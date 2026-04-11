@@ -1,0 +1,368 @@
+import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import { Router } from "express";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { haversineKm } from "../lib/algorithms.js";
+import { createNotification, createAuditLog, createJournalEntry } from "../lib/businessHelpers.js";
+
+const router = Router();
+router.use(authMiddleware);
+
+const VALID_CASE_TRANSITIONS: Record<string, string[]> = {
+  open: ['in_progress'],
+  in_progress: ['judgment', 'closed'],
+  judgment: ['execution', 'closed'],
+  execution: ['closed'],
+  closed: [],
+};
+
+router.get("/contracts", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status } = req.query as any;
+    const conditions = [`"companyId" = $1`];
+    const params: any[] = [scope.companyId];
+    if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
+    conditions.push(`"deletedAt" IS NULL`);
+    const rows = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${conditions.join(" AND ")} ORDER BY id DESC`, params);
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (err) { handleRouteError(err, res, "Legal contracts error:"); }
+});
+
+router.post("/contracts", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+
+    if (!b.startDate) {
+      validationError(res, "لا يمكن إنشاء عقد بدون تاريخ بداية", "startDate", "حدد تاريخ بداية العقد");
+      return;
+    }
+    if (!b.endDate) {
+      validationError(res, "لا يمكن إنشاء عقد بدون تاريخ نهاية", "endDate", "حدد تاريخ نهاية العقد");
+      return;
+    }
+    if (new Date(b.endDate) <= new Date(b.startDate)) {
+      validationError(res, "تاريخ نهاية العقد يجب أن يكون بعد تاريخ البداية", "endDate", "تأكد من أن تاريخ النهاية أحدث من تاريخ البداية");
+      return;
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","partyContact","startDate","endDate",value,status,notes,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [scope.companyId, b.ref, b.title, b.contractType, b.partyName, b.partyContact, b.startDate, b.endDate, b.value, b.status || 'draft', b.notes, scope.userId]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create legal contract error:"); }
+});
+
+router.get("/contracts/renewal-alerts", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const alerts90 = await rawQuery<any>(
+      `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
+       FROM legal_contracts WHERE "companyId"=$1 AND status='active'
+       AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '90 days'`,
+      [cid]
+    );
+    const alerts30 = await rawQuery<any>(
+      `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
+       FROM legal_contracts WHERE "companyId"=$1 AND status='active'
+       AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '15 days' AND CURRENT_DATE + INTERVAL '30 days'`,
+      [cid]
+    );
+    const alerts14 = await rawQuery<any>(
+      `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
+       FROM legal_contracts WHERE "companyId"=$1 AND status='active'
+       AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '14 days'`,
+      [cid]
+    );
+
+    const all = [...alerts90, ...alerts30, ...alerts14].map((r: any) => {
+      const daysLeft = Number(r.daysLeft);
+      let severity = 'low';
+      if (daysLeft <= 14) severity = 'critical';
+      else if (daysLeft <= 30) severity = 'high';
+      else severity = 'medium';
+      return {
+        ...r, daysLeft, severity,
+        message: `عقد "${r.title}" مع ${r.partyName} ينتهي خلال ${daysLeft} يوم`,
+      };
+    });
+
+    res.json({ data: all, total: all.length, page: 1, pageSize: all.length });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+router.get("/contracts/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    if (!row) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get contract error:"); }
+});
+
+router.patch("/contracts/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT id, "startDate", "endDate" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!existing) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    const b = req.body;
+    const effectiveStart = b.startDate || existing.startDate;
+    const effectiveEnd = b.endDate || existing.endDate;
+    if (effectiveStart && effectiveEnd && new Date(effectiveEnd) <= new Date(effectiveStart)) {
+      validationError(res, "تاريخ نهاية العقد يجب أن يكون بعد تاريخ البداية", "endDate", "تأكد من أن تاريخ النهاية أحدث من تاريخ البداية");
+      return;
+    }
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.partyName !== undefined) { params.push(b.partyName); sets.push(`"partyName"=$${params.length}`); }
+    if (b.partyContact !== undefined) { params.push(b.partyContact); sets.push(`"partyContact"=$${params.length}`); }
+    if (b.contractType !== undefined) { params.push(b.contractType); sets.push(`"contractType"=$${params.length}`); }
+    if (b.value !== undefined) { params.push(b.value); sets.push(`value=$${params.length}`); }
+    if (b.startDate !== undefined) { params.push(b.startDate); sets.push(`"startDate"=$${params.length}`); }
+    if (b.endDate !== undefined) { params.push(b.endDate); sets.push(`"endDate"=$${params.length}`); }
+    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
+    if (sets.length === 0) { res.json(existing); return; }
+    params.push(id);
+    await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update contract error:"); }
+});
+
+router.delete("/contracts/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT id FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!existing) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json({ message: "تم حذف العقد بنجاح" });
+  } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
+});
+
+router.get("/cases", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status } = req.query as any;
+    const conditions = [`"companyId" = $1`];
+    const params: any[] = [scope.companyId];
+    if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
+    conditions.push(`"deletedAt" IS NULL`);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_cases WHERE ${conditions.join(" AND ")} ORDER BY id DESC`, params);
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (err) { handleRouteError(err, res, "Legal cases error:"); }
+});
+
+router.post("/cases", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const { insertId } = await rawExecute(
+      `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, b.lawyerName, b.status || 'open', b.priority || 'medium', b.description]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "legal_cases", entityId: insertId,
+      after: { title: b.title, caseType: b.caseType, status: 'open', priority: b.priority || 'medium' },
+    }).catch(console.error);
+
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create legal case error:"); }
+});
+
+router.get("/cases/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    if (!row) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+
+    const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [row.id]);
+
+    res.json({ ...row, sessions, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
+  } catch (err) { handleRouteError(err, res, "Get case error:"); }
+});
+
+router.patch("/cases/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!existing) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    const b = req.body;
+
+    if (b.status !== undefined && b.status !== existing.status) {
+      const allowed = VALID_CASE_TRANSITIONS[existing.status] || [];
+      if (!allowed.includes(b.status)) {
+        res.status(400).json({
+          error: `لا يمكن الانتقال من "${existing.status}" إلى "${b.status}"`,
+          allowedTransitions: allowed,
+        });
+        return;
+      }
+    }
+
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.priority !== undefined) { params.push(b.priority); sets.push(`priority=$${params.length}`); }
+    if (b.lawyerName !== undefined) { params.push(b.lawyerName); sets.push(`"lawyerName"=$${params.length}`); }
+    if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
+    if (b.court !== undefined) { params.push(b.court); sets.push(`court=$${params.length}`); }
+    if (sets.length <= 1 && params.length === 0) { res.json(existing); return; }
+    params.push(id);
+    await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "legal_cases", entityId: id,
+      before: { status: existing.status }, after: { status: b.status || existing.status },
+    }).catch(console.error);
+
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
+    res.json({ ...row, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
+  } catch (err) { handleRouteError(err, res, "Update case error:"); }
+});
+
+router.delete("/cases/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!existing) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json({ message: "تم حذف القضية بنجاح" });
+  } catch (err) { handleRouteError(err, res, "Delete case error:"); }
+});
+
+router.get("/cases/:caseId/sessions", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const caseId = Number(req.params.caseId);
+    const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    if (!legalCase) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [caseId]);
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
+});
+
+router.post("/cases/:caseId/sessions", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const caseId = Number(req.params.caseId);
+
+    const [legalCase] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
+    if (!legalCase) { res.status(404).json({ error: "القضية غير موجودة أو غير مصرح بها" }); return; }
+
+    let distanceToCourtKm: number | null = null;
+    if (b.courtLat && b.courtLon && b.officeLat && b.officeLon) {
+      distanceToCourtKm = haversineKm(
+        Number(b.officeLat), Number(b.officeLon),
+        Number(b.courtLat), Number(b.courtLon)
+      );
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO legal_sessions ("caseId","sessionDate",location,judge,result,"nextSessionDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [caseId, b.sessionDate, b.location, b.judge, b.result, b.nextSessionDate, b.notes]
+    );
+
+    if (legalCase.lawyerName) {
+      try {
+        const [lawyerEmp] = await rawQuery<any>(
+          `SELECT ea.id AS "assignmentId" FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
+           WHERE ea."companyId"=$1 AND e.name ILIKE $2 LIMIT 1`,
+          [scope.companyId, `%${legalCase.lawyerName}%`]
+        );
+        if (lawyerEmp?.assignmentId) {
+          createNotification({
+            companyId: scope.companyId,
+            assignmentId: lawyerEmp.assignmentId,
+            type: "legal_session",
+            title: `جلسة قضائية: ${legalCase.title}`,
+            body: `جلسة بتاريخ ${b.sessionDate} — ${b.location || legalCase.court || ''} ${distanceToCourtKm ? `(${distanceToCourtKm.toFixed(1)} كم)` : ''}`,
+            priority: legalCase.priority === 'high' ? 'high' : 'normal',
+            refType: "legal_sessions",
+            refId: insertId,
+          }).catch(console.error);
+        }
+      } catch (notifErr) { console.error("Lawyer notification error:", notifErr); }
+    }
+
+    if (legalCase.status === 'open') {
+      await rawExecute(`UPDATE legal_cases SET status='in_progress', "updatedAt"=NOW() WHERE id=$1`, [caseId]);
+    }
+
+    let invoiceId: number | null = null;
+    let invoiceError: string | null = null;
+    let journalEntryId: number | null = null;
+    if (b.hoursSpent && b.hourlyRate) {
+      const billingAmount = Number(b.hoursSpent) * Number(b.hourlyRate);
+      const vatAmount = billingAmount * 0.15;
+      const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
+      const yearShort = String(new Date().getFullYear()).slice(2);
+      const ref = `INV-LEGAL-${yearShort}${monthNum}-${insertId}`;
+      try {
+        const { insertId: iId } = await rawExecute(
+          `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,NULL,$2,$3,$4,$5,$6,15,0,'draft',$7,$8)`,
+          [scope.companyId, ref, `أتعاب قانونية - جلسة ${b.sessionDate} - ${legalCase.title}`, billingAmount, billingAmount + vatAmount, vatAmount, new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0], scope.userId]
+        );
+        invoiceId = iId;
+      } catch (invoiceErr) {
+        console.error("Failed to create legal session invoice:", invoiceErr);
+        invoiceError = "فشل إنشاء فاتورة الأتعاب";
+      }
+
+      // Auto journal entry for legal fees
+      try {
+        const totalWithVat = billingAmount + vatAmount;
+        journalEntryId = await createJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          createdBy: scope.activeAssignmentId ?? scope.userId,
+          ref: `LEGAL-FEE-${insertId}`,
+          description: `أتعاب قانونية / ${legalCase.title} / جلسة ${b.sessionDate} / ${billingAmount.toLocaleString()} ريال`,
+          lines: [
+            { accountCode: "5400", debit: billingAmount, credit: 0 },
+            { accountCode: "1400", debit: vatAmount, credit: 0 },
+            { accountCode: "2100", debit: 0, credit: totalWithVat },
+          ],
+        });
+      } catch (jErr) { console.error("Legal fee journal entry failed:", jErr); }
+    }
+
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE id=$1`, [insertId]);
+    res.status(201).json({ ...row, distanceToCourtKm, invoiceId, invoiceError, journalEntryId, calendarTaskCreated: !!legalCase.lawyerName });
+  } catch (err) { handleRouteError(err, res, "Create session error:"); }
+});
+
+router.get("/stats", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const [contracts] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1`, [cid]);
+    const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1`, [cid]);
+    const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active'`, [cid]);
+    const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
+    res.json({
+      totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
+      totalCases: Number(cases.total), openCases: Number(cases.open), inProgressCases: Number(cases.inProgress),
+      expiringContracts: Number(expiring.count), upcomingSessions: Number(sessions.upcoming),
+    });
+  } catch (err) { handleRouteError(err, res, "Legal stats error:"); }
+});
+
+export default router;

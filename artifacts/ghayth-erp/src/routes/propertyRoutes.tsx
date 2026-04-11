@@ -1,0 +1,45 @@
+import { lazy } from "react";
+
+const Properties = lazy(() => import("@/pages/properties"));
+const PropertiesDashboard = lazy(() => import("@/pages/properties-dashboard"));
+const PropertiesBuildings = lazy(() => import("@/pages/properties-buildings"));
+const PropertiesTenants = lazy(() => import("@/pages/properties-tenants"));
+const PropertiesOwners = lazy(() => import("@/pages/properties-owners"));
+const PropertiesContracts = lazy(() => import("@/pages/properties-contracts"));
+const PropertiesPayments = lazy(() => import("@/pages/properties-payments"));
+const PropertiesMaintenance = lazy(() => import("@/pages/properties-maintenance"));
+const PropertiesCreate = lazy(() => import("@/pages/create/properties-create"));
+const ContractsCreate = lazy(() => import("@/pages/create/properties/contracts-create"));
+const TenantsCreate = lazy(() => import("@/pages/create/properties/tenants-create"));
+const PropertyMaintenanceCreate = lazy(() => import("@/pages/create/properties/maintenance-create"));
+const OwnersCreate = lazy(() => import("@/pages/create/properties/owners-create"));
+const BuildingsCreate = lazy(() => import("@/pages/create/properties/buildings-create"));
+const PaymentRecord = lazy(() => import("@/pages/create/properties/payment-record"));
+const UnitStatusChange = lazy(() => import("@/pages/create/properties/unit-status-change"));
+const PaymentRegister = lazy(() => import("@/pages/create/properties/payment-register"));
+const UnitDetail = lazy(() => import("@/pages/details/unit-detail"));
+const BuildingDetail = lazy(() => import("@/pages/details/building-detail"));
+const TenantDetail = lazy(() => import("@/pages/details/tenant-detail"));
+
+export const propertyRoutes = [
+  { path: "/properties/dashboard", component: PropertiesDashboard },
+  { path: "/properties/buildings/create", component: BuildingsCreate },
+  { path: "/properties/buildings/:id", component: BuildingDetail },
+  { path: "/properties/buildings", component: PropertiesBuildings },
+  { path: "/properties/tenants/create", component: TenantsCreate },
+  { path: "/properties/tenants/:id", component: TenantDetail },
+  { path: "/properties/tenants", component: PropertiesTenants },
+  { path: "/properties/owners/create", component: OwnersCreate },
+  { path: "/properties/owners", component: PropertiesOwners },
+  { path: "/properties/contracts/create", component: ContractsCreate },
+  { path: "/properties/contracts/:contractId/pay/:installmentId", component: PaymentRecord },
+  { path: "/properties/contracts", component: PropertiesContracts },
+  { path: "/properties/payments/:paymentId/pay", component: PaymentRegister },
+  { path: "/properties/payments", component: PropertiesPayments },
+  { path: "/properties/maintenance/create", component: PropertyMaintenanceCreate },
+  { path: "/properties/maintenance", component: PropertiesMaintenance },
+  { path: "/properties/create", component: PropertiesCreate },
+  { path: "/properties/:id/status", component: UnitStatusChange },
+  { path: "/properties/:id", component: UnitDetail },
+  { path: "/properties", component: Properties },
+];

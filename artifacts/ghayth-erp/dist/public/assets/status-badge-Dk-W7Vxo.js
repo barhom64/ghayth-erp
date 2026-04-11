@@ -1,0 +1,1 @@
+import{j as a}from"./index-B4FIOEgj.js";import{B as t}from"./badge-D_X_o2qm.js";import{S as e,g as m}from"./constants-DqDxjurJ.js";function S({status:o,className:r}){return a.jsx(t,{className:`font-normal ${m(o)} ${r||""}`,variant:"outline",children:e[o]||o})}export{S};

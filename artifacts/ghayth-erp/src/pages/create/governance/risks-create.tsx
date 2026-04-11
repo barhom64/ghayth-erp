@@ -1,0 +1,146 @@
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { useApiMutation, useApiQuery } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+
+const DRAFT_KEY = "governance_risks_create";
+const INITIAL = {
+  title: "", category: "operational", severity: "medium",
+  likelihood: "medium", impact: "medium", status: "identified",
+  assignedTo: "", description: "", mitigationPlan: "",
+};
+
+export default function RisksCreate() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const createMut = useApiMutation("/governance/risks", "POST", [["governance-risks"]]);
+  const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const employees = employeesData?.data || [];
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+
+  const handleSubmit = async () => {
+    if (!form.title) {
+      toast({ variant: "destructive", title: "عنوان الخطر مطلوب" });
+      return;
+    }
+    try {
+      await createMut.mutateAsync({
+        ...form,
+        assignedTo: form.assignedTo || undefined,
+      });
+      clearDraft();
+      toast({ title: "تم تسجيل الخطر بنجاح" });
+      setLocation("/governance/risks");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الخطر", description: err.message });
+    }
+  };
+
+  return (
+    <CreatePageLayout title="تسجيل خطر جديد" backPath="/governance/risks">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <CreationDateField />
+      </div>
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><Label>عنوان الخطر <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div>
+          <div>
+            <Label>الفئة</Label>
+            <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="operational">تشغيلي</SelectItem>
+                <SelectItem value="financial">مالي</SelectItem>
+                <SelectItem value="strategic">استراتيجي</SelectItem>
+                <SelectItem value="compliance">امتثال</SelectItem>
+                <SelectItem value="technology">تقني</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>الخطورة</Label>
+            <Select value={form.severity} onValueChange={(v) => setForm((f) => ({ ...f, severity: v }))}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">منخفضة</SelectItem>
+                <SelectItem value="medium">متوسطة</SelectItem>
+                <SelectItem value="high">عالية</SelectItem>
+                <SelectItem value="critical">حرجة</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>مستوى الاحتمالية</Label>
+            <Select value={form.likelihood} onValueChange={(v) => setForm((f) => ({ ...f, likelihood: v }))}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">منخفض</SelectItem>
+                <SelectItem value="medium">متوسط</SelectItem>
+                <SelectItem value="high">عالي</SelectItem>
+                <SelectItem value="critical">حرج</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>مستوى التأثير</Label>
+            <Select value={form.impact} onValueChange={(v) => setForm((f) => ({ ...f, impact: v }))}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">منخفض</SelectItem>
+                <SelectItem value="medium">متوسط</SelectItem>
+                <SelectItem value="high">عالي</SelectItem>
+                <SelectItem value="critical">حرج</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>الحالة</Label>
+            <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="identified">محدد</SelectItem>
+                <SelectItem value="mitigating">قيد المعالجة</SelectItem>
+                <SelectItem value="resolved">تم الحل</SelectItem>
+                <SelectItem value="accepted">مقبول</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>المسؤول عن المعالجة</Label>
+            <Select value={form.assignedTo || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, assignedTo: v === "_none" ? "" : v }))}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— اختياري —</SelectItem>
+                {employees.map((emp: any) => (
+                  <SelectItem key={emp.id} value={emp.name}>{emp.name} - {emp.jobTitle || emp.department || ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف الخطر..." /></div>
+        <div><Label>خطة المعالجة</Label><Textarea className="mt-1" value={form.mitigationPlan} onChange={(e) => setForm((f) => ({ ...f, mitigationPlan: e.target.value }))} placeholder="إجراءات المعالجة..." /></div>
+        <FileDropZone files={attachments} onFilesChange={setAttachments} />
+        <div className="flex justify-end gap-3 pt-4">
+          <Button variant="outline" onClick={() => setLocation("/governance/risks")}>إلغاء</Button>
+          <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري التسجيل..." : "تسجيل"}</Button>
+        </div>
+      </div>
+    </CreatePageLayout>
+  );
+}

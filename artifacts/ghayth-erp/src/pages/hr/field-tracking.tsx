@@ -1,0 +1,140 @@
+import { useApiQuery, asList } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { MapPin, Navigation, Clock, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useEffect, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+const defaultCenter: [number, number] = [24.7136, 46.6753];
+
+function AttendanceMap({ items }: { items: any[] }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapRef.current || mapInstance.current) return;
+
+    mapInstance.current = L.map(mapRef.current, {
+      center: defaultCenter,
+      zoom: 11,
+      attributionControl: false,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; OpenStreetMap',
+    }).addTo(mapInstance.current);
+
+    return () => {
+      mapInstance.current?.remove();
+      mapInstance.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapInstance.current) return;
+
+    mapInstance.current.eachLayer((layer) => {
+      if (layer instanceof L.Marker) {
+        mapInstance.current!.removeLayer(layer);
+      }
+    });
+
+    const bounds: L.LatLngExpression[] = [];
+
+    items.forEach((a: any) => {
+      const lat = parseFloat(a.lat || a.checkInLat);
+      const lng = parseFloat(a.lon || a.lng || a.checkInLon);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        const color = a.isOutOfRange ? "#EF4444" : "#22C55E";
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        });
+        const time = a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "";
+        L.marker([lat, lng], { icon })
+          .bindPopup(`<div style="text-align:right;font-family:inherit"><b>${a.employeeName || "موظف"}</b><br/>التاريخ: ${a.date || ""}<br/>الوقت: ${time}</div>`)
+          .addTo(mapInstance.current!);
+        bounds.push([lat, lng]);
+      }
+    });
+
+    if (bounds.length > 0) {
+      mapInstance.current.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [40, 40], maxZoom: 14 });
+    }
+  }, [items]);
+
+  return <div ref={mapRef} style={{ height: 400, borderRadius: 12 }} />;
+}
+
+export default function FieldTrackingPage() {
+  const { data } = useApiQuery<any>(["attendance"], "/hr/attendance");
+  const items = asList(data);
+
+  const kpis = [
+    { label: "تسجيلات اليوم", value: items.length, icon: Navigation, color: "text-blue-600 bg-blue-50" },
+    { label: "داخل النطاق", value: items.filter((a: any) => !a.isOutOfRange).length, icon: MapPin, color: "text-green-600 bg-green-50" },
+    { label: "خارج النطاق", value: items.filter((a: any) => a.isOutOfRange).length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "متوسط وقت الحضور", value: "-", icon: Clock, color: "text-purple-600 bg-purple-50" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">التتبع الميداني — GPS</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">متابعة مواقع الموظفين الميدانيين</p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((c) => (
+          <Card key={c.label} className="border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
+                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{c.value}</p>
+                <p className="text-xs text-gray-500">{c.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardContent className="p-4">
+          <h4 className="font-semibold mb-3">خريطة التتبع الميداني</h4>
+          <AttendanceMap items={items} />
+          {items.length === 0 && (
+            <p className="text-center text-gray-400 mt-3 text-sm">لا توجد سجلات حضور بإحداثيات GPS لعرضها على الخريطة</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card><CardContent className="p-0">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b bg-gray-50">
+            <th className="p-3 text-start">الموظف</th>
+            <th className="p-3 text-start">التاريخ</th>
+            <th className="p-3 text-start">وقت التسجيل</th>
+            <th className="p-3 text-start">الحالة</th>
+          </tr></thead>
+          <tbody>
+            {items.slice(0, 20).map((a: any) => (
+              <tr key={a.id} className="border-b hover:bg-gray-50">
+                <td className="p-3 font-medium">{a.employeeName}</td>
+                <td className="p-3 text-gray-500">{a.date}</td>
+                <td className="p-3 font-mono">{a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
+                <td className="p-3"><Badge className={a.status === "present" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>{a.status === "present" ? "حاضر" : a.status}</Badge></td>
+              </tr>
+            ))}
+            {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد سجلات</td></tr>}
+          </tbody>
+        </table>
+      </CardContent></Card>
+    </div>
+  );
+}

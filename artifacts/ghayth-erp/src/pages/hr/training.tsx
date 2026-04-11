@@ -1,0 +1,213 @@
+import { useState, Fragment } from "react";
+import { Link } from "wouter";
+import { useApiQuery } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, GraduationCap, Users, BookOpen, Award } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
+import { useSortedData } from "@/hooks/use-sorted-data";
+import { SortableTableHead } from "@/components/sortable-table-head";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PaginationBar } from "@/components/data-table-wrapper";
+import { useAppContext } from "@/contexts/app-context";
+
+const statusMap: Record<string, { label: string; color: string }> = {
+  planned: { label: "مخطط", color: "bg-blue-100 text-blue-700" },
+  upcoming: { label: "قادم", color: "bg-blue-100 text-blue-700" },
+  active: { label: "جاري", color: "bg-green-100 text-green-700" },
+  completed: { label: "مكتمل", color: "bg-gray-100 text-gray-700" },
+  cancelled: { label: "ملغي", color: "bg-red-100 text-red-700" },
+};
+
+export default function TrainingPage() {
+  const { permissions } = useAppContext();
+  const canManage = permissions.canManageEmployees;
+  const [filters, setFilters] = useFilters();
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const { data, refetch: refetchPrograms } = useApiQuery<any>(["training-programs"], "/training/programs");
+  const { data: statsData } = useApiQuery<any>(["training-stats"], "/training/stats");
+  const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
+  const items = data?.data || [];
+  const enrollments = enrollmentsData?.data || [];
+  const filteredEnrollments = applyFilters(enrollments, filters, { searchFields: ["employeeName"], statusField: "status" });
+  const { sortedData: sortedEnrollments, sortState, handleSort } = useSortedData(filteredEnrollments);
+  const stats = statsData || {};
+
+  const filtered = applyFilters(items, filters, { searchFields: ["title", "trainer"], statusField: "status" });
+
+  const kpis = [
+    { label: "إجمالي البرامج", value: stats.totalPrograms ?? items.length, icon: BookOpen, color: "text-blue-600 bg-blue-50" },
+    { label: "برامج نشطة", value: stats.activePrograms ?? items.filter((i: any) => i.status === "active").length, icon: GraduationCap, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي التسجيلات", value: stats.totalEnrollments ?? enrollments.length, icon: Users, color: "text-purple-600 bg-purple-50" },
+    { label: "مكتملة", value: stats.completedEnrollments ?? 0, icon: Award, color: "text-orange-600 bg-orange-50" },
+  ];
+
+  const programActions = useInlineActions({
+    endpoint: "/training/programs",
+    queryKeys: [["training-programs"], ["training-stats"]],
+    onSuccess: () => refetchPrograms(),
+  });
+
+  const programEditFields = [
+    { key: "title", label: "العنوان" },
+    { key: "trainer", label: "المدرب" },
+    { key: "location", label: "الموقع" },
+    { key: "capacity", label: "السعة", type: "number" as const },
+    { key: "status", label: "الحالة", type: "select" as const, options: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })) },
+  ];
+
+  const enrollmentActions = useInlineActions({
+    endpoint: "/training/enrollments",
+    queryKeys: [["training-enrollments"], ["training-stats"]],
+    onSuccess: () => refetchEnrollments(),
+  });
+
+  const enrollmentEditFields = [
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "enrolled", label: "مسجل" }, { value: "completed", label: "مكتمل" }, { value: "cancelled", label: "ملغي" }] },
+    { key: "score", label: "الدرجة", type: "number" as const },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">برامج التدريب</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">إدارة برامج التدريب وتسجيلات الموظفين</p>
+        </div>
+        <Link href="/hr/training/create">
+          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة برنامج</Button>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((c) => (
+          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
+                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{c.value}</p>
+                <p className="text-xs text-gray-500">{c.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث في البرامج...",
+          statuses: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })),
+          showDateRange: true,
+        }}
+        values={filters}
+        onChange={(v) => { setFilters(v); setPage(1); }}
+        resultCount={filtered.length}
+      />
+
+      <Tabs defaultValue="programs" dir="rtl">
+        <TabsList>
+          <TabsTrigger value="programs">البرامج</TabsTrigger>
+          <TabsTrigger value="enrollments">التسجيلات</TabsTrigger>
+        </TabsList>
+        <TabsContent value="programs">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((t: any) => (
+              <Card key={t.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className="w-5 h-5 text-blue-500" />
+                      <span className="font-semibold">{t.title}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <StatusBadge status={t.status} />
+                      <RowActions
+                        canEdit={canManage}
+                        onEdit={() => programActions.startEdit(t.id, { title: t.title, trainer: t.trainer || "", location: t.location || "", capacity: t.capacity || t.maxParticipants || 0, status: t.status || "planned" })}
+                        onDelete={() => programActions.startDelete(t.id)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm text-gray-500">
+                    {t.trainer && <p>المدرب: <span className="text-gray-700">{t.trainer}</span></p>}
+                    {t.startDate && <p>التاريخ: {t.startDate} {t.endDate ? `— ${t.endDate}` : ""}</p>}
+                    {t.location && <p>الموقع: {t.location}</p>}
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <span>المشاركين: {t.enrolled || t.currentParticipants || 0}/{t.capacity || t.maxParticipants || 0}</span>
+                      {t.category && <Badge variant="outline" className="text-xs">{t.category}</Badge>}
+                    </div>
+                  </div>
+                  {programActions.editingId === t.id && (
+                    <div className="mt-3">
+                      <InlineEditForm fields={programEditFields} form={programActions.editForm} setForm={programActions.setEditForm} onSave={() => programActions.handleSave(t.id, programActions.editForm)} onCancel={programActions.cancelEdit} isPending={programActions.isPending} />
+                    </div>
+                  )}
+                  {programActions.deletingId === t.id && (
+                    <div className="mt-3">
+                      <InlineDeleteConfirm onConfirm={() => programActions.handleDelete(t.id)} onCancel={programActions.cancelDelete} isPending={programActions.isPending} itemName={t.title} entityType="training" entityId={t.id} />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+            {filtered.length === 0 && <p className="text-gray-400 col-span-3 text-center py-8">لا توجد برامج تدريبية</p>}
+          </div>
+        </TabsContent>
+        <TabsContent value="enrollments">
+          <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
+                  <SortableTableHead column="programTitle" label="البرنامج" sortState={sortState} onSort={handleSort} />
+                  <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
+                  <SortableTableHead column="score" label="الدرجة" sortState={sortState} onSort={handleSort} />
+                  <th className="p-3 text-start font-medium">إجراءات</th>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(sortedEnrollments || []).map((e: any) => (
+                  <Fragment key={e.id}>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="p-3 font-medium">{e.employeeName || "-"}</td>
+                      <td className="p-3">{e.programTitle || "-"}</td>
+                      <td className="p-3"><StatusBadge status={e.status} /></td>
+                      <td className="p-3">{e.score ?? "-"}</td>
+                      <td className="p-3">
+                        <RowActions
+                          canEdit={canManage}
+                          onEdit={() => enrollmentActions.startEdit(e.id, { status: e.status || "enrolled", score: e.score || 0 })}
+                          onDelete={() => enrollmentActions.startDelete(e.id)}
+                        />
+                      </td>
+                    </tr>
+                    {enrollmentActions.editingId === e.id && (
+                      <tr><td colSpan={5} className="p-2">
+                        <InlineEditForm fields={enrollmentEditFields} form={enrollmentActions.editForm} setForm={enrollmentActions.setEditForm} onSave={() => enrollmentActions.handleSave(e.id, enrollmentActions.editForm)} onCancel={enrollmentActions.cancelEdit} isPending={enrollmentActions.isPending} />
+                      </td></tr>
+                    )}
+                    {enrollmentActions.deletingId === e.id && (
+                      <tr><td colSpan={5} className="p-2">
+                        <InlineDeleteConfirm onConfirm={() => enrollmentActions.handleDelete(e.id)} onCancel={enrollmentActions.cancelDelete} isPending={enrollmentActions.isPending} itemName={e.employeeName} entityType="training" entityId={e.id} />
+                      </td></tr>
+                    )}
+                  </Fragment>
+                ))}
+                {enrollments.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد تسجيلات</td></tr>}
+              </TableBody>
+            </Table>
+            <PaginationBar page={page} pageSize={pageSize} total={filteredEnrollments.length} onPageChange={setPage} />
+          </div></div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

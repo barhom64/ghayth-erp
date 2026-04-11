@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "غيث ERP — نظام تشغيل مؤسسي"
+version = "1.0.0"
+id = "artifacts/ghayth-erp"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18822
+
+[services.development]
+run = "pnpm --filter @workspace/ghayth-erp run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ghayth-erp", "run", "build" ]
+publicDir = "artifacts/ghayth-erp/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18822"
+BASE_PATH = "/"

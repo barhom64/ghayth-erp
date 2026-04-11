@@ -1,0 +1,169 @@
+import { useState } from "react";
+import { Link } from "wouter";
+import { useApiQuery } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowRight, AlertTriangle, DollarSign, Users, KeyRound, ChevronDown, ChevronRight } from "lucide-react";
+import { formatCurrency, formatNumber , formatDateAr } from "@/lib/formatters";
+
+export default function CustodyAgingReportPage() {
+  const { data, isLoading } = useApiQuery<any>(["custody-aging-report"], "/finance/custodies/report");
+  const employees = data?.data || [];
+  const summary = data?.summary || {};
+  const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid gap-4 md:grid-cols-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/finance/custodies">
+            <Button variant="ghost" size="sm"><ArrowRight className="h-4 w-4 me-1" />العهد</Button>
+          </Link>
+          <h1 className="text-3xl font-bold tracking-tight">تقرير أعمار العهد</h1>
+        </div>
+      </div>
+
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="p-2 bg-orange-100 rounded-lg"><DollarSign className="h-5 w-5 text-orange-600" /></div>
+          <div>
+            <p className="text-xs text-gray-500">إجمالي المعلّق</p>
+            <p className="text-xl font-bold text-orange-600">{formatCurrency(Number(summary.totalOutstanding || 0))}</p>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="p-2 bg-red-100 rounded-lg"><AlertTriangle className="h-5 w-5 text-red-600" /></div>
+          <div>
+            <p className="text-xs text-gray-500">مبالغ متأخرة</p>
+            <p className="text-xl font-bold text-red-600">{formatCurrency(Number(summary.totalOverdue || 0))}</p>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="p-2 bg-blue-100 rounded-lg"><Users className="h-5 w-5 text-blue-600" /></div>
+          <div>
+            <p className="text-xs text-gray-500">عدد الموظفين</p>
+            <p className="text-xl font-bold">{formatNumber(summary.employeeCount || 0)}</p>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="p-2 bg-purple-100 rounded-lg"><KeyRound className="h-5 w-5 text-purple-600" /></div>
+          <div>
+            <p className="text-xs text-gray-500">عهد معلّقة</p>
+            <p className="text-xl font-bold">{formatNumber(summary.totalCustodies || 0)}</p>
+          </div>
+        </CardContent></Card>
+      </div>
+
+      {employees.length === 0 ? (
+        <Card><CardContent className="p-12 text-center text-gray-400">
+          <KeyRound className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p>لا توجد عهد معلّقة</p>
+        </CardContent></Card>
+      ) : (
+        <div className="space-y-3">
+          {employees.map((emp: any) => {
+            const isExpanded = expandedEmployee === emp.employeeName;
+            return (
+              <Card key={emp.employeeName} className={emp.overdueCount > 0 ? "border-red-200" : ""}>
+                <CardContent className="p-0">
+                  <button
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-right"
+                    onClick={() => setExpandedEmployee(isExpanded ? null : emp.employeeName)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {isExpanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      <div>
+                        <p className="font-semibold">{emp.employeeName}</p>
+                        <p className="text-xs text-gray-500">{emp.custodyCount} عهدة معلّقة</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {emp.overdueCount > 0 && (
+                        <Badge className="bg-red-100 text-red-700">
+                          <AlertTriangle className="h-3 w-3 me-1" />
+                          {emp.overdueCount} متأخرة
+                        </Badge>
+                      )}
+                      <div className="text-end">
+                        <p className="font-bold text-orange-600">{formatCurrency(emp.totalOutstanding)}</p>
+                        {emp.overdueAmount > 0 && (
+                          <p className="text-xs text-red-500">متأخر: {formatCurrency(emp.overdueAmount)}</p>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+
+                  {isExpanded && emp.custodies && (
+                    <div className="border-t">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b">
+                            <th className="p-3 text-right text-xs text-gray-500">المرجع</th>
+                            <th className="p-3 text-right text-xs text-gray-500">الوصف</th>
+                            <th className="p-3 text-right text-xs text-gray-500">المبلغ</th>
+                            <th className="p-3 text-right text-xs text-gray-500">المسوّى</th>
+                            <th className="p-3 text-right text-xs text-gray-500">المتبقي</th>
+                            <th className="p-3 text-right text-xs text-gray-500">التاريخ</th>
+                            <th className="p-3 text-right text-xs text-gray-500">تاريخ الإرجاع</th>
+                            <th className="p-3 text-right text-xs text-gray-500">أيام التأخير</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {emp.custodies.map((c: any) => (
+                            <tr key={c.id} className={`border-b hover:bg-gray-50 ${c.isOverdue ? "bg-red-50/30" : ""}`}>
+                              <td className="p-3">
+                                <Link href={`/finance/custodies/${c.id}`}>
+                                  <span className="font-mono text-blue-600 text-xs hover:underline cursor-pointer">{c.ref}</span>
+                                </Link>
+                              </td>
+                              <td className="p-3 text-gray-600">
+                                {c.description || "-"}
+                                {c.purpose && <div className="text-xs text-gray-400">{c.purpose}</div>}
+                              </td>
+                              <td className="p-3 font-semibold">{formatCurrency(c.amount)}</td>
+                              <td className="p-3 text-green-600">{formatCurrency(c.settledAmount)}</td>
+                              <td className="p-3 font-semibold text-orange-600">{formatCurrency(c.remainingAmount)}</td>
+                              <td className="p-3 text-gray-500 text-xs">{c.date ? formatDateAr(c.date) : "-"}</td>
+                              <td className="p-3 text-xs">
+                                {c.expectedReturnDate ? (
+                                  <span className={c.isOverdue ? "text-red-600 font-semibold" : "text-gray-500"}>
+                                    {formatDateAr(c.expectedReturnDate)}
+                                  </span>
+                                ) : "-"}
+                              </td>
+                              <td className="p-3">
+                                {c.daysOverdue > 0 ? (
+                                  <Badge className="bg-red-100 text-red-700 text-xs">{c.daysOverdue} يوم</Badge>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

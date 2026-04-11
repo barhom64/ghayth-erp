@@ -1,0 +1,170 @@
+import { Router } from "express";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError } from "../lib/errorHandler.js";
+
+const router = Router();
+router.use(authMiddleware);
+
+router.get("/", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rules = await rawQuery<any>(
+      `SELECT * FROM business_rules 
+       WHERE ("companyId" IS NULL OR "companyId" = $1)
+       ORDER BY priority DESC, "createdAt" DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rules, total: rules.length });
+  } catch (err) {
+    handleRouteError(err, res, "قواعد الأعمال");
+  }
+});
+
+router.get("/logs", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { ruleId, limit: lim = "50", page = "1" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
+    const params: any[] = [scope.companyId];
+
+    if (ruleId) {
+      params.push(Number(ruleId));
+      conditions.push(`"ruleId" = $${params.length}`);
+    }
+
+    params.push(Number(lim));
+    const limitIdx = params.length;
+    params.push(offset);
+    const offsetIdx = params.length;
+
+    const logs = await rawQuery<any>(
+      `SELECT * FROM business_rule_logs 
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY "executedAt" DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params
+    );
+
+    const countParams = params.slice(0, params.length - 2);
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM business_rule_logs WHERE ${conditions.join(" AND ")}`,
+      countParams
+    );
+
+    res.json({ data: logs, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+  } catch (err) {
+    handleRouteError(err, res, "سجل القواعد");
+  }
+});
+
+router.post("/", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+
+    if (!b.name || !b.triggerEvent || !b.actionType) {
+      res.status(400).json({ error: "الاسم ونوع الحدث ونوع الإجراء مطلوبة" });
+      return;
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO business_rules ("companyId",name,description,"triggerEvent","conditionField","conditionOperator","conditionValue","actionType","actionTarget","actionConfig",module,priority,"isActive","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [
+        scope.companyId, b.name, b.description || null, b.triggerEvent,
+        b.conditionField || null, b.conditionOperator || ">=", b.conditionValue || null,
+        b.actionType, b.actionTarget || null, JSON.stringify(b.actionConfig || {}),
+        b.module || null, b.priority || 0, b.isActive !== false, scope.userId,
+      ]
+    );
+
+    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [insertId]);
+    res.status(201).json(rule);
+  } catch (err) {
+    handleRouteError(err, res, "إنشاء قاعدة");
+  }
+});
+
+router.patch("/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!existing) {
+      res.status(404).json({ error: "القاعدة غير موجودة أو لا يمكن تعديل القواعد الافتراضية" });
+      return;
+    }
+
+    const sets: string[] = [`"updatedAt" = NOW()`];
+    const params: any[] = [];
+
+    if (b.name !== undefined) { params.push(b.name); sets.push(`name = $${params.length}`); }
+    if (b.description !== undefined) { params.push(b.description); sets.push(`description = $${params.length}`); }
+    if (b.triggerEvent !== undefined) { params.push(b.triggerEvent); sets.push(`"triggerEvent" = $${params.length}`); }
+    if (b.conditionField !== undefined) { params.push(b.conditionField); sets.push(`"conditionField" = $${params.length}`); }
+    if (b.conditionOperator !== undefined) { params.push(b.conditionOperator); sets.push(`"conditionOperator" = $${params.length}`); }
+    if (b.conditionValue !== undefined) { params.push(b.conditionValue); sets.push(`"conditionValue" = $${params.length}`); }
+    if (b.actionType !== undefined) { params.push(b.actionType); sets.push(`"actionType" = $${params.length}`); }
+    if (b.actionTarget !== undefined) { params.push(b.actionTarget); sets.push(`"actionTarget" = $${params.length}`); }
+    if (b.actionConfig !== undefined) { params.push(JSON.stringify(b.actionConfig)); sets.push(`"actionConfig" = $${params.length}`); }
+    if (b.module !== undefined) { params.push(b.module); sets.push(`module = $${params.length}`); }
+    if (b.priority !== undefined) { params.push(b.priority); sets.push(`priority = $${params.length}`); }
+    if (b.isActive !== undefined) { params.push(b.isActive); sets.push(`"isActive" = $${params.length}`); }
+
+    params.push(id);
+    await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length}`, params);
+
+    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [id]);
+    res.json(rule);
+  } catch (err) {
+    handleRouteError(err, res, "تعديل قاعدة");
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!existing) {
+      res.status(404).json({ error: "القاعدة غير موجودة أو لا يمكن حذف القواعد الافتراضية" });
+      return;
+    }
+    await rawExecute(`DELETE FROM business_rules WHERE id = $1`, [id]);
+    res.json({ message: "تم حذف القاعدة بنجاح" });
+  } catch (err) {
+    handleRouteError(err, res, "حذف قاعدة");
+  }
+});
+
+router.patch("/:id/toggle", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
+      [id, scope.companyId]
+    );
+    if (!existing) {
+      res.status(404).json({ error: "القاعدة غير موجودة" });
+      return;
+    }
+    const newActive = !existing.isActive;
+    await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND ("companyId" IS NULL OR "companyId" = $3)`, [newActive, id, scope.companyId]);
+    res.json({ id, isActive: newActive, message: newActive ? "تم تفعيل القاعدة" : "تم تعطيل القاعدة" });
+  } catch (err) {
+    handleRouteError(err, res, "تبديل حالة القاعدة");
+  }
+});
+
+export default router;

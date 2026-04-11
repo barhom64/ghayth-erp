@@ -1,0 +1,3734 @@
+import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import { Router } from "express";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import rateLimit from "express-rate-limit";
+import {
+  haversineDistance,
+  createNotification,
+  emitEvent,
+  createAuditLog,
+  getManagerAssignmentId,
+  initiateApprovalChain,
+  processApprovalStep,
+  createJournalEntry,
+  getAccountCodeFromMapping,
+} from "../lib/businessHelpers.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import {
+  computeLeaveImpact,
+  computeTerminationImpact,
+  computeViolationImpact,
+} from "../lib/impactPreview.js";
+import { submitWorkflow } from "../lib/workflowEngine.js";
+
+const router = Router();
+router.use(authMiddleware);
+
+const checkInLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى لمحاولات تسجيل الحضور. يرجى المحاولة بعد دقيقة" },
+  validate: { ip: false, trustProxy: false },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATTENDANCE – check-in and dedicated check-out endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+    const period = today.slice(0, 7);
+    const { lat, lon, notes } = req.body as any;
+
+    // ── Step 1: GPS + timestamp received ──
+
+    // ── Step 2: Prevent duplicate check-in ──
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "checkOut" FROM attendance
+       WHERE "assignmentId" = $1 AND date = $2`,
+      [scope.activeAssignmentId, today]
+    );
+    if (existing) {
+      res.status(400).json({ error: "لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة" });
+      return;
+    }
+
+    // ── Step 3: Fetch assignment, shift, and branch ──
+    const [assignment] = await rawQuery<any>(
+      `SELECT ea."branchId", ea.salary, ea."employeeId", ea."departmentId",
+              b.lat AS "branchLat", b.lon AS "branchLon"
+       FROM employee_assignments ea
+       LEFT JOIN branches b ON b.id = ea."branchId"
+       WHERE ea.id = $1`,
+      [scope.activeAssignmentId]
+    );
+
+    // ── Step 4: Check if today is a work day ──
+    const [shiftAssignment] = await rawQuery<any>(
+      `SELECT s.id, s."startTime", s."endTime", s.days
+       FROM employee_shift_assignments esa
+       JOIN shifts s ON s.id = esa."shiftId"
+       WHERE esa."assignmentId" = $1
+         AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
+       ORDER BY esa.id DESC LIMIT 1`,
+      [scope.activeAssignmentId, today]
+    );
+    let shift = shiftAssignment;
+    if (!shift) {
+      const [defaultShift] = await rawQuery<any>(
+        `SELECT id, "startTime", "endTime", days FROM shifts
+         WHERE "companyId" = $1 AND status = 'active'
+         ORDER BY "isDefault" DESC LIMIT 1`,
+        [scope.companyId]
+      );
+      shift = defaultShift;
+    }
+    if (!shift) {
+      const { insertId: newShiftId } = await rawExecute(
+        `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status)
+         VALUES ($1,$2,'وردية افتراضية','08:00','17:00','0,1,2,3,4',true,'active')`,
+        [scope.companyId, scope.branchId]
+      );
+      shift = { id: newShiftId, startTime: "08:00", endTime: "17:00", days: "0,1,2,3,4" };
+    }
+
+    const dayOfWeek = now.getDay();
+    const shiftDays = String(shift.days ?? "0,1,2,3,4").split(",").map(Number);
+    const isWorkDay = shiftDays.includes(dayOfWeek);
+
+    // ── Step 5: Check if employee is on approved leave ──
+    const [activeLeave] = await rawQuery<any>(
+      `SELECT id FROM hr_leave_requests
+       WHERE "employeeId" = $1 AND status = 'approved'
+         AND "startDate" <= $2 AND "endDate" >= $2`,
+      [scope.employeeId, today]
+    );
+    if (activeLeave) {
+      res.status(400).json({ error: "أنت في إجازة مُعتمدة اليوم. لا يمكن تسجيل الحضور.", leaveRequestId: activeLeave.id });
+      return;
+    }
+
+    // ── Step 6: GPS validation (Haversine) ──
+    let distanceMeters: number | null = null;
+    let isOutOfRange = false;
+    const [policy] = await rawQuery<any>(
+      `SELECT "gpsRadiusMeters","lateThresholdMinutes",
+              "penaltyLevel1","penaltyLevel2","penaltyLevel3","penaltyLevel4","penaltyLevel5",
+              "penaltyLevel1Label","penaltyLevel2Label","penaltyLevel3Label","penaltyLevel4Label","penaltyLevel5Label"
+       FROM attendance_policies WHERE "companyId" = $1`,
+      [scope.companyId]
+    );
+    const gpsRadius = policy?.gpsRadiusMeters ?? 500;
+    const lateThreshold = policy?.lateThresholdMinutes ?? 15;
+
+    if (lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
+      distanceMeters = Math.round(
+        haversineDistance(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon))
+      );
+      isOutOfRange = distanceMeters > gpsRadius;
+    }
+
+    if (isOutOfRange) {
+      await rawExecute(
+        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+         VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
+        [scope.companyId, scope.activeAssignmentId, `تسجيل حضور خارج نطاق الفرع بمسافة ${distanceMeters}م`, period]
+      );
+    }
+
+    // ── Step 7: Late detection ──
+    let lateMinutes = 0;
+    let isLate = false;
+    if (shift?.startTime) {
+      const parts = String(shift.startTime).split(":");
+      const h = Number(parts[0]);
+      const m = Number(parts[1]);
+      const expected = new Date(today + "T00:00:00");
+      expected.setHours(h, m, 0, 0);
+      const diff = now.getTime() - expected.getTime();
+      if (diff > 0) { lateMinutes = Math.floor(diff / 60000); isLate = lateMinutes > 0; }
+    }
+
+    // ── Step 8: Check policy threshold ──
+    const exceedsThreshold = isLate && lateMinutes > lateThreshold;
+
+    // ── Step 9: Calculate deduction ──
+    let deductionAmount = 0;
+    if (isLate && assignment?.salary) {
+      const dailySalary = Number(assignment.salary) / 30;
+      const minuteRate = dailySalary / 480;
+      deductionAmount = Math.round(minuteRate * lateMinutes * 100) / 100;
+    }
+
+    // ── Step 10: Insert attendance record ──
+    let checkInStatus: string;
+    if (!isWorkDay) {
+      checkInStatus = "present_off_day";
+    } else if (isOutOfRange) {
+      checkInStatus = "present_out_of_range";
+    } else {
+      checkInStatus = "present";
+    }
+
+    const { insertId: attendanceId } = await rawExecute(
+      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
+        today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
+        lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null]
+    );
+
+    // ── Step 11: Auto violation if late > threshold ──
+    let violationId: number | null = null;
+    if (exceedsThreshold) {
+      const { insertId: vId } = await rawExecute(
+        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+         VALUES ($1,$2,'late_arrival',$3,'medium',$4,$5)`,
+        [scope.companyId, scope.activeAssignmentId, `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`, deductionAmount, period]
+      );
+      violationId = vId;
+
+      // ── Step 12: Record pending payroll deduction ──
+      await rawExecute(
+        `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+         VALUES ($1,$2,$3,'late',$4,$5,$6,'pending_payroll')`,
+        [scope.companyId, scope.activeAssignmentId, attendanceId, lateMinutes, deductionAmount, period]
+      );
+    }
+
+    // ── Step 13: Count monthly violations for penalty escalation ──
+    let penaltyLevel = 0;
+    let penaltyLabel = "";
+    let penaltyDeduction = 0;
+    if (exceedsThreshold) {
+      const [monthCount] = await rawQuery<any>(
+        `SELECT COUNT(*) AS cnt FROM employee_violations
+         WHERE "assignmentId" = $1 AND period = $2 AND type = 'late_arrival' AND "deletedAt" IS NULL`,
+        [scope.activeAssignmentId, period]
+      );
+      const count = Number(monthCount?.cnt ?? 1);
+
+      // ── Step 14: 5-level penalty escalation ──
+      if (count >= 10) {
+        penaltyLevel = 5;
+        penaltyDeduction = Number(policy?.penaltyLevel5 ?? 500);
+        penaltyLabel = policy?.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي";
+      } else if (count >= 7) {
+        penaltyLevel = 4;
+        penaltyDeduction = Number(policy?.penaltyLevel4 ?? 200);
+        penaltyLabel = policy?.penaltyLevel4Label ?? "خصم يومين";
+      } else if (count >= 5) {
+        penaltyLevel = 3;
+        penaltyDeduction = Number(policy?.penaltyLevel3 ?? 100);
+        penaltyLabel = policy?.penaltyLevel3Label ?? "خصم يوم";
+      } else if (count >= 3) {
+        penaltyLevel = 2;
+        penaltyDeduction = Number(policy?.penaltyLevel2 ?? 50);
+        penaltyLabel = policy?.penaltyLevel2Label ?? "إنذار كتابي";
+      } else {
+        penaltyLevel = 1;
+        penaltyDeduction = Number(policy?.penaltyLevel1 ?? 0);
+        penaltyLabel = policy?.penaltyLevel1Label ?? "إنذار شفهي";
+      }
+
+      if (penaltyDeduction > 0) {
+        await rawExecute(
+          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+           VALUES ($1,$2,$3,'penalty',0,$4,$5,'pending_payroll')`,
+          [scope.companyId, scope.activeAssignmentId, attendanceId, penaltyDeduction, period]
+        );
+      }
+    }
+
+    // ── Step 15: Update monthly stats ──
+    await rawExecute(
+      `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"presentDays","lateDays","totalLateMinutes","totalDeduction")
+       VALUES ($1,$2,$3,1,$4,$5,$6)
+       ON CONFLICT ("assignmentId",period) DO UPDATE
+       SET "presentDays" = employee_monthly_attendance."presentDays" + 1,
+           "lateDays" = employee_monthly_attendance."lateDays" + $4,
+           "totalLateMinutes" = employee_monthly_attendance."totalLateMinutes" + $5,
+           "totalDeduction" = employee_monthly_attendance."totalDeduction" + $6`,
+      [scope.companyId, scope.activeAssignmentId, period, isLate ? 1 : 0, lateMinutes, deductionAmount + penaltyDeduction]
+    );
+
+    // ── Step 16: Notify employee about late ──
+    if (exceedsThreshold) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
+        type: "late_warning", title: "تنبيه تأخر",
+        body: `تم تسجيل تأخرك ${lateMinutes} دقيقة اليوم. ${penaltyLabel ? `العقوبة: ${penaltyLabel}` : ""}`,
+        priority: "high", refType: "attendance", refId: attendanceId,
+      }).catch(console.error);
+    }
+
+    // ── Step 17: Notify manager ──
+    if (exceedsThreshold) {
+      getManagerAssignmentId(scope.companyId, scope.branchId).then((managerAssignmentId) => {
+        if (managerAssignmentId) {
+          createNotification({
+            companyId: scope.companyId, assignmentId: managerAssignmentId,
+            type: "late_arrival", title: "تأخر موظف",
+            body: `تأخر الموظف ${lateMinutes} دقيقة اليوم ${today}${penaltyLevel > 0 ? ` (مستوى العقوبة: ${penaltyLevel})` : ""}`,
+            priority: "high", refType: "attendance", refId: attendanceId,
+          }).catch(console.error);
+        }
+      }).catch(console.error);
+    }
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "attendance.checkin", entity: "attendance", entityId: attendanceId,
+      details: JSON.stringify({ lateMinutes, isLate, distanceMeters, isOutOfRange, penaltyLevel, penaltyLabel, isWorkDay }),
+    }).catch(console.error);
+
+    res.json({
+      message: "تم تسجيل الحضور", lateMinutes, isLate,
+      deductionAmount, distanceMeters, isOutOfRange, type: "checkin",
+      penaltyLevel, penaltyLabel, penaltyDeduction, isWorkDay,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Check-in error:");
+  }
+});
+
+router.post("/check-out", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+    const period = today.slice(0, 7);
+    const { notes, lat, lon } = req.body as any;
+
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "checkIn", "checkOut" FROM attendance
+       WHERE "assignmentId" = $1 AND date = $2`,
+      [scope.activeAssignmentId, today]
+    );
+    if (!existing) {
+      res.status(400).json({ error: "لم تسجل حضوراً اليوم" });
+      return;
+    }
+    if (existing.checkOut) {
+      res.status(400).json({ error: "لقد سجلت الانصراف مسبقاً اليوم" });
+      return;
+    }
+
+    // ── Fetch assignment for salary ──
+    const [assignment] = await rawQuery<any>(
+      `SELECT ea.salary, ea."branchId", b.lat AS "branchLat", b.lon AS "branchLon"
+       FROM employee_assignments ea
+       LEFT JOIN branches b ON b.id = ea."branchId"
+       WHERE ea.id = $1`,
+      [scope.activeAssignmentId]
+    );
+
+    // ── Fetch shift for end time ──
+    let shift: any = null;
+    const [shiftAssignment] = await rawQuery<any>(
+      `SELECT s."endTime", s."startTime"
+       FROM employee_shift_assignments esa
+       JOIN shifts s ON s.id = esa."shiftId"
+       WHERE esa."assignmentId" = $1
+         AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
+       ORDER BY esa.id DESC LIMIT 1`,
+      [scope.activeAssignmentId, today]
+    );
+    if (shiftAssignment) {
+      shift = shiftAssignment;
+    } else {
+      const [defaultShift] = await rawQuery<any>(
+        `SELECT "endTime", "startTime" FROM shifts
+         WHERE "companyId" = $1 AND status = 'active'
+         ORDER BY "isDefault" DESC LIMIT 1`,
+        [scope.companyId]
+      );
+      shift = defaultShift ?? { endTime: "17:00", startTime: "08:00" };
+    }
+
+    // ── GPS validation on check-out ──
+    const [policy] = await rawQuery<any>(
+      `SELECT "gpsRadiusMeters" FROM attendance_policies WHERE "companyId" = $1`,
+      [scope.companyId]
+    );
+    const gpsRadius = policy?.gpsRadiusMeters ?? 500;
+    let checkOutDistanceMeters: number | null = null;
+    let isCheckOutOutOfRange = false;
+    if (lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
+      checkOutDistanceMeters = Math.round(
+        haversineDistance(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon))
+      );
+      isCheckOutOutOfRange = checkOutDistanceMeters > gpsRadius;
+      if (isCheckOutOutOfRange) {
+        await rawExecute(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
+          [scope.companyId, scope.activeAssignmentId,
+            `تسجيل انصراف خارج نطاق الفرع بمسافة ${checkOutDistanceMeters}م`, period]
+        );
+      }
+    }
+
+    // ── Calculate worked time ──
+    const checkInTime = new Date(existing.checkIn);
+    const workedMs = now.getTime() - checkInTime.getTime();
+    const workedHours = Math.round((workedMs / 3600000) * 100) / 100;
+
+    // ── Calculate overtime: compare actual checkout vs shift end ──
+    let overtimeMinutes = 0;
+    let earlyDepartureMinutes = 0;
+    if (shift?.endTime) {
+      const parts = String(shift.endTime).split(":");
+      const endH = Number(parts[0]);
+      const endM = Number(parts[1] ?? 0);
+      const shiftEnd = new Date(today + "T00:00:00");
+      shiftEnd.setHours(endH, endM, 0, 0);
+      const diffMs = now.getTime() - shiftEnd.getTime();
+      if (diffMs > 0) {
+        overtimeMinutes = Math.floor(diffMs / 60000);
+      } else if (diffMs < 0) {
+        earlyDepartureMinutes = Math.abs(Math.floor(diffMs / 60000));
+      }
+    }
+
+    // ── Update attendance record ──
+    await rawExecute(
+      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3`,
+      [now.toISOString(), notes ?? null, existing.id,
+        lat !== undefined && lat !== null ? Number(lat) : null,
+        lon !== undefined && lon !== null ? Number(lon) : null,
+        overtimeMinutes]
+    );
+
+    // ── Update monthly stats ──
+    await rawExecute(
+      `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"overtimeMinutes")
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT ("assignmentId",period) DO UPDATE
+       SET "overtimeMinutes" = COALESCE(employee_monthly_attendance."overtimeMinutes", 0) + $4`,
+      [scope.companyId, scope.activeAssignmentId, period, overtimeMinutes]
+    );
+
+    // ── Early departure violation ──
+    if (earlyDepartureMinutes > 0) {
+      const dailySalary = Number(assignment?.salary ?? 0) / 30;
+      const minuteRate = dailySalary / 480;
+      const earlyDeductionAmount = Math.round(minuteRate * earlyDepartureMinutes * 100) / 100;
+
+      await rawExecute(
+        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+         VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)`,
+        [scope.companyId, scope.activeAssignmentId,
+          `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
+          earlyDeductionAmount, period]
+      );
+
+      if (earlyDeductionAmount > 0) {
+        await rawExecute(
+          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+           VALUES ($1,$2,$3,'early_departure',$4,$5,$6,'pending_payroll')`,
+          [scope.companyId, scope.activeAssignmentId, existing.id, earlyDepartureMinutes, earlyDeductionAmount, period]
+        );
+      }
+
+      // ── Notify employee about early departure ──
+      createNotification({
+        companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
+        type: "early_departure_warning", title: "تنبيه خروج مبكر",
+        body: `تم تسجيل خروجك المبكر بمقدار ${earlyDepartureMinutes} دقيقة اليوم.`,
+        priority: "high", refType: "attendance", refId: existing.id,
+      }).catch(console.error);
+
+      // ── Notify manager ──
+      getManagerAssignmentId(scope.companyId, scope.branchId).then((managerAssignmentId) => {
+        if (managerAssignmentId) {
+          createNotification({
+            companyId: scope.companyId, assignmentId: managerAssignmentId,
+            type: "early_departure", title: "خروج مبكر لموظف",
+            body: `غادر الموظف مبكراً بمقدار ${earlyDepartureMinutes} دقيقة اليوم ${today}`,
+            priority: "high", refType: "attendance", refId: existing.id,
+          }).catch(console.error);
+        }
+      }).catch(console.error);
+    }
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "attendance.checkout", entity: "attendance", entityId: existing.id,
+      details: JSON.stringify({ workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters }),
+    }).catch(console.error);
+
+    res.json({ message: "تم تسجيل الانصراف", workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, type: "checkout" });
+  } catch (err) {
+    handleRouteError(err, res, "Check-out error:");
+  }
+});
+
+router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { month } = req.query as { month?: string };
+    const monthStr = month ?? new Date().toISOString().slice(0, 7);
+
+    const filters = parseScopeFilters(req);
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'a."companyId"', branchColumn: 'a."branchId"' });
+    params.push(monthStr);
+
+    const records = await rawQuery<any>(
+      `SELECT a.id, a.date, a."checkIn", a."checkOut",
+              a."lateMinutes", a.status, e.name AS "employeeName",
+              a."checkInLat", a."checkInLon", a."checkOutLat", a."checkOutLon",
+              CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
+                THEN ROUND(EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn")) / 3600.0, 2)
+                ELSE NULL
+              END AS "workHours",
+              COALESCE(a."overtimeMinutes", 0) AS "overtimeMinutes",
+              COALESCE(v.deduction, 0) AS "deductionAmount",
+              COALESCE(v.severity, 'none') AS "violationSeverity"
+       FROM attendance a
+       JOIN employee_assignments ea ON ea.id = a."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN LATERAL (
+         SELECT ev.deduction, ev.severity
+         FROM employee_violations ev
+         WHERE ev."assignmentId" = ea.id AND ev."deletedAt" IS NULL AND ev.period = TO_CHAR(a.date, 'YYYY-MM')
+         ORDER BY ev.id DESC LIMIT 1
+       ) v ON TRUE
+       WHERE ${where}
+         AND TO_CHAR(a.date, 'YYYY-MM') = $${nextParamIndex}
+       ORDER BY a.date DESC`,
+      params
+    );
+
+    res.json({ data: records, total: records.length, page: 1, pageSize: records.length });
+  } catch (err) {
+    handleRouteError(err, res, "Get attendance error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEAVE TYPES & BALANCES
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/leave-types", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const types = await rawQuery<any>(
+      `SELECT id, name, "annualDays" AS "maxDays", true AS "requiresApproval", "isPaid"
+       FROM hr_leave_types WHERE "companyId" = $1 ORDER BY name`,
+      [scope.companyId]
+    );
+    res.json({ data: types, total: types.length, page: 1, pageSize: types.length });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const year = new Date().getFullYear();
+    const balancesFromTable = await rawQuery<any>(
+      `SELECT lb.*, lt.name
+       FROM hr_leave_balances lb
+       JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
+       WHERE lb."companyId" = $1 AND lb."employeeId" = $2 AND lb.year = $3`,
+      [scope.companyId, scope.employeeId, year]
+    );
+
+    if (balancesFromTable.length > 0) {
+      const data = balancesFromTable.map((b: any) => ({
+        leaveTypeId: b.leaveTypeId, name: b.name, annualDays: b.entitled,
+        maxDays: b.entitled, used: Number(b.used), reserved: Number(b.reserved),
+        remaining: Number(b.remaining),
+      }));
+      res.json({ data, total: data.length, page: 1, pageSize: data.length });
+      return;
+    }
+
+    const balances = await rawQuery<any>(
+      `SELECT lt.id AS "leaveTypeId", lt.name, lt."annualDays",
+              COALESCE(SUM(lr.days) FILTER (
+                WHERE lr.status = 'approved' AND EXTRACT(YEAR FROM lr."startDate") = $3
+              ), 0) AS used
+       FROM hr_leave_types lt
+       LEFT JOIN hr_leave_requests lr ON lr."leaveTypeId" = lt.id AND lr."employeeId" = $2
+       WHERE lt."companyId" = $1
+       GROUP BY lt.id, lt.name, lt."annualDays"
+       ORDER BY lt.name`,
+      [scope.companyId, scope.employeeId, year]
+    );
+
+    const data = balances.map((b: any) => ({
+      ...b, maxDays: Number(b.annualDays ?? 21), used: Number(b.used),
+      remaining: Number(b.annualDays ?? 21) - Number(b.used),
+    }));
+    res.json({ data, total: data.length, page: 1, pageSize: data.length });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEAVE REQUESTS – staged approval pipeline (manager → HR → auto-escalation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status, page = "1", limit: lim = "20" } = req.query as { status?: string; page?: string; limit?: string };
+    const filters = parseScopeFilters(req);
+
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, {
+      companyColumn: 'lr."companyId"',
+      branchColumn: 'lr."branchId"',
+    });
+    let finalWhere = where;
+    let paramIdx = nextParamIndex;
+    if (status) {
+      finalWhere += ` AND lr.status = $${paramIdx++}`;
+      params.push(status);
+    }
+
+    const pageNum = Math.max(Number(page), 1);
+    const pageSize = Math.min(Math.max(Number(lim), 1), 100);
+    const offset = (pageNum - 1) * pageSize;
+
+    params.push(pageSize);
+    const limitIdx = paramIdx++;
+    params.push(offset);
+    const offsetIdx = paramIdx++;
+
+    const requests = await rawQuery<any>(
+      `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days,
+              lr.reason, lr."createdAt", lr."rejectedReason", lr."approvedBy", lr."approvedAt",
+              e.name AS "employeeName", lt.name AS "leaveTypeName"
+       FROM hr_leave_requests lr
+       JOIN employees e ON e.id = lr."employeeId"
+       JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+       WHERE ${finalWhere}
+       ORDER BY lr."createdAt" DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params
+    );
+
+    const countParams = params.slice(0, params.length - 2);
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM hr_leave_requests lr WHERE ${finalWhere}`,
+      countParams
+    );
+
+    res.json({ data: requests, total: Number(countRow?.total ?? 0), page: pageNum, pageSize });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+router.post("/leave-requests", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = req.body as any;
+
+    if (!startDate || !endDate) {
+      res.status(400).json({ error: "تاريخا البداية والنهاية مطلوبة" });
+      return;
+    }
+
+    if (!leaveTypeId && leaveTypeName) {
+      const [found] = await rawQuery<any>(
+        `SELECT id FROM hr_leave_types WHERE LOWER(name)=LOWER($1) AND "companyId"=$2`,
+        [leaveTypeName, scope.companyId]
+      );
+      if (found) leaveTypeId = found.id;
+    }
+
+    if (!leaveTypeId) {
+      res.status(400).json({ error: "نوع الإجازة مطلوب" });
+      return;
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1);
+    const year = start.getFullYear();
+
+    // ── Validation 1: Fetch leave type with extended rules ──
+    const [leaveType] = await rawQuery<any>(
+      `SELECT id, name, "annualDays", "isPaid", "genderRestriction", "minServiceMonths", "oncePerCareer", "requiresDocument", "maxDeptAbsentPct"
+       FROM hr_leave_types WHERE id = $1 AND "companyId" = $2`,
+      [leaveTypeId, scope.companyId]
+    );
+    if (!leaveType) {
+      res.status(400).json({ error: "نوع الإجازة غير موجود" });
+      return;
+    }
+
+    // ── Validation 2: Check balance (accounting for reserved days) ──
+    const [balance] = await rawQuery<any>(
+      `SELECT entitled, used, reserved,
+              GREATEST(0, entitled - used - reserved) AS remaining
+       FROM hr_leave_balances
+       WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND year = $4`,
+      [scope.companyId, scope.employeeId, leaveTypeId, year]
+    );
+    if (balance) {
+      const effectiveRemaining = Math.max(0, Number(balance.entitled) - Number(balance.used) - Number(balance.reserved));
+      if (effectiveRemaining < days) {
+        res.status(400).json({
+          error: `رصيد الإجازة غير كافٍ. المتبقي الفعلي (بعد الحجوزات): ${effectiveRemaining} يوم، المطلوب: ${days} يوم`,
+        });
+        return;
+      }
+    } else {
+      const [usedRow] = await rawQuery<any>(
+        `SELECT COALESCE(SUM(days), 0) AS used FROM hr_leave_requests
+         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status IN ('approved','pending')
+           AND EXTRACT(YEAR FROM "startDate") = $3`,
+        [scope.employeeId, leaveTypeId, year]
+      );
+      const entitled = Number(leaveType.annualDays ?? 21);
+      if (entitled - Number(usedRow?.used ?? 0) < days) {
+        res.status(400).json({ error: `رصيد الإجازة غير كافٍ` });
+        return;
+      }
+    }
+
+    // ── Validation 3: No overlapping requests ──
+    const [overlap] = await rawQuery<any>(
+      `SELECT id FROM hr_leave_requests
+       WHERE "employeeId" = $1 AND status IN ('pending','approved')
+         AND "startDate" <= $2 AND "endDate" >= $3`,
+      [scope.employeeId, endDate, startDate]
+    );
+    if (overlap) {
+      res.status(400).json({ error: "يوجد طلب إجازة متداخل في هذه الفترة" });
+      return;
+    }
+
+    // ── Validation 4: Document requirement ──
+    if (leaveType.requiresDocument && !documentUrl && !reason) {
+      res.status(400).json({ error: "هذا النوع من الإجازة يتطلب إرفاق مستند أو سبب مفصل" });
+      return;
+    }
+
+    // ── Validation 5: Gender restriction ──
+    if (leaveType.genderRestriction) {
+      const [emp] = await rawQuery<any>(
+        `SELECT gender FROM employees WHERE id = $1`, [scope.employeeId]
+      );
+      if (emp?.gender && emp.gender !== leaveType.genderRestriction) {
+        res.status(400).json({ error: `هذا النوع من الإجازة مخصص للموظفين ${leaveType.genderRestriction === "female" ? "الإناث" : "الذكور"} فقط` });
+        return;
+      }
+    }
+
+    // ── Validation 6: Minimum service months ──
+    if (leaveType.minServiceMonths && leaveType.minServiceMonths > 0) {
+      const [ass] = await rawQuery<any>(
+        `SELECT "hireDate" FROM employee_assignments WHERE id = $1`, [scope.activeAssignmentId]
+      );
+      if (ass?.hireDate) {
+        const hireDate = new Date(ass.hireDate);
+        const monthsOfService = (new Date().getFullYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
+        if (monthsOfService < leaveType.minServiceMonths) {
+          res.status(400).json({ error: `يشترط مدة خدمة لا تقل عن ${leaveType.minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر` });
+          return;
+        }
+      }
+    }
+
+    // ── Validation 7: Once-per-career check (e.g., Hajj) ──
+    if (leaveType.oncePerCareer) {
+      const [prevHajj] = await rawQuery<any>(
+        `SELECT id FROM hr_leave_requests
+         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved'`,
+        [scope.employeeId, leaveTypeId]
+      );
+      if (prevHajj) {
+        res.status(400).json({ error: "لقد حصلت على هذا النوع من الإجازة مسبقاً (مرة واحدة فقط)" });
+        return;
+      }
+    }
+
+    // ── Validation 8: Department absent percentage limit ──
+    const maxDeptPct = Number(leaveType.maxDeptAbsentPct ?? 25);
+    const [assignment] = await rawQuery<any>(
+      `SELECT "departmentId" FROM employee_assignments WHERE id = $1`, [scope.activeAssignmentId]
+    );
+    if (assignment?.departmentId) {
+      const [deptTotal] = await rawQuery<any>(
+        `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "companyId" = $1 AND "departmentId" = $2 AND status = 'active'`,
+        [scope.companyId, assignment.departmentId]
+      );
+      const [deptAbsent] = await rawQuery<any>(
+        `SELECT COUNT(DISTINCT lr."employeeId") AS cnt FROM hr_leave_requests lr
+         JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId" AND ea."departmentId" = $1
+         WHERE lr.status = 'approved' AND lr."startDate" <= $2 AND lr."endDate" >= $3
+           AND lr."employeeId" != $4`,
+        [assignment.departmentId, endDate, startDate, scope.employeeId]
+      );
+      const totalDept = Number(deptTotal?.cnt ?? 1);
+      const absentDept = Number(deptAbsent?.cnt ?? 0);
+      if (totalDept > 0 && ((absentDept + 1) / totalDept) * 100 > maxDeptPct) {
+        res.status(400).json({ error: `نسبة الغياب في القسم ستتجاوز الحد المسموح (${maxDeptPct}%). الزملاء الغائبون: ${absentDept}/${totalDept}` });
+        return;
+      }
+    }
+
+    // ── Create request with dynamic approval chain from approval_chains table ──
+    const entitled = Number(leaveType.annualDays ?? 21);
+
+    // Prefer direct manager (managerId on assignment = employees.id) over branch-level manager lookup
+    let managerAssignmentId: number | null = null;
+    try {
+      const [directManagerRow] = await rawQuery<any>(
+        `SELECT ea2.id AS "managerAssignmentId"
+         FROM employee_assignments ea
+         JOIN employee_assignments ea2 ON ea2."employeeId" = ea."managerId" AND ea2.status = 'active' AND ea2."companyId" = $2
+         WHERE ea.id = $1 AND ea."managerId" IS NOT NULL
+         LIMIT 1`,
+        [scope.activeAssignmentId, scope.companyId]
+      );
+      managerAssignmentId = directManagerRow?.managerAssignmentId ?? null;
+    } catch (_e) {}
+    if (!managerAssignmentId) {
+      managerAssignmentId = await getManagerAssignmentId(scope.companyId, scope.branchId);
+    }
+
+    // Read approval chain from DB (fall back to default manager→HR if none configured)
+    let chainSteps: any[] = [];
+    try {
+      chainSteps = await rawQuery<any>(
+        `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
+         FROM approval_chains ac
+         JOIN approval_chain_steps acs ON acs."chainId" = ac.id
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         ORDER BY acs."stepOrder" ASC`,
+        [scope.companyId]
+      );
+    } catch (_e) {}
+
+    if (chainSteps.length === 0) {
+      chainSteps = [
+        { stepOrder: 1, requiredRole: "branch_manager", timeoutHours: 24, autoApproveOnTimeout: false },
+        { stepOrder: 2, requiredRole: "hr_manager", timeoutHours: 48, autoApproveOnTimeout: false },
+      ];
+    }
+
+    const firstStep = chainSteps[0];
+    const stage1ExpiresAt = new Date();
+    stage1ExpiresAt.setHours(stage1ExpiresAt.getHours() + (firstStep.timeoutHours ?? 24));
+
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO hr_leave_balances ("companyId","employeeId","assignmentId","leaveTypeId",year,entitled,used,reserved)
+         SELECT $1,$2,$3,$4,$5,$6,0,0
+         WHERE NOT EXISTS (
+           SELECT 1 FROM hr_leave_balances
+           WHERE "companyId"=$1 AND "employeeId"=$2 AND "leaveTypeId"=$4 AND year=$5
+         )`,
+        [scope.companyId, scope.employeeId, scope.activeAssignmentId, leaveTypeId, year, entitled]
+      );
+      await client.query(
+        `UPDATE hr_leave_balances
+         SET reserved = reserved + $1
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [days, scope.companyId, scope.employeeId, leaveTypeId, year]
+      );
+
+      const result = await client.query(
+        `INSERT INTO hr_leave_requests ("employeeId","companyId","leaveTypeId","startDate","endDate",days,reason,status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'pending') RETURNING id`,
+        [scope.employeeId, scope.companyId, leaveTypeId, startDate, endDate, days, reason ?? null]
+      );
+      insertId = result.rows[0].id;
+
+      // Find the appropriate assignee for the first step
+      let firstAssignee = managerAssignmentId;
+      if (!["branch_manager", "general_manager"].includes(firstStep.requiredRole)) {
+        const [roleMatch] = await rawQuery<any>(
+          `SELECT id FROM employee_assignments
+           WHERE "companyId" = $1 AND role = $2 AND status = 'active'
+           LIMIT 1`,
+          [scope.companyId, firstStep.requiredRole]
+        );
+        if (roleMatch) firstAssignee = roleMatch.id;
+      }
+
+      await client.query(
+        `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
+         VALUES ($1,1,$2,$3,$4)`,
+        [insertId, firstStep.requiredRole, firstAssignee ?? null, stage1ExpiresAt.toISOString()]
+      );
+    });
+
+    if (managerAssignmentId) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: managerAssignmentId,
+        type: "leave_request", title: "طلب إجازة جديد يتطلب موافقتك",
+        body: `طلب إجازة ${leaveType.name} لمدة ${days} أيام من ${startDate} إلى ${endDate}`,
+        priority: "high", refType: "leave_request", refId: insertId,
+        actionUrl: `/hr/leave-requests/${insertId}`,
+      }).catch(console.error);
+    }
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "leave.requested", entity: "hr_leave_requests", entityId: insertId,
+      details: JSON.stringify({ leaveTypeId, days, startDate, endDate, leaveTypeName: leaveType.name }),
+    }).catch(console.error);
+
+    submitWorkflow({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      requestType: "leave",
+      refTable: "hr_leave_requests",
+      refId: insertId,
+      title: `طلب إجازة ${leaveType.name} — ${days} ${days === 1 ? "يوم" : "أيام"}`,
+      submittedBy: scope.activeAssignmentId,
+      submittedByName: scope.userName,
+      data: { leaveTypeId, days, startDate, endDate, reason },
+    }).catch(console.error);
+
+    const [request] = await rawQuery<any>(
+      `SELECT lr.*, lt.name AS "leaveTypeName"
+       FROM hr_leave_requests lr JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+       WHERE lr.id = $1`,
+      [insertId]
+    );
+
+    res.status(201).json(request);
+  } catch (err) {
+    handleRouteError(err, res, "Request leave error:");
+  }
+});
+
+// Staged leave approval: manager (stage 1) → HR (stage 2)
+router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+    const { approved, reason } = req.body as { approved: boolean | "returned"; reason?: string };
+
+    // Authorization: only branch_manager, hr_manager, or owner roles can approve leave
+    if (!["branch_manager", "hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: صلاحية الموافقة محصورة بالمدير أو HR أو المالك" });
+      return;
+    }
+
+    const [request] = await rawQuery<any>(
+      `SELECT lr.*, lt.name AS "leaveTypeName"
+       FROM hr_leave_requests lr
+       JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+       WHERE lr.id = $1 AND lr."companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!request) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (request.status !== "pending") {
+      res.status(400).json({ error: "تم البت في هذا الطلب مسبقاً" }); return;
+    }
+
+    // Find the current pending stage for this request
+    const [currentStage] = await rawQuery<any>(
+      `SELECT * FROM leave_approval_stages
+       WHERE "leaveRequestId" = $1 AND status = 'pending'
+       ORDER BY stage ASC LIMIT 1`,
+      [Number(id)]
+    );
+
+    // Enforce stage-role: approver's role must match the required role for the current stage
+    if (currentStage && scope.role !== "owner") {
+      const stageRequiredRole = currentStage.requiredRole;
+      const isAssignedApprover = currentStage.assignedTo === scope.activeAssignmentId;
+
+      if (currentStage.assignedTo && !isAssignedApprover) {
+        res.status(403).json({
+          error: "هذه المرحلة مخصصة لموافق آخر. لا يمكنك اتخاذ القرار.",
+          requiredRole: stageRequiredRole,
+          currentStage: currentStage.stage,
+        });
+        return;
+      }
+
+      if (!currentStage.assignedTo) {
+        const roleMatchesStage =
+          (stageRequiredRole === "manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
+          (stageRequiredRole === "hr" && scope.role === "hr_manager") ||
+          (stageRequiredRole === "branch_manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
+          (stageRequiredRole === "hr_manager" && scope.role === "hr_manager") ||
+          (stageRequiredRole === scope.role);
+        if (!roleMatchesStage) {
+          res.status(403).json({
+            error: `هذه المرحلة تتطلب موافقة ${stageRequiredRole}. دورك الحالي: ${scope.role}`,
+            requiredRole: stageRequiredRole,
+            currentStage: currentStage.stage,
+          });
+          return;
+        }
+      }
+    }
+
+    const year = new Date(request.startDate).getFullYear();
+
+    if (!approved) {
+      // Rejection: authorized role at current stage can reject
+      await rawExecute(
+        `UPDATE hr_leave_requests
+         SET status = 'rejected', "approvedBy" = $1, "approvedAt" = NOW(), "rejectedReason" = $2
+         WHERE id = $3 AND "companyId" = $4`,
+        [scope.activeAssignmentId, reason ?? null, Number(id), scope.companyId]
+      );
+      if (currentStage) {
+        await rawExecute(
+          `UPDATE leave_approval_stages
+           SET status = 'rejected', decision = $1, "decidedBy" = $2, "decidedAt" = NOW()
+           WHERE id = $3`,
+          [reason ?? "مرفوض", scope.activeAssignmentId, currentStage.id]
+        );
+      }
+
+      // Restore reserved balance
+      await rawExecute(
+        `UPDATE hr_leave_balances
+         SET reserved = reserved - $1
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+      );
+
+      // Notify requester
+      const [reqAssignment] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [request.employeeId, scope.companyId]
+      );
+      if (reqAssignment) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: reqAssignment.id,
+          type: "leave_rejected", title: "تم رفض طلب الإجازة",
+          body: `تم رفض طلب الإجازة. السبب: ${reason ?? "لم يحدد"}`,
+          priority: "high", refType: "leave_request", refId: Number(id),
+        }).catch(console.error);
+      }
+
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'rejected',$2,$3,$4)`,
+          [Number(id), reason || null, scope.userId, scope.companyId]
+        );
+      } catch (e) { console.error("Failed to log approval action:", e); }
+
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.rejected",
+        entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+
+      res.json({ message: "تم الرفض", status: "rejected" });
+      return;
+    }
+
+    if (approved === "returned") {
+      if (!reason) { res.status(400).json({ error: "يجب ذكر سبب الإرجاع" }); return; }
+
+      await rawExecute(
+        `UPDATE hr_leave_requests SET status = 'returned', "rejectedReason" = $1 WHERE id = $2 AND "companyId" = $3`,
+        [reason, Number(id), scope.companyId]
+      );
+      if (currentStage) {
+        await rawExecute(
+          `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3`,
+          [reason, scope.activeAssignmentId, currentStage.id]
+        );
+      }
+
+      const [reqAssignment] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [request.employeeId, scope.companyId]
+      );
+      if (reqAssignment) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: reqAssignment.id,
+          type: "leave_returned", title: "تم إرجاع طلب الإجازة",
+          body: `تم إرجاع طلب الإجازة للمراجعة. السبب: ${reason}`,
+          priority: "medium", refType: "leave_request", refId: Number(id),
+        }).catch(console.error);
+      }
+
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'returned',$2,$3,$4)`,
+          [Number(id), reason, scope.userId, scope.companyId]
+        );
+      } catch (e) { console.error("Failed to log approval action:", e); }
+
+      res.json({ message: "تم الإرجاع", status: "returned" });
+      return;
+    }
+
+    // Approval path – dynamic chain from approval_chains table
+    const currentStageNum = currentStage?.stage ?? 1;
+
+    // Mark current stage as approved
+    if (currentStage) {
+      await rawExecute(
+        `UPDATE leave_approval_stages
+         SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+         WHERE id = $2`,
+        [scope.activeAssignmentId, currentStage.id]
+      );
+    }
+
+    // Read approval chain to determine next step
+    let chainSteps: any[] = [];
+    try {
+      chainSteps = await rawQuery<any>(
+        `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
+         FROM approval_chains ac
+         JOIN approval_chain_steps acs ON acs."chainId" = ac.id
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         ORDER BY acs."stepOrder" ASC`,
+        [scope.companyId]
+      );
+    } catch (_e) {}
+
+    if (chainSteps.length === 0) {
+      chainSteps = [
+        { stepOrder: 1, requiredRole: "branch_manager", timeoutHours: 24, autoApproveOnTimeout: false },
+        { stepOrder: 2, requiredRole: "hr_manager", timeoutHours: 48, autoApproveOnTimeout: false },
+      ];
+    }
+
+    // Find the next step after the current one
+    const nextStep = chainSteps.find((s: any) => s.stepOrder > currentStageNum);
+
+    if (nextStep) {
+      // Find the appropriate assignee for next step
+      const [nextAssignee] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments
+         WHERE "companyId" = $1 AND role IN ($2, 'owner') AND status = 'active'
+         ORDER BY CASE role WHEN $2 THEN 1 ELSE 2 END LIMIT 1`,
+        [scope.companyId, nextStep.requiredRole]
+      );
+
+      if (nextAssignee && nextAssignee.id !== scope.activeAssignmentId) {
+        const nextExpiresAt = new Date();
+        nextExpiresAt.setHours(nextExpiresAt.getHours() + (nextStep.timeoutHours ?? 48));
+        await rawExecute(
+          `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
+           VALUES ($1,$2,$3,$4,$5)`,
+          [Number(id), nextStep.stepOrder, nextStep.requiredRole, nextAssignee.id, nextExpiresAt.toISOString()]
+        );
+
+        createNotification({
+          companyId: scope.companyId, assignmentId: nextAssignee.id,
+          type: "leave_request", title: `طلب إجازة يتطلب مراجعة ${nextStep.requiredRole}`,
+          body: `أقر المرحلة ${currentStageNum} على طلب إجازة لمدة ${request.days} أيام`,
+          priority: "high", refType: "leave_request", refId: Number(id),
+        }).catch(console.error);
+
+        emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `leave.stage${currentStageNum}_approved`,
+          entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+
+        res.json({ message: `تمت الموافقة من المرحلة ${currentStageNum}. الطلب الآن في مرحلة ${nextStep.requiredRole}`, status: "pending", nextStage: nextStep.stepOrder });
+        return;
+      }
+    }
+
+    // Final approval (stage 2 HR or owner approving directly)
+    await rawExecute(
+      `UPDATE hr_leave_requests
+       SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW()
+       WHERE id = $2 AND "companyId" = $3`,
+      [scope.activeAssignmentId, Number(id), scope.companyId]
+    );
+    if (currentStage) {
+      await rawExecute(
+        `UPDATE leave_approval_stages
+         SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+         WHERE id = $2`,
+        [scope.activeAssignmentId, currentStage.id]
+      );
+    }
+
+    // ── Fetch ALL assignments first (needed for balance + attendance + tasks) ──
+    const allAssignments = await rawQuery<any>(
+      `SELECT ea.id, ea."companyId", ea."branchId"
+       FROM employee_assignments ea
+       WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
+      [request.employeeId]
+    );
+
+    // Confirm balance deduction: move from reserved to used across ALL companies
+    // Leave follows the person (not the assignment), so deduct from all companies
+    const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
+    for (const cId of allCompanyIds) {
+      await rawExecute(
+        `UPDATE hr_leave_balances
+         SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [request.days, cId, request.employeeId, request.leaveTypeId, year]
+      );
+    }
+
+    // Update approval_requests table
+    await rawExecute(
+      `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+       WHERE "refType" = 'leave_request' AND "refId" = $2`,
+      [scope.activeAssignmentId, Number(id)]
+    );
+    const leaveStart = new Date(request.startDate);
+    const leaveEnd = new Date(request.endDate);
+    for (const asn of allAssignments) {
+      for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split("T")[0];
+        await rawExecute(
+          `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
+           VALUES ($1,$2,$3,$4,'on_leave',$5)
+           ON CONFLICT DO NOTHING`,
+          [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${id}`]
+        ).catch(() => {});
+      }
+    }
+
+    // ── Reassign tasks during leave period (per assignment's own company) ──
+    if (allAssignments.length > 0) {
+      const assignmentIds = allAssignments.map((a: any) => a.id);
+      for (const asn of allAssignments) {
+        const aId = asn.id;
+        const [managerAId] = await rawQuery<any>(
+          `SELECT ea.id FROM employee_assignments ea
+           WHERE ea."companyId" = $1 AND ea."branchId" = $2
+             AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
+           ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
+          [asn.companyId, asn.branchId, aId]
+        );
+        if (managerAId) {
+          await rawExecute(
+            `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
+             WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
+               AND status NOT IN ('completed','cancelled')
+               AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
+            [managerAId.id, aId, request.startDate, request.endDate]
+          ).catch(() => {});
+        }
+      }
+    }
+
+    // ── Notify requester and all managers ──
+    for (const asn of allAssignments) {
+      createNotification({
+        companyId: asn.companyId, assignmentId: asn.id,
+        type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
+        body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
+        priority: "high", refType: "leave_request", refId: Number(id),
+      }).catch(console.error);
+
+      getManagerAssignmentId(asn.companyId, asn.branchId).then((mgr) => {
+        if (mgr && mgr !== scope.activeAssignmentId) {
+          createNotification({
+            companyId: asn.companyId, assignmentId: mgr,
+            type: "leave_approved", title: "موظف في إجازة معتمدة",
+            body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
+            priority: "normal", refType: "leave_request", refId: Number(id),
+          }).catch(console.error);
+        }
+      }).catch(console.error);
+    }
+
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'approved',$2,$3,$4)`,
+        [Number(id), reason || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error("Failed to log approval action:", e); }
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.approved",
+      entity: "hr_leave_requests", entityId: Number(id),
+      details: JSON.stringify({ affectedAssignments: allAssignments.length }) }).catch(console.error);
+
+    res.json({ message: "تمت الموافقة النهائية", status: "approved", affectedAssignments: allAssignments.length });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+// Get leave request approval stages with timeline
+router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+
+    const [leaveReq] = await rawQuery<any>(
+      `SELECT id FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!leaveReq) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+
+    const stages = await rawQuery<any>(
+      `SELECT las.*, e.name AS "decidedByName"
+       FROM leave_approval_stages las
+       LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE las."leaveRequestId" = $1
+       ORDER BY las.stage ASC`,
+      [Number(id)]
+    );
+
+    // Also get the configured chain steps for context
+    let chainSteps: any[] = [];
+    try {
+      chainSteps = await rawQuery<any>(
+        `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
+         FROM approval_chains ac
+         JOIN approval_chain_steps acs ON acs."chainId" = ac.id
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         ORDER BY acs."stepOrder" ASC`,
+        [scope.companyId]
+      );
+    } catch (_e) {}
+
+    if (chainSteps.length === 0) {
+      chainSteps = [
+        { stepOrder: 1, requiredRole: "branch_manager", timeoutHours: 24, autoApproveOnTimeout: false },
+        { stepOrder: 2, requiredRole: "hr_manager", timeoutHours: 48, autoApproveOnTimeout: false },
+      ];
+    }
+
+    res.json({ stages, chainSteps, totalSteps: chainSteps.length });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+// Escalate – auto-escalation after 48h (HR/owner only)
+router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+
+    if (!["branch_manager", "hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك" });
+      return;
+    }
+
+    const [request] = await rawQuery<any>(
+      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
+      [Number(id), scope.companyId]
+    );
+    if (!request) { res.status(404).json({ error: "الطلب غير موجود أو ليس معلقاً" }); return; }
+
+    // Escalation is only valid when the current pending stage has exceeded its 48h window
+    const [currentPendingStage] = await rawQuery<any>(
+      `SELECT id, stage, "requiredRole", "expiresAt"
+       FROM leave_approval_stages
+       WHERE "leaveRequestId" = $1 AND status = 'pending'
+       ORDER BY stage ASC LIMIT 1`,
+      [Number(id)]
+    );
+
+    if (!currentPendingStage) {
+      res.status(400).json({ error: "لا توجد مراحل موافقة معلقة لهذا الطلب" });
+      return;
+    }
+
+    const expiresAt = new Date(currentPendingStage.expiresAt);
+    if (expiresAt > new Date()) {
+      const msRemaining = expiresAt.getTime() - Date.now();
+      const hoursRemaining = Math.ceil(msRemaining / 3600000);
+      res.status(400).json({
+        error: `لا يمكن التصعيد قبل انتهاء مهلة الموافقة (48 ساعة). الوقت المتبقي: ${hoursRemaining} ساعة`,
+        expiresAt: expiresAt.toISOString(),
+        hoursRemaining,
+      });
+      return;
+    }
+
+    // Stage has expired – mark it and escalate
+    await rawExecute(
+      `UPDATE leave_approval_stages
+       SET status = 'escalated'
+       WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
+      [Number(id)]
+    );
+
+    const [hrAssignment] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments
+       WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active'
+       ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
+      [scope.companyId]
+    );
+    if (hrAssignment) {
+      const escalateExpiresAt = new Date();
+      escalateExpiresAt.setHours(escalateExpiresAt.getHours() + 24);
+      await rawExecute(
+        `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
+         VALUES ($1,99,'hr_manager',$2,$3)`,
+        [Number(id), hrAssignment.id, escalateExpiresAt.toISOString()]
+      );
+
+      createNotification({
+        companyId: scope.companyId, assignmentId: hrAssignment.id,
+        type: "leave_escalated", title: "تصعيد طلب إجازة",
+        body: `تم تصعيد طلب إجازة (${id}) لعدم البت فيه خلال المهلة المحددة`,
+        priority: "urgent", refType: "leave_request", refId: Number(id),
+      }).catch(console.error);
+    }
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.escalated",
+      entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+
+    res.json({ message: "تم تصعيد الطلب لـ HR" });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYROLL – employee-level aggregation with multi-assignment, GOSI, absences, loans
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const runs = await rawQuery<any>(
+      `SELECT pr.id, pr.period, pr.status, pr."totalNet",
+              pr."createdAt", e.name AS "runByName",
+              COUNT(pl.id) AS "employeeCount"
+       FROM payroll_runs pr
+       LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN payroll_lines pl ON pl."runId" = pr.id AND pl."deletedAt" IS NULL
+       WHERE pr."companyId" = $1 AND pr."deletedAt" IS NULL
+       GROUP BY pr.id, e.name ORDER BY pr."createdAt" DESC`,
+      [scope.companyId]
+    );
+    const data = runs.map((r: any) => ({
+      ...r, month: r.period, totalAmount: Number(r.totalNet),
+      employeeCount: Number(r.employeeCount),
+    }));
+    res.json({ data, total: data.length, page: 1, pageSize: data.length });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+router.get("/payroll/:id/lines", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+
+    // Verify this payroll run belongs to the requesting company (prevent IDOR)
+    const [run] = await rawQuery<any>(
+      `SELECT id FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [Number(id), scope.companyId]
+    );
+    if (!run) { res.status(404).json({ error: "سجل الرواتب غير موجود" }); return; }
+
+    const lines = await rawQuery<any>(
+      `SELECT pl.*, e.name AS "employeeName", e."empNumber"
+       FROM payroll_lines pl
+       JOIN employee_assignments ea ON ea.id = pl."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY e.name`,
+      [Number(id)]
+    );
+    const data = lines.map((l: any) => ({
+      ...l, basic: Number(l.basic), grossSalary: Number(l.grossSalary),
+      gosi: Number(l.gosi), lateDeduction: Number(l.lateDeduction), netSalary: Number(l.netSalary),
+    }));
+    res.json({ data, total: data.length, page: 1, pageSize: data.length });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    // Payroll execution requires HR, Finance, Director or Owner role
+    if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({
+        error: "ليس لديك الصلاحية لتشغيل مسير الرواتب",
+        requiredRoles: ["hr_manager", "finance_manager", "general_manager", "owner"],
+        yourRole: scope.role,
+      });
+      return;
+    }
+    const { month } = req.body as { month?: string };
+    const targetPeriod = month ?? new Date().toISOString().slice(0, 7);
+
+    // Prevent duplicate runs
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM payroll_runs WHERE "companyId" = $1 AND period = $2 AND "deletedAt" IS NULL`,
+      [scope.companyId, targetPeriod]
+    );
+    if (existing) {
+      res.status(409).json({ error: `الرواتب لشهر ${targetPeriod} تمت معالجتها مسبقاً` }); return;
+    }
+
+    // ── Payroll pre-check: attendance completeness ──
+    const [activeCount] = await rawQuery<any>(
+      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "companyId" = $1 AND status = 'active'`,
+      [scope.companyId]
+    );
+    const [attendanceCount] = await rawQuery<any>(
+      `SELECT COUNT(DISTINCT a."assignmentId") AS cnt FROM attendance a
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2`,
+      [scope.companyId, targetPeriod]
+    );
+    const totalActive = Number(activeCount?.cnt ?? 0);
+    const totalWithAttendance = Number(attendanceCount?.cnt ?? 0);
+    if (totalActive > 0 && totalWithAttendance < totalActive) {
+      validationError(
+        res,
+        `لا يمكن تشغيل الرواتب: سجلات الحضور غير مكتملة (${totalWithAttendance} من ${totalActive} موظف لديهم حضور مسجّل)`,
+        "attendance",
+        `تأكد من اكتمال سجلات الحضور لجميع الموظفين في شهر ${targetPeriod} قبل تشغيل الرواتب`
+      );
+      return;
+    }
+
+    // ── Payroll pre-check: no unresolved violations ──
+    const unresolvedViolations = await rawQuery<any>(
+      `SELECT ev.id, e.name AS "employeeName", ev.type, ev.description
+       FROM employee_violations ev
+       JOIN employee_assignments ea ON ea.id = ev."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE ev."companyId" = $1 AND ev."deletedAt" IS NULL AND ev.period = $2 AND ev.deduction IS NULL
+       LIMIT 5`,
+      [scope.companyId, targetPeriod]
+    );
+    if (unresolvedViolations.length > 0) {
+      validationError(
+        res,
+        `لا يمكن تشغيل الرواتب: يوجد ${unresolvedViolations.length} مخالفة لم يُحدد جزاؤها`,
+        "violations",
+        "راجع المخالفات وحدد الجزاء لكل مخالفة قبل تشغيل الرواتب"
+      );
+      return;
+    }
+
+    const salaryComponents = await rawQuery<any>(
+      `SELECT id, name, type, "calculationType", value, "isTaxable", "isGosi", "isActive"
+       FROM salary_components WHERE "companyId" = $1 AND "isActive" = true ORDER BY "order"`,
+      [scope.companyId]
+    );
+
+    if (salaryComponents.length === 0) {
+      validationError(
+        res,
+        "لا يمكن تشغيل الرواتب: لم يتم إعداد بنود الراتب (salary_components) لهذه الشركة",
+        "salary_components",
+        "يرجى الانتقال إلى إعدادات الرواتب وإضافة بنود الراتب (بدل سكن، بدل نقل، التأمينات الاجتماعية...) قبل تشغيل الرواتب"
+      );
+      return;
+    }
+
+    const gosiSettings = await rawQuery<{ key: string; value: string }>(
+      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate')`,
+      [scope.companyId]
+    );
+    const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
+    const gosiComponent = salaryComponents.find((c: any) => c.isGosi && c.type === 'deduction');
+    const GOSI_EMPLOYEE_RATE = gosiComponent
+      ? Number(gosiComponent.value) / 100
+      : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
+    const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
+
+    const earningComponents = salaryComponents.filter((c: any) => c.type === 'earning' && !c.isGosi);
+
+    const assignments = await rawQuery<any>(
+      `SELECT ea.id AS "assignmentId", ea."employeeId", ea.salary, ea."branchId"
+       FROM employee_assignments ea
+       WHERE ea."companyId" = $1 AND ea.status = 'active'`,
+      [scope.companyId]
+    );
+
+    // Late deductions per assignment (type = 'late')
+    const lateDeductionRows = await rawQuery<any>(
+      `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
+       FROM attendance_deductions
+       WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'late'
+       GROUP BY "assignmentId"`,
+      [scope.companyId, targetPeriod]
+    );
+    const lateMap = new Map<number, number>();
+    for (const d of lateDeductionRows) lateMap.set(Number(d.assignmentId), Number(d.total));
+
+    // Penalty deductions per assignment (type = 'penalty')
+    const penaltyDeductionRows = await rawQuery<any>(
+      `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
+       FROM attendance_deductions
+       WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'penalty'
+       GROUP BY "assignmentId"`,
+      [scope.companyId, targetPeriod]
+    );
+    const penaltyMap = new Map<number, number>();
+    for (const d of penaltyDeductionRows) penaltyMap.set(Number(d.assignmentId), Number(d.total));
+
+    // Violation deductions per assignment (from attendance_deductions type='violation' only, not employee_violations to avoid double-counting with late/penalty)
+    const violationRows = await rawQuery<any>(
+      `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
+       FROM attendance_deductions
+       WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'violation'
+       GROUP BY "assignmentId"`,
+      [scope.companyId, targetPeriod]
+    );
+    const violationMap = new Map<number, number>();
+    for (const d of violationRows) violationMap.set(Number(d.assignmentId), Number(d.total));
+
+    // Absence days per assignment
+    const absenceRows = await rawQuery<any>(
+      `SELECT a."assignmentId", COUNT(*) AS "absentDays"
+       FROM attendance a
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent'
+       GROUP BY a."assignmentId"`,
+      [scope.companyId, targetPeriod]
+    );
+    const absenceMap = new Map<number, number>();
+    for (const row of absenceRows) absenceMap.set(Number(row.assignmentId), Number(row.absentDays ?? 0));
+
+    // Loan installments per assignment
+    const loanRows = await rawQuery<any>(
+      `SELECT la."assignmentId", COALESCE(SUM(la."monthlyInstallment"), 0) AS "installment"
+       FROM loan_accounts la
+       WHERE la."companyId" = $1 AND la.status = 'active' AND la."remainingAmount" > 0
+       GROUP BY la."assignmentId"`,
+      [scope.companyId]
+    );
+    const loanMap = new Map<number, number>();
+    for (const row of loanRows) loanMap.set(Number(row.assignmentId), Number(row.installment ?? 0));
+
+    // Overtime per assignment
+    const overtimeRows = await rawQuery<any>(
+      `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
+       FROM attendance a
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0
+       GROUP BY a."assignmentId"`,
+      [scope.companyId, targetPeriod]
+    );
+    const overtimeMap = new Map<number, number>();
+    for (const row of overtimeRows) overtimeMap.set(Number(row.assignmentId), Number(row.totalOvertimeMinutes ?? 0));
+
+    // ── Build per-assignment payroll lines (12 items each) ──
+    let totalNet = 0;
+    let totalGosiEmployer = 0;
+    const lines: {
+      employeeId: number; assignmentId: number;
+      basic: number; housingAllowance: number; transportAllowance: number;
+      gross: number; gosiEmployee: number; gosiEmployer: number;
+      lateDeduction: number; absenceDeduction: number; violationDeduction: number;
+      loanDeduction: number; overtime: number; overtimeHours: number; net: number;
+    }[] = [];
+
+    for (const asn of assignments) {
+      const basic = Number(asn.salary ?? 0);
+      const aId = Number(asn.assignmentId);
+
+      let housingAllowance = 0;
+      let transportAllowance = 0;
+      let otherEarnings = 0;
+
+      if (earningComponents.length > 0) {
+        for (const comp of earningComponents) {
+          const compName = (comp.name || "").trim();
+          const calcType = comp.calculationType;
+          const compValue = Number(comp.value);
+          let amount = 0;
+          if (calcType === "percentage") {
+            amount = Math.round(basic * (compValue / 100) * 100) / 100;
+          } else {
+            amount = Math.round(compValue * 100) / 100;
+          }
+          if (compName.includes("سكن") || compName.toLowerCase().includes("housing")) {
+            housingAllowance = amount;
+          } else if (compName.includes("نقل") || compName.toLowerCase().includes("transport")) {
+            transportAllowance = amount;
+          } else if (compName.includes("أساسي") || compName.toLowerCase().includes("basic")) {
+            continue;
+          } else {
+            otherEarnings += amount;
+          }
+        }
+      }
+      const gross = basic + housingAllowance + transportAllowance + otherEarnings;
+
+      const lateDeduction = lateMap.get(aId) ?? 0;
+      const absentDays = absenceMap.get(aId) ?? 0;
+      const absenceDeduction = Math.round((absentDays * (basic / 30)) * 100) / 100;
+      const violationDeduction = (penaltyMap.get(aId) ?? 0) + (violationMap.get(aId) ?? 0);
+      const loanDeduction = loanMap.get(aId) ?? 0;
+      const gosiEmployee = Math.round(basic * GOSI_EMPLOYEE_RATE * 100) / 100;
+      const gosiEmployer = Math.round(basic * GOSI_EMPLOYER_RATE * 100) / 100;
+      totalGosiEmployer += gosiEmployer;
+      const overtimeMinutes = overtimeMap.get(aId) ?? 0;
+      const overtimeHours = Math.round((overtimeMinutes / 60) * 100) / 100;
+      const hourlyRate = basic / (30 * 8);
+      const overtime = Math.round(overtimeHours * hourlyRate * 1.5 * 100) / 100;
+
+      const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee;
+      const net = Math.max(0, Math.round((gross + overtime - totalDeductions) * 100) / 100);
+      totalNet += net;
+
+      lines.push({
+        employeeId: asn.employeeId, assignmentId: aId,
+        basic, housingAllowance, transportAllowance, gross,
+        gosiEmployee, gosiEmployer, lateDeduction, absenceDeduction,
+        violationDeduction, loanDeduction, overtime, overtimeHours, net,
+      });
+    }
+
+    const totalGross = Math.round(lines.reduce((s, l) => s + l.gross, 0) * 100) / 100;
+    const totalGosiEmployee = Math.round(lines.reduce((s, l) => s + l.gosiEmployee, 0) * 100) / 100;
+    const totalBankPayout = Math.round(totalNet * 100) / 100;
+    const totalGosiPayable = Math.round((totalGosiEmployer + totalGosiEmployee) * 100) / 100;
+
+    const runId = await withTransaction(async (client) => {
+      const runResult = await client.query(
+        `INSERT INTO payroll_runs ("companyId", period, status, "totalNet", "runBy")
+         VALUES ($1,$2,'completed',$3,$4) RETURNING id`,
+        [scope.companyId, targetPeriod, Math.round(totalNet * 100) / 100, scope.activeAssignmentId]
+      );
+      const newRunId = runResult.rows[0].id;
+
+      for (const l of lines) {
+        await client.query(
+          `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"housingAllowance","transportAllowance","grossSalary",gosi,"gosiEmployer","lateDeduction","absenceDeduction","violationDeduction","loanDeduction","overtime","overtimeHours","netSalary")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          [newRunId, l.assignmentId, l.employeeId, l.basic, l.housingAllowance, l.transportAllowance,
+            l.gross, l.gosiEmployee, l.gosiEmployer, l.lateDeduction, l.absenceDeduction,
+            l.violationDeduction, l.loanDeduction, l.overtime, l.overtimeHours, l.net]
+        );
+      }
+
+      await client.query(
+        `UPDATE attendance_deductions SET status = 'deducted_in_payroll'
+         WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll'`,
+        [scope.companyId, targetPeriod]
+      );
+
+      if (loanRows.length > 0) {
+        const assignmentIdsWithLoans = loanRows.map((r: any) => Number(r.assignmentId));
+        await client.query(
+          `UPDATE loan_accounts
+           SET "remainingAmount" = GREATEST(0, "remainingAmount" - "monthlyInstallment"),
+               status = CASE WHEN "remainingAmount" - "monthlyInstallment" <= 0 THEN 'settled' ELSE status END
+           WHERE "companyId" = $1 AND status = 'active' AND "assignmentId" = ANY($2::int[])`,
+          [scope.companyId, assignmentIdsWithLoans]
+        );
+      }
+
+      return newRunId;
+    });
+
+    try {
+      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
+        getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
+      ]);
+
+      await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `PAYROLL-${targetPeriod}`,
+        description: `صرف رواتب ${targetPeriod} – ${lines.length} موظف`,
+        lines: [
+          { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
+          { accountCode: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0 },
+          { accountCode: bankCode, debit: 0, credit: totalBankPayout },
+          { accountCode: gosiPayableCode, debit: 0, credit: totalGosiPayable },
+          { accountCode: "2210", debit: 0, credit: Math.round((totalGross - totalNet - totalGosiEmployee) * 100) / 100 || 0 },
+        ].filter(l => l.debit > 0 || l.credit > 0),
+      });
+    } catch (journalErr) {
+      console.error("Payroll journal entry failed:", journalErr);
+      res.status(500).json({ error: "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي" });
+      return;
+    }
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "payroll.completed", entity: "payroll_runs", entityId: runId,
+      details: JSON.stringify({ period: targetPeriod, totalNet, totalGosiEmployer, assignmentCount: lines.length }),
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "payroll.run", entity: "payroll_runs", entityId: runId,
+      after: { period: targetPeriod, totalNet, totalGosiEmployer, assignmentCount: lines.length },
+    }).catch(console.error);
+
+    // Employee-level aggregate for response
+    const empAgg = new Map<number, { total: number; count: number }>();
+    for (const l of lines) {
+      const cur = empAgg.get(l.employeeId) ?? { total: 0, count: 0 };
+      cur.total += l.net;
+      cur.count++;
+      empAgg.set(l.employeeId, cur);
+    }
+
+    res.status(201).json({
+      id: runId, month: targetPeriod,
+      totalAmount: Math.round(totalNet * 100) / 100,
+      totalGosiEmployer: Math.round(totalGosiEmployer * 100) / 100,
+      assignmentCount: lines.length,
+      employeeCount: empAgg.size,
+      gosiEmployeeRate: GOSI_EMPLOYEE_RATE,
+      gosiEmployerRate: GOSI_EMPLOYER_RATE,
+      journalRef: `PAYROLL-${targetPeriod}`,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Run payroll error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIOLATIONS, SHIFTS, PERFORMANCE, LEGACY LEAVE
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/violations", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT ev.*, e.name AS "employeeName"
+       FROM employee_violations ev
+       JOIN employee_assignments ea ON ea.id = ev."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE ev."companyId" = $1 AND ev."deletedAt" IS NULL ORDER BY ev."createdAt" DESC LIMIT 100`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (err) { console.error("Get violations error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+});
+
+router.post("/violations", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { assignmentId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
+    const period = reqPeriod || new Date().toISOString().slice(0, 7);
+    const { insertId } = await rawExecute(
+      `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scope.companyId, assignmentId, type, description, severity ?? "medium", deduction ?? 0, period]
+    );
+    res.status(201).json({ id: insertId, ...req.body });
+  } catch (err) { handleRouteError(err, res, "Create violation error:"); }
+});
+
+router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 ORDER BY name`, [scope.companyId]);
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (err) { console.error("Get shifts error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+});
+
+router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { name, startTime, endTime, days, isDefault } = req.body as any;
+    if (isDefault) {
+      await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1`, [scope.companyId]);
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'active')`,
+      [scope.companyId, scope.branchId, name, startTime, endTime, days ?? "0,1,2,3,4", isDefault ?? false]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create shift error:"); }
+});
+
+router.get("/performance", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT pr.*, e.name AS "employeeName", e."empNumber"
+       FROM performance_reviews pr
+       JOIN employees e ON e.id = pr."employeeId"
+       WHERE pr."companyId" = $1 ORDER BY pr."createdAt" DESC LIMIT 100`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (err) { console.error("Get performance error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+});
+
+router.post("/performance", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = req.body as any;
+    const finalEmployeeId = employeeId || assignmentId;
+    const finalScores = scores || categories ? JSON.stringify(scores || categories) : null;
+    const finalComments = comments || notes || null;
+    const { insertId } = await rawExecute(
+      `INSERT INTO performance_reviews ("companyId","employeeId",period,"overallScore",scores,comments,status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scope.companyId, finalEmployeeId, period, overallScore ?? 0, finalScores, finalComments, status ?? "pending"]
+    );
+    res.status(201).json({ id: insertId, ...req.body });
+  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+});
+
+router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const [present] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present'`,
+      [scope.companyId, month]
+    );
+    const [absent] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent'`,
+      [scope.companyId, month]
+    );
+    const [late] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0`,
+      [scope.companyId, month]
+    );
+    const [totalEmp] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM employee_assignments WHERE "companyId"=$1 AND status='active'`,
+      [scope.companyId]
+    );
+    res.json({
+      present: Number(present?.count ?? 0),
+      absent: Number(absent?.count ?? 0),
+      late: Number(late?.count ?? 0),
+      totalEmployees: Number(totalEmp?.count ?? 0),
+      month,
+    });
+  } catch (_e) { res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
+});
+
+router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [pending] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending'`, [scope.companyId]
+    );
+    const [approved] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved'`, [scope.companyId]
+    );
+    const [rejected] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected'`, [scope.companyId]
+    );
+    const [total] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1`, [scope.companyId]
+    );
+    res.json({
+      pending: Number(pending?.count ?? 0),
+      approved: Number(approved?.count ?? 0),
+      rejected: Number(rejected?.count ?? 0),
+      total: Number(total?.count ?? 0),
+    });
+  } catch (_e) { res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
+});
+
+router.get("/salary-components", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name`, [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (_e) { res.json({ data: [], total: 0 }); }
+});
+
+router.post("/salary-components", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { name, type, category, value, taxable } = req.body as any;
+    const { insertId } = await rawExecute(
+      `INSERT INTO salary_components ("companyId",name,type,category,value,taxable,status)
+       VALUES ($1,$2,$3,$4,$5,$6,'active')`,
+      [scope.companyId, name, type ?? "fixed", category ?? "allowance", value ?? 0, taxable ?? true]
+    );
+    res.status(201).json({ id: insertId, ...req.body });
+  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+});
+
+router.get("/approval-chains", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT las.*, lr.id AS "requestId", lr.status AS "requestStatus",
+              lr."startDate", lr."endDate", lr.days,
+              e.name AS "employeeName", lt.name AS "leaveTypeName"
+       FROM leave_approval_stages las
+       JOIN hr_leave_requests lr ON lr.id = las."leaveRequestId"
+       JOIN employees e ON e.id = lr."employeeId"
+       JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+       WHERE lr."companyId" = $1
+       ORDER BY las."createdAt" DESC LIMIT 50`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (_e) { res.json({ data: [], total: 0 }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APPROVAL CHAINS — Generic approval chain management (5 types)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/approval-chain-definitions", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const chains = await rawQuery<any>(
+      `SELECT ac.*, 
+              json_agg(json_build_object('id', acs.id, 'stepOrder', acs."stepOrder", 'requiredRole', acs."requiredRole", 'timeoutHours', acs."timeoutHours", 'autoApproveOnTimeout', acs."autoApproveOnTimeout") ORDER BY acs."stepOrder") AS steps
+       FROM approval_chains ac
+       LEFT JOIN approval_chain_steps acs ON acs."chainId" = ac.id
+       WHERE ac."companyId" = $1
+       GROUP BY ac.id
+       ORDER BY ac."chainType", ac."minAmount"`,
+      [scope.companyId]
+    );
+    res.json({ data: chains, total: chains.length });
+  } catch (_e) { res.json({ data: [], total: 0 }); }
+});
+
+router.post("/approval-chain-definitions", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح بإنشاء سلاسل موافقات" }); return;
+    }
+    const { name, chainType, minAmount, maxAmount, steps } = req.body as any;
+    if (!name || !chainType) {
+      res.status(400).json({ error: "الاسم ونوع السلسلة مطلوبان" }); return;
+    }
+    const validTypes = ["leaves", "purchases", "expenses", "advances", "letters"];
+    if (!validTypes.includes(chainType)) {
+      res.status(400).json({ error: `نوع السلسلة يجب أن يكون أحد: ${validTypes.join(", ")}` }); return;
+    }
+
+    const { insertId: chainId } = await rawExecute(
+      `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
+       VALUES ($1,$2,$3,$4,$5)`,
+      [scope.companyId, name, chainType, minAmount ?? 0, maxAmount ?? 999999999]
+    );
+
+    if (Array.isArray(steps)) {
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        await rawExecute(
+          `INSERT INTO approval_chain_steps ("chainId","stepOrder","requiredRole","timeoutHours","autoApproveOnTimeout")
+           VALUES ($1,$2,$3,$4,$5)`,
+          [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]
+        );
+      }
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "approval_chains", entityId: chainId,
+      after: { name, chainType, minAmount, maxAmount, stepCount: steps?.length ?? 0 },
+    }).catch(console.error);
+
+    res.status(201).json({ id: chainId, name, chainType, stepsCreated: steps?.length ?? 0 });
+  } catch (err) { handleRouteError(err, res, "Create approval chain error:"); }
+});
+
+router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام" }); return;
+    }
+    const id = Number(req.params.id);
+    await rawExecute(`DELETE FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ─── Generic approval request endpoints ──────────────────────
+
+router.get("/approval-requests", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const statusFilter = (req.query.status as string) ?? "pending";
+    const rows = await rawQuery<any>(
+      `SELECT ar.*, e.name AS "assignedToName"
+       FROM approval_requests ar
+       LEFT JOIN employee_assignments ea ON ea.id = ar."assignedTo"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE ar."companyId" = $1 AND ar.status = $2
+       ORDER BY ar."createdAt" DESC`,
+      [scope.companyId, statusFilter]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (_e) { res.json({ data: [], total: 0 }); }
+});
+
+router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { approved, reason } = req.body as any;
+
+    if (!["branch_manager", "hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح بالموافقة أو الرفض" }); return;
+    }
+
+    const [request] = await rawQuery<any>(
+      `SELECT * FROM approval_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!request) { res.status(404).json({ error: "طلب الموافقة غير موجود أو تمت معالجته" }); return; }
+
+    const isOwnerOverride = scope.role === "owner";
+    const isAssignedApprover = request.assignedTo === scope.activeAssignmentId;
+    const roleMatches = !request.requiredRole || request.requiredRole === scope.role;
+
+    if (!isOwnerOverride && !isAssignedApprover && !roleMatches) {
+      res.status(403).json({
+        error: `هذا الطلب يتطلب موافقة ${request.requiredRole ?? "المعين"}. دورك الحالي: ${scope.role}`,
+      }); return;
+    }
+    if (!isOwnerOverride && request.assignedTo && !isAssignedApprover) {
+      res.status(403).json({
+        error: "هذا الطلب مخصص لموافق آخر. لا يمكنك اتخاذ القرار.",
+      }); return;
+    }
+
+    const refCreatorMap: Record<string, { table: string; col: string }> = {
+      leave_request: { table: "hr_leave_requests", col: '"assignmentId"' },
+      purchase_order: { table: "purchase_orders", col: '"createdByAssignmentId"' },
+      expense: { table: "expenses", col: '"createdByAssignmentId"' },
+      salary_advance: { table: "salary_advances", col: '"createdByAssignmentId"' },
+      custody: { table: "custodies", col: '"createdByAssignmentId"' },
+      official_letter: { table: "official_letters", col: '"createdByAssignmentId"' },
+    };
+    const refMap = refCreatorMap[request.refType];
+    let requesterId: number | undefined;
+    if (refMap) {
+      try {
+        const [refRow] = await rawQuery<any>(
+          `SELECT ${refMap.col} AS "requesterId" FROM ${refMap.table} WHERE id = $1 LIMIT 1`,
+          [request.refId]
+        );
+        requesterId = refRow?.requesterId ?? undefined;
+      } catch {
+        // column may not exist for all entity types; skip check
+      }
+    }
+    if (requesterId !== undefined && requesterId === scope.activeAssignmentId) {
+      res.status(403).json({ error: "لا يمكنك الموافقة على طلبك الخاص" });
+      return;
+    }
+
+    const result = await processApprovalStep({
+      companyId: scope.companyId, branchId: scope.branchId,
+      refType: request.refType, refId: request.refId,
+      approved: !!approved, decidedBy: scope.activeAssignmentId,
+      reason, requesterId,
+    });
+
+    if (result.status === "approved") {
+      const entityUpdateMap: Record<string, { table: string; column: string }> = {
+        purchase_order: { table: "purchase_orders", column: "status" },
+        official_letter: { table: "official_letters", column: "status" },
+      };
+      const target = entityUpdateMap[request.refType];
+      if (target) {
+        await rawExecute(
+          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
+          [request.refId]
+        );
+      }
+      const journalRefTypes = ["expense", "salary_advance", "custody"];
+      if (journalRefTypes.includes(request.refType)) {
+        await rawExecute(
+          `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
+          [request.refId]
+        );
+      }
+    } else if (result.status === "rejected") {
+      const entityUpdateMap: Record<string, { table: string; column: string }> = {
+        purchase_order: { table: "purchase_orders", column: "status" },
+        official_letter: { table: "official_letters", column: "status" },
+      };
+      const target = entityUpdateMap[request.refType];
+      if (target) {
+        await rawExecute(
+          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1`,
+          [request.refId]
+        );
+      }
+      const journalRefTypes = ["expense", "salary_advance", "custody"];
+      if (journalRefTypes.includes(request.refType)) {
+        await rawExecute(
+          `UPDATE journal_entries SET status = 'rejected' WHERE id = $1 AND status = 'pending_approval'`,
+          [request.refId]
+        );
+      }
+    }
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: `approval.${result.status}`, entity: "approval_requests",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ refType: request.refType, refId: request.refId, result: result.status }),
+    }).catch(console.error);
+
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Approval decision error:"); }
+});
+
+// ─── Attendance policy management ──────────────────────
+router.get("/attendance-policy", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [policy] = await rawQuery<any>(
+      `SELECT * FROM attendance_policies WHERE "companyId" = $1`,
+      [scope.companyId]
+    );
+    res.json(policy ?? {
+      lateThresholdMinutes: 15, gpsRadiusMeters: 500,
+      penaltyLevel1: 0, penaltyLevel2: 50, penaltyLevel3: 100, penaltyLevel4: 200, penaltyLevel5: 500,
+      penaltyLevel1Label: "إنذار شفهي", penaltyLevel2Label: "إنذار كتابي",
+      penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
+      penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
+    });
+  } catch (_e) { res.json({}); }
+});
+
+router.put("/attendance-policy", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح" }); return;
+    }
+    const b = req.body as any;
+    await rawExecute(
+      `INSERT INTO attendance_policies ("companyId","lateThresholdMinutes","gpsRadiusMeters",
+        "penaltyLevel1","penaltyLevel2","penaltyLevel3","penaltyLevel4","penaltyLevel5",
+        "penaltyLevel1Label","penaltyLevel2Label","penaltyLevel3Label","penaltyLevel4Label","penaltyLevel5Label")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       ON CONFLICT ("companyId") DO UPDATE SET
+        "lateThresholdMinutes"=$2,"gpsRadiusMeters"=$3,
+        "penaltyLevel1"=$4,"penaltyLevel2"=$5,"penaltyLevel3"=$6,"penaltyLevel4"=$7,"penaltyLevel5"=$8,
+        "penaltyLevel1Label"=$9,"penaltyLevel2Label"=$10,"penaltyLevel3Label"=$11,"penaltyLevel4Label"=$12,"penaltyLevel5Label"=$13`,
+      [scope.companyId,
+        b.lateThresholdMinutes ?? 15, b.gpsRadiusMeters ?? 500,
+        b.penaltyLevel1 ?? 0, b.penaltyLevel2 ?? 50, b.penaltyLevel3 ?? 100, b.penaltyLevel4 ?? 200, b.penaltyLevel5 ?? 500,
+        b.penaltyLevel1Label ?? "إنذار شفهي", b.penaltyLevel2Label ?? "إنذار كتابي",
+        b.penaltyLevel3Label ?? "خصم يوم", b.penaltyLevel4Label ?? "خصم يومين",
+        b.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي"]
+    );
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ─── Employee payroll summary (aggregate all assignments) ──────────────────────
+router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { period } = req.query as { period?: string };
+    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+
+    const lines = await rawQuery<any>(
+      `SELECT pl.*, e.name AS "employeeName", e."empNumber", ea."jobTitle", ea."branchId", b.name AS "branchName"
+       FROM payroll_lines pl
+       JOIN employee_assignments ea ON ea.id = pl."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN branches b ON b.id = ea."branchId"
+       JOIN payroll_runs pr ON pr.id = pl."runId"
+       WHERE pr."companyId" = $1 AND pr.period = $2 AND pr."deletedAt" IS NULL AND pl."deletedAt" IS NULL
+       ORDER BY e.name, ea.id`,
+      [scope.companyId, targetPeriod]
+    );
+
+    const empMap = new Map<number, any>();
+    for (const l of lines) {
+      const empId = l.employeeId ?? 0;
+      if (!empMap.has(empId)) {
+        empMap.set(empId, {
+          employeeId: empId, employeeName: l.employeeName, empNumber: l.empNumber,
+          totalBasic: 0, totalGross: 0, totalGosi: 0, totalNet: 0,
+          assignmentBreakdowns: [],
+        });
+      }
+      const emp = empMap.get(empId)!;
+      emp.totalBasic += Number(l.basic ?? 0);
+      emp.totalGross += Number(l.grossSalary ?? 0);
+      emp.totalGosi += Number(l.gosi ?? 0);
+      emp.totalNet += Number(l.netSalary ?? 0);
+      emp.assignmentBreakdowns.push({
+        assignmentId: l.assignmentId, jobTitle: l.jobTitle, branchName: l.branchName,
+        basic: Number(l.basic ?? 0),
+        housingAllowance: Number(l.housingAllowance ?? 0),
+        transportAllowance: Number(l.transportAllowance ?? 0),
+        grossSalary: Number(l.grossSalary ?? 0),
+        gosi: Number(l.gosi ?? 0),
+        gosiEmployer: Number(l.gosiEmployer ?? 0),
+        lateDeduction: Number(l.lateDeduction ?? 0),
+        absenceDeduction: Number(l.absenceDeduction ?? 0),
+        violationDeduction: Number(l.violationDeduction ?? 0),
+        loanDeduction: Number(l.loanDeduction ?? 0),
+        overtime: Number(l.overtime ?? 0),
+        overtimeHours: Number(l.overtimeHours ?? 0),
+        netSalary: Number(l.netSalary ?? 0),
+      });
+    }
+
+    const data = Array.from(empMap.values());
+    res.json({ data, total: data.length, period: targetPeriod });
+  } catch (err) { res.json({ data: [], total: 0 }); }
+});
+
+router.get("/violations-stats", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [total] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
+    );
+    const [active] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
+    );
+    const [totalDeductions] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(deduction),0) AS total FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
+    );
+    res.json({
+      total: Number(total?.count ?? 0),
+      active: Number(active?.count ?? 0),
+      totalDeductions: Number(totalDeductions?.total ?? 0),
+    });
+  } catch (_e) { res.json({ total: 0, active: 0, totalDeductions: 0 }); }
+});
+
+router.patch("/violations/:id", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك" }); return;
+    }
+    const id = Number(req.params.id);
+    const b = req.body as any;
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
+    if (b.severity !== undefined) { params.push(b.severity); sets.push(`severity=$${params.length}`); }
+    if (b.deduction !== undefined) { params.push(Number(b.deduction)); sets.push(`deduction=$${params.length}`); }
+    if (b.period !== undefined) { params.push(b.period); sets.push(`period=$${params.length}`); }
+    if (b.description !== undefined) {
+      params.push(b.description); sets.push(`description=$${params.length}`);
+    } else if (b.notes) {
+      params.push(b.notes); sets.push(`description=CONCAT(description, E'\\n', $${params.length})`);
+    }
+    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    res.json(updated || { message: "تم التحديث" });
+  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+});
+
+router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body as any;
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
+    if (b.startTime !== undefined) { params.push(b.startTime); sets.push(`"startTime"=$${params.length}`); }
+    if (b.endTime !== undefined) { params.push(b.endTime); sets.push(`"endTime"=$${params.length}`); }
+    if (b.days !== undefined) { params.push(b.days); sets.push(`days=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.isDefault !== undefined) {
+      if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1`, [scope.companyId]);
+      params.push(b.isDefault); sets.push(`"isDefault"=$${params.length}`);
+    }
+    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json(row);
+  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+});
+
+router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await rawExecute(`DELETE FROM shifts WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    res.json({ message: "تم حذف الوردية" });
+  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+});
+
+router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT esa.*, s.name AS "shiftName", s."startTime", s."endTime",
+              e.name AS "employeeName", e."empNumber"
+       FROM employee_shift_assignments esa
+       JOIN shifts s ON s.id = esa."shiftId"
+       JOIN employee_assignments ea ON ea.id = esa."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE s."companyId" = $1
+       ORDER BY esa."startDate" DESC LIMIT 200`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (_e) { res.json({ data: [], total: 0 }); }
+});
+
+router.post("/shift-assignments", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { assignmentId, shiftId, startDate, endDate } = req.body as any;
+    const [validAssignment] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE id=$1 AND "companyId"=$2`, [assignmentId, scope.companyId]
+    );
+    const [validShift] = await rawQuery<any>(
+      `SELECT id FROM shifts WHERE id=$1 AND "companyId"=$2`, [shiftId, scope.companyId]
+    );
+    if (!validAssignment || !validShift) {
+      res.status(403).json({ error: "غير مصرح" }); return;
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO employee_shift_assignments ("assignmentId","shiftId","startDate","endDate") VALUES ($1,$2,$3,$4)`,
+      [assignmentId, shiftId, startDate, endDate ?? null]
+    );
+    res.status(201).json({ id: insertId });
+  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+});
+
+router.get("/official-letters", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT ol.*, e.name AS "employeeName"
+       FROM official_letters ol
+       LEFT JOIN employees e ON e.id = ol."employeeId"
+       WHERE ol."companyId" = $1
+       ORDER BY ol."createdAt" DESC LIMIT 100`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (_e) { res.json({ data: [], total: 0 }); }
+});
+
+router.post("/official-letters", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId, type, subject, content, status } = req.body as any;
+    const { insertId } = await rawExecute(
+      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [scope.companyId, employeeId, type ?? "general", subject, content, status ?? "draft"]
+    );
+
+    const approvalResult = await initiateApprovalChain({
+      companyId: scope.companyId, branchId: scope.branchId,
+      chainType: "letters", refType: "official_letter", refId: insertId,
+    });
+
+    if (approvalResult.requiresApproval) {
+      await rawExecute(
+        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1`,
+        [insertId]
+      );
+    }
+
+    submitWorkflow({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      requestType: "official_letter",
+      refTable: "official_letters",
+      refId: insertId,
+      title: `خطاب رسمي — ${subject ?? type ?? "طلب خطاب"}`,
+      submittedBy: scope.activeAssignmentId,
+      submittedByName: scope.userName,
+      data: { type, subject, content },
+    }).catch(console.error);
+
+    res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
+  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+});
+
+router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const rows = await rawQuery<any>(
+      `SELECT ema.*, e.name AS "employeeName", e."empNumber"
+       FROM employee_monthly_attendance ema
+       JOIN employee_assignments ea ON ea.id = ema."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE ema."companyId" = $1 AND ema.period = $2
+       ORDER BY e.name`,
+      [scope.companyId, month]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (_e) { res.json({ data: [], total: 0 }); }
+});
+
+// ─── Leave requests general PATCH/DELETE ──────────────────────
+router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك" }); return;
+    }
+    const { status, reason } = req.body as any;
+    if (status && ["approved", "rejected"].includes(status)) {
+      res.status(400).json({ error: "استخدم نقطة نهاية الموافقة/الرفض المخصصة" }); return;
+    }
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+    if (status) { sets.push(`status = $${idx++}`); params.push(status); }
+    if (reason !== undefined) { sets.push(`reason = $${idx++}`); params.push(reason); }
+    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    params.push(Number(req.params.id), scope.companyId);
+    const [row] = await rawQuery<any>(
+      `UPDATE hr_leave_requests SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      params
+    );
+    if (!row) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [leaveReq] = await rawQuery<any>(
+      `SELECT lr."employeeId" FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!leaveReq) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
+    const isOwnRequest = leaveReq.employeeId === scope.employeeId;
+    if (!isOwnRequest && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: حذف طلبات الإجازة مقصور على صاحب الطلب أو HR أو المالك" }); return;
+    }
+    const [row] = await rawQuery<any>(
+      `DELETE FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' RETURNING id`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "طلب الإجازة غير موجود أو لا يمكن حذفه (تمت معالجته)" }); return; }
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ─── Payroll PATCH/DELETE ──────────────────────
+router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك" }); return;
+    }
+    const { status } = req.body as any;
+
+    const [existing] = await rawQuery<any>(
+      `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!existing) { res.status(404).json({ error: "دورة الرواتب غير موجودة" }); return; }
+
+    if (status === "posted" && existing.status !== "posted") {
+      const period = existing.period;
+      const totalNet = Number(existing.totalNet ?? 0);
+
+      const lines = await rawQuery<any>(
+        `SELECT pl."employeeId", pl."gosiEmployee", pl."gosiEmployer", pl.basic, pl."grossSalary", pl."netSalary"
+         FROM payroll_lines pl WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL`,
+        [Number(req.params.id)]
+      );
+
+      const totalGross = lines.reduce((s: number, l: any) => s + Number(l.grossSalary ?? l.basic ?? 0), 0);
+      const totalGosiEmployee = lines.reduce((s: number, l: any) => s + Number(l.gosiEmployee ?? 0), 0);
+      const totalGosiEmployer = lines.reduce((s: number, l: any) => s + Number(l.gosiEmployer ?? 0), 0);
+      const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
+      const totalBankPayout = Math.max(0, totalNet);
+
+      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
+        getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
+      ]);
+
+      const jlLines = [
+        { code: salaryExpenseCode, debit: totalGross, credit: 0, desc: "مصاريف رواتب" },
+        { code: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0, desc: "تأمينات اجتماعية صاحب عمل" },
+        { code: bankCode, debit: 0, credit: totalBankPayout, desc: "صرف رواتب — بنك" },
+        { code: gosiPayableCode, debit: 0, credit: Math.round(totalGosiPayable * 100) / 100, desc: "تأمينات اجتماعية مستحقة" },
+      ].filter(l => l.debit > 0 || l.credit > 0);
+
+      const totalJeDebit = jlLines.reduce((s, l) => s + l.debit, 0);
+      const totalJeCredit = jlLines.reduce((s, l) => s + l.credit, 0);
+      if (Math.abs(totalJeDebit - totalJeCredit) > 0.01) {
+        res.status(422).json({
+          error: `لا يمكن ترحيل الرواتب: القيد المحاسبي غير متوازن (مدين=${totalJeDebit.toFixed(2)} ≠ دائن=${totalJeCredit.toFixed(2)})`,
+        });
+        return;
+      }
+
+      await withTransaction(async (client) => {
+        const runRes = await client.query(
+          `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
+          [status, Number(req.params.id), scope.companyId]
+        );
+        if (!runRes.rows[0]) throw new Error("دورة الرواتب غير موجودة");
+
+        const jeRef = `PAYROLL-POST-${period}`;
+        const jeRes = await client.query(
+          `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type,"sourceType","sourceId")
+           VALUES ($1,$2,$3,$4,$5,'payroll','payroll_run',$6) RETURNING id`,
+          [scope.companyId, scope.branchId, scope.activeAssignmentId, jeRef, `قيد إقفال رواتب ${period}`, Number(req.params.id)]
+        );
+        const journalId = jeRes.rows[0].id;
+
+        for (const l of jlLines) {
+          const accRes = await client.query(
+            `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 LIMIT 1`,
+            [scope.companyId, l.code]
+          );
+          await client.query(
+            `INSERT INTO journal_lines ("journalId","accountCode","accountId",debit,credit,description) VALUES ($1,$2,$3,$4,$5,$6)`,
+            [journalId, l.code, accRes.rows[0]?.id ?? null, l.debit, l.credit, l.desc]
+          );
+        }
+      });
+
+      const [row] = await rawQuery<any>(
+        `SELECT * FROM payroll_runs WHERE id = $1`,
+        [Number(req.params.id)]
+      );
+      res.json(row);
+      return;
+    }
+
+    const [row] = await rawQuery<any>(
+      `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
+      [status, Number(req.params.id), scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "دورة الرواتب غير موجودة" }); return; }
+
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: حذف الرواتب مقصور على HR أو المالك" }); return;
+    }
+    const id = Number(req.params.id);
+    const [exists] = await rawQuery<any>(
+      `SELECT id, status FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]
+    );
+    if (!exists) { res.status(404).json({ error: "دورة الرواتب غير موجودة" }); return; }
+    if (exists.status === "posted") {
+      res.status(400).json({ error: "لا يمكن حذف دورة رواتب تم ترحيلها" }); return;
+    }
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE payroll_lines SET "deletedAt" = NOW() WHERE "runId" = $1 AND "deletedAt" IS NULL`, [id]);
+      await client.query(`UPDATE payroll_runs SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    });
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ─── Performance PATCH/DELETE ──────────────────────
+router.patch("/performance/:id", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك" }); return;
+    }
+    const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = req.body as any;
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+    const finalScore = overallScore ?? score;
+    if (finalScore !== undefined) { sets.push(`"overallScore" = $${idx++}`); params.push(finalScore); }
+    const finalComments = comments ?? feedback;
+    if (finalComments !== undefined) { sets.push(`comments = $${idx++}`); params.push(finalComments); }
+    if (status !== undefined) { sets.push(`status = $${idx++}`); params.push(status); }
+    if (strengths !== undefined) { sets.push(`strengths = $${idx++}`); params.push(strengths); }
+    if (improvements !== undefined) { sets.push(`improvements = $${idx++}`); params.push(improvements); }
+    if (goals !== undefined) { sets.push(`goals = $${idx++}`); params.push(goals); }
+    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(Number(req.params.id), scope.companyId);
+    const [row] = await rawQuery<any>(
+      `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      params
+    );
+    if (!row) { res.status(404).json({ error: "التقييم غير موجود" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Patch performance error:"); }
+});
+
+router.delete("/performance/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: حذف التقييمات مقصور على HR أو المالك" }); return;
+    }
+    const [row] = await rawQuery<any>(
+      `DELETE FROM performance_reviews WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "التقييم غير موجود" }); return; }
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ─── Violations DELETE ──────────────────────
+router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: حذف المخالفات مقصور على HR أو المالك" }); return;
+    }
+    const [row] = await rawQuery<any>(
+      `UPDATE employee_violations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ─── Official letters PATCH/DELETE ──────────────────────
+router.patch("/official-letters/:id", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: تعديل الخطابات مقصور على HR أو المدير أو المالك" }); return;
+    }
+    const { subject, content, status, type } = req.body as any;
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+    if (subject !== undefined) { sets.push(`subject = $${idx++}`); params.push(subject); }
+    if (content !== undefined) { sets.push(`content = $${idx++}`); params.push(content); }
+    if (status !== undefined) { sets.push(`status = $${idx++}`); params.push(status); }
+    if (type !== undefined) { sets.push(`type = $${idx++}`); params.push(type); }
+    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    params.push(Number(req.params.id), scope.companyId);
+    const [row] = await rawQuery<any>(
+      `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      params
+    );
+    if (!row) { res.status(404).json({ error: "الخطاب غير موجود" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+router.delete("/official-letters/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: حذف الخطابات مقصور على HR أو المالك" }); return;
+    }
+    const [row] = await rawQuery<any>(
+      `DELETE FROM official_letters WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "الخطاب غير موجود" }); return; }
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+router.patch("/official-letters/:id/approve", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const HR_APPROVAL_ROLES = ["hr_manager", "branch_manager", "general_manager", "owner"];
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: لا تملك صلاحية اعتماد الخطابات" }); return;
+    }
+    const { id } = req.params;
+    const { approved, notes } = req.body as any;
+
+    const [letter] = await rawQuery<any>(
+      `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!letter) { res.status(404).json({ error: "الخطاب غير موجود" }); return; }
+
+    const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
+    if (newStatus === "rejected" && !notes) {
+      res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return;
+    }
+
+    await rawExecute(
+      `UPDATE official_letters SET status = $1 WHERE id = $2`,
+      [newStatus, Number(id)]
+    );
+
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
+        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error("Failed to log approval action:", e); }
+
+    res.json({ id: Number(id), status: newStatus });
+  } catch (err) { handleRouteError(err, res, "خطأ في اعتماد الخطاب"); }
+});
+
+// ─── HR Stats ──────────────────────
+router.get("/stats", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [empCount] = await rawQuery<any>(
+      `SELECT COUNT(DISTINCT ea."employeeId") AS count FROM employee_assignments ea WHERE ea."companyId" = $1`,
+      [scope.companyId]
+    );
+    const [leaveCount] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total,
+              COUNT(*) FILTER(WHERE status='pending') AS pending,
+              COUNT(*) FILTER(WHERE status='approved') AS approved
+       FROM hr_leave_requests WHERE "companyId" = $1`,
+      [scope.companyId]
+    );
+    const [violationCount] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    const [payrollCount] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM payroll_runs WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    res.json({
+      employees: Number(empCount?.count ?? 0),
+      leaveRequests: Number(leaveCount?.total ?? 0),
+      pendingLeaves: Number(leaveCount?.pending ?? 0),
+      approvedLeaves: Number(leaveCount?.approved ?? 0),
+      violations: Number(violationCount?.total ?? 0),
+      payrollRuns: Number(payrollCount?.total ?? 0),
+    });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+router.get("/deductions", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const rows = await rawQuery<any>(
+      `SELECT ad.*, e.name AS "employeeName"
+       FROM attendance_deductions ad
+       JOIN employee_assignments ea ON ea.id = ad."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE ad."companyId" = $1 AND ad.period = $2
+       ORDER BY ad."createdAt" DESC`,
+      [scope.companyId, month]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (_e) { res.json({ data: [], total: 0 }); }
+});
+
+router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<any>(
+      `SELECT value FROM settings WHERE key = 'hr.onboarding_steps' AND scope = 'company' AND "scopeId" = $1 LIMIT 1`,
+      [scope.companyId]
+    );
+    if (row) {
+      const val = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+      res.json({ data: val }); return;
+    }
+    res.json({ data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] });
+  } catch { res.json({ data: [] }); }
+});
+
+router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!['owner', 'general_manager', 'hr_manager'].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح بتعديل إعدادات التهيئة" }); return;
+    }
+    const { steps } = req.body as { steps: string[] };
+    if (!Array.isArray(steps)) { res.status(400).json({ error: "الخطوات مطلوبة" }); return; }
+    const val = JSON.stringify(steps);
+    await rawExecute(
+      `INSERT INTO settings (key, value, scope, "scopeId")
+       VALUES ('hr.onboarding_steps', $1, 'company', $2)
+       ON CONFLICT (key, scope, "scopeId") DO UPDATE SET value = $1`,
+      [val, scope.companyId]
+    );
+    res.json({ data: steps });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IMPACT PREVIEW — preview the effects of HR actions before approval
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId, leaveTypeId, startDate, endDate, days } = req.body as any;
+    if (!employeeId || !leaveTypeId || !startDate || !endDate) {
+      res.status(400).json({ error: "بيانات غير مكتملة" }); return;
+    }
+    const [assignment] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+      [Number(employeeId), scope.companyId]
+    );
+    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    const daysCount = days ?? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
+    const impact = await computeLeaveImpact(scope.companyId, Number(employeeId), assignment.id, Number(leaveTypeId), startDate, endDate, daysCount);
+    res.json(impact);
+  } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
+});
+
+router.post("/impact-preview/termination", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId } = req.body as any;
+    if (!employeeId) { res.status(400).json({ error: "معرف الموظف مطلوب" }); return; }
+    const [assignment] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+      [Number(employeeId), scope.companyId]
+    );
+    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    const impact = await computeTerminationImpact(scope.companyId, Number(employeeId), assignment.id);
+    res.json(impact);
+  } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
+});
+
+router.post("/impact-preview/violation", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId, deduction = 0, severity = "medium" } = req.body as any;
+    if (!employeeId) { res.status(400).json({ error: "معرف الموظف مطلوب" }); return; }
+    const [assignment] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+      [Number(employeeId), scope.companyId]
+    );
+    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    const impact = await computeViolationImpact(scope.companyId, Number(employeeId), assignment.id, Number(deduction), severity);
+    res.json(impact);
+  } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPLOYEE OPERATIONAL STATUS — live state calculation
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/employee-status/:employeeId", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId } = req.params;
+    const [assignment] = await rawQuery<any>(
+      `SELECT ea.id FROM employee_assignments ea
+       WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active' LIMIT 1`,
+      [Number(employeeId), scope.companyId]
+    );
+    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+
+    const { computeEmployeeOperationalStatus } = await import("../lib/impactPreview.js");
+    const status = await computeEmployeeOperationalStatus(scope.companyId, Number(employeeId), assignment.id);
+    res.json(status);
+  } catch (err) { handleRouteError(err, res, "خطأ في حساب حالة الموظف"); }
+});
+
+router.get("/employees-status", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employees = await rawQuery<any>(
+      `SELECT e.id AS "employeeId", ea.id AS "assignmentId"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
+       WHERE e.status = 'active'`,
+      [scope.companyId]
+    );
+
+    const { computeEmployeeOperationalStatus } = await import("../lib/impactPreview.js");
+    const statuses = await Promise.all(
+      employees.map(async (emp: any) => {
+        try {
+          const s = await computeEmployeeOperationalStatus(scope.companyId, emp.employeeId, emp.assignmentId);
+          return { employeeId: emp.employeeId, ...s };
+        } catch {
+          return { employeeId: emp.employeeId, status: "working", label: "على رأس العمل", color: "bg-green-100 text-green-700", reason: "" };
+        }
+      })
+    );
+
+    res.json({ data: statuses });
+  } catch (err) { handleRouteError(err, res, "خطأ في حساب حالات الموظفين"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 360° SMART EVALUATION SYSTEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HR_ROLES = ["hr_manager", "owner", "general_manager"] as const;
+const MGR_ROLES = ["branch_manager", "hr_manager", "owner", "general_manager"] as const;
+
+function isHR(scope: { role: string }): boolean {
+  return (HR_ROLES as readonly string[]).includes(scope.role);
+}
+function isMgr(scope: { role: string }): boolean {
+  return (MGR_ROLES as readonly string[]).includes(scope.role);
+}
+
+// Helper: compute system evaluation scores for an employee
+async function computeSystemEvaluation(companyId: number, employeeId: number): Promise<{
+  attendanceScore: number;
+  taskCompletionScore: number;
+  onTimeScore: number;
+  clientSatScore: number;
+  docQualityScore: number;
+  overallScore: number;
+  metrics: Record<string, number>;
+}> {
+  const today = new Date().toISOString().split("T")[0]!;
+  const { calculateEmployeeKPIs } = await import("../lib/kpiEngine.js");
+  const kpiMetrics = await calculateEmployeeKPIs(companyId, employeeId, today);
+
+  // Attendance score: based on 30-day attendance records
+  const [attRow] = await rawQuery<any>(
+    `SELECT
+       COUNT(*) FILTER (WHERE status='present') AS present,
+       COUNT(*) FILTER (WHERE status='absent') AS absent,
+       COUNT(*) FILTER (WHERE "lateMinutes" > 0) AS late,
+       COUNT(*) AS total
+     FROM attendance a
+     JOIN employee_assignments ea ON ea.id = a."assignmentId"
+     WHERE ea."companyId" = $1 AND ea."employeeId" = $2
+       AND a.date >= CURRENT_DATE - INTERVAL '30 days'`,
+    [companyId, employeeId]
+  );
+  const totalDays = Number(attRow?.total ?? 0);
+  const presentDays = Number(attRow?.present ?? 0);
+  const lateDays = Number(attRow?.late ?? 0);
+  const absencePenalty = totalDays > 0 ? (Number(attRow?.absent ?? 0) / totalDays) * 20 : 0;
+  const latePenalty = totalDays > 0 ? (lateDays / totalDays) * 10 : 0;
+  const attendanceScore = Math.max(0, Math.min(100, totalDays > 0 ? (presentDays / totalDays) * 100 - latePenalty : 50));
+
+  // Task completion score
+  const taskCompletionScore = kpiMetrics.task_completion_rate ?? 0;
+
+  // On-time rate score
+  const onTimeScore = kpiMetrics.on_time_rate ?? 0;
+
+  // Client satisfaction score (0-5 scale → 0-100)
+  const clientSat = kpiMetrics.client_satisfaction ?? 0;
+  const clientSatScore = Math.round((clientSat / 5) * 100);
+
+  // Document quality score: count of documents with description in last 90 days
+  const [docRow] = await rawQuery<any>(
+    `SELECT COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE description IS NOT NULL AND description != '') AS documented
+     FROM employee_documents
+     WHERE "companyId" = $1 AND "employeeId" = $2
+       AND "createdAt" >= CURRENT_DATE - INTERVAL '90 days'`,
+    [companyId, employeeId]
+  );
+  const totalDocs = Number(docRow?.total ?? 0);
+  const documentedDocs = Number(docRow?.documented ?? 0);
+  const docQualityScore = totalDocs > 0 ? Math.round((documentedDocs / totalDocs) * 100) : 50;
+
+  const metrics: Record<string, number> = {
+    ...kpiMetrics,
+    attendance_rate: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0,
+    late_days: lateDays,
+    present_days: presentDays,
+    total_working_days: totalDays,
+    doc_quality_score: docQualityScore,
+  };
+
+  // Weighted overall score
+  const overallScore = Math.round(
+    attendanceScore * 0.25 +
+    taskCompletionScore * 0.25 +
+    onTimeScore * 0.20 +
+    clientSatScore * 0.20 +
+    docQualityScore * 0.10
+  );
+
+  return {
+    attendanceScore: Math.round(attendanceScore),
+    taskCompletionScore: Math.round(taskCompletionScore),
+    onTimeScore: Math.round(onTimeScore),
+    clientSatScore: Math.round(clientSatScore),
+    docQualityScore: Math.round(docQualityScore),
+    overallScore: Math.round(overallScore),
+    metrics,
+  };
+}
+
+// Helper: recompute and save evaluation summary
+async function recomputeSummary(cycleId: number, companyId: number, employeeId: number): Promise<void> {
+  const [sysEval] = await rawQuery<any>(
+    `SELECT "overallScore" FROM system_evaluations WHERE "cycleId" = $1`, [cycleId]
+  );
+  const peerRows = await rawQuery<any>(
+    `SELECT "overallScore", "evaluatorRole" FROM peer_evaluations WHERE "cycleId" = $1`, [cycleId]
+  );
+  const upwardRows = await rawQuery<any>(
+    `SELECT "overallScore" FROM anonymous_upward_reviews WHERE "cycleId" = $1`, [cycleId]
+  );
+
+  const systemScore = sysEval ? Number(sysEval.overallScore) : null;
+  const managerEvals = peerRows.filter((p: any) => p.evaluatorRole === 'manager');
+  const peerEvals = peerRows.filter((p: any) => p.evaluatorRole === 'peer');
+  const managerScore = managerEvals.length > 0
+    ? Math.round(managerEvals.reduce((s: number, p: any) => s + Number(p.overallScore), 0) / managerEvals.length)
+    : null;
+  const peerScore = peerEvals.length > 0
+    ? Math.round(peerEvals.reduce((s: number, p: any) => s + Number(p.overallScore), 0) / peerEvals.length)
+    : null;
+  const upwardCount = upwardRows.length;
+  const upwardAvgScore = upwardCount >= 3
+    ? Math.round(upwardRows.reduce((s: number, r: any) => s + Number(r.overallScore), 0) / upwardCount)
+    : null;
+
+  // Final weighted score
+  const parts: number[] = [];
+  if (systemScore !== null) parts.push(systemScore * 0.40);
+  if (managerScore !== null) parts.push(managerScore * 0.35);
+  if (peerScore !== null) parts.push(peerScore * 0.15);
+  if (upwardAvgScore !== null) parts.push(upwardAvgScore * 0.10);
+  const totalWeight = (systemScore !== null ? 0.40 : 0) + (managerScore !== null ? 0.35 : 0) +
+    (peerScore !== null ? 0.15 : 0) + (upwardAvgScore !== null ? 0.10 : 0);
+  const finalScore = totalWeight > 0 ? Math.round(parts.reduce((a, b) => a + b, 0) / totalWeight) : null;
+
+  await rawExecute(
+    `INSERT INTO evaluation_summaries ("cycleId","companyId","employeeId","systemScore","peerScore","managerScore","upwardAvgScore","upwardReviewCount","finalScore","updatedAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+     ON CONFLICT ("cycleId") DO UPDATE SET
+       "systemScore" = EXCLUDED."systemScore",
+       "peerScore" = EXCLUDED."peerScore",
+       "managerScore" = EXCLUDED."managerScore",
+       "upwardAvgScore" = EXCLUDED."upwardAvgScore",
+       "upwardReviewCount" = EXCLUDED."upwardReviewCount",
+       "finalScore" = EXCLUDED."finalScore",
+       "updatedAt" = NOW()`,
+    [cycleId, companyId, employeeId, systemScore, peerScore, managerScore, upwardAvgScore, upwardCount, finalScore]
+  );
+}
+
+// GET /hr/evaluation-cycles — list cycles (scoped by role)
+router.get("/evaluation-cycles", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId } = req.query as any;
+    let rows: any[];
+
+    if (isHR(scope)) {
+      // HR sees all cycles for the company (optionally filtered by employeeId)
+      rows = await rawQuery<any>(
+        `SELECT ec.*, e.name AS "employeeName", e."empNumber",
+                es."finalScore", es."systemScore", es."peerScore", es."managerScore",
+                CASE WHEN es."upwardReviewCount" >= 3 THEN es."upwardAvgScore" ELSE NULL END AS "upwardAvgScore"
+         FROM evaluation_cycles ec
+         JOIN employees e ON e.id = ec."employeeId"
+         LEFT JOIN evaluation_summaries es ON es."cycleId" = ec.id
+         WHERE ec."companyId" = $1 ${employeeId ? `AND ec."employeeId" = $2` : ''}
+         ORDER BY ec."createdAt" DESC LIMIT 200`,
+        employeeId ? [scope.companyId, employeeId] : [scope.companyId]
+      );
+    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+      // Managers see cycles for employees they manage (same branch)
+      rows = await rawQuery<any>(
+        `SELECT ec.*, e.name AS "employeeName", e."empNumber",
+                es."finalScore", es."systemScore", es."peerScore", es."managerScore",
+                CASE WHEN es."upwardReviewCount" >= 3 THEN es."upwardAvgScore" ELSE NULL END AS "upwardAvgScore"
+         FROM evaluation_cycles ec
+         JOIN employees e ON e.id = ec."employeeId"
+         LEFT JOIN evaluation_summaries es ON es."cycleId" = ec.id
+         JOIN employee_assignments ea_sub ON ea_sub."employeeId" = ec."employeeId" AND ea_sub."branchId" = $2 AND ea_sub.status='active'
+         WHERE ec."companyId" = $1
+         ORDER BY ec."createdAt" DESC LIMIT 200`,
+        [scope.companyId, scope.branchId]
+      );
+    } else {
+      // Employees see their own cycles + cycles where they are participants
+      rows = await rawQuery<any>(
+        `SELECT ec.*, e.name AS "employeeName", e."empNumber",
+                es."finalScore", es."systemScore", es."peerScore", es."managerScore",
+                CASE WHEN es."upwardReviewCount" >= 3 THEN es."upwardAvgScore" ELSE NULL END AS "upwardAvgScore"
+         FROM evaluation_cycles ec
+         JOIN employees e ON e.id = ec."employeeId"
+         LEFT JOIN evaluation_summaries es ON es."cycleId" = ec.id
+         WHERE ec."companyId" = $1
+           AND (ec."employeeId" = $2 OR EXISTS (
+             SELECT 1 FROM evaluation_participants ep WHERE ep."cycleId" = ec.id AND ep."evaluatorId" = $2
+           ))
+         ORDER BY ec."createdAt" DESC LIMIT 200`,
+        [scope.companyId, scope.employeeId]
+      );
+    }
+
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "خطأ في جلب دورات التقييم"); }
+});
+
+// POST /hr/evaluation-cycles — start a new evaluation cycle (HR only)
+router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!isHR(scope)) return res.status(403).json({ error: "مسموح فقط لـ HR بإنشاء دورات التقييم" });
+
+    const { employeeId, period, notes, participants = [] } = req.body as any;
+    if (!employeeId || !period) return res.status(422).json({ error: "employeeId و period مطلوبان" });
+
+    // Validate subject employee belongs to this company (multi-tenant integrity)
+    const [subjectAssign] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 LIMIT 1`,
+      [employeeId, scope.companyId]
+    );
+    if (!subjectAssign) return res.status(422).json({ error: "الموظف لا ينتمي إلى هذه الشركة" });
+
+    // Create the cycle
+    const { insertId: cycleId } = await rawExecute(
+      `INSERT INTO evaluation_cycles ("companyId","employeeId","initiatorId",period,status,notes,"startDate")
+       VALUES ($1,$2,$3,$4,'open',$5,CURRENT_DATE)`,
+      [scope.companyId, employeeId, scope.employeeId ?? null, period, notes ?? null]
+    );
+
+    // Register participants — validate each belongs to this company before inserting
+    // validRoles must match the DB CHECK constraint: ('manager','peer')
+    const validRoles = new Set(["manager", "peer"]);
+    for (const p of participants as Array<{ evaluatorId: number; evaluatorRole: string }>) {
+      if (!p.evaluatorId || !validRoles.has(p.evaluatorRole)) continue;
+      const [participantAssign] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 LIMIT 1`,
+        [p.evaluatorId, scope.companyId]
+      );
+      if (!participantAssign) continue; // silently skip cross-company IDs
+      await rawExecute(
+        `INSERT INTO evaluation_participants ("cycleId","companyId","evaluatorId","evaluatorRole")
+         VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+        [cycleId, scope.companyId, p.evaluatorId, p.evaluatorRole]
+      );
+    }
+
+    // Auto-generate system evaluation
+    const evalData = await computeSystemEvaluation(scope.companyId, employeeId);
+    await rawExecute(
+      `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [cycleId, scope.companyId, employeeId,
+       evalData.attendanceScore, evalData.taskCompletionScore,
+       evalData.onTimeScore, evalData.clientSatScore, evalData.docQualityScore,
+       evalData.overallScore, JSON.stringify(evalData.metrics)]
+    );
+
+    // Initialize summary
+    await recomputeSummary(cycleId, scope.companyId, employeeId);
+
+    // Update cycle status
+    await rawExecute(`UPDATE evaluation_cycles SET status='in_progress' WHERE id=$1`, [cycleId]);
+
+    res.status(201).json({ id: cycleId, period, employeeId, status: 'in_progress', systemEval: evalData });
+  } catch (err) { handleRouteError(err, res, "خطأ في بدء دورة التقييم"); }
+});
+
+// GET /hr/evaluation-cycles/:id — get cycle details (access-controlled)
+router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cycleId = Number(req.params.id);
+
+    const [cycle] = await rawQuery<any>(
+      `SELECT ec.*, e.name AS "employeeName", e."empNumber", e."jobTitle"
+       FROM evaluation_cycles ec
+       JOIN employees e ON e.id = ec."employeeId"
+       WHERE ec.id = $1 AND ec."companyId" = $2`,
+      [cycleId, scope.companyId]
+    );
+    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+
+    // Access check:
+    // - HR: see all cycles in the company
+    // - Manager: only cycles for employees in their branch (branch-scoped, not role-only)
+    // - Employee: only their own cycle, or cycles where they are an assigned participant
+    if (isHR(scope)) {
+      // HR: unrestricted within company — already filtered by companyId above
+    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+      // Manager must share at least one branch with the employee being evaluated (any active assignment)
+      const [sharedBranch] = await rawQuery<any>(
+        `SELECT 1 FROM employee_assignments ea_mgr
+         JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
+         WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
+           AND ea_sub."employeeId"=$3 AND ea_sub."companyId"=$2 AND ea_sub.status='active'
+         LIMIT 1`,
+        [scope.employeeId, scope.companyId, cycle.employeeId]
+      );
+      const isOwnCycle = cycle.employeeId === scope.employeeId;
+      const [isParticipant] = await rawQuery<any>(
+        `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+        [cycleId, scope.employeeId]
+      );
+      if (!sharedBranch && !isOwnCycle && !isParticipant) {
+        return res.status(403).json({ error: "لا تملك صلاحية لعرض دورات الموظفين خارج فرعك" });
+      }
+    } else {
+      // Regular employee: own cycle or assigned participant
+      const isOwn = cycle.employeeId === scope.employeeId;
+      const [isParticipant] = await rawQuery<any>(
+        `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+        [cycleId, scope.employeeId]
+      );
+      if (!isOwn && !isParticipant) return res.status(403).json({ error: "لا تملك صلاحية لعرض هذه الدورة" });
+    }
+
+    const [sysEval] = await rawQuery<any>(
+      `SELECT * FROM system_evaluations WHERE "cycleId" = $1`, [cycleId]
+    );
+
+    const peerEvals = await rawQuery<any>(
+      `SELECT pe.*, e.name AS "evaluatorName", e."jobTitle" AS "evaluatorTitle"
+       FROM peer_evaluations pe
+       JOIN employees e ON e.id = pe."evaluatorId"
+       WHERE pe."cycleId" = $1`,
+      [cycleId]
+    );
+
+    const participants = await rawQuery<any>(
+      `SELECT ep.*, e.name AS "evaluatorName"
+       FROM evaluation_participants ep
+       JOIN employees e ON e.id = ep."evaluatorId"
+       WHERE ep."cycleId" = $1`,
+      [cycleId]
+    );
+
+    const [summary] = await rawQuery<any>(
+      `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]
+    );
+
+    // Upward reviews: only count, no names, no individual rows
+    const [upwardCount] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count, AVG("overallScore") AS avg FROM anonymous_upward_reviews WHERE "cycleId" = $1`,
+      [cycleId]
+    );
+    const upCount = Number(upwardCount?.count ?? 0);
+    const upwardThresholdMet = upCount >= 3;
+
+    res.json({
+      cycle,
+      systemEval: sysEval ?? null,
+      peerEvals,
+      participants,
+      summary: summary ?? null,
+      upwardSummary: {
+        // Only reveal aggregate AND count when at least 3 reviews exist
+        // Hiding count below threshold prevents inference in small teams
+        ...(upwardThresholdMet
+          ? { count: upCount, avgScore: Math.round(Number(upwardCount?.avg ?? 0)), locked: false }
+          : { locked: true }),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "خطأ في جلب تفاصيل دورة التقييم"); }
+});
+
+// GET /hr/evaluation-cycles/:id/system-report — get auto-generated report
+router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cycleId = Number(req.params.id);
+
+    const [cycle] = await rawQuery<any>(
+      `SELECT ec."employeeId", ec."companyId"
+       FROM evaluation_cycles ec
+       WHERE ec.id = $1 AND ec."companyId" = $2`,
+      [cycleId, scope.companyId]
+    );
+    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+
+    // Enforce the same cycle-level authorization as the detail endpoint
+    if (isHR(scope)) {
+      // unrestricted
+    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+      const [sharedBranch] = await rawQuery<any>(
+        `SELECT 1 FROM employee_assignments ea_mgr
+         JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
+         WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
+           AND ea_sub."employeeId"=$3 AND ea_sub."companyId"=$2 AND ea_sub.status='active'
+         LIMIT 1`,
+        [scope.employeeId, scope.companyId, cycle.employeeId]
+      );
+      const [isParticipantRow] = await rawQuery<any>(
+        `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+        [cycleId, scope.employeeId]
+      );
+      if (!sharedBranch && cycle.employeeId !== scope.employeeId && !isParticipantRow) {
+        return res.status(403).json({ error: "لا تملك صلاحية لعرض التقرير الآلي لهذه الدورة" });
+      }
+    } else {
+      const isOwn = cycle.employeeId === scope.employeeId;
+      const [isParticipantRow] = await rawQuery<any>(
+        `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+        [cycleId, scope.employeeId]
+      );
+      if (!isOwn && !isParticipantRow) {
+        return res.status(403).json({ error: "لا تملك صلاحية لعرض التقرير الآلي لهذه الدورة" });
+      }
+    }
+
+    let [sysEval] = await rawQuery<any>(
+      `SELECT * FROM system_evaluations WHERE "cycleId" = $1`, [cycleId]
+    );
+
+    if (!sysEval) {
+      // Recompute if not yet generated
+      const evalData = await computeSystemEvaluation(cycle.companyId, cycle.employeeId);
+      await rawExecute(
+        `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT ("cycleId") DO UPDATE SET
+           "attendanceScore"=$4,"taskCompletionScore"=$5,"onTimeScore"=$6,"clientSatScore"=$7,"docQualityScore"=$8,"overallScore"=$9,metrics=$10`,
+        [cycleId, cycle.companyId, cycle.employeeId,
+         evalData.attendanceScore, evalData.taskCompletionScore,
+         evalData.onTimeScore, evalData.clientSatScore, evalData.docQualityScore,
+         evalData.overallScore, JSON.stringify(evalData.metrics)]
+      );
+      sysEval = { ...evalData, cycleId, companyId: cycle.companyId, employeeId: cycle.employeeId };
+    }
+
+    res.json(sysEval);
+  } catch (err) { handleRouteError(err, res, "خطأ في جلب التقرير الآلي"); }
+});
+
+// POST /hr/evaluation-cycles/:id/peer-evaluation — submit manager/peer review
+// Evaluator identity is derived from the authenticated session (scope.employeeId), NOT the request body
+router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cycleId = Number(req.params.id);
+    const { overallScore, scores, comments } = req.body as any;
+
+    // Evaluator is always the authenticated user — prevents impersonation
+    const evaluatorId = scope.employeeId;
+    if (!evaluatorId) return res.status(403).json({ error: "لا يمكن تحديد هوية المقيِّم" });
+    if (!overallScore) return res.status(422).json({ error: "overallScore مطلوب" });
+
+    const [cycle] = await rawQuery<any>(
+      `SELECT "employeeId","companyId" FROM evaluation_cycles WHERE id = $1 AND "companyId" = $2`,
+      [cycleId, scope.companyId]
+    );
+    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+
+    // Authorization: determine if evaluator is allowed to submit for this cycle
+    // Priority: (1) assigned participant (always allowed + uses their assigned role)
+    //           (2) HR — allowed for any cycle in the company
+    //           (3) manager — ONLY if same branch as the subject employee
+    //           (4) all others — must be a participant
+    let evaluatorRole = "peer";
+    const [participant] = await rawQuery<any>(
+      `SELECT "evaluatorRole" FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+      [cycleId, evaluatorId]
+    );
+    if (participant) {
+      evaluatorRole = participant.evaluatorRole;
+    } else if (isHR(scope)) {
+      // HR can submit evaluations for any cycle without being a pre-assigned participant
+      evaluatorRole = "peer";
+    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+      // Manager must share at least one branch with the subject employee (any active assignment, not just primary)
+      const [sharedBranch] = await rawQuery<any>(
+        `SELECT 1 FROM employee_assignments ea_mgr
+         JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
+         WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
+           AND ea_sub."employeeId"=$3 AND ea_sub."companyId"=$2 AND ea_sub.status='active'
+         LIMIT 1`,
+        [scope.employeeId, scope.companyId, cycle.employeeId]
+      );
+      if (!sharedBranch) {
+        return res.status(403).json({ error: "لا تملك صلاحية تقييم موظفين خارج فرعك" });
+      }
+      evaluatorRole = "manager";
+    } else {
+      return res.status(403).json({ error: "أنت لست ضمن المقيِّمين المعينين لهذه الدورة" });
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO peer_evaluations ("cycleId","companyId","evaluatorId","employeeId","evaluatorRole","overallScore",scores,comments)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT ("cycleId","evaluatorId") DO UPDATE SET
+         "evaluatorRole"=$5,"overallScore"=$6,scores=$7,comments=$8`,
+      [cycleId, scope.companyId, evaluatorId, cycle.employeeId, evaluatorRole, overallScore,
+       scores ? JSON.stringify(scores) : null, comments ?? null]
+    );
+
+    // Mark participant as submitted — no participant record is valid for HR/manager paths
+    await rawExecute(
+      `UPDATE evaluation_participants SET "hasSubmitted"=true,"submittedAt"=NOW()
+       WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+      [cycleId, evaluatorId]
+    );
+
+    await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
+
+    res.status(201).json({ id: insertId, cycleId, evaluatorId, evaluatorRole, overallScore });
+  } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم"); }
+});
+
+// POST /hr/evaluation-cycles/:id/upward-review — anonymous upward review (employee rates manager)
+router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cycleId = Number(req.params.id);
+    const { managerId, overallScore, scores, comments } = req.body as any;
+
+    if (!managerId || !overallScore) return res.status(422).json({ error: "managerId و overallScore مطلوبان" });
+
+    const [cycle] = await rawQuery<any>(
+      `SELECT id,"companyId","employeeId" FROM evaluation_cycles WHERE id = $1 AND "companyId" = $2`,
+      [cycleId, scope.companyId]
+    );
+    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+
+    // Validate that the managerId is a legitimate participant in this cycle with role=manager
+    // This prevents rating arbitrary employees as "manager" within a cycle
+    const [managerIsParticipant] = await rawQuery<any>(
+      `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2 AND "evaluatorRole"='manager'`,
+      [cycleId, managerId]
+    );
+    if (!managerIsParticipant) {
+      return res.status(422).json({ error: "المدير المختار ليس مشاركاً معيَّناً بدور مدير في هذه الدورة" });
+    }
+
+    // Self-rating guard: reviewer cannot rate themselves as manager
+    if (managerId === scope.employeeId) {
+      return res.status(403).json({ error: "لا يمكنك تقييم نفسك في التقييم العكسي" });
+    }
+
+    // Eligibility check — upward reviews must come from non-manager employees:
+    // (a) the subject employee (who is being evaluated), OR
+    // (b) a cycle participant with role='peer' (subordinates/peers, not managers)
+    // Managers with evaluatorRole='manager' and HR users are explicitly excluded to
+    // preserve objectivity of the "employee rates manager" model.
+    const isSubject = cycle.employeeId === scope.employeeId;
+    const [isEligibleParticipant] = await rawQuery<any>(
+      `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2 AND "evaluatorRole"='peer'`,
+      [cycleId, scope.employeeId]
+    );
+
+    if (!isSubject && !isEligibleParticipant) {
+      return res.status(403).json({ error: "أنت غير مؤهل لتقديم تقييم عكسي في هذه الدورة" });
+    }
+
+    // Prevent duplicate submissions from the same person per cycle per manager
+    // We store a one-way hash (HMAC) that uniquely identifies this reviewer-cycle-manager
+    // pair without revealing the reviewer's identity
+    const crypto = await import("crypto");
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return res.status(500).json({ error: "خطأ في إعداد النظام: JWT_SECRET غير مضبوط" });
+    const submissionToken = crypto
+      .createHmac("sha256", secret)
+      .update(`${scope.userId}:${cycleId}:${managerId}`)
+      .digest("hex");
+
+    // Store submission token in the DB to detect duplicates
+    // First check if this token already exists
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM anonymous_upward_reviews WHERE "cycleId"=$1 AND "managerId"=$2 AND "submissionToken"=$3`,
+      [cycleId, managerId, submissionToken]
+    );
+    if (existing) return res.status(409).json({ error: "لقد أرسلت تقييمك لهذا المدير مسبقاً في هذه الدورة" });
+
+    // Insert with hashed token only — reviewer identity NOT stored
+    const { insertId } = await rawExecute(
+      `INSERT INTO anonymous_upward_reviews ("cycleId","companyId","managerId","overallScore",scores,comments,"submissionToken")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [cycleId, scope.companyId, managerId, overallScore, scores ? JSON.stringify(scores) : null, comments ?? null, submissionToken]
+    );
+
+    // Recompute summary (upward score only shows when >=3 reviews)
+    await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
+
+    res.status(201).json({ id: insertId, cycleId, anonymous: true, message: "تم إرسال التقييم بنجاح — هويتك محمية" });
+  } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم العكسي"); }
+});
+
+// GET /hr/evaluation-cycles/:id/summary — get 360 summary
+router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cycleId = Number(req.params.id);
+
+    const [cycle] = await rawQuery<any>(
+      `SELECT ec.*, e.name AS "employeeName", e."jobTitle"
+       FROM evaluation_cycles ec
+       JOIN employees e ON e.id = ec."employeeId"
+       WHERE ec.id = $1 AND ec."companyId" = $2`,
+      [cycleId, scope.companyId]
+    );
+    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+
+    // Access check (same branch-scoped rules as detail endpoint)
+    if (isHR(scope)) {
+      // unrestricted
+    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+      const [sharedBranch] = await rawQuery<any>(
+        `SELECT 1 FROM employee_assignments ea_mgr
+         JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
+         WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
+           AND ea_sub."employeeId"=$3 AND ea_sub."companyId"=$2 AND ea_sub.status='active'
+         LIMIT 1`,
+        [scope.employeeId, scope.companyId, cycle.employeeId]
+      );
+      const [isParticipantRow] = await rawQuery<any>(
+        `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+        [cycleId, scope.employeeId]
+      );
+      if (!sharedBranch && cycle.employeeId !== scope.employeeId && !isParticipantRow) {
+        return res.status(403).json({ error: "لا تملك صلاحية لعرض هذا الملخص" });
+      }
+    } else if (cycle.employeeId !== scope.employeeId) {
+      return res.status(403).json({ error: "لا تملك صلاحية لعرض هذا الملخص" });
+    }
+
+    const [sysEval] = await rawQuery<any>(
+      `SELECT "attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics
+       FROM system_evaluations WHERE "cycleId" = $1`, [cycleId]
+    );
+
+    const peerEvals = await rawQuery<any>(
+      `SELECT "evaluatorRole","overallScore",scores,comments FROM peer_evaluations WHERE "cycleId" = $1`, [cycleId]
+    );
+
+    const [upwardRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count, ROUND(AVG("overallScore")) AS avg
+       FROM anonymous_upward_reviews WHERE "cycleId" = $1`, [cycleId]
+    );
+
+    let [summary] = await rawQuery<any>(
+      `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]
+    );
+
+    if (!summary) {
+      await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
+      [summary] = await rawQuery<any>(`SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]);
+    }
+
+    const upwardCount = Number(upwardRow?.count ?? 0);
+    const upwardThresholdMet = upwardCount >= 3;
+
+    res.json({
+      cycle,
+      systemEval: sysEval ?? null,
+      peerEvals,
+      upward: upwardThresholdMet
+        ? { count: upwardCount, avgScore: Number(upwardRow?.avg ?? 0), locked: false }
+        : { locked: true },
+      summary: summary ?? null,
+    });
+  } catch (err) { handleRouteError(err, res, "خطأ في جلب ملخص التقييم 360°"); }
+});
+
+// GET /hr/employees/:id/evaluation-history — performance trend over time
+router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employeeId = Number(req.params.id);
+
+    // Validate employee belongs to this company via assignment (prevents cross-tenant PII leakage)
+    const [empAssign] = await rawQuery<any>(
+      `SELECT ea."branchId", ea."jobTitle", e.name, e."empNumber"
+       FROM employee_assignments ea
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE ea."employeeId"=$1 AND ea."companyId"=$2 AND ea."isPrimary"=true`,
+      [employeeId, scope.companyId]
+    );
+    if (!empAssign) return res.status(404).json({ error: "الموظف غير موجود في هذه الشركة" });
+
+    // Access check:
+    // - HR: unrestricted within company
+    // - Manager: same branch as employee, or explicitly checking own data
+    // - Employee: own history only
+    if (isHR(scope)) {
+      // unrestricted
+    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+      const [sharedBranch] = await rawQuery<any>(
+        `SELECT 1 FROM employee_assignments ea_mgr
+         JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
+         WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
+           AND ea_sub."employeeId"=$3 AND ea_sub."companyId"=$2 AND ea_sub.status='active'
+         LIMIT 1`,
+        [scope.employeeId, scope.companyId, employeeId]
+      );
+      const isOwn = scope.employeeId === employeeId;
+      if (!sharedBranch && !isOwn) {
+        return res.status(403).json({ error: "لا تملك صلاحية لعرض تاريخ تقييمات موظفين خارج فرعك" });
+      }
+    } else if (scope.employeeId !== employeeId) {
+      return res.status(403).json({ error: "لا تملك صلاحية لعرض تاريخ تقييمات هذا الموظف" });
+    }
+
+    const cycles = await rawQuery<any>(
+      `SELECT ec.id, ec.period, ec."startDate", ec.status,
+              es."finalScore", es."systemScore", es."managerScore", es."peerScore", es."upwardAvgScore"
+       FROM evaluation_cycles ec
+       LEFT JOIN evaluation_summaries es ON es."cycleId" = ec.id
+       WHERE ec."companyId" = $1 AND ec."employeeId" = $2
+       ORDER BY ec."startDate" ASC`,
+      [scope.companyId, employeeId]
+    );
+
+    res.json({
+      employee: { name: empAssign.name, empNumber: empAssign.empNumber, jobTitle: empAssign.jobTitle },
+      history: cycles,
+    });
+  } catch (err) { handleRouteError(err, res, "خطأ في جلب تاريخ التقييمات"); }
+});
+
+// GET /hr/upward-reviews/manager/:managerId — aggregated upward reviews for a manager (HR only)
+router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const managerId = Number(req.params.managerId);
+
+    // Only HR or the manager themselves can view this — no cross-manager access
+    if (!isHR(scope) && scope.employeeId !== managerId) {
+      return res.status(403).json({ error: "لا تملك صلاحية لعرض التقييمات العكسية لمدير آخر" });
+    }
+
+    const [row] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count,
+              ROUND(AVG("overallScore")) AS "avgScore",
+              ROUND(AVG((scores->>'leadership')::numeric)) AS "leadershipAvg",
+              ROUND(AVG((scores->>'communication')::numeric)) AS "communicationAvg",
+              ROUND(AVG((scores->>'fairness')::numeric)) AS "fairnessAvg",
+              ROUND(AVG((scores->>'support')::numeric)) AS "supportAvg"
+       FROM anonymous_upward_reviews
+       WHERE "companyId" = $1 AND "managerId" = $2`,
+      [scope.companyId, managerId]
+    );
+
+    const count = Number(row?.count ?? 0);
+
+    if (count < 3) {
+      // Do NOT expose count below threshold — prevents inference in small cohorts
+      return res.json({
+        managerId,
+        locked: true,
+        message: "يتطلب عدد كافٍ من التقييمات لعرض النتائج",
+        avgScore: null,
+      });
+    }
+
+    res.json({
+      managerId,
+      count,
+      locked: false,
+      avgScore: Number(row?.avgScore ?? 0),
+      leadershipAvg: row?.leadershipAvg ? Number(row.leadershipAvg) : null,
+      communicationAvg: row?.communicationAvg ? Number(row.communicationAvg) : null,
+      fairnessAvg: row?.fairnessAvg ? Number(row.fairnessAvg) : null,
+      supportAvg: row?.supportAvg ? Number(row.supportAvg) : null,
+    });
+  } catch (err) { handleRouteError(err, res, "خطأ في جلب التقييمات العكسية"); }
+});
+
+export default router;

@@ -1,0 +1,604 @@
+import { rawQuery, rawExecute } from "./rawdb.js";
+import { eventBus } from "./eventBus.js";
+
+export function haversineDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export async function createNotification(params: {
+  companyId: number;
+  assignmentId: number;
+  type: string;
+  title: string;
+  body: string;
+  priority?: string;
+  refType?: string;
+  refId?: number;
+  actionUrl?: string;
+}) {
+  try {
+    await rawExecute(
+      `INSERT INTO notifications ("companyId","assignmentId",type,title,body,priority,"refType","refId","actionUrl","isRead")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,false)`,
+      [
+        params.companyId,
+        params.assignmentId,
+        params.type,
+        params.title,
+        params.body,
+        params.priority ?? "normal",
+        params.refType ?? null,
+        params.refId ?? null,
+        params.actionUrl ?? null,
+      ]
+    );
+  } catch (err) {
+    console.error("createNotification error:", err);
+  }
+}
+
+export async function emitEvent(params: {
+  companyId: number;
+  branchId?: number;
+  userId: number;
+  action: string;
+  entity: string;
+  entityId: number;
+  details?: string;
+  before?: any;
+  after?: any;
+  [key: string]: any;
+}) {
+  try {
+    await rawExecute(
+      `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [
+        params.companyId,
+        params.userId,
+        params.action,
+        params.entity,
+        params.entityId,
+        params.details ?? null,
+      ]
+    );
+    eventBus.emit(params.action, {
+      companyId: params.companyId,
+      branchId: params.branchId,
+      userId: params.userId,
+      entity: params.entity,
+      entityId: params.entityId,
+      action: params.action,
+      details: params.details,
+      before: params.before,
+      after: params.after,
+    });
+  } catch (err) {
+    console.error("emitEvent error:", err);
+  }
+}
+
+export async function createAuditLog(params: {
+  companyId: number;
+  branchId?: number;
+  userId: number;
+  action: string;
+  entity: string;
+  entityId: number;
+  before?: any;
+  after?: any;
+  reason?: string;
+}) {
+  try {
+    await rawExecute(
+      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after",reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        params.companyId,
+        params.branchId ?? null,
+        params.userId,
+        params.action,
+        params.entity,
+        params.entityId,
+        params.before ? JSON.stringify(params.before) : null,
+        params.after ? JSON.stringify(params.after) : null,
+        params.reason ?? null,
+      ]
+    );
+  } catch (err) {
+    console.error("createAuditLog error:", err);
+  }
+}
+
+export interface JournalEntryLine {
+  accountCode: string;
+  accountId?: number;
+  debit: number;
+  credit: number;
+  description?: string;
+  departmentId?: number;
+  projectId?: number;
+  employeeId?: number;
+  vehicleId?: number;
+  propertyId?: number;
+  contractId?: number;
+  activityType?: string;
+  costCenter?: string;
+  templateId?: number;
+}
+
+export async function createJournalEntry(params: {
+  companyId: number;
+  branchId: number;
+  createdBy: number;
+  ref: string;
+  description: string;
+  type?: string;
+  sourceType?: string;
+  sourceId?: number;
+  operationType?: string;
+  lines: JournalEntryLine[];
+}) {
+  const totalDebit = params.lines.reduce((s, l) => s + Number(l.debit), 0);
+  const totalCredit = params.lines.reduce((s, l) => s + Number(l.credit), 0);
+  const imbalance = Math.round((totalDebit - totalCredit) * 10000) / 10000;
+  if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
+    const [roundingAcc] = await rawQuery<any>(
+      `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
+      [params.companyId]
+    );
+    if (roundingAcc) {
+      params.lines.push({
+        accountCode: "9999",
+        debit: imbalance < 0 ? Math.abs(imbalance) : 0,
+        credit: imbalance > 0 ? imbalance : 0,
+        description: "فرق تقريب تلقائي",
+      });
+    } else {
+      throw new Error(
+        `قيد غير متوازن: مدين=${totalDebit.toFixed(2)} ≠ دائن=${totalCredit.toFixed(2)} (${params.ref}) — حساب فروقات التقريب 9999 غير موجود`
+      );
+    }
+  } else if (Math.abs(imbalance) > 0.05) {
+    throw new Error(
+      `قيد غير متوازن: مدين=${totalDebit.toFixed(2)} ≠ دائن=${totalCredit.toFixed(2)} (${params.ref})`
+    );
+  }
+
+  const { insertId: journalId } = await rawExecute(
+    `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type,"sourceType","sourceId")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [
+      params.companyId, params.branchId, params.createdBy, params.ref, params.description,
+      params.type ?? "manual", params.sourceType ?? null, params.sourceId ?? null,
+    ]
+  );
+
+  const accountCodesToUpdate: string[] = [];
+  for (const line of params.lines) {
+    let accountId = line.accountId ?? null;
+    if (!accountId && line.accountCode) {
+      const [acc] = await rawQuery<any>(
+        `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 LIMIT 1`,
+        [params.companyId, line.accountCode]
+      );
+      accountId = acc?.id ?? null;
+    }
+
+    await rawExecute(
+      `INSERT INTO journal_lines (
+        "journalId","accountCode","accountId",debit,credit,description,"costCenter",
+        "departmentId","projectId","employeeId","vehicleId","propertyId","contractId","activityType","templateId"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      [
+        journalId, line.accountCode, accountId, line.debit, line.credit,
+        line.description ?? null, line.costCenter ?? null,
+        line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
+        line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
+        line.activityType ?? null, line.templateId ?? null,
+      ]
+    );
+    if (line.accountCode) accountCodesToUpdate.push(line.accountCode);
+  }
+
+  await updateAccountBalances(params.companyId, params.lines);
+
+  return journalId;
+}
+
+export async function updateAccountBalances(
+  companyId: number,
+  lines: { accountCode: string; debit: number; credit: number }[]
+) {
+  const balanceChanges = new Map<string, number>();
+  for (const line of lines) {
+    const delta = Number(line.debit) - Number(line.credit);
+    balanceChanges.set(line.accountCode, (balanceChanges.get(line.accountCode) || 0) + delta);
+  }
+  for (const [accountCode, delta] of balanceChanges) {
+    if (Math.abs(delta) < 0.001) continue;
+    await rawExecute(
+      `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
+      [delta, companyId, accountCode]
+    );
+  }
+}
+
+export async function reverseAccountBalances(
+  companyId: number,
+  journalId: number
+) {
+  const lines = await rawQuery<any>(
+    `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1`,
+    [journalId]
+  );
+  const balanceChanges = new Map<string, number>();
+  for (const line of lines) {
+    const delta = -(Number(line.debit) - Number(line.credit));
+    balanceChanges.set(line.accountCode, (balanceChanges.get(line.accountCode) || 0) + delta);
+  }
+  for (const [accountCode, delta] of balanceChanges) {
+    if (Math.abs(delta) < 0.001) continue;
+    await rawExecute(
+      `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
+      [delta, companyId, accountCode]
+    );
+  }
+}
+
+export type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters";
+
+export interface ApprovalChainResult {
+  requiresApproval: boolean;
+  chainId: number | null;
+  approvalRequestId: number | null;
+  currentStep: number;
+  totalSteps: number;
+}
+
+export async function initiateApprovalChain(params: {
+  companyId: number;
+  branchId: number;
+  chainType: ApprovalChainType;
+  refType: string;
+  refId: number;
+  amount?: number;
+}): Promise<ApprovalChainResult> {
+  const queryParams: any[] = [params.companyId, params.chainType];
+  const amountFilter = params.amount != null
+    ? `AND "minAmount" <= $3 AND "maxAmount" >= $3`
+    : "";
+  if (params.amount != null) queryParams.push(params.amount);
+
+  const chains = await rawQuery<any>(
+    `SELECT * FROM approval_chains
+     WHERE "companyId" = $1 AND "chainType" = $2 AND "isActive" = true
+     ${amountFilter}
+     ORDER BY "minAmount" DESC LIMIT 1`,
+    queryParams
+  );
+
+  if (chains.length === 0) {
+    return { requiresApproval: false, chainId: null, approvalRequestId: null, currentStep: 0, totalSteps: 0 };
+  }
+
+  const chain = chains[0];
+  const steps = await rawQuery<any>(
+    `SELECT * FROM approval_chain_steps WHERE "chainId" = $1 ORDER BY "stepOrder" ASC`,
+    [chain.id]
+  );
+
+  if (steps.length === 0) {
+    return { requiresApproval: false, chainId: chain.id, approvalRequestId: null, currentStep: 0, totalSteps: 0 };
+  }
+
+  const firstStep = steps[0];
+  const [approver] = await rawQuery<any>(
+    `SELECT id FROM employee_assignments
+     WHERE "companyId" = $1 AND role = $2 AND status = 'active'
+     ORDER BY CASE WHEN "branchId" = $3 THEN 0 ELSE 1 END LIMIT 1`,
+    [params.companyId, firstStep.requiredRole, params.branchId]
+  );
+
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + (firstStep.timeoutHours ?? 48));
+
+  const { insertId: requestId } = await rawExecute(
+    `INSERT INTO approval_requests ("companyId","branchId","refType","refId","requiredRole","assignedTo",status,"expiresAt","escalationLevel","chainId","currentStepOrder")
+     VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,0,$8,$9)`,
+    [params.companyId, params.branchId, params.refType, params.refId, firstStep.requiredRole, approver?.id ?? null, expiresAt.toISOString(), chain.id, firstStep.stepOrder]
+  );
+
+  if (approver) {
+    await createNotification({
+      companyId: params.companyId, assignmentId: approver.id,
+      type: "approval_required", title: "طلب موافقة جديد",
+      body: `يوجد طلب ${chainTypeLabel(params.chainType)} جديد يتطلب موافقتك`,
+      priority: "high", refType: params.refType, refId: params.refId,
+    });
+  }
+
+  return { requiresApproval: true, chainId: chain.id, approvalRequestId: requestId, currentStep: 1, totalSteps: steps.length };
+}
+
+export async function processApprovalStep(params: {
+  companyId: number;
+  branchId: number;
+  refType: string;
+  refId: number;
+  approved: boolean;
+  decidedBy: number;
+  reason?: string;
+  requesterId?: number;
+}): Promise<{ status: "approved" | "rejected" | "pending_next_step"; nextRole?: string; message: string }> {
+  if (params.requesterId !== undefined && params.requesterId === params.decidedBy) {
+    throw Object.assign(new Error("لا يمكن للمنشئ الموافقة على طلبه الخاص"), { statusCode: 403 });
+  }
+
+  const [request] = await rawQuery<any>(
+    `SELECT * FROM approval_requests
+     WHERE "refType" = $1 AND "refId" = $2 AND "companyId" = $3 AND status = 'pending'
+     ORDER BY "createdAt" DESC LIMIT 1`,
+    [params.refType, params.refId, params.companyId]
+  );
+
+  if (!request) {
+    return { status: "approved", message: "لا يوجد طلب موافقة معلق" };
+  }
+
+  if (!params.approved) {
+    await rawExecute(
+      `UPDATE approval_requests SET status = 'rejected', "decidedBy" = $1, "decidedAt" = NOW()
+       WHERE id = $2`,
+      [params.decidedBy, request.id]
+    );
+    return { status: "rejected", message: "تم الرفض" };
+  }
+
+  await rawExecute(
+    `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+     WHERE id = $2`,
+    [params.decidedBy, request.id]
+  );
+
+  const chainId = request.chainId;
+  const currentStepOrder = request.currentStepOrder ?? 1;
+
+  if (!chainId) return { status: "approved", message: "تمت الموافقة" };
+
+  const steps = await rawQuery<any>(
+    `SELECT * FROM approval_chain_steps WHERE "chainId" = $1 ORDER BY "stepOrder" ASC`,
+    [chainId]
+  );
+
+  const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
+  if (!nextStep) {
+    return { status: "approved", message: "تمت الموافقة النهائية" };
+  }
+
+  const [nextApprover] = await rawQuery<any>(
+    `SELECT id FROM employee_assignments
+     WHERE "companyId" = $1 AND role = $2 AND status = 'active'
+     ORDER BY CASE WHEN "branchId" = $3 THEN 0 ELSE 1 END LIMIT 1`,
+    [params.companyId, nextStep.requiredRole, params.branchId]
+  );
+
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + (nextStep.timeoutHours ?? 48));
+
+  await rawExecute(
+    `INSERT INTO approval_requests ("companyId","branchId","refType","refId","requiredRole","assignedTo",status,"expiresAt","escalationLevel","chainId","currentStepOrder")
+     VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,0,$8,$9)`,
+    [params.companyId, params.branchId, params.refType, params.refId, nextStep.requiredRole, nextApprover?.id ?? null, expiresAt.toISOString(), chainId, nextStep.stepOrder]
+  );
+
+  const chainType = refTypeToChainType(params.refType);
+  if (nextApprover) {
+    await createNotification({
+      companyId: params.companyId, assignmentId: nextApprover.id,
+      type: "approval_required", title: "طلب موافقة - مرحلة تالية",
+      body: `يتطلب طلب ${chainTypeLabel(chainType ?? "advances")} موافقتك (المرحلة ${nextStep.stepOrder})`,
+      priority: "high", refType: params.refType, refId: params.refId,
+    });
+  }
+
+  return { status: "pending_next_step", nextRole: nextStep.requiredRole, message: `تمت الموافقة على المرحلة. ينتظر موافقة ${nextStep.requiredRole}` };
+}
+
+function chainTypeLabel(t: ApprovalChainType): string {
+  const map: Record<string, string> = {
+    leaves: "إجازات", purchases: "مشتريات", expenses: "مصروفات",
+    advances: "سلفة/عهدة", letters: "خطاب رسمي",
+  };
+  return map[t] ?? t;
+}
+
+export function refTypeToChainType(refType: string): ApprovalChainType | null {
+  const map: Record<string, ApprovalChainType> = {
+    leave_request: "leaves", purchase_order: "purchases",
+    expense: "expenses", salary_advance: "advances",
+    custody: "advances", official_letter: "letters",
+  };
+  return map[refType] ?? null;
+}
+
+export async function validateBudget(params: {
+  companyId: number;
+  accountCode: string;
+  amount: number;
+  period?: string;
+  role: string;
+}): Promise<{
+  status: "auto_approved" | "warning_cfo" | "blocked_gm" | "rejected" | "no_budget";
+  canProceed: boolean;
+  utilization: number;
+  message: string;
+  requiresApproval: boolean;
+  approvalLevel?: string;
+}> {
+  const targetPeriod = params.period ?? new Date().toISOString().slice(0, 7);
+  const [budget] = await rawQuery<any>(
+    `SELECT amount, used FROM budgets
+     WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
+    [params.companyId, params.accountCode, targetPeriod]
+  );
+
+  if (!budget) {
+    return { status: "no_budget", canProceed: true, utilization: 0, message: "لا توجد ميزانية محددة", requiresApproval: false };
+  }
+
+  const budgetAmount = Number(budget.amount);
+  const newUsed = Number(budget.used) + Number(params.amount);
+  const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
+
+  if (utilization <= 80) {
+    return { status: "auto_approved", canProceed: true, utilization: Math.round(utilization), message: "الميزانية متاحة – موافقة تلقائية", requiresApproval: false };
+  }
+  if (utilization <= 99) {
+    return {
+      status: "warning_cfo", canProceed: ["finance_manager", "general_manager", "owner"].includes(params.role),
+      utilization: Math.round(utilization),
+      message: "تحذير: استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
+      requiresApproval: true, approvalLevel: "cfo",
+    };
+  }
+  if (utilization <= 110) {
+    return {
+      status: "blocked_gm", canProceed: ["general_manager", "owner"].includes(params.role),
+      utilization: Math.round(utilization),
+      message: "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
+      requiresApproval: true, approvalLevel: "general_manager",
+    };
+  }
+  return {
+    status: "rejected", canProceed: false, utilization: Math.round(utilization),
+    message: "تجاوز الميزانية أكثر من 110% – رفض نهائي",
+    requiresApproval: false,
+  };
+}
+
+export async function updateBudgetUsed(params: {
+  companyId: number;
+  accountCode: string;
+  amount: number;
+  period?: string;
+}): Promise<void> {
+  const targetPeriod = params.period ?? new Date().toISOString().slice(0, 7);
+  await rawExecute(
+    `UPDATE budgets SET used = used + $1
+     WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
+    [Number(params.amount), params.companyId, params.accountCode, targetPeriod]
+  ).catch(() => {});
+}
+
+export async function getAssignmentIdByRole(companyId: number, branchId: number, role: string): Promise<number | null> {
+  const [row] = await rawQuery<any>(
+    `SELECT ea.id FROM employee_assignments ea
+     WHERE ea."companyId" = $1 AND ea."branchId" = $2
+       AND ea.role = $3 AND ea.status = 'active'
+     LIMIT 1`,
+    [companyId, branchId, role]
+  );
+  return row?.id ?? null;
+}
+
+export async function getDirectorAssignmentId(companyId: number, branchId: number): Promise<number | null> {
+  const [row] = await rawQuery<any>(
+    `SELECT ea.id FROM employee_assignments ea
+     WHERE ea."companyId" = $1 AND ea."branchId" = $2
+       AND ea.role IN ('general_manager','owner') AND ea.status = 'active'
+     ORDER BY CASE ea.role WHEN 'general_manager' THEN 1 ELSE 2 END
+     LIMIT 1`,
+    [companyId, branchId]
+  );
+  return row?.id ?? null;
+}
+
+export async function getCfoAssignmentId(companyId: number, branchId: number): Promise<number | null> {
+  const [row] = await rawQuery<any>(
+    `SELECT ea.id FROM employee_assignments ea
+     JOIN user_roles ur ON ur."userId" = (SELECT "employeeId" FROM employee_assignments WHERE id = ea.id)
+     WHERE ea."companyId" = $1 AND ea."branchId" = $2
+       AND ur."roleKey" = 'finance_manager' AND ea.status = 'active'
+     LIMIT 1`,
+    [companyId, branchId]
+  );
+  if (row?.id) return row.id;
+  return getDirectorAssignmentId(companyId, branchId);
+}
+
+export async function getManagerAssignmentId(companyId: number, branchId: number): Promise<number | null> {
+  const [manager] = await rawQuery<any>(
+    `SELECT ea.id FROM employee_assignments ea
+     WHERE ea."companyId" = $1 AND ea."branchId" = $2
+       AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active'
+     ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END
+     LIMIT 1`,
+    [companyId, branchId]
+  );
+  return manager?.id ?? null;
+}
+
+export async function checkFinancialPeriodOpen(
+  companyId: number,
+  date: string
+): Promise<{ open: boolean; periodName?: string }> {
+  const rows = await rawQuery<any>(
+    `SELECT name FROM financial_periods
+     WHERE "companyId" = $1 AND status = 'closed'
+       AND "startDate" <= $2 AND "endDate" >= $2
+     LIMIT 1`,
+    [companyId, date]
+  );
+  if (rows.length > 0) {
+    return { open: false, periodName: rows[0].name };
+  }
+  return { open: true };
+}
+
+export async function getAccountCodeFromMapping(
+  companyId: number,
+  operationType: string,
+  side: "debit" | "credit",
+  fallbackCode: string
+): Promise<string> {
+  const [mapping] = await rawQuery<any>(
+    `SELECT "debitAccountCode", "creditAccountCode", "debitAccountId", "creditAccountId",
+            da.code AS "debitCode", ca.code AS "creditCode"
+     FROM accounting_mappings am
+     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
+     WHERE am."companyId" = $1 AND am."operationType" = $2 AND am."isActive" = true
+     LIMIT 1`,
+    [companyId, operationType]
+  );
+  if (!mapping) {
+    console.warn(`[accounting_mappings] No mapping found for operationType="${operationType}", company=${companyId}. Using fallback code "${fallbackCode}".`);
+    return fallbackCode;
+  }
+  if (side === "debit") {
+    const code = mapping.debitCode || mapping.debitAccountCode || fallbackCode;
+    if (!code || code === fallbackCode) {
+      console.warn(`[accounting_mappings] Debit account not set for operationType="${operationType}", company=${companyId}. Using fallback "${fallbackCode}".`);
+    }
+    return code || fallbackCode;
+  } else {
+    const code = mapping.creditCode || mapping.creditAccountCode || fallbackCode;
+    if (!code || code === fallbackCode) {
+      console.warn(`[accounting_mappings] Credit account not set for operationType="${operationType}", company=${companyId}. Using fallback "${fallbackCode}".`);
+    }
+    return code || fallbackCode;
+  }
+}

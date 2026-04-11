@@ -1,0 +1,189 @@
+import { useState } from "react";
+import { useApiQuery, asList } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar, CheckCircle, XCircle, Clock, FileText } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+
+function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => void }) {
+  const [showImpact, setShowImpact] = useState(false);
+
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 text-xs font-bold">
+                {(request.employeeName || "؟").charAt(0)}
+              </div>
+              <span className="font-semibold">{request.employeeName}</span>
+              <Badge className="bg-yellow-100 text-yellow-700">معلق</Badge>
+            </div>
+            <div className="text-sm text-gray-500 ms-10 space-y-1">
+              <p>النوع: {request.leaveTypeName || request.leaveType}</p>
+              <p>الفترة: {request.startDate} — {request.endDate} ({request.days} أيام)</p>
+              {request.reason && <p>السبب: {request.reason}</p>}
+              <NotesDisplay status={request.status} notes={request.rejectedReason} returnReason={request.returnReason} rejectionReason={request.rejectedReason} />
+            </div>
+
+            {request.employeeId && request.leaveTypeId && (
+              <div className="mt-3 ms-10">
+                <ImpactPreviewButton
+                  endpoint="/hr/impact-preview/leave"
+                  payload={{
+                    employeeId: request.employeeId,
+                    leaveTypeId: request.leaveTypeId,
+                    startDate: request.startDate,
+                    endDate: request.endDate,
+                    days: request.days,
+                  }}
+                  label="معاينة الأثر قبل الاعتماد"
+                />
+              </div>
+            )}
+          </div>
+
+          <ApprovalActions
+            entityType="leave"
+            entityId={request.id}
+            currentStatus={request.status}
+            approveEndpoint={`/hr/leave-requests/${request.id}/approve`}
+            rejectEndpoint={`/hr/leave-requests/${request.id}/approve`}
+            returnEndpoint={`/hr/leave-requests/${request.id}/approve`}
+            approveMethod="PATCH"
+            rejectMethod="PATCH"
+            returnMethod="PATCH"
+            approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
+            rejectBody={(notes) => ({ approved: false, reason: notes })}
+            returnBody={(notes) => ({ approved: "returned", reason: notes })}
+            pendingStatuses={["pending"]}
+            onDone={onDone}
+          />
+        </div>
+
+        <div className="mt-3">
+          <ActionHistory entityType="leave" entityId={request.id} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function LeaveManagementPage() {
+  const { data: requestsData, refetch: refetchPending } = useApiQuery<any>(["leaves-pending"], "/hr/leave-requests?status=pending");
+  const { data: balanceData } = useApiQuery<any>(["leave-balance"], "/hr/leave-balance");
+  const { data: typesData } = useApiQuery<any>(["leave-types"], "/hr/leave-types");
+  const { data: statsData } = useApiQuery<any>(["leave-stats"], "/hr/leave-stats");
+  const pendingRequests = asList(requestsData);
+  const balances = balanceData?.data || [];
+  const types = typesData?.data || [];
+  const stats = statsData || {};
+  const qc = useQueryClient();
+
+  const handleDone = () => {
+    refetchPending();
+    qc.invalidateQueries({ queryKey: ["leaves"] });
+    qc.invalidateQueries({ queryKey: ["leave-balance"] });
+    qc.invalidateQueries({ queryKey: ["leave-stats"] });
+  };
+
+  const kpis = [
+    { label: "طلبات معلقة", value: stats.pending ?? pendingRequests.length, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
+    { label: "موافق عليها", value: stats.approved ?? 0, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+    { label: "مرفوضة", value: stats.rejected ?? 0, icon: XCircle, color: "text-red-600 bg-red-50" },
+    { label: "أنواع الإجازات", value: types.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">إدارة الإجازات</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">اعتماد طلبات الإجازات ومتابعة الأرصدة</p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((c) => (
+          <Card key={c.label} className="border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
+                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{c.value}</p>
+                <p className="text-xs text-gray-500">{c.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Tabs defaultValue="pending" dir="rtl">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="pending">الطلبات المعلقة ({pendingRequests.length})</TabsTrigger>
+          <TabsTrigger value="balances">أرصدة الإجازات</TabsTrigger>
+          <TabsTrigger value="types">أنواع الإجازات</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pending">
+          <div className="space-y-3">
+            {pendingRequests.map((r: any) => (
+              <LeaveApprovalCard key={r.id} request={r} onDone={handleDone} />
+            ))}
+            {pendingRequests.length === 0 && <Card><CardContent className="p-8 text-center text-gray-400">لا توجد طلبات معلقة</CardContent></Card>}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="balances">
+          <Card><CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b bg-gray-50">
+                <th className="p-3 text-start">نوع الإجازة</th>
+                <th className="p-3 text-start">المستحق</th>
+                <th className="p-3 text-start">المستخدم</th>
+                <th className="p-3 text-start">المحجوز</th>
+                <th className="p-3 text-start">المتبقي</th>
+              </tr></thead>
+              <tbody>
+                {balances.map((b: any, i: number) => (
+                  <tr key={i} className="border-b hover:bg-gray-50">
+                    <td className="p-3 font-medium">{b.name || b.leaveTypeName}</td>
+                    <td className="p-3">{b.annualDays || b.entitled || b.maxDays}</td>
+                    <td className="p-3 text-red-600">{b.used || 0}</td>
+                    <td className="p-3 text-yellow-600">{b.reserved || 0}</td>
+                    <td className="p-3 font-bold text-green-600">{b.remaining ?? (Number(b.maxDays || b.annualDays || 0) - Number(b.used || 0))}</td>
+                  </tr>
+                ))}
+                {balances.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد أرصدة</td></tr>}
+              </tbody>
+            </table>
+          </CardContent></Card>
+        </TabsContent>
+
+        <TabsContent value="types">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {types.map((t: any) => (
+              <Card key={t.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="w-5 h-5 text-blue-500" />
+                    <span className="font-semibold">{t.name}</span>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-500">
+                    <p>الأيام السنوية: <span className="font-medium text-gray-700">{t.maxDays || t.annualDays || 0}</span></p>
+                    <p>مدفوعة: <Badge className={t.isPaid ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>{t.isPaid ? "نعم" : "لا"}</Badge></p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {types.length === 0 && <p className="text-center text-gray-400 col-span-3 py-8">لا توجد أنواع إجازات</p>}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

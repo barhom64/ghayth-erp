@@ -1,0 +1,82 @@
+import { lazy } from "react";
+
+const Accounts = lazy(() => import("@/pages/finance/accounts"));
+const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
+const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
+const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
+const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
+const Journal = lazy(() => import("@/pages/finance/journal"));
+const JournalCreate = lazy(() => import("@/pages/create/finance/journal-create"));
+const Invoices = lazy(() => import("@/pages/finance/invoices"));
+const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create"));
+const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
+const Expenses = lazy(() => import("@/pages/finance/expenses"));
+const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
+const Budget = lazy(() => import("@/pages/finance/budget"));
+const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
+const Vendors = lazy(() => import("@/pages/finance/vendors"));
+const VendorsCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
+const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
+const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
+const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
+const FinancialReports = lazy(() => import("@/pages/finance/reports"));
+const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
+const Receivables = lazy(() => import("@/pages/finance/receivables"));
+const Payments = lazy(() => import("@/pages/finance/payments-page"));
+const Commitments = lazy(() => import("@/pages/finance/commitments"));
+const FinancialRequests = lazy(() => import("@/pages/finance/financial-requests"));
+const Custodies = lazy(() => import("@/pages/finance/custodies"));
+const CustodyDetail = lazy(() => import("@/pages/finance/custody-detail"));
+const CustodyAgingReport = lazy(() => import("@/pages/finance/custody-aging-report"));
+const FiscalPeriods = lazy(() => import("@/pages/finance/fiscal-periods"));
+const SalaryAdvances = lazy(() => import("@/pages/finance/salary-advances"));
+const Ledger = lazy(() => import("@/pages/finance/ledger"));
+const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
+const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
+const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
+const BankManualMatch = lazy(() => import("@/pages/create/finance/bank-manual-match"));
+const FixedAssets = lazy(() => import("@/pages/finance/fixed-assets"));
+const BatchDepreciate = lazy(() => import("@/pages/create/finance/batch-depreciate"));
+const InventoryCosting = lazy(() => import("@/pages/finance/inventory-costing"));
+
+export const financeRoutes = [
+  { path: "/finance", component: Accounts },
+  { path: "/finance/accounts", component: Accounts },
+  { path: "/finance/accounts/create", component: AccountsCreate },
+  { path: "/finance/accounts/:id/edit", component: AccountsEdit },
+  { path: "/finance/vouchers", component: Vouchers },
+  { path: "/finance/vouchers/create", component: VouchersCreate },
+  { path: "/finance/journal", component: Journal },
+  { path: "/finance/journal/create", component: JournalCreate },
+  { path: "/finance/invoices", component: Invoices },
+  { path: "/finance/invoices/create", component: InvoicesCreate },
+  { path: "/finance/invoices/:id", component: InvoiceDetail },
+  { path: "/finance/expenses", component: Expenses },
+  { path: "/finance/expenses/create", component: ExpensesCreate },
+  { path: "/finance/budget", component: Budget },
+  { path: "/finance/budget/create", component: BudgetCreate },
+  { path: "/finance/vendors", component: Vendors },
+  { path: "/finance/vendors/create", component: VendorsCreate },
+  { path: "/finance/purchase-orders", component: PurchaseOrders },
+  { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
+  { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
+  { path: "/finance/reports", component: FinancialReports },
+  { path: "/finance/tax", component: TaxSystem },
+  { path: "/finance/receivables", component: Receivables },
+  { path: "/finance/payments", component: Payments },
+  { path: "/finance/commitments", component: Commitments },
+  { path: "/finance/financial-requests", component: FinancialRequests },
+  { path: "/finance/custodies", component: Custodies },
+  { path: "/finance/custodies/report", component: CustodyAgingReport },
+  { path: "/finance/custodies/:id", component: CustodyDetail },
+  { path: "/finance/fiscal-periods", component: FiscalPeriods },
+  { path: "/finance/salary-advances", component: SalaryAdvances },
+  { path: "/finance/ledger/:code", component: Ledger },
+  { path: "/finance/ar-aging", component: ArAging },
+  { path: "/finance/ap-aging", component: ApAging },
+  { path: "/finance/bank-reconciliation", component: BankReconciliation },
+  { path: "/finance/bank-reconciliation/manual-match/:batchId/:rowId", component: BankManualMatch },
+  { path: "/finance/fixed-assets", component: FixedAssets },
+  { path: "/finance/fixed-assets/batch-depreciate", component: BatchDepreciate },
+  { path: "/finance/inventory-costing", component: InventoryCosting },
+];

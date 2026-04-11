@@ -1,0 +1,98 @@
+@media print {
+  nav,
+  aside,
+  header,
+  .no-print,
+  button,
+  [role="tablist"],
+  .pagination-bar {
+    display: none !important;
+  }
+
+  body {
+    direction: rtl;
+    font-family: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .card,
+  [class*="Card"] {
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #ccc !important;
+    padding: 6px 8px !important;
+    text-align: right !important;
+  }
+
+  th {
+    background-color: #f5f5f5 !important;
+    font-weight: bold !important;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: black !important;
+  }
+
+  .badge,
+  [class*="Badge"] {
+    border: 1px solid #999 !important;
+    background: transparent !important;
+    color: black !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+
+  .print-document {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .print-header {
+    border-bottom: 2px solid #333 !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 20px !important;
+  }
+
+  .print-header img {
+    width: 70px !important;
+    height: 70px !important;
+    object-fit: contain !important;
+  }
+
+  .print-footer {
+    border-top: 1px solid #ccc !important;
+    padding-top: 8px !important;
+    margin-top: 30px !important;
+    font-size: 8pt !important;
+    color: #777 !important;
+  }
+
+  .summary-table td {
+    border: none !important;
+  }
+}

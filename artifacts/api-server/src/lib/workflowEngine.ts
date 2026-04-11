@@ -1,0 +1,838 @@
+import { rawQuery, rawExecute } from "./rawdb.js";
+import { createNotification, getAssignmentIdByRole, createAuditLog } from "./businessHelpers.js";
+
+async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
+  await rawExecute(
+    `UPDATE hr_leave_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW() WHERE id = $2`,
+    [approvedBy ?? null, refId]
+  );
+
+  const [request] = await rawQuery<any>(
+    `SELECT lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr."endDate",
+            lt.name AS "leaveTypeName"
+     FROM hr_leave_requests lr
+     JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+     WHERE lr.id = $1`,
+    [refId]
+  );
+  if (!request) return;
+
+  const year = new Date(request.startDate).getFullYear();
+
+  const allAssignments = await rawQuery<any>(
+    `SELECT ea.id, ea."companyId", ea."branchId"
+     FROM employee_assignments ea
+     WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
+    [request.employeeId]
+  );
+
+  const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
+  for (const cId of allCompanyIds) {
+    await rawExecute(
+      `UPDATE hr_leave_balances
+       SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
+       WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+      [request.days, cId, request.employeeId, request.leaveTypeId, year]
+    );
+  }
+
+  const leaveStart = new Date(request.startDate);
+  const leaveEnd = new Date(request.endDate);
+  for (const asn of allAssignments) {
+    for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split("T")[0];
+      await rawExecute(
+        `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
+         VALUES ($1,$2,$3,$4,'on_leave',$5)
+         ON CONFLICT DO NOTHING`,
+        [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${refId}`]
+      ).catch(() => {});
+    }
+  }
+
+  await rawExecute(
+    `UPDATE leave_approval_stages SET status = 'approved', decision = 'approved', "decidedAt" = NOW()
+     WHERE "leaveRequestId" = $1 AND status = 'pending'`,
+    [refId]
+  ).catch(() => {});
+}
+
+async function handleLeaveRejection(refId: number): Promise<void> {
+  await rawExecute(
+    `UPDATE hr_leave_requests SET status = 'rejected', "approvedAt" = NOW() WHERE id = $1`,
+    [refId]
+  );
+
+  const [request] = await rawQuery<any>(
+    `SELECT "employeeId", "companyId", "leaveTypeId", days, "startDate" FROM hr_leave_requests WHERE id = $1`,
+    [refId]
+  );
+  if (!request) return;
+
+  const year = new Date(request.startDate).getFullYear();
+  await rawExecute(
+    `UPDATE hr_leave_balances
+     SET reserved = GREATEST(reserved - $1, 0)
+     WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+    [request.days, request.companyId, request.employeeId, request.leaveTypeId, year]
+  );
+
+  await rawExecute(
+    `UPDATE leave_approval_stages SET status = 'rejected', "decidedAt" = NOW()
+     WHERE "leaveRequestId" = $1 AND status = 'pending'`,
+    [refId]
+  ).catch(() => {});
+}
+
+const DOMAIN_RECORD_HANDLERS: Record<
+  string,
+  (refId: number, outcome: "approved" | "rejected" | "returned", approvedBy?: number | null) => Promise<void>
+> = {
+  hr_leave_requests: async (refId, outcome, approvedBy) => {
+    if (outcome === "approved") {
+      await handleLeaveApproval(refId, approvedBy);
+    } else if (outcome === "rejected") {
+      await handleLeaveRejection(refId);
+    } else {
+      await rawExecute(`UPDATE hr_leave_requests SET status = 'returned' WHERE id = $1`, [refId]);
+      await rawExecute(
+        `UPDATE leave_approval_stages SET status = 'returned', "decidedAt" = NOW()
+         WHERE "leaveRequestId" = $1 AND status = 'pending'`,
+        [refId]
+      ).catch(() => {});
+    }
+  },
+  official_letters: async (refId, outcome) => {
+    const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
+    await rawExecute(`UPDATE official_letters SET status = $1 WHERE id = $2`, [status, refId]);
+  },
+  journal_entries: async (refId, outcome) => {
+    const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
+    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [status, refId]);
+  },
+  purchase_requests: async (refId, outcome) => {
+    const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "draft";
+    await rawExecute(`UPDATE purchase_requests SET status = $1 WHERE id = $2`, [status, refId]);
+  },
+  expenses: async (refId, outcome) => {
+    const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
+    await rawExecute(`UPDATE expenses SET status = $1 WHERE id = $2`, [status, refId]);
+  },
+};
+
+async function propagateDomainStatus(
+  refTable: string | null | undefined,
+  refId: number | null | undefined,
+  outcome: "approved" | "rejected" | "returned",
+  approvedByAssignmentId?: number | null,
+) {
+  if (!refTable || !refId) return;
+  const handler = DOMAIN_RECORD_HANDLERS[refTable];
+  if (!handler) return;
+
+  try {
+    await handler(refId, outcome, approvedByAssignmentId);
+  } catch (err) {
+    console.error(`[WorkflowEngine] propagateDomainStatus error for ${refTable}/${refId}:`, err);
+  }
+}
+
+export type WorkflowAction = "submit" | "approve" | "reject" | "refer" | "escalate" | "return";
+
+const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+  draft: ["pending"],
+  pending: ["in_review", "approved", "rejected", "returned", "escalated"],
+  in_review: ["approved", "rejected", "returned", "escalated", "pending"],
+  returned: ["pending"],
+  rejected: [],
+  approved: [],
+  escalated: ["approved", "rejected", "pending"],
+};
+
+const ACTION_TO_STATUS: Record<string, string> = {
+  submit: "pending",
+  approve: "approved",
+  reject: "rejected",
+  return: "returned",
+  escalate: "escalated",
+  refer: "__same__",
+};
+
+function isTransitionAllowed(from: string, to: string): boolean {
+  const allowed = VALID_STATUS_TRANSITIONS[from];
+  if (!allowed) return false;
+  return allowed.includes(to);
+}
+
+interface ValidationError {
+  code: string;
+  message: string;
+}
+
+async function validatePreApproval(
+  instance: any,
+  companyId: number,
+  currentAttachments?: any[],
+): Promise<ValidationError[]> {
+  const errors: ValidationError[] = [];
+
+  const data = typeof instance.data === "string" ? JSON.parse(instance.data || "{}") : (instance.data || {});
+
+  const requiredFields = data._requiredFields as string[] | undefined;
+  if (requiredFields && requiredFields.length > 0) {
+    for (const field of requiredFields) {
+      if (data[field] === undefined || data[field] === null || data[field] === "") {
+        errors.push({ code: "MISSING_FIELD", message: `الحقل المطلوب "${field}" غير مكتمل` });
+      }
+    }
+  }
+
+  if (data._requiresAttachments) {
+    const hasCurrentAttachments = currentAttachments && currentAttachments.length > 0;
+    if (!hasCurrentAttachments) {
+      const existingAttachments = await rawQuery<any>(
+        `SELECT COUNT(*) as count FROM workflow_step_actions WHERE "instanceId" = $1 AND attachments IS NOT NULL AND attachments != '[]'`,
+        [instance.id]
+      );
+      const count = Number(existingAttachments[0]?.count || 0);
+      if (count === 0) {
+        errors.push({ code: "MISSING_ATTACHMENTS", message: "المرفقات الإلزامية غير مرفقة" });
+      }
+    }
+  }
+
+  if (data._budgetAccountCode && data._budgetAmount) {
+    const period = new Date().toISOString().slice(0, 7);
+    const [budget] = await rawQuery<any>(
+      `SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
+      [companyId, data._budgetAccountCode, period]
+    );
+    if (!budget) {
+      errors.push({ code: "NO_BUDGET", message: `لا توجد ميزانية معرّفة للحساب "${data._budgetAccountCode}" — لا يمكن الاعتماد` });
+    } else {
+      const budgetAmount = Number(budget.amount);
+      if (budgetAmount <= 0) {
+        errors.push({ code: "BUDGET_ZERO", message: "الميزانية المحددة صفر أو سالبة — لا يمكن الاعتماد" });
+      } else {
+        const newUsed = Number(budget.used) + Number(data._budgetAmount);
+        const utilization = (newUsed / budgetAmount) * 100;
+        if (utilization > 110) {
+          errors.push({ code: "BUDGET_EXCEEDED", message: `تجاوز الميزانية (${Math.round(utilization)}%) — لا يمكن الاعتماد` });
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+interface ActualImpact {
+  statusChange?: { from: string; to: string };
+  journalEntries?: { id: number; ref: string }[];
+  budgetChanges?: { accountCode: string; amountUsed: number; newUtilization: number }[];
+  notifications?: string[];
+  overrideLogged?: boolean;
+}
+
+interface SubmitParams {
+  companyId: number;
+  branchId?: number;
+  requestType: string;
+  refTable?: string;
+  refId?: number;
+  title: string;
+  submittedBy: number;
+  submittedByName?: string;
+  data?: Record<string, unknown>;
+}
+
+interface ActionParams {
+  instanceId: number;
+  companyId: number;
+  branchId?: number;
+  actionBy: number;
+  actionByName?: string;
+  notes?: string;
+  attachments?: any[];
+  referredTo?: number;
+  referredToName?: string;
+  overrideReason?: string;
+}
+
+export async function submitWorkflow(params: SubmitParams) {
+  const {
+    companyId, branchId, requestType, refTable, refId,
+    title, submittedBy, submittedByName, data,
+  } = params;
+
+  const [def] = await rawQuery<any>(
+    `SELECT * FROM workflow_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
+    [companyId, requestType]
+  );
+
+  const definitionId = def?.id ?? null;
+  const label = def?.requestTypeLabel ?? requestType;
+
+  const steps = def ? await rawQuery<any>(
+    `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
+    [def.id]
+  ) : [];
+
+  const firstStep = steps[0] ?? null;
+
+  const [sla] = await rawQuery<any>(
+    `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
+    [companyId, requestType]
+  );
+
+  const slaHours = firstStep?.slaHours ?? sla?.deadlineHours ?? def?.defaultSlaHours ?? 48;
+  const expectedCompletion = new Date(Date.now() + slaHours * 3600000);
+
+  let currentAssignee: number | null = null;
+  if (firstStep) {
+    // First: try to resolve the submitter's direct manager via managerId on the assignment
+    if (submittedBy) {
+      try {
+        const [directMgrRow] = await rawQuery<any>(
+          `SELECT ea2.id AS "assignmentId"
+           FROM employee_assignments ea
+           JOIN employee_assignments ea2
+             ON ea2."employeeId" = ea."managerId"
+             AND ea2.status = 'active'
+             AND ea2."companyId" = $2
+           WHERE ea.id = $1 AND ea."managerId" IS NOT NULL
+           LIMIT 1`,
+          [submittedBy, companyId]
+        );
+        if (directMgrRow?.assignmentId) {
+          currentAssignee = directMgrRow.assignmentId;
+        }
+      } catch { /* ignore */ }
+    }
+    // Fallback: resolve by required role at branch/company level
+    if (!currentAssignee) {
+      try {
+        currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, firstStep.requiredRole);
+      } catch { /* no assignee found */ }
+    }
+  }
+
+  const { insertId } = await rawExecute(
+    `INSERT INTO workflow_instances
+     ("companyId", "branchId", "definitionId", "requestType", "requestTypeLabel",
+      "refTable", "refId", title, "submittedBy", "submittedByName",
+      status, "currentStepOrder", "currentAssignee", "expectedCompletionAt",
+      "slaStatus", data)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13,'normal',$14)`,
+    [
+      companyId, branchId ?? null, definitionId, requestType, label,
+      refTable ?? null, refId ?? null, title, submittedBy, submittedByName ?? null,
+      firstStep?.stepOrder ?? 1, currentAssignee,
+      expectedCompletion.toISOString(),
+      data ? JSON.stringify(data) : "{}",
+    ]
+  );
+
+  await rawExecute(
+    `INSERT INTO workflow_step_actions
+     ("instanceId", "stepOrder", "stepName", action, "actionBy", "actionByName", "assignedRole", notes)
+     VALUES ($1,$2,$3,'submit',$4,$5,$6,$7)`,
+    [
+      insertId, 0, "تقديم الطلب", submittedBy, submittedByName ?? null,
+      null, title,
+    ]
+  );
+
+  if (currentAssignee) {
+    createNotification({
+      companyId, assignmentId: currentAssignee,
+      type: "workflow_pending",
+      title: `طلب جديد ينتظر موافقتك`,
+      body: `${label}: ${title}`,
+      priority: "high",
+      refType: refTable ?? requestType,
+      refId: refId ?? insertId,
+    }).catch(console.error);
+  }
+
+  return { instanceId: insertId, definitionId, currentStep: firstStep?.stepOrder ?? 1, currentAssignee };
+}
+
+export async function approveWorkflow(params: ActionParams) {
+  return processAction({ ...params, action: "approve" });
+}
+
+export async function rejectWorkflow(params: ActionParams) {
+  return processAction({ ...params, action: "reject" });
+}
+
+export async function referWorkflow(params: ActionParams) {
+  if (!params.referredTo) throw new Error("يجب تحديد الشخص المحال إليه");
+  const [targetAssignment] = await rawQuery<any>(
+    `SELECT id FROM employee_assignments WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
+    [params.referredTo, params.companyId]
+  );
+  if (!targetAssignment) throw new Error("الشخص المحال إليه غير موجود أو غير نشط في نفس الشركة");
+  return processAction({ ...params, action: "refer" });
+}
+
+export async function escalateWorkflow(params: ActionParams) {
+  return processAction({ ...params, action: "escalate" });
+}
+
+export async function returnWorkflow(params: ActionParams) {
+  return processAction({ ...params, action: "return" });
+}
+
+async function processAction(params: ActionParams & { action: WorkflowAction }) {
+  const {
+    instanceId, companyId, branchId, actionBy, actionByName,
+    notes, attachments, referredTo, referredToName, action,
+    overrideReason,
+  } = params;
+
+  const [instance] = await rawQuery<any>(
+    `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2`,
+    [instanceId, companyId]
+  );
+  if (!instance) throw new Error("المعاملة غير موجودة");
+
+  const targetStatus = ACTION_TO_STATUS[action];
+  if (targetStatus && targetStatus !== "__same__") {
+    if (!isTransitionAllowed(instance.status, targetStatus)) {
+      const nextStepExists = action === "approve" &&
+        instance.definitionId &&
+        (instance.status === "pending" || instance.status === "in_review");
+      if (!nextStepExists || (instance.status !== "pending" && instance.status !== "in_review")) {
+        throw new Error(`لا يمكن الانتقال من "${instance.status}" إلى "${targetStatus}" — انتقال غير مصرح`);
+      }
+    }
+  }
+
+  if (instance.status !== "pending" && instance.status !== "in_review" && instance.status !== "escalated") {
+    throw new Error("المعاملة ليست في حالة تسمح بهذا الإجراء");
+  }
+
+  const privilegedRoles = ["owner", "general_manager", "hr_manager", "finance_manager"];
+  let isOverride = false;
+
+  const [actorAssignment] = await rawQuery<any>(
+    `SELECT role FROM employee_assignments WHERE id = $1 AND status = 'active'`,
+    [actionBy]
+  );
+
+  if (!instance.currentAssignee) {
+    if (!actorAssignment || !privilegedRoles.includes(actorAssignment.role)) {
+      throw new Error("المعاملة غير مسندة لأحد — يلزم دور إداري للتدخل");
+    }
+    isOverride = true;
+    if (!overrideReason && !notes) {
+      throw new Error("يجب تحديد سبب التدخل في معاملة غير مسندة");
+    }
+  } else if (instance.currentAssignee !== actionBy) {
+    if (!actorAssignment || !privilegedRoles.includes(actorAssignment.role)) {
+      throw new Error("غير مصرح لك باتخاذ هذا الإجراء على هذه المعاملة");
+    }
+    isOverride = true;
+    if (!overrideReason && !notes) {
+      throw new Error("يجب تحديد سبب التجاوز عند التدخل في معاملة ليست مسندة إليك");
+    }
+  }
+
+  if (action === "approve") {
+    const validationErrors = await validatePreApproval(instance, companyId, attachments);
+    if (validationErrors.length > 0) {
+      throw new Error(
+        `لا يمكن الاعتماد — شروط غير مستوفاة:\n${validationErrors.map(e => `• ${e.message}`).join("\n")}`
+      );
+    }
+  }
+
+  if (isOverride) {
+    await createAuditLog({
+      companyId,
+      branchId: branchId ?? instance.branchId ?? undefined,
+      userId: actionBy,
+      action: "workflow_override",
+      entity: "workflow_instance",
+      entityId: instanceId,
+      before: { currentAssignee: instance.currentAssignee, status: instance.status },
+      after: { overriddenBy: actionBy, action },
+      reason: overrideReason || notes || "تدخل دور أعلى",
+    });
+  }
+
+  const steps = instance.definitionId
+    ? await rawQuery<any>(
+        `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
+        [instance.definitionId]
+      )
+    : [];
+
+  const currentStep = steps.find((s: any) => s.stepOrder === instance.currentStepOrder);
+
+  const beforeData = { status: instance.status, currentStepOrder: instance.currentStepOrder };
+
+  await rawExecute(
+    `INSERT INTO workflow_step_actions
+     ("instanceId", "stepOrder", "stepName", action, "actionBy", "actionByName",
+      "assignedRole", notes, attachments, "beforeData", "afterData",
+      "referredTo", "referredToName")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+    [
+      instanceId, instance.currentStepOrder, currentStep?.stepName ?? `خطوة ${instance.currentStepOrder}`,
+      isOverride ? `${action}_override` : action, actionBy, actionByName ?? null,
+      currentStep?.requiredRole ?? null,
+      isOverride ? `[تدخل] ${overrideReason || notes || ""}` : (notes ?? null),
+      attachments ? JSON.stringify(attachments) : "[]",
+      JSON.stringify(beforeData), null,
+      referredTo ?? null, referredToName ?? null,
+    ]
+  );
+
+  let newStatus = instance.status;
+  let newStepOrder = instance.currentStepOrder;
+  let newAssignee: number | null = instance.currentAssignee;
+  let message = "";
+  const actualImpact: ActualImpact = { notifications: [] };
+
+  switch (action) {
+    case "approve": {
+      const nextStep = steps.find((s: any) => s.stepOrder > instance.currentStepOrder);
+      if (nextStep) {
+        newStepOrder = nextStep.stepOrder;
+        newStatus = "pending";
+        try {
+          newAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, nextStep.requiredRole);
+        } catch { newAssignee = null; }
+
+        const [sla] = await rawQuery<any>(
+          `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
+          [companyId, instance.requestType]
+        );
+        const slaHours = nextStep.slaHours ?? sla?.deadlineHours ?? 48;
+        const expectedCompletion = new Date(Date.now() + slaHours * 3600000);
+
+        await rawExecute(
+          `UPDATE workflow_instances SET "currentStepOrder" = $1, "currentAssignee" = $2,
+           "expectedCompletionAt" = $3, "slaStatus" = 'normal', "updatedAt" = NOW() WHERE id = $4`,
+          [newStepOrder, newAssignee, expectedCompletion.toISOString(), instanceId]
+        );
+
+        if (newAssignee) {
+          createNotification({
+            companyId, assignmentId: newAssignee,
+            type: "workflow_pending",
+            title: `طلب ينتظر موافقتك (${nextStep.stepName})`,
+            body: `${instance.requestTypeLabel}: ${instance.title}`,
+            priority: "high",
+            refType: instance.refTable ?? instance.requestType,
+            refId: instance.refId ?? instanceId,
+          }).catch(console.error);
+          actualImpact.notifications!.push(`إشعار للمعتمد التالي (${nextStep.stepName})`);
+        }
+        message = `تمت الموافقة - انتقل للخطوة التالية: ${nextStep.stepName}`;
+      } else {
+        newStatus = "approved";
+        await rawExecute(
+          `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW(),
+           "slaStatus" = 'normal', "updatedAt" = NOW() WHERE id = $1`,
+          [instanceId]
+        );
+        // Propagate final approval to the linked domain record
+        propagateDomainStatus(instance.refTable, instance.refId, "approved", actionBy).catch(console.error);
+        if (instance.submittedBy) {
+          createNotification({
+            companyId, assignmentId: instance.submittedBy,
+            type: "workflow_approved",
+            title: "تمت الموافقة على طلبك",
+            body: `${instance.requestTypeLabel}: ${instance.title}`,
+            priority: "normal",
+            refType: instance.refTable ?? instance.requestType,
+            refId: instance.refId ?? instanceId,
+          }).catch(console.error);
+          actualImpact.notifications!.push("إشعار لمقدم الطلب بالموافقة النهائية");
+        }
+        message = "تمت الموافقة النهائية";
+      }
+      actualImpact.statusChange = { from: instance.status, to: newStatus };
+      break;
+    }
+
+    case "reject": {
+      newStatus = "rejected";
+      await rawExecute(
+        `UPDATE workflow_instances SET status = 'rejected', "completedAt" = NOW(), "updatedAt" = NOW() WHERE id = $1`,
+        [instanceId]
+      );
+      // Propagate rejection to the linked domain record
+      propagateDomainStatus(instance.refTable, instance.refId, "rejected").catch(console.error);
+      if (instance.submittedBy) {
+        createNotification({
+          companyId, assignmentId: instance.submittedBy,
+          type: "workflow_rejected",
+          title: "تم رفض طلبك",
+          body: `${instance.requestTypeLabel}: ${instance.title}${notes ? ` - السبب: ${notes}` : ""}`,
+          priority: "high",
+          refType: instance.refTable ?? instance.requestType,
+          refId: instance.refId ?? instanceId,
+        }).catch(console.error);
+        actualImpact.notifications!.push("إشعار لمقدم الطلب بالرفض");
+      }
+      actualImpact.statusChange = { from: instance.status, to: "rejected" };
+      message = "تم رفض الطلب";
+      break;
+    }
+
+    case "return": {
+      newStatus = "returned";
+      await rawExecute(
+        `UPDATE workflow_instances SET status = 'returned', "updatedAt" = NOW() WHERE id = $1`,
+        [instanceId]
+      );
+      // Propagate return to the linked domain record
+      propagateDomainStatus(instance.refTable, instance.refId, "returned").catch(console.error);
+      if (instance.submittedBy) {
+        createNotification({
+          companyId, assignmentId: instance.submittedBy,
+          type: "workflow_returned",
+          title: "تم إرجاع طلبك للتعديل",
+          body: `${instance.requestTypeLabel}: ${instance.title}${notes ? ` - السبب: ${notes}` : ""}`,
+          priority: "normal",
+          refType: instance.refTable ?? instance.requestType,
+          refId: instance.refId ?? instanceId,
+        }).catch(console.error);
+        actualImpact.notifications!.push("إشعار لمقدم الطلب بالإرجاع");
+      }
+      actualImpact.statusChange = { from: instance.status, to: "returned" };
+      message = "تم إرجاع الطلب للمقدم";
+      break;
+    }
+
+    case "refer": {
+      newAssignee = referredTo!;
+      await rawExecute(
+        `UPDATE workflow_instances SET "currentAssignee" = $1, "updatedAt" = NOW() WHERE id = $2`,
+        [referredTo, instanceId]
+      );
+      createNotification({
+        companyId, assignmentId: referredTo!,
+        type: "workflow_referred",
+        title: "تمت إحالة طلب إليك",
+        body: `${instance.requestTypeLabel}: ${instance.title}`,
+        priority: "high",
+        refType: instance.refTable ?? instance.requestType,
+        refId: instance.refId ?? instanceId,
+      }).catch(console.error);
+      actualImpact.notifications!.push(`إشعار إحالة إلى ${referredToName || "المعني"}`);
+      message = `تمت الإحالة إلى ${referredToName || "المعني"}`;
+      break;
+    }
+
+    case "escalate": {
+      const [sla] = await rawQuery<any>(
+        `SELECT "escalateTo" FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
+        [companyId, instance.requestType]
+      );
+      const escalateRole = sla?.escalateTo ?? "hr_manager";
+      let escalateAssignee: number | null = null;
+      try {
+        escalateAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, escalateRole);
+      } catch { /* */ }
+
+      await rawExecute(
+        `UPDATE workflow_instances SET "currentAssignee" = $1, "slaStatus" = 'escalated', "updatedAt" = NOW() WHERE id = $2`,
+        [escalateAssignee, instanceId]
+      );
+
+      if (escalateAssignee) {
+        createNotification({
+          companyId, assignmentId: escalateAssignee,
+          type: "workflow_escalated",
+          title: "تصعيد طلب متأخر",
+          body: `${instance.requestTypeLabel}: ${instance.title} - تجاوز المهلة المحددة`,
+          priority: "urgent",
+          refType: instance.refTable ?? instance.requestType,
+          refId: instance.refId ?? instanceId,
+        }).catch(console.error);
+        actualImpact.notifications!.push(`تصعيد إلى ${escalateRole}`);
+      }
+      actualImpact.statusChange = { from: instance.status, to: "escalated" };
+      message = `تم التصعيد إلى ${escalateRole}`;
+      break;
+    }
+  }
+
+  if (isOverride) {
+    actualImpact.overrideLogged = true;
+  }
+
+  const afterData = { status: newStatus, currentStepOrder: newStepOrder };
+  await rawExecute(
+    `UPDATE workflow_step_actions SET "afterData" = $1
+     WHERE id = (SELECT id FROM workflow_step_actions WHERE "instanceId" = $2 ORDER BY id DESC LIMIT 1)`,
+    [JSON.stringify(afterData), instanceId]
+  );
+
+  return { status: newStatus, stepOrder: newStepOrder, assignee: newAssignee, message, actualImpact, isOverride };
+}
+
+export async function getTimeline(instanceId: number, companyId: number) {
+  const [instance] = await rawQuery<any>(
+    `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2`,
+    [instanceId, companyId]
+  );
+  if (!instance) throw new Error("المعاملة غير موجودة");
+
+  const actions = await rawQuery<any>(
+    `SELECT wsa.*, u.email AS "actionByEmail"
+     FROM workflow_step_actions wsa
+     LEFT JOIN users u ON u.id = wsa."actionBy"
+     WHERE wsa."instanceId" = $1
+     ORDER BY wsa."createdAt" ASC`,
+    [instanceId]
+  );
+
+  const steps = instance.definitionId
+    ? await rawQuery<any>(
+        `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
+        [instance.definitionId]
+      )
+    : [];
+
+  return {
+    instance,
+    actions,
+    steps,
+  };
+}
+
+export async function getTimelineByRef(refTable: string, refId: number, companyId: number) {
+  const [instance] = await rawQuery<any>(
+    `SELECT * FROM workflow_instances WHERE "refTable" = $1 AND "refId" = $2 AND "companyId" = $3`,
+    [refTable, refId, companyId]
+  );
+  if (!instance) return { instance: null, actions: [], steps: [] };
+  return getTimeline(instance.id, companyId);
+}
+
+export async function checkSlaStatus(companyId: number) {
+  const now = new Date();
+  let warnings = 0, escalations = 0, autoApprovals = 0;
+
+  const pendingInstances = await rawQuery<any>(
+    `SELECT wi.*, sd."warningHours", sd."deadlineHours", sd."escalationHours",
+            sd."autoApproveOnTimeout", sd."escalateTo"
+     FROM workflow_instances wi
+     LEFT JOIN sla_definitions sd ON sd."companyId" = wi."companyId" AND sd."requestType" = wi."requestType" AND sd."isActive" = true
+     WHERE wi."companyId" = $1 AND wi.status IN ('pending', 'in_review')
+     ORDER BY wi."createdAt" ASC`,
+    [companyId]
+  );
+
+  for (const inst of pendingInstances) {
+    const stepBaseTime = inst.expectedCompletionAt
+      ? new Date(inst.expectedCompletionAt)
+      : new Date(inst.createdAt);
+    const stepSlaHours = inst.deadlineHours ?? 48;
+    const stepStartTime = inst.expectedCompletionAt
+      ? new Date(stepBaseTime.getTime() - stepSlaHours * 3600000)
+      : new Date(inst.createdAt);
+    const hoursSince = (now.getTime() - stepStartTime.getTime()) / 3600000;
+    const warningH = inst.warningHours ?? 24;
+    const deadlineH = inst.deadlineHours ?? 48;
+    const escalationH = inst.escalationHours ?? 72;
+
+    if (hoursSince >= escalationH && inst.slaStatus !== "escalated") {
+      if (inst.autoApproveOnTimeout) {
+        await rawExecute(
+          `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW(),
+           "slaStatus" = 'auto_approved', "updatedAt" = NOW() WHERE id = $1`,
+          [inst.id]
+        );
+        await rawExecute(
+          `INSERT INTO workflow_step_actions ("instanceId", "stepOrder", "stepName", action, "actionBy", notes)
+           VALUES ($1, $2, 'موافقة تلقائية', 'approve', 0, 'تمت الموافقة تلقائياً بسبب تجاوز المهلة')`,
+          [inst.id, inst.currentStepOrder]
+        );
+        if (inst.submittedBy) {
+          createNotification({
+            companyId, assignmentId: inst.submittedBy,
+            type: "workflow_auto_approved",
+            title: "موافقة تلقائية على طلبك",
+            body: `${inst.requestTypeLabel}: ${inst.title} - تمت الموافقة تلقائياً بعد تجاوز المهلة`,
+            priority: "normal",
+            refType: inst.refTable ?? inst.requestType,
+            refId: inst.refId ?? inst.id,
+          }).catch(console.error);
+        }
+        autoApprovals++;
+      } else {
+        const escalateRole = inst.escalateTo ?? "hr_manager";
+        let escalateAssignee: number | null = null;
+        try {
+          escalateAssignee = await getAssignmentIdByRole(companyId, inst.branchId ?? 0, escalateRole);
+        } catch { /* */ }
+
+        await rawExecute(
+          `UPDATE workflow_instances SET "currentAssignee" = $1, "slaStatus" = 'escalated', "updatedAt" = NOW() WHERE id = $2`,
+          [escalateAssignee, inst.id]
+        );
+        await rawExecute(
+          `INSERT INTO workflow_step_actions ("instanceId", "stepOrder", "stepName", action, "actionBy", notes)
+           VALUES ($1, $2, 'تصعيد تلقائي', 'escalate', 0, 'تصعيد تلقائي بسبب تجاوز المهلة')`,
+          [inst.id, inst.currentStepOrder]
+        );
+        if (escalateAssignee) {
+          createNotification({
+            companyId, assignmentId: escalateAssignee,
+            type: "workflow_escalated",
+            title: "تصعيد طلب متأخر",
+            body: `${inst.requestTypeLabel}: ${inst.title} - تجاوز المهلة`,
+            priority: "urgent",
+            refType: inst.refTable ?? inst.requestType,
+            refId: inst.refId ?? inst.id,
+          }).catch(console.error);
+        }
+        escalations++;
+      }
+    } else if (hoursSince >= deadlineH && inst.slaStatus !== "exceeded" && inst.slaStatus !== "escalated") {
+      await rawExecute(
+        `UPDATE workflow_instances SET "slaStatus" = 'exceeded', "updatedAt" = NOW() WHERE id = $1`,
+        [inst.id]
+      );
+      if (inst.currentAssignee) {
+        createNotification({
+          companyId, assignmentId: inst.currentAssignee,
+          type: "workflow_sla_exceeded",
+          title: "تجاوز المهلة المحددة",
+          body: `${inst.requestTypeLabel}: ${inst.title} - تجاوز المهلة، سيتم التصعيد قريباً`,
+          priority: "urgent",
+          refType: inst.refTable ?? inst.requestType,
+          refId: inst.refId ?? inst.id,
+        }).catch(console.error);
+      }
+      warnings++;
+    } else if (hoursSince >= warningH && inst.slaStatus === "normal") {
+      await rawExecute(
+        `UPDATE workflow_instances SET "slaStatus" = 'warning', "updatedAt" = NOW() WHERE id = $1`,
+        [inst.id]
+      );
+      if (inst.currentAssignee) {
+        createNotification({
+          companyId, assignmentId: inst.currentAssignee,
+          type: "workflow_sla_warning",
+          title: "تنبيه - اقتراب المهلة",
+          body: `${inst.requestTypeLabel}: ${inst.title} - المهلة تقترب`,
+          priority: "high",
+          refType: inst.refTable ?? inst.requestType,
+          refId: inst.refId ?? inst.id,
+        }).catch(console.error);
+      }
+      warnings++;
+    }
+  }
+
+  return { warnings, escalations, autoApprovals };
+}
+

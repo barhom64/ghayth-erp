@@ -1,0 +1,727 @@
+import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import { Router } from "express";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { authMiddleware } from "../middlewares/authMiddleware.js";
+import {
+  createNotification,
+  emitEvent,
+  createAuditLog,
+  getManagerAssignmentId,
+} from "../lib/businessHelpers.js";
+import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { hashPassword } from "../lib/auth.js";
+
+const router = Router();
+router.use(authMiddleware);
+
+router.get("/", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { search = "", page = "1", limit: lim = "20" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+
+    const filters = parseScopeFilters(req);
+    if (search) filters.search = String(search);
+    filters.searchColumns = ['e.name', 'e.email', 'e."empNumber"'];
+
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, {
+      companyColumn: 'ea."companyId"',
+      branchColumn: 'ea."branchId"',
+      extraConditions: [`ea.status = 'active'`],
+    });
+
+    let paramIdx = nextParamIndex;
+    let where = baseWhere;
+
+    if (!scope.isOwner && scope.role === "employee" && scope.employeeId) {
+      where += ` AND e.id = $${paramIdx}`;
+      params.push(scope.employeeId);
+      paramIdx++;
+    }
+
+    params.push(Number(lim));
+    const limitIdx = paramIdx++;
+    params.push(offset);
+    const offsetIdx = paramIdx++;
+
+    const employees = await rawQuery<any>(
+      `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+              e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
+              COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
+              ea.role, ea.salary, ea."branchId",
+              b.name AS "branchName",
+              (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'employee' AND gl."entityId" = e.id AND gl."companyId" = ea."companyId")::int AS "govLinkCount"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId" = e.id
+       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+       WHERE ${where}
+       ORDER BY e.name ASC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params
+    );
+
+    const countParams = params.slice(0, params.length - 2);
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId" = e.id
+       WHERE ${where}`,
+      countParams
+    );
+
+    res.json({ data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+  } catch (err) {
+    handleRouteError(err, res, "List employees error:");
+  }
+});
+
+router.post("/", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const {
+      name,
+      phone,
+      email,
+      empNumber,
+      nationalId,
+      gender,
+      nationality,
+      dateOfBirth,
+      jobTitle = "موظف",
+      role = "employee",
+      salary = 0,
+      branchId,
+      companyId: bodyCompanyId,
+      departmentId,
+      department,
+      hireDate,
+      contractType = "full_time",
+      probationDays = 90,
+      managerId,
+      iqamaNumber, iqamaExpiry, passportNumber, passportExpiry,
+      borderNumber, visaNumber, visaType, visaExpiry,
+      sponsorNumber, workPermitNumber, workPermitExpiry, iqamaStatus,
+    } = req.body as any;
+    const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
+
+    if (!name) {
+      validationError(res, "لا يمكن إنشاء موظف بدون اسم", "name", "أدخل الاسم الكامل للموظف");
+      return;
+    }
+    if (!nationalId) {
+      validationError(res, "لا يمكن إنشاء موظف بدون رقم هوية", "nationalId", "أدخل رقم الهوية الوطنية أو رقم الإقامة");
+      return;
+    }
+    if (!nationality) {
+      validationError(res, "لا يمكن إنشاء موظف بدون جنسية", "nationality", "حدد جنسية الموظف");
+      return;
+    }
+    if (!phone) {
+      validationError(res, "رقم الجوال مطلوب", "phone", "أدخل رقم جوال الموظف");
+      return;
+    }
+    if (!managerId) {
+      validationError(res, "المدير المباشر مطلوب", "managerId", "حدد المدير المباشر للموظف");
+      return;
+    }
+    if (!department && !departmentId) {
+      validationError(res, "القسم مطلوب", "department", "حدد القسم الذي ينتمي إليه الموظف");
+      return;
+    }
+    if (!jobTitle || jobTitle === "موظف") {
+      validationError(res, "المسمى الوظيفي مطلوب", "jobTitle", "حدد المسمى الوظيفي للموظف");
+      return;
+    }
+    if (!contractType) {
+      validationError(res, "نوع العقد مطلوب", "contractType", "حدد نوع العقد للموظف");
+      return;
+    }
+    if (salary !== undefined && salary !== null && Number(salary) <= 0) {
+      validationError(res, "الراتب يجب أن يكون أكبر من صفر", "salary", "أدخل راتباً موجباً أكبر من صفر");
+      return;
+    }
+
+    const targetBranchId = branchId ?? scope.branchId;
+    const effectiveHireDate = hireDate || new Date().toISOString().split("T")[0];
+
+    let resolvedDepartmentId = departmentId ?? null;
+    if (!resolvedDepartmentId && department) {
+      const deptRows = await rawQuery(
+        `SELECT id FROM departments WHERE name = $1 AND "companyId" = $2 LIMIT 1`,
+        [department, effectiveCompanyId]
+      );
+      if (deptRows.length > 0) {
+        resolvedDepartmentId = deptRows[0].id;
+      }
+    }
+
+    const result = await withTransaction(async (client) => {
+      // ── Step 1: Auto-generate employee number (EMP-YYYY-NNN) ──
+      let finalEmpNumber = empNumber;
+      if (!finalEmpNumber) {
+        const seqRes = await client.query(`SELECT nextval('employee_number_seq') AS seq`);
+        const seq = Number(seqRes.rows[0].seq);
+        const yearStr = new Date().getFullYear().toString();
+        finalEmpNumber = `EMP-${yearStr}-${String(seq).padStart(3, "0")}`;
+      }
+
+      // ── Step 2: Create the employee record ──
+      const empRes = await client.query(
+        `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", gender, nationality, "dateOfBirth", status,
+         "iqamaNumber","iqamaExpiry","passportNumber","passportExpiry",
+         "borderNumber","visaNumber","visaType","visaExpiry",
+         "sponsorNumber","workPermitNumber","workPermitExpiry","iqamaStatus")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active',
+         $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         RETURNING id`,
+        [name, phone || null, email || null, finalEmpNumber, nationalId || null, gender || null, nationality || null, dateOfBirth || null,
+         iqamaNumber || null, iqamaExpiry || null, passportNumber || null, passportExpiry || null,
+         borderNumber || null, visaNumber || null, visaType || null, visaExpiry || null,
+         sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active']
+      );
+      const empId = empRes.rows[0].id;
+
+      // ── Step 3: Create first assignment ──
+      let resolvedJobTitleId = req.body.jobTitleId ?? null;
+      if (!resolvedJobTitleId && jobTitle && jobTitle !== "موظف") {
+        const jtRes = await client.query(
+          `SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+          [jobTitle, effectiveCompanyId]
+        );
+        if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
+      }
+
+      const assignRes = await client.query(
+        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,'active',$10)
+         RETURNING id`,
+        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, jobTitle, resolvedJobTitleId, role, Number(salary), effectiveHireDate, managerId ? Number(managerId) : null]
+      );
+      const assignmentId = assignRes.rows[0].id;
+
+      // ── Step 4: Initialize leave balances (10 types) ──
+      const leaveTypesRes = await client.query(
+        `SELECT id, "annualDays" FROM hr_leave_types WHERE "companyId" = $1`,
+        [effectiveCompanyId]
+      );
+      const year = new Date().getFullYear();
+      for (const lt of leaveTypesRes.rows) {
+        await client.query(
+          `INSERT INTO hr_leave_balances ("companyId","employeeId","assignmentId","leaveTypeId",year,entitled,used,reserved)
+           VALUES ($1,$2,$3,$4,$5,$6,0,0)
+           ON CONFLICT DO NOTHING`,
+          [effectiveCompanyId, empId, assignmentId, lt.id, year, Number(lt.annualDays ?? 21)]
+        );
+      }
+
+      // ── Step 5: Assign default shift and attendance policy ──
+      const defaultShiftRes = await client.query(
+        `SELECT id FROM shifts WHERE "companyId" = $1 AND "isDefault" = true AND status = 'active' LIMIT 1`,
+        [effectiveCompanyId]
+      );
+      if (defaultShiftRes.rows.length > 0) {
+        const shiftId = defaultShiftRes.rows[0].id;
+        await client.query(
+          `INSERT INTO employee_shift_assignments ("assignmentId","shiftId","startDate")
+           VALUES ($1,$2,$3)`,
+          [assignmentId, shiftId, effectiveHireDate]
+        );
+      }
+      const existingPolicy = await client.query(
+        `SELECT id FROM attendance_policies WHERE "companyId" = $1 LIMIT 1`,
+        [scope.companyId]
+      );
+      if (existingPolicy.rows.length === 0) {
+        await client.query(
+          `INSERT INTO attendance_policies ("companyId","lateThresholdMinutes","gpsRadiusMeters")
+           VALUES ($1, 15, 200)`,
+          [scope.companyId]
+        );
+      }
+
+      // ── Step 6: Create employment contract + probation period ──
+      const probEnd = new Date(effectiveHireDate);
+      probEnd.setDate(probEnd.getDate() + Number(probationDays));
+      await client.query(
+        `INSERT INTO employee_contracts ("companyId","employeeId","assignmentId","contractType","startDate","probationEndDate","probationStatus",status)
+         VALUES ($1,$2,$3,$4,$5,$6,'active','active')`,
+        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, probEnd.toISOString().split("T")[0]]
+      );
+
+      // ── Step 7: Create 4 onboarding tasks ──
+      const onboardingTasks = [
+        "تسليم أجهزة IT وإعداد الحسابات",
+        "توقيع عقد العمل والتأمينات",
+        "تعريف المدير المباشر والفريق",
+        "دورة التعريف بالشركة وسياساتها",
+      ];
+      const dueDateOnboarding = new Date();
+      dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
+      for (const taskTitle of onboardingTasks) {
+        await client.query(
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
+           VALUES ($1,$2,$3,$4,$5,'pending')`,
+          [scope.companyId, empId, assignmentId, taskTitle, dueDateOnboarding.toISOString().split("T")[0]]
+        );
+      }
+
+      // ── Step 8: Auto-create user account ──
+      let userId: number | null = null;
+      let tempPassword: string | null = null;
+      if (email) {
+        const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [email]);
+        if (existingUser.rows.length === 0) {
+          tempPassword = Math.random().toString(36).slice(-8) + "A1!";
+          const hashedPw = await hashPassword(tempPassword);
+          const userRes = await client.query(
+            `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive") VALUES ($1,$2,$3,$4,true) RETURNING id`,
+            [email, hashedPw, role || "employee", empId]
+          );
+          userId = userRes.rows[0].id;
+        } else {
+          userId = existingUser.rows[0].id;
+          await client.query(`UPDATE users SET "employeeId"=$1 WHERE id=$2`, [empId, userId]);
+        }
+      }
+
+      // ── Step 9: Copy active company salary components to the new employee ──
+      const compSalaryComponents = await client.query(
+        `SELECT id FROM salary_components WHERE "companyId" = $1 AND "isActive" = true`,
+        [effectiveCompanyId]
+      );
+      for (const sc of compSalaryComponents.rows) {
+        await client.query(
+          `INSERT INTO employee_salary_components ("employeeId","assignmentId","companyId","componentId","isActive","createdAt")
+           VALUES ($1,$2,$3,$4,true,NOW())
+           ON CONFLICT DO NOTHING`,
+          [empId, assignmentId, effectiveCompanyId, sc.id]
+        ).catch(() => {});
+      }
+
+      return { empId, assignmentId, finalEmpNumber, userId, tempPassword };
+    });
+
+    const { empId, assignmentId, finalEmpNumber, userId, tempPassword } = result;
+
+    // ── Step 8: Notify manager and HR ──
+    const managerAssignmentId = await getManagerAssignmentId(scope.companyId, targetBranchId);
+    if (managerAssignmentId) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: managerAssignmentId,
+        type: "employee_created", title: "موظف جديد في فريقك",
+        body: `تم إضافة الموظف ${name} (${finalEmpNumber}) إلى فريقك. يرجى متابعة مهام التهيئة.`,
+        priority: "high", refType: "employee", refId: empId,
+      }).catch(console.error);
+    }
+    const [hrAssignment] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager') AND status = 'active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 ELSE 2 END LIMIT 1`,
+      [scope.companyId]
+    );
+    const hrTargetId = hrAssignment?.id ?? scope.activeAssignmentId;
+    createNotification({
+      companyId: scope.companyId, assignmentId: hrTargetId,
+      type: "employee_created", title: "تم إضافة موظف جديد — مطلوب متابعة HR",
+      body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح. تم إنشاء ${4} مهام تهيئة. يرجى مراجعة ملف الموظف.`,
+      priority: "high", refType: "employee", refId: empId,
+    }).catch(console.error);
+    if (hrTargetId !== scope.activeAssignmentId) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
+        type: "employee_created", title: "تم إضافة موظف جديد",
+        body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح.`,
+        priority: "low", refType: "employee", refId: empId,
+      }).catch(console.error);
+    }
+
+    // ── Step 9: Welcome notification/email ──
+    createNotification({
+      companyId: scope.companyId, assignmentId,
+      type: "welcome", title: "مرحباً في فريق العمل",
+      body: `أهلاً ${name}، رقمك الوظيفي ${finalEmpNumber}. يسعدنا انضمامك إلى الفريق. فترة التجربة: ${probationDays} يوم.`,
+      priority: "normal", refType: "employee", refId: empId,
+    }).catch(console.error);
+    if (email) {
+      rawExecute(
+        `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
+         VALUES ($1,$2,$3,$4,$5,'pending',NOW(),'employee',$6)`,
+        [scope.companyId, email, name, `مرحباً في فريق العمل - ${finalEmpNumber}`,
+          `أهلاً ${name}،\n\nرقمك الوظيفي: ${finalEmpNumber}\nالمسمى الوظيفي: ${jobTitle}\nتاريخ الالتحاق: ${effectiveHireDate}\nفترة التجربة: ${probationDays} يوم\n\nيسعدنا انضمامك إلى الفريق.`,
+          empId]
+      ).catch(console.error);
+    }
+    if (email && tempPassword) {
+      rawExecute(
+        `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
+         VALUES ($1,$2,$3,$4,$5,'pending',NOW(),'user',$6)`,
+        [scope.companyId, email, name, `بيانات الدخول إلى النظام - ${finalEmpNumber}`,
+          `أهلاً ${name}،\n\nتم إنشاء حساب لك في نظام غيث ERP.\n\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${tempPassword}\n\nيرجى تغيير كلمة المرور فور تسجيل الدخول الأول.\n\nهذه الرسالة تلقائية، يرجى عدم الرد عليها.`,
+          empId]
+      ).catch(console.error);
+    }
+
+    // ── Step 10: Event log ──
+    await emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "employee.created", entity: "employees", entityId: empId,
+      details: JSON.stringify({ empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary, onboardingTasks: 4, probationDays: Number(probationDays) }),
+    });
+
+    // ── Step 11: Audit log ──
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "employees", entityId: empId,
+      after: { name, empNumber: finalEmpNumber, jobTitle, role, salary, contractType, probationDays: Number(probationDays) },
+    });
+
+    // ── Step 12: Auto-create subsidiary accounting accounts ──
+    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch(console.error);
+
+    const [employee] = await rawQuery<any>(
+      `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+              ea."jobTitle", ea.role, ea.salary, ea."branchId",
+              b.name AS "branchName"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId" = e.id
+       LEFT JOIN branches b ON b.id = ea."branchId"
+       WHERE e.id = $1`,
+      [empId]
+    );
+
+    res.status(201).json({
+      ...employee,
+      assignmentId,
+      onboardingTasksCreated: 4,
+      probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return d.toISOString().split("T")[0]; })(),
+      userAccount: userId ? {
+        userId,
+        email: email || null,
+        isNewAccount: !!tempPassword,
+        message: tempPassword
+          ? "تم إنشاء حساب مستخدم. كلمة المرور المؤقتة أُرسلت إلى الموظف عبر البريد الإلكتروني."
+          : "تم ربط الحساب الموجود بالموظف.",
+      } : null,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Create employee error:");
+  }
+});
+
+router.get("/onboarding-tasks", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId, status } = req.query as any;
+    const conditions = [`ot."companyId" = $1`];
+    const params: any[] = [scope.companyId];
+    if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }
+    if (status) { params.push(status); conditions.push(`ot.status = $${params.length}`); }
+    const rows = await rawQuery<any>(
+      `SELECT ot.*, e.name AS "employeeName", e."empNumber"
+       FROM onboarding_tasks ot
+       JOIN employees e ON e.id = ot."employeeId"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY ot."createdAt" DESC LIMIT 200`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { console.error("Onboarding tasks error:", err); res.json({ data: [], total: 0 }); }
+});
+
+router.patch("/onboarding-tasks/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status } = req.body as any;
+    const completedAt = status === "completed" ? "NOW()" : "NULL";
+    const [row] = await rawQuery<any>(
+      `UPDATE onboarding_tasks SET status = $1, "completedAt" = ${completedAt}, "completedBy" = $2
+       WHERE id = $3 AND "companyId" = $4 RETURNING *`,
+      [status, scope.activeAssignmentId, Number(req.params.id), scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+router.get("/job-titles", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { res.json({ data: [], total: 0 }); }
+});
+
+router.get("/contracts", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT ec.*, e.name AS "employeeName", e."empNumber"
+       FROM employee_contracts ec
+       JOIN employees e ON e.id = ec."employeeId"
+       WHERE ec."companyId" = $1
+       ORDER BY ec."createdAt" DESC LIMIT 200`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { res.json({ data: [], total: 0 }); }
+});
+
+router.get("/documents", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT ed.*, e.name AS "employeeName"
+       FROM employee_documents ed
+       JOIN employees e ON e.id = ed."employeeId"
+       WHERE ed."companyId" = $1
+       ORDER BY ed."createdAt" DESC
+       LIMIT 100`,
+      [scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    handleRouteError(err, res, "Get employee documents error:");
+  }
+});
+
+router.get("/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+
+    let extraCondition = "";
+    const queryParams: any[] = [Number(id), scope.companyId];
+    if (!scope.isOwner && scope.role === "employee" && scope.employeeId) {
+      extraCondition = ` AND e.id = $3`;
+      queryParams.push(scope.employeeId);
+    }
+
+    const [employee] = await rawQuery<any>(
+      `SELECT e.id, e.name, e.phone, e.email, e."empNumber",
+              e."photoUrl", e.status, e."createdAt",
+              e."nationalId", e.nationality, e.gender, e."dateOfBirth",
+              e."iqamaNumber", e."iqamaExpiry", e."passportNumber", e."passportExpiry",
+              e."borderNumber", e."visaNumber", e."visaType", e."visaExpiry",
+              e."sponsorNumber", e."workPermitNumber", e."workPermitExpiry", e."iqamaStatus",
+              ea.id AS "assignmentId",
+              COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
+              ea.role, ea.salary, ea."hireDate",
+              ea."companyId", ea."branchId", ea."departmentId",
+              ea."managerId",
+              b.name AS "branchName", d.name AS "departmentName",
+              mgr.name AS "managerName"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN departments d ON d.id = ea."departmentId"
+       LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+       LEFT JOIN employees mgr ON mgr.id = ea."managerId"
+       WHERE e.id = $1 AND ea."companyId" = $2${extraCondition}`,
+      queryParams
+    );
+
+    if (!employee) {
+      res.status(404).json({ error: "الموظف غير موجود" });
+      return;
+    }
+
+    const [tasks, attendance, leaves, trainings, payroll, violations] = await Promise.all([
+      rawQuery<any>(
+        `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
+         FROM project_tasks pt
+         LEFT JOIN projects p ON p.id = pt."projectId"
+         WHERE pt."assigneeId" = $1 AND p."companyId" = $2
+         ORDER BY pt."dueDate" DESC NULLS LAST LIMIT 20`,
+        [Number(id), scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT a.id, a.date, a."checkIn", a."checkOut", a."lateMinutes", a.status
+         FROM attendance a
+         WHERE a."assignmentId" = $1
+         ORDER BY a.date DESC LIMIT 30`,
+        [employee.assignmentId]
+      ),
+      rawQuery<any>(
+        `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days, lr.reason,
+                lt.name AS "leaveTypeName"
+         FROM hr_leave_requests lr
+         JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+         WHERE lr."employeeId" = $1
+         ORDER BY lr."createdAt" DESC LIMIT 20`,
+        [Number(id)]
+      ),
+      rawQuery<any>(
+        `SELECT tp.id, tp.status, tp."completedAt",
+                tc.title AS "courseTitle", tc.type AS "courseType"
+         FROM training_participants tp
+         JOIN training_courses tc ON tc.id = tp."courseId"
+         WHERE tp."employeeId" = $1
+         ORDER BY tc."startDate" DESC LIMIT 20`,
+        [Number(id)]
+      ).catch(() => []),
+      rawQuery<any>(
+        `SELECT pl.id, pl.basic, pl."grossSalary", pl.gosi, pl."lateDeduction", pl."netSalary",
+                pr.period, pr.status, pr."createdAt"
+         FROM payroll_lines pl
+         JOIN payroll_runs pr ON pr.id = pl."runId"
+         WHERE pl."assignmentId" = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL AND pr."deletedAt" IS NULL
+         ORDER BY pr.period DESC LIMIT 12`,
+        [employee.assignmentId, scope.companyId]
+      ).catch(() => []),
+      rawQuery<any>(
+        `SELECT ev.id, ev.type, ev.description, ev.severity, ev.deduction, ev.period, ev."createdAt"
+         FROM employee_violations ev
+         WHERE ev."assignmentId" = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL
+         ORDER BY ev."createdAt" DESC LIMIT 20`,
+        [employee.assignmentId, scope.companyId]
+      ).catch(() => []),
+    ]);
+
+    res.json({ ...employee, tasks, attendance, leaves, trainings, payroll, violations });
+  } catch (err) {
+    handleRouteError(err, res, "Get employee error:");
+  }
+});
+
+router.patch("/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+    const {
+      name, phone, email, jobTitle, role, salary, branchId, departmentId, status,
+      borderNumber, visaNumber, visaType, visaExpiry, sponsorNumber,
+      workPermitNumber, workPermitExpiry, iqamaStatus,
+      nationalId, iqamaNumber, iqamaExpiry, passportNumber, passportExpiry,
+    } = req.body as any;
+
+    const [employee] = await rawQuery<any>(
+      `SELECT e.id, ea.id AS "assignmentId" FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       WHERE e.id = $1 AND ea."companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+
+    if (!employee) {
+      res.status(404).json({ error: "الموظف غير موجود" });
+      return;
+    }
+
+    if (salary !== undefined && salary !== null && Number(salary) <= 0) {
+      res.status(400).json({ error: "الراتب يجب أن يكون أكبر من صفر", field: "salary" });
+      return;
+    }
+
+    const empFields: string[] = [];
+    const empVals: any[] = [];
+    if (name !== undefined) { empVals.push(name); empFields.push(`name = $${empVals.length}`); }
+    if (phone !== undefined) { empVals.push(phone); empFields.push(`phone = $${empVals.length}`); }
+    if (email !== undefined) { empVals.push(email); empFields.push(`email = $${empVals.length}`); }
+    if (status !== undefined) { empVals.push(status); empFields.push(`status = $${empVals.length}`); }
+    if (nationalId !== undefined) { empVals.push(nationalId); empFields.push(`"nationalId" = $${empVals.length}`); }
+    if (iqamaNumber !== undefined) { empVals.push(iqamaNumber); empFields.push(`"iqamaNumber" = $${empVals.length}`); }
+    if (iqamaExpiry !== undefined) { empVals.push(iqamaExpiry || null); empFields.push(`"iqamaExpiry" = $${empVals.length}`); }
+    if (passportNumber !== undefined) { empVals.push(passportNumber); empFields.push(`"passportNumber" = $${empVals.length}`); }
+    if (passportExpiry !== undefined) { empVals.push(passportExpiry || null); empFields.push(`"passportExpiry" = $${empVals.length}`); }
+    if (borderNumber !== undefined) { empVals.push(borderNumber); empFields.push(`"borderNumber" = $${empVals.length}`); }
+    if (visaNumber !== undefined) { empVals.push(visaNumber); empFields.push(`"visaNumber" = $${empVals.length}`); }
+    if (visaType !== undefined) { empVals.push(visaType); empFields.push(`"visaType" = $${empVals.length}`); }
+    if (visaExpiry !== undefined) { empVals.push(visaExpiry || null); empFields.push(`"visaExpiry" = $${empVals.length}`); }
+    if (sponsorNumber !== undefined) { empVals.push(sponsorNumber); empFields.push(`"sponsorNumber" = $${empVals.length}`); }
+    if (workPermitNumber !== undefined) { empVals.push(workPermitNumber); empFields.push(`"workPermitNumber" = $${empVals.length}`); }
+    if (workPermitExpiry !== undefined) { empVals.push(workPermitExpiry || null); empFields.push(`"workPermitExpiry" = $${empVals.length}`); }
+    if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
+    if (empFields.length) {
+      empVals.push(Number(id));
+      await rawExecute(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length}`, empVals);
+    }
+
+    const { jobTitleId: bodyJobTitleId, managerId: bodyManagerId } = req.body as any;
+    if (jobTitle || role || salary !== undefined || branchId || departmentId || bodyJobTitleId !== undefined || bodyManagerId !== undefined) {
+      const fields: string[] = [];
+      const vals: any[] = [];
+      if (jobTitle) { vals.push(jobTitle); fields.push(`"jobTitle" = $${vals.length}`); }
+      if (bodyJobTitleId !== undefined) { vals.push(bodyJobTitleId || null); fields.push(`"jobTitleId" = $${vals.length}`); }
+      else if (jobTitle) {
+        const [jtRow] = await rawQuery<any>(`SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`, [jobTitle, scope.companyId]);
+        if (jtRow) { vals.push(jtRow.id); fields.push(`"jobTitleId" = $${vals.length}`); }
+      }
+      if (bodyManagerId !== undefined) { vals.push(bodyManagerId ? Number(bodyManagerId) : null); fields.push(`"managerId" = $${vals.length}`); }
+      if (role) { vals.push(role); fields.push(`role = $${vals.length}`); }
+      if (salary !== undefined) {
+        const [currentAsgn] = await rawQuery<{ salary: number }>(
+          `SELECT salary FROM employee_assignments WHERE id = $1`,
+          [employee.assignmentId]
+        );
+        const oldSalary = Number(currentAsgn?.salary ?? 0);
+        const newSalary = Number(salary);
+        vals.push(newSalary); fields.push(`salary = $${vals.length}`);
+        if (oldSalary !== newSalary) {
+          rawExecute(
+            `INSERT INTO salary_history ("employeeId","assignmentId","companyId","oldSalary","newSalary","effectiveDate","changedBy","createdAt")
+             VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,$6,NOW())`,
+            [Number(id), employee.assignmentId, scope.companyId, oldSalary, newSalary, scope.activeAssignmentId]
+          ).catch(console.error);
+        }
+      }
+      if (branchId) { vals.push(branchId); fields.push(`"branchId" = $${vals.length}`); }
+      if (departmentId) { vals.push(departmentId); fields.push(`"departmentId" = $${vals.length}`); }
+      if (fields.length) {
+        vals.push(employee.assignmentId);
+        await rawExecute(`UPDATE employee_assignments SET ${fields.join(",")} WHERE id = $${vals.length}`, vals);
+      }
+    }
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "employees",
+      entityId: Number(id),
+      after: req.body,
+    }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(
+      `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+              COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
+              ea.role, ea.salary
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+       WHERE e.id = $1`,
+      [Number(id)]
+    );
+
+    res.json(updated);
+  } catch (err) {
+    handleRouteError(err, res, "Update employee error:");
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+    const [employee] = await rawQuery<any>(
+      `SELECT e.id, ea.id AS "assignmentId" FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       WHERE e.id = $1 AND ea."companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!employee) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    await rawExecute(`UPDATE employee_assignments SET status = 'terminated' WHERE id = $1`, [employee.assignmentId]);
+    await rawExecute(`UPDATE employees SET status = 'terminated' WHERE id = $1`, [Number(id)]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "employees", entityId: Number(id), after: {},
+    }).catch(console.error);
+    res.json({ message: "تم إنهاء خدمة الموظف بنجاح" });
+  } catch (err) {
+    handleRouteError(err, res, "Delete employee error:");
+  }
+});
+
+export default router;

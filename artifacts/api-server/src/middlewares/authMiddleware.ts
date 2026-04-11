@@ -1,0 +1,100 @@
+import type { Request, Response, NextFunction } from "express";
+import { verifyToken, type JWTPayload } from "../lib/auth.js";
+import { rawQuery } from "../lib/rawdb.js";
+
+export interface RequestScope {
+  userId: number;
+  employeeId: number | null;
+  companyId: number;
+  branchId: number;
+  activeAssignmentId: number;
+  allowedCompanies: number[];
+  allowedBranches: number[];
+  allowedAssignments: number[];
+  role: string;
+  isOwner: boolean;
+  jobTitle: string | null;
+  jobTitleId: number | null;
+  userName: string;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      scope?: RequestScope;
+    }
+  }
+}
+
+export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "غير مصرح: لا يوجد توكن" });
+    return;
+  }
+
+  const token = auth.slice(7);
+
+  try {
+    const payload = verifyToken(token);
+    const scope = await buildScope(payload);
+    req.scope = scope;
+    next();
+  } catch (err: any) {
+    console.error("[AUTH] Token verification failed:", err?.message || err);
+    res.status(401).json({ error: "توكن غير صالح أو منتهي" });
+  }
+}
+
+async function buildScope(payload: JWTPayload): Promise<RequestScope> {
+  const activeAssignmentId = payload.assignmentId;
+
+  const [assignment] = await rawQuery<any>(
+    `SELECT ea.id, ea."employeeId", ea."companyId", ea."branchId", ea.role,
+            ea."jobTitleId", COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
+            COALESCE(e.name, 'مستخدم') AS "userName"
+     FROM employee_assignments ea
+     JOIN users u ON u."employeeId" = ea."employeeId"
+     LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+     LEFT JOIN employees e ON e.id = ea."employeeId"
+     WHERE ea.id = $1 AND ea.status = 'active' AND u.id = $2`,
+    [activeAssignmentId, payload.userId]
+  );
+
+  if (!assignment) throw new Error("التعيين غير موجود أو غير نشط");
+
+  const allAssignments = await rawQuery<any>(
+    `SELECT id, "companyId", "branchId" FROM employee_assignments
+     WHERE "employeeId" = $1 AND status = 'active'`,
+    [assignment.employeeId]
+  );
+
+  const allowedCompanies = [...new Set(allAssignments.map((a: any) => a.companyId as number))];
+  const allowedBranches = [...new Set(allAssignments.map((a: any) => a.branchId as number))];
+
+  if (assignment.role === "owner" || assignment.role === "general_manager") {
+    const companyBranches = await rawQuery<any>(
+      `SELECT id FROM branches WHERE "companyId" = ANY($1)`,
+      [allowedCompanies]
+    );
+    for (const b of companyBranches) {
+      if (!allowedBranches.includes(b.id)) allowedBranches.push(b.id);
+    }
+  }
+
+  return {
+    userId: payload.userId,
+    employeeId: assignment.employeeId,
+    companyId: assignment.companyId,
+    branchId: assignment.branchId,
+    activeAssignmentId,
+    allowedCompanies,
+    allowedBranches,
+    allowedAssignments: allAssignments.map((a: any) => a.id),
+    role: assignment.role,
+    isOwner: assignment.role === "owner",
+    jobTitle: assignment.jobTitle || null,
+    jobTitleId: assignment.jobTitleId || null,
+    userName: assignment.userName ?? "مستخدم",
+  };
+}
