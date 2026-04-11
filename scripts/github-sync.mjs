@@ -8,32 +8,22 @@ const BASE = "/home/runner/workspace";
 const CONCURRENCY = 5;
 const DELAY_MS = 600;
 
-const IGNORE_DIRS = new Set([
-  "node_modules", ".git", ".cache", ".config", ".local", ".agents",
-  ".upm", "dist", "tmp", "out-tsc", ".expo", ".expo-shared",
-  ".vscode", ".idea", "coverage", "attached_assets", "snippets",
-  ".replit-artifact",
-]);
-
-const IGNORE_FILES = new Set([".replit", "replit.nix", "generated-icon.png"]);
-const IGNORE_EXTS = new Set([".zip", ".gz", ".tar", ".tsbuildinfo"]);
+const SKIP_DIRS = new Set(["node_modules", ".git"]);
 
 function walkDir(dir, basePath) {
   let results = [];
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return results; }
   for (const entry of entries) {
-    if (IGNORE_DIRS.has(entry.name)) continue;
-    if (IGNORE_FILES.has(entry.name) && dir === basePath) continue;
+    if (SKIP_DIRS.has(entry.name)) continue;
     const fullPath = path.join(dir, entry.name);
     if (entry.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
       results = results.concat(walkDir(fullPath, basePath));
     } else if (entry.isFile()) {
-      if (IGNORE_EXTS.has(path.extname(entry.name).toLowerCase())) continue;
       try {
         const stat = fs.statSync(fullPath);
-        if (stat.size > 50 * 1024 * 1024 || stat.size === 0) continue;
+        if (stat.size > 90 * 1024 * 1024 || stat.size === 0) continue;
         results.push({ rel: path.relative(basePath, fullPath), full: fullPath });
       } catch {}
     }
@@ -68,10 +58,10 @@ async function createBlob(connectors, filePath) {
 }
 
 async function main() {
-  console.log("[sync] Starting GitHub sync...");
+  console.log("[sync] Starting full GitHub sync...");
   const connectors = new ReplitConnectors();
   const files = walkDir(BASE, BASE);
-  console.log(`[sync] ${files.length} files`);
+  console.log(`[sync] ${files.length} files (all project files)`);
 
   const refData = await ghApi(connectors, `/repos/${OWNER}/${REPO}/git/ref/heads/main`);
   const latestSha = refData.object?.sha;
@@ -82,6 +72,7 @@ async function main() {
 
   const treeEntries = [];
   let done = 0;
+  let failed = 0;
 
   for (let i = 0; i < files.length; i += CONCURRENCY) {
     const batch = files.slice(i, i + CONCURRENCY);
@@ -89,13 +80,16 @@ async function main() {
       const sha = await createBlob(connectors, f.full);
       return sha ? { path: f.rel, mode: "100644", type: "blob", sha } : null;
     }));
-    for (const r of results) if (r) treeEntries.push(r);
+    for (const r of results) {
+      if (r) treeEntries.push(r);
+      else failed++;
+    }
     done += batch.length;
     if (done % 100 === 0 || done >= files.length) console.log(`[sync] ${done}/${files.length}`);
     await new Promise(r => setTimeout(r, DELAY_MS));
   }
 
-  console.log(`[sync] ${treeEntries.length} blobs`);
+  console.log(`[sync] ${treeEntries.length} blobs OK, ${failed} failed`);
   if (treeEntries.length === 0) { console.error("[sync] No blobs"); process.exit(1); }
 
   let currentTree = baseTree;
@@ -120,7 +114,7 @@ async function main() {
     sha: newCommit.sha, force: true,
   });
 
-  console.log(`[sync] Done! ${newCommit.sha?.substring(0, 8)}`);
+  console.log(`[sync] Done! Commit: ${newCommit.sha?.substring(0, 8)} — ${treeEntries.length} files synced`);
 }
 
 main().catch(e => { console.error("[sync]", e.message); process.exit(1); });
