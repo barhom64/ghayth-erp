@@ -9,7 +9,7 @@ import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper
 import { SortableTableHead } from "@/components/sortable-table-head";
 import { useSortedData } from "@/hooks/use-sorted-data";
 import { useApiQuery, asList } from "@/lib/api";
-import { FileText, Gavel, Plus, Scale, Search, Copy, ExternalLink } from "lucide-react";
+import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
@@ -17,16 +17,37 @@ import { useAppContext } from "@/contexts/app-context";
 
 export default function Legal() {
   const [tab, setTab] = useState("contracts");
+  const { data: stats } = useApiQuery(["legal-stats"], "/legal/stats");
+  const s: any = stats || {};
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">الشؤون القانونية</h1>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "العقود النشطة", value: s.activeContracts || 0, color: "text-blue-600 bg-blue-50" },
+          { label: "القضايا المفتوحة", value: s.openCases || 0, color: "text-red-600 bg-red-50" },
+          { label: "العقود المنتهية قريباً", value: s.expiringContracts || 0, color: "text-amber-600 bg-amber-50" },
+          { label: "الالتزامات المحتملة", value: formatCurrency(s.contingentLiabilities || 0), color: "text-purple-600 bg-purple-50" },
+        ].map(c => (
+          <Card key={c.label} className="border-0 shadow-sm">
+            <CardContent className="p-3">
+              <p className={`text-xl font-bold ${c.color.split(' ')[0]}`}>{c.value}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{c.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="contracts" className="gap-2"><FileText className="h-4 w-4" /> العقود</TabsTrigger>
           <TabsTrigger value="cases" className="gap-2"><Gavel className="h-4 w-4" /> القضايا</TabsTrigger>
+          <TabsTrigger value="financial" className="gap-2"><BarChart2 className="h-4 w-4" /> المالي</TabsTrigger>
         </TabsList>
         <TabsContent value="contracts" className="mt-6"><ContractsTab /></TabsContent>
         <TabsContent value="cases" className="mt-6"><CasesTab /></TabsContent>
+        <TabsContent value="financial" className="mt-6"><FinancialLegalTab /></TabsContent>
       </Tabs>
     </div>
   );
@@ -280,6 +301,106 @@ function CasesTab() {
           </DataTableWrapper></Table>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function FinancialLegalTab() {
+  const { data: reportResp, isLoading } = useApiQuery<any>(["legal-financial-report"], "/legal/financial-report");
+  const report = reportResp || {};
+
+  const RISK_COLORS: Record<string, string> = {
+    critical: "text-red-700 bg-red-50 border-red-200",
+    high: "text-orange-700 bg-orange-50 border-orange-200",
+    medium: "text-amber-700 bg-amber-50 border-amber-200",
+    low: "text-green-700 bg-green-50 border-green-200",
+  };
+  const RISK_LABELS: Record<string, string> = {
+    critical: "حرجة", high: "عالية", medium: "متوسطة", low: "منخفضة",
+  };
+
+  return (
+    <div className="space-y-5">
+      {isLoading ? (
+        <div className="h-32 bg-gray-100 rounded animate-pulse" />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <p className="text-xl font-bold text-red-600">{formatCurrency(report.totalContingentLiabilities || 0)}</p>
+                <p className="text-xs text-gray-500">الالتزامات المحتملة</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <p className="text-xl font-bold text-amber-600">{formatCurrency(report.highRiskAmount || 0)}</p>
+                <p className="text-xs text-gray-500">مخاطر عالية/حرجة</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <p className="text-xl font-bold text-purple-600">{formatCurrency(report.totalJudgmentAmount || 0)}</p>
+                <p className="text-xs text-gray-500">مبالغ الأحكام</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {(report.casesByRisk || []).length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>القضايا حسب مستوى المخاطر المالية</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {(report.casesByRisk || []).map((c: any) => (
+                    <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border ${RISK_COLORS[c.riskLevel] || "bg-gray-50 border-gray-200"}`}>
+                      <div>
+                        <p className="font-medium text-sm">{c.title}</p>
+                        <p className="text-xs mt-0.5 opacity-75">{c.court || "-"} — {c.opposingParty || "-"}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-sm">{formatCurrency(c.financialRisk || 0)}</p>
+                        <p className="text-xs mt-0.5 font-medium">{RISK_LABELS[c.riskLevel] || c.riskLevel}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {(report.recentJudgments || []).length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>الأحكام الأخيرة</CardTitle></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>القضية</TableHead>
+                    <TableHead>تاريخ الحكم</TableHead>
+                    <TableHead>النتيجة</TableHead>
+                    <TableHead>المبلغ</TableHead>
+                    <TableHead>المدفوع</TableHead>
+                  </TableRow></TableHeader>
+                  <tbody>
+                    {(report.recentJudgments || []).map((j: any) => (
+                      <TableRow key={j.id}>
+                        <TableCell className="font-medium">{j.caseTitle || `قضية #${j.caseId}`}</TableCell>
+                        <TableCell>{j.judgmentDate ? formatDateAr(j.judgmentDate) : "-"}</TableCell>
+                        <TableCell>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${j.verdict === 'win' ? 'bg-green-100 text-green-700' : j.verdict === 'loss' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {j.verdict === 'win' ? 'ربح' : j.verdict === 'loss' ? 'خسارة' : j.verdict || "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatCurrency(j.amount || 0)}</TableCell>
+                        <TableCell>{formatCurrency(j.paidAmount || 0)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </tbody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }

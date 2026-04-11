@@ -443,19 +443,19 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { clientId, companyId } = scope;
-    const { title, description, category, priority = "medium" } = req.body as any;
+    const { title, description, category, priority = "medium", invoiceId, contractId } = req.body as any;
     if (!title) {
       res.status(400).json({ error: "عنوان الطلب مطلوب" });
       return;
     }
     const ref = `TKT-${Date.now().toString(36).toUpperCase()}`;
     const { insertId } = await portalScopedExecute(scope,
-      `INSERT INTO support_tickets (ref, title, description, category, priority, status, "clientId", "companyId")
-       VALUES ($1, $2, $3, $4, $5, 'open', $6, $7)`,
-      [ref, title, description ?? null, category ?? "general", priority, clientId, companyId]
+      `INSERT INTO support_tickets (ref, title, description, category, priority, status, "clientId", "companyId", "invoiceId", "contractId")
+       VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8, $9)`,
+      [ref, title, description ?? null, category ?? "general", priority, clientId, companyId, invoiceId || null, contractId || null]
     );
     const [ticket] = await portalScopedQuery<any>(scope,
-      `SELECT id, ref, title, status, priority, category, "createdAt" FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
+      `SELECT id, ref, title, status, priority, category, "invoiceId", "contractId", "createdAt" FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [clientId, companyId, insertId]
     );
     res.status(201).json(ticket);
@@ -497,6 +497,120 @@ protectedRouter.patch("/profile/password", withPortalScope(async (req, res) => {
     res.json({ message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Portal change password error:");
+  }
+}));
+
+protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const { id } = req.params;
+    const { amount, method = "online", transactionRef } = req.body as any;
+    if (!amount || Number(amount) <= 0) {
+      res.status(400).json({ error: "المبلغ مطلوب وأكبر من صفر" });
+      return;
+    }
+    const [invoice] = await portalScopedQuery<any>(scope,
+      `SELECT id, ref, total, "paidAmount", status FROM invoices WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [scope.clientId, scope.companyId, Number(id)]
+    );
+    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (invoice.status === 'paid') { res.status(400).json({ error: "الفاتورة مدفوعة بالكامل مسبقاً" }); return; }
+
+    const payAmt = Math.min(Number(amount), Number(invoice.total) - Number(invoice.paidAmount));
+    const newPaid = Number(invoice.paidAmount) + payAmt;
+    const newStatus = newPaid >= Number(invoice.total) ? 'paid' : 'partial';
+
+    await rawExecute(
+      `UPDATE invoices SET "paidAmount"=$1, status=$2, "updatedAt"=NOW() WHERE id=$3`,
+      [newPaid, newStatus, invoice.id]
+    );
+    const paymentRef = transactionRef || `PAY-PORTAL-${Date.now().toString(36).toUpperCase()}`;
+    await rawExecute(
+      `INSERT INTO invoice_payments ("invoiceId","companyId","clientId",amount,method,"transactionRef","paidAt",source) VALUES ($1,$2,$3,$4,$5,$6,NOW(),'portal') ON CONFLICT DO NOTHING`,
+      [invoice.id, scope.companyId, scope.clientId, payAmt, method, paymentRef]
+    ).catch(console.error);
+
+    res.json({
+      invoiceId: invoice.id,
+      invoiceRef: invoice.ref,
+      paidAmount: payAmt,
+      totalPaid: newPaid,
+      status: newStatus,
+      paymentRef,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Portal invoice payment error:");
+  }
+}));
+
+protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const { id } = req.params;
+    const { score, comment } = req.body as any;
+    if (!score || score < 1 || score > 5) { res.status(400).json({ error: "التقييم يجب أن يكون بين 1 و 5" }); return; }
+    const [ticket] = await portalScopedQuery<any>(scope,
+      `SELECT id, "assigneeId", status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
+      [scope.clientId, scope.companyId, Number(id)]
+    );
+    if (!ticket) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
+    if (!['resolved', 'closed'].includes(ticket.status)) { res.status(400).json({ error: "لا يمكن تقييم تذكرة مفتوحة" }); return; }
+    await rawExecute(
+      `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
+      [Number(id), scope.companyId, ticket.assigneeId, score, comment || null]
+    );
+    res.status(201).json({ ticketId: Number(id), score, comment });
+  } catch (err) {
+    handleRouteError(err, res, "Portal CSAT error:");
+  }
+}));
+
+protectedRouter.get("/kb", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const { q, category } = req.query as any;
+    const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`];
+    const params: any[] = [scope.companyId];
+    if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
+    if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
+    const rows = await rawQuery<any>(
+      `SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC LIMIT 50`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal KB list error:");
+  }
+}));
+
+protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND status='published'`,
+      [id, scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "المقالة غير موجودة" }); return; }
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(() => {});
+    res.json(row);
+  } catch (err) {
+    handleRouteError(err, res, "Portal KB article error:");
+  }
+}));
+
+protectedRouter.post("/kb/:id/feedback", withPortalScope(async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { helpful } = req.body as any;
+    if (helpful === true || helpful === 'true') {
+      await rawExecute(`UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1`, [id]);
+    } else {
+      await rawExecute(`UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1`, [id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    handleRouteError(err, res, "Portal KB feedback error:");
   }
 }));
 

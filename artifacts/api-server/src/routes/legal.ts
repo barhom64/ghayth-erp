@@ -357,12 +357,157 @@ router.get("/stats", async (req, res) => {
     const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1`, [cid]);
     const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active'`, [cid]);
     const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
+    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed')`, [cid]).catch(() => [{ total: 0 }]);
     res.json({
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
       totalCases: Number(cases.total), openCases: Number(cases.open), inProgressCases: Number(cases.inProgress),
       expiringContracts: Number(expiring.count), upcomingSessions: Number(sessions.upcoming),
+      contingentLiabilities: Number(contingent?.total || 0),
     });
   } catch (err) { handleRouteError(err, res, "Legal stats error:"); }
+});
+
+router.get("/cases/:caseId/correspondence", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const caseId = Number(req.params.caseId);
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    const rows = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC`, [caseId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
+});
+
+router.post("/cases/:caseId/correspondence", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const caseId = Number(req.params.caseId);
+    const b = req.body;
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    const { insertId } = await rawExecute(
+      `INSERT INTO legal_correspondence ("caseId","companyId",direction,subject,parties,"correspondenceDate","documentRef",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [caseId, scope.companyId, b.direction || 'outgoing', b.subject, b.parties, b.correspondenceDate || new Date().toISOString().split('T')[0], b.documentRef || null, b.notes || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create correspondence error:"); }
+});
+
+router.get("/cases/:caseId/judgments", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const caseId = Number(req.params.caseId);
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 ORDER BY "judgmentDate" DESC`, [caseId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
+});
+
+router.post("/cases/:caseId/judgments", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const caseId = Number(req.params.caseId);
+    const b = req.body;
+    const [lc] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    const { insertId } = await rawExecute(
+      `INSERT INTO legal_judgments ("caseId","companyId","judgmentDate","judgmentType",verdict,amount,"paidAmount","dueDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [caseId, scope.companyId, b.judgmentDate, b.judgmentType || 'judgment', b.verdict, b.amount || 0, b.paidAmount || 0, b.dueDate || null, b.notes || null]
+    );
+    if (b.amount && Number(b.amount) > 0) {
+      await rawExecute(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2`, [Number(b.amount), caseId]).catch(console.error);
+    }
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create judgment error:"); }
+});
+
+router.patch("/cases/:caseId/judgments/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const caseId = Number(req.params.caseId);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.paidAmount !== undefined) { params.push(b.paidAmount); sets.push(`"paidAmount"=$${params.length}`); }
+    if (b.verdict !== undefined) { params.push(b.verdict); sets.push(`verdict=$${params.length}`); }
+    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
+    if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
+    params.push(id); params.push(caseId);
+    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "caseId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update judgment error:"); }
+});
+
+router.patch("/cases/:id/financial-risk", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { financialRisk, riskLevel } = req.body;
+    const [existing] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!existing) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    await rawExecute(
+      `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3`,
+      [financialRisk || 0, riskLevel || 'medium', id]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }
+});
+
+router.get("/sessions/upcoming", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const days = Number(req.query.days) || 14;
+    const rows = await rawQuery<any>(
+      `SELECT ls.*, lc.title AS "caseTitle", lc."lawyerName", lc.priority,
+              (ls."sessionDate"::date - CURRENT_DATE) AS "daysUntil"
+       FROM legal_sessions ls
+       JOIN legal_cases lc ON lc.id=ls."caseId"
+       WHERE lc."companyId"=$1 AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL
+       ORDER BY ls."sessionDate" ASC`,
+      [scope.companyId, days]
+    );
+    const alerts = rows.map((r: any) => ({
+      ...r,
+      alertLevel: Number(r.daysUntil) <= 1 ? 'critical' : Number(r.daysUntil) <= 7 ? 'high' : 'medium',
+    }));
+    res.json({ data: alerts, total: alerts.length });
+  } catch (err) { handleRouteError(err, res, "Upcoming sessions error:"); }
+});
+
+router.get("/judgments/financial-report", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT lj.*, lc.title AS "caseTitle", lc."caseNumber", lc."riskLevel"
+       FROM legal_judgments lj
+       JOIN legal_cases lc ON lc.id=lj."caseId"
+       WHERE lj."companyId"=$1
+       ORDER BY lj."judgmentDate" DESC`,
+      [scope.companyId]
+    );
+    const [totals] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(amount),0) AS "totalAmount", COALESCE(SUM("paidAmount"),0) AS "totalPaid"
+       FROM legal_judgments WHERE "companyId"=$1`,
+      [scope.companyId]
+    );
+    const [contingent] = await rawQuery<any>(
+      `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed')`,
+      [scope.companyId]
+    ).catch(() => [{ total: 0 }]);
+    res.json({
+      data: rows,
+      totalAmount: Number(totals?.totalAmount || 0),
+      totalPaid: Number(totals?.totalPaid || 0),
+      outstanding: Number(totals?.totalAmount || 0) - Number(totals?.totalPaid || 0),
+      contingentLiabilities: Number(contingent?.total || 0),
+    });
+  } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
 export default router;

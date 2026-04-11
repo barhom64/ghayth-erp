@@ -1551,4 +1551,220 @@ router.post("/contracts/:id/schedule/:installmentId/pay", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Pay installment error:"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROPERTY INSPECTIONS — جدول فحص دوري للوحدات
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/inspections", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { unitId, status } = req.query as any;
+    const conditions = [`i."companyId"=$1`];
+    const params: any[] = [scope.companyId];
+    if (unitId) { params.push(Number(unitId)); conditions.push(`i."unitId"=$${params.length}`); }
+    if (status) { params.push(status); conditions.push(`i.status=$${params.length}`); }
+    const rows = await rawQuery<any>(
+      `SELECT i.*, u."unitNumber", u."buildingName"
+       FROM property_inspections i
+       JOIN property_units u ON u.id=i."unitId"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY i."scheduledDate" DESC`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Inspections error:"); }
+});
+
+router.post("/inspections", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.unitId || !b.type) {
+      res.status(400).json({ error: "الوحدة ونوع الفحص مطلوبان" }); return;
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO property_inspections
+       ("companyId","unitId",type,"scheduledDate","inspectorName",status,notes,findings,"conditionRating")
+       VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8)`,
+      [scope.companyId, b.unitId, b.type,
+       b.scheduledDate || new Date().toISOString().split('T')[0],
+       b.inspectorName || null, b.notes || null,
+       b.findings ? JSON.stringify(b.findings) : null,
+       b.conditionRating || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM property_inspections WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create inspection error:"); }
+});
+
+router.patch("/inspections/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.inspectionDate !== undefined) { params.push(b.inspectionDate); sets.push(`"inspectionDate"=$${params.length}`); }
+    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
+    if (b.findings !== undefined) { params.push(JSON.stringify(b.findings)); sets.push(`findings=$${params.length}`); }
+    if (b.conditionRating !== undefined) { params.push(b.conditionRating); sets.push(`"conditionRating"=$${params.length}`); }
+    if (b.inspectorName !== undefined) { params.push(b.inspectorName); sets.push(`"inspectorName"=$${params.length}`); }
+    if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
+    params.push(id); params.push(scope.companyId);
+    const rows = await rawQuery<any>(
+      `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      params
+    );
+    if (!rows[0]) { res.status(404).json({ error: "الفحص غير موجود" }); return; }
+    res.json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Update inspection error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECURITY DEPOSITS — ودائع ضمان
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/deposits", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status, contractId } = req.query as any;
+    const conditions = [`sd."companyId"=$1`];
+    const params: any[] = [scope.companyId];
+    if (status) { params.push(status); conditions.push(`sd.status=$${params.length}`); }
+    if (contractId) { params.push(Number(contractId)); conditions.push(`sd."contractId"=$${params.length}`); }
+    const rows = await rawQuery<any>(
+      `SELECT sd.*, rc."tenantName", u."unitNumber", u."buildingName"
+       FROM property_security_deposits sd
+       JOIN rental_contracts rc ON rc.id=sd."contractId"
+       LEFT JOIN property_units u ON u.id=rc."unitId"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY sd."receivedDate" DESC`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Security deposits error:"); }
+});
+
+router.post("/deposits", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.contractId || !b.amount) {
+      res.status(400).json({ error: "العقد والمبلغ مطلوبان" }); return;
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO property_security_deposits
+       ("companyId","contractId",amount,"receivedDate",status,notes,"refundAmount","refundDate","refundReason")
+       VALUES ($1,$2,$3,$4,'held',$5,$6,$7,$8)`,
+      [scope.companyId, b.contractId, b.amount,
+       b.receivedDate || new Date().toISOString().split('T')[0],
+       b.notes || null, b.refundAmount || null, b.refundDate || null, b.refundReason || null]
+    );
+
+    // Create accounting journal entry
+    try {
+      await createJournalEntry({
+        companyId: scope.companyId, branchId: scope.branchId ?? 0,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `DEP-${insertId}`,
+        description: `استلام وديعة ضمان — عقد #${b.contractId}`,
+        lines: [
+          { accountCode: "1100", debit: Number(b.amount), credit: 0 },
+          { accountCode: "2300", debit: 0, credit: Number(b.amount) },
+        ],
+      });
+    } catch (jErr) { console.error("Deposit journal entry failed:", jErr); }
+
+    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create deposit error:"); }
+});
+
+router.patch("/deposits/:id/refund", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const [deposit] = await rawQuery<any>(
+      `SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2 AND status='held'`,
+      [id, scope.companyId]
+    );
+    if (!deposit) { res.status(404).json({ error: "الوديعة غير موجودة أو تم إرجاعها" }); return; }
+    const refundAmount = Number(b.refundAmount || deposit.amount);
+    await rawExecute(
+      `UPDATE property_security_deposits SET status='refunded', "refundAmount"=$1, "refundDate"=$2, "refundReason"=$3 WHERE id=$4`,
+      [refundAmount, b.refundDate || new Date().toISOString().split('T')[0], b.refundReason || null, id]
+    );
+    // Journal entry for refund
+    try {
+      await createJournalEntry({
+        companyId: scope.companyId, branchId: scope.branchId ?? 0,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `DEP-REF-${id}`,
+        description: `إرجاع وديعة ضمان — عقد #${deposit.contractId} / السبب: ${b.refundReason || 'إنهاء العقد'}`,
+        lines: [
+          { accountCode: "2300", debit: refundAmount, credit: 0 },
+          { accountCode: "1100", debit: 0, credit: refundAmount },
+        ],
+      });
+    } catch (jErr) { console.error("Deposit refund journal entry failed:", jErr); }
+    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Refund deposit error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OCCUPANCY REPORT — تقرير الإشغال التفاعلي
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/occupancy-report", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { buildingId } = req.query as any;
+
+    const conditions = [`u."companyId"=$1`, `u."deletedAt" IS NULL`];
+    const params: any[] = [scope.companyId];
+    if (buildingId) { params.push(Number(buildingId)); conditions.push(`u."buildingId"=$${params.length}`); }
+
+    const units = await rawQuery<any>(
+      `SELECT u.id, u."unitNumber", u."buildingName", u."buildingId", u.status,
+              u."monthlyRent", u.type, u.area,
+              rc.id AS "activeContractId", rc."tenantName", rc."endDate" AS "contractEnd"
+       FROM property_units u
+       LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc.status='active' AND rc."deletedAt" IS NULL
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY u."buildingName", u."unitNumber"`,
+      params
+    );
+
+    const total = units.length;
+    const occupied = units.filter((u: any) => u.status === 'rented').length;
+    const available = units.filter((u: any) => u.status === 'available').length;
+    const maintenance = units.filter((u: any) => u.status === 'maintenance').length;
+    const occupancyRate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+    const totalMonthlyRent = units
+      .filter((u: any) => u.status === 'rented')
+      .reduce((s: number, u: any) => s + Number(u.monthlyRent || 0), 0);
+
+    // By building
+    const byBuilding: Record<string, any> = {};
+    units.forEach((u: any) => {
+      const b = u.buildingName || 'غير محدد';
+      if (!byBuilding[b]) byBuilding[b] = { name: b, total: 0, occupied: 0, available: 0 };
+      byBuilding[b].total++;
+      if (u.status === 'rented') byBuilding[b].occupied++;
+      if (u.status === 'available') byBuilding[b].available++;
+    });
+
+    res.json({
+      total, occupied, available, maintenance,
+      occupancyRate,
+      totalMonthlyRent: Math.round(totalMonthlyRent),
+      byBuilding: Object.values(byBuilding),
+      units,
+    });
+  } catch (err) { handleRouteError(err, res, "Occupancy report error:"); }
+});
+
 export default router;

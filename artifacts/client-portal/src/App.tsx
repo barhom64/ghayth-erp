@@ -15,6 +15,7 @@ const Tickets = lazy(() => import("@/pages/tickets"));
 const TicketDetail = lazy(() => import("@/pages/ticket-detail"));
 const NewTicket = lazy(() => import("@/pages/new-ticket"));
 const Profile = lazy(() => import("@/pages/profile"));
+const { KBPage, KBArticlePage } = { KBPage: lazy(() => import("@/pages/kb").then(m => ({ default: m.KBPage }))), KBArticlePage: lazy(() => import("@/pages/kb").then(m => ({ default: m.KBArticlePage }))) };
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -82,6 +83,12 @@ function Router() {
       </Route>
       <Route path="/profile">
         <ProtectedRoute><Profile /></ProtectedRoute>
+      </Route>
+      <Route path="/kb/:id">
+        <ProtectedRoute><KBArticlePage /></ProtectedRoute>
+      </Route>
+      <Route path="/kb">
+        <ProtectedRoute><KBPage /></ProtectedRoute>
       </Route>
 
       <Route>

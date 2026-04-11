@@ -18,7 +18,7 @@ export async function runMigrations(): Promise<void> {
       )
     `);
 
-    const migrationsDir = resolve(__dirname, "../migrations");
+    const migrationsDir = resolve(__dirname, "./migrations");
 
     let files: string[] = [];
     try {

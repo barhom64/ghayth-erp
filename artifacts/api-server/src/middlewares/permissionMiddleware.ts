@@ -71,6 +71,25 @@ async function logSecurityEvent(opts: {
   }
 }
 
+async function loadAllUserRolePermissions(userId: number, primaryRole: string, companyId: number): Promise<Set<string>> {
+  const userRoleRows = await rawQuery<{ roleKey: string }>(
+    `SELECT "roleKey" FROM user_roles WHERE "userId" = $1 AND "companyId" = $2`,
+    [userId, companyId]
+  ).catch(() => [] as { roleKey: string }[]);
+
+  const roleKeys = new Set<string>(userRoleRows.map((r) => r.roleKey));
+  roleKeys.add(primaryRole);
+
+  const allPerms = new Set<string>();
+  await Promise.all(
+    Array.from(roleKeys).map(async (role) => {
+      const perms = await loadRolePermissions(role, companyId);
+      for (const p of perms) allPerms.add(p);
+    })
+  );
+  return allPerms;
+}
+
 export function requirePermission(...requiredPerms: string[]) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const scope = req.scope;
@@ -85,7 +104,7 @@ export function requirePermission(...requiredPerms: string[]) {
     }
 
     try {
-      const rolePerms = await loadRolePermissions(scope.role, scope.companyId);
+      const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId);
       const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
 
       const effectivePerms = new Set(rolePerms);

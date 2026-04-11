@@ -613,7 +613,7 @@ router.post("/push/subscribe", async (req, res): Promise<void> => {
          auth = EXCLUDED.auth,
          "endpointEncrypted" = EXCLUDED."endpointEncrypted",
          "updatedAt" = NOW()`,
-      [scope.companyId, scope.assignmentId ?? null, encryptedEndpoint, endpointHash, keys.p256dh, keys.auth, userAgent, isEncrypted]
+      [scope.companyId, scope.activeAssignmentId ?? null, encryptedEndpoint, endpointHash, keys.p256dh, keys.auth, userAgent, isEncrypted]
     );
 
     res.json({ success: true });
@@ -646,7 +646,7 @@ router.post("/push/test", async (req, res): Promise<void> => {
     const scope = req.scope!;
     const result = await sendPushToCompany(
       scope.companyId,
-      scope.assignmentId ?? null,
+      scope.activeAssignmentId ?? null,
       "اختبار الإشعارات",
       "تم تفعيل إشعارات المتصفح بنجاح! ستصلك الإشعارات حتى بدون فتح التطبيق.",
       { type: "test" }

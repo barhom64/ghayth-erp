@@ -36,13 +36,13 @@ export default function LettersCreate() {
       toNumber: form.toNumber,
       body: form.body || undefined,
     }, {
-      onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/communications/letters"); },
+      onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/letters"); },
       onError: (err) => toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الخطاب", description: err.message }),
     });
   };
 
   return (
-    <CreatePageLayout title="خطاب جديد" backPath="/communications/letters">
+    <CreatePageLayout title="خطاب جديد" backPath="/letters">
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
@@ -101,7 +101,7 @@ export default function LettersCreate() {
         <div><Label>المحتوى</Label><Textarea value={form.body} onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))} placeholder="نص الخطاب..." className="min-h-[120px]" /></div>
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={() => setLocation("/communications/letters")}>إلغاء</Button>
+          <Button type="button" variant="outline" onClick={() => setLocation("/letters")}>إلغاء</Button>
           <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
         </div>
       </div>

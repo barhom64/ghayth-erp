@@ -78,14 +78,86 @@ router.get("/stats", async (req, res) => {
     const cid = scope.companyId;
     const [total] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
     const [active] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE status='active' AND "companyId"=$1`, [cid]);
-    const [budget] = await rawQuery(`SELECT COALESCE(SUM(budget),0) as total FROM marketing_campaigns WHERE status='active' AND "companyId"=$1`, [cid]);
-    const [spent] = await rawQuery(`SELECT COALESCE(SUM(spent),0) as total FROM marketing_campaigns WHERE status='active' AND "companyId"=$1`, [cid]);
+    const [budget] = await rawQuery(`SELECT COALESCE(SUM(budget),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
+    const [spent] = await rawQuery(`SELECT COALESCE(SUM(spent),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
+    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]).catch(() => [{ total: 0 }]);
+    const totalSpent = Number(spent.total);
+    const totalRevenue = Number(revenue?.total || 0);
+    const roas = totalSpent > 0 ? (totalRevenue / totalSpent).toFixed(2) : null;
+    const sourceCounts = await rawQuery<any>(
+      `SELECT source, COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND source IS NOT NULL GROUP BY source ORDER BY count DESC`,
+      [cid]
+    ).catch(() => []);
     res.json({
       totalCampaigns: Number(total.count),
       activeCampaigns: Number(active.count),
       totalBudget: Number(budget.total),
-      totalSpent: Number(spent.total),
+      totalSpent: totalSpent,
+      totalRevenue: totalRevenue,
+      roas,
+      sourceCounts,
     });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get("/campaigns/:id/roas", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [campaign] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!campaign) { res.status(404).json({ error: "الحملة غير موجودة" }); return; }
+    const spent = Number(campaign.spent || 0);
+    const revenue = Number(campaign.revenue || 0);
+    const roas = spent > 0 ? revenue / spent : null;
+    const leads = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND source=$2`,
+      [scope.companyId, campaign.name]
+    ).catch(() => [{ count: 0 }]);
+    res.json({
+      campaignId: id,
+      campaignName: campaign.name,
+      spent,
+      revenue,
+      roas: roas ? Number(roas).toFixed(2) : null,
+      leadsGenerated: Number(leads?.[0]?.count || 0),
+    });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get("/funnel", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const STAGES = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
+    const stageData: any[] = [];
+    for (const stage of STAGES) {
+      const [row] = await rawQuery<any>(`SELECT COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE "companyId"=$1 AND stage=$2`, [cid, stage]);
+      stageData.push({ stage, count: Number(row.count), value: Number(row.value) });
+    }
+    const sourceFunnel = await rawQuery<any>(
+      `SELECT source, COUNT(*) AS total, COUNT(*) FILTER (WHERE stage='closed_won') AS won, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonValue"
+       FROM crm_opportunities WHERE "companyId"=$1 AND source IS NOT NULL GROUP BY source ORDER BY total DESC`,
+      [cid]
+    ).catch(() => []);
+    const conversionRates = stageData.map((s, i) => {
+      const prev = i > 0 ? stageData[i - 1] : null;
+      return {
+        ...s,
+        conversionFromPrev: prev && prev.count > 0 ? ((s.count / prev.count) * 100).toFixed(1) : null,
+      };
+    });
+    res.json({ stages: conversionRates, sourceFunnel });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch("/campaigns/:id/revenue", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { revenue } = req.body;
+    await rawExecute(`UPDATE marketing_campaigns SET revenue=$1 WHERE id=$2 AND "companyId"=$3`, [revenue || 0, id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1`, [id]);
+    res.json(row);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

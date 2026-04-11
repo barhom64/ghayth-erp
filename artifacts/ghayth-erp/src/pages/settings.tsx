@@ -885,11 +885,15 @@ function RolePermissionsTab() {
     { key: "legal", label: "القانونية" }, { key: "crm", label: "المبيعات" },
     { key: "marketing", label: "التسويق" }, { key: "store", label: "المتجر" },
     { key: "support", label: "الدعم" }, { key: "settings", label: "الإعدادات" },
+    { key: "umrah", label: "العمرة" },
   ];
 
   const startEdit = (roleKey: string, modules: any) => {
     setEditingRole(roleKey);
-    const mods = typeof modules === "string" ? JSON.parse(modules) : modules;
+    let mods = typeof modules === "string" ? JSON.parse(modules) : modules;
+    if (mods && typeof mods === "object" && !Array.isArray(mods) && mods.all === true) {
+      mods = allModules.map(m => m.key);
+    }
     setEditModules(Array.isArray(mods) ? mods : []);
   };
 
@@ -920,7 +924,10 @@ function RolePermissionsTab() {
       </h3>
       <div className="space-y-3">
         {roles.map((role: any) => {
-          const mods = typeof role.modules === "string" ? JSON.parse(role.modules) : role.modules || [];
+          let mods = typeof role.modules === "string" ? JSON.parse(role.modules) : role.modules || [];
+          if (mods && typeof mods === "object" && !Array.isArray(mods) && mods.all === true) {
+            mods = allModules.map(m => m.key);
+          }
           const isEditing = editingRole === role.roleKey;
 
           return (

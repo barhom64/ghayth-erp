@@ -1,17 +1,19 @@
 import fs from 'fs';
 import path from 'path';
 
-const IGNORE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage']);
-const CODE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.json', '.md']);
+const IGNORE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', '.cache', '.local', '.config', '.upm', 'ai-guardian-data']);
+const CODE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 
-function walk(dir, results = []) {
-  if (!fs.existsSync(dir)) return results;
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+function walk(dir, results = [], depth = 0) {
+  if (!fs.existsSync(dir) || depth > 6) return results;
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return results; }
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
+    if (entry.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
-      if (!IGNORE_DIRS.has(entry.name)) walk(fullPath, results);
+      if (!IGNORE_DIRS.has(entry.name)) walk(fullPath, results, depth + 1);
       continue;
     }
     const ext = path.extname(entry.name).toLowerCase();
@@ -38,6 +40,7 @@ export function scanProjectStructure(rootDir = process.cwd()) {
     totalFiles: files.length,
     serverFiles: [],
     routeFiles: [],
+    pageFiles: [],
     componentFiles: [],
     configFiles: [],
     suspiciousFiles: [],
@@ -46,15 +49,16 @@ export function scanProjectStructure(rootDir = process.cwd()) {
   for (const file of files) {
     const normalized = file.replace(/\\/g, '/');
     const name = path.basename(file).toLowerCase();
+    const rel = path.relative(rootDir, file);
 
-    if (name.includes('server') || name.includes('app')) summary.serverFiles.push(normalized);
-    if (normalized.includes('/route') || normalized.includes('/routes/')) summary.routeFiles.push(normalized);
-    if (normalized.includes('/component') || normalized.includes('/components/')) summary.componentFiles.push(normalized);
-    if (name === 'package.json' || name.includes('vite') || name.includes('tsconfig') || name.includes('.replit')) summary.configFiles.push(normalized);
+    if (normalized.includes('/routes/') || name.includes('router')) summary.routeFiles.push(rel);
+    else if (normalized.includes('/pages/')) summary.pageFiles.push(rel);
+    else if (normalized.includes('/components/')) summary.componentFiles.push(rel);
+    else if (normalized.includes('server') || normalized.includes('/src/index')) summary.serverFiles.push(rel);
 
     const content = safeRead(file);
-    if (content.includes('TODO') || content.includes('FIXME') || content.includes('placeholder')) {
-      summary.suspiciousFiles.push(normalized);
+    if (content.includes('TODO') || content.includes('FIXME') || content.includes('HACK')) {
+      summary.suspiciousFiles.push(rel);
     }
   }
 

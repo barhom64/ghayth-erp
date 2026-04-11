@@ -391,12 +391,199 @@ router.get("/stats", async (req, res) => {
     const [risks] = await rawQuery(`SELECT COUNT(*) as count FROM governance_risks WHERE status='open' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     const [audits] = await rawQuery(`SELECT COUNT(*) as count FROM governance_audits WHERE status IN ('planned','in_progress') AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     const [compliance] = await rawQuery(`SELECT COUNT(*) as count FROM governance_compliance WHERE status='non_compliant' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
+    const [complianceActions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='implemented') AS implemented, COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, total: 0 }]);
+    const [risksNoTreatment] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_risks WHERE status='open' AND "treatmentPlan" IS NULL AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]).catch(() => [{ count: 0 }]);
+    const [openCapas] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_capa WHERE status IN ('open','in_progress') AND "companyId"=$1`, [cid]).catch(() => [{ count: 0 }]);
+    const implementedPct = Number(complianceActions?.total) > 0 ? Math.round(Number(complianceActions?.implemented) / Number(complianceActions?.total) * 100) : 100;
     res.json({
       totalPolicies: Number(policies.count),
       openRisks: Number(risks.count),
       activeAudits: Number(audits.count),
       nonCompliant: Number(compliance.count),
+      complianceRate: implementedPct,
+      complianceActionsTotal: Number(complianceActions?.total || 0),
+      complianceActionsImplemented: Number(complianceActions?.implemented || 0),
+      complianceActions: Number(complianceActions?.total || 0),
+      openCapas: Number(openCapas?.count || 0),
+      risksNoTreatment: Number(risksNoTreatment?.count || 0),
     });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get("/compliance-dashboard", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const [actions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='implemented') AS implemented, COUNT(*) FILTER (WHERE status='not_implemented') AS "notImplemented", COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, notImplemented: 0, total: 0 }]);
+    const [risks] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NOT NULL) AS "withTreatment", COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NULL) AS "withoutTreatment", COUNT(*) FILTER (WHERE status='open') AS open FROM governance_risks WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]).catch(() => [{ withTreatment: 0, withoutTreatment: 0, open: 0 }]);
+    const [policiesNoActions] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM governance_policies gp WHERE ("companyId"=$1 OR "companyId" IS NULL) AND status='active' AND NOT EXISTS (SELECT 1 FROM policy_compliance_actions pca WHERE pca."policyId"=gp.id AND pca."companyId"=$1)`,
+      [cid]
+    ).catch(() => [{ count: 0 }]);
+    const capas = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`, [cid]).catch(() => []);
+    const rate = Number(actions?.total) > 0 ? Math.round(Number(actions?.implemented) / Number(actions?.total) * 100) : 100;
+    res.json({
+      complianceRate: rate,
+      actionsTotal: Number(actions?.total || 0),
+      actionsImplemented: Number(actions?.implemented || 0),
+      actionsNotImplemented: Number(actions?.notImplemented || 0),
+      risksOpen: Number(risks?.open || 0),
+      risksWithTreatment: Number(risks?.withTreatment || 0),
+      risksWithoutTreatment: Number(risks?.withoutTreatment || 0),
+      policiesNoActions: Number(policiesNoActions?.count || 0),
+      recentCapas: capas,
+    });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get("/compliance-actions", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "companyId"=$1 ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC`, [scope.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.post("/compliance-actions", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const r = await rawExecute(
+      `INSERT INTO policy_compliance_actions ("companyId",title,regulation,description,owner,"dueDate",status) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scope.companyId, b.title, b.regulation || null, b.description || null, b.owner || null, b.dueDate || null, b.status || 'open']
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
+    res.status(201).json(row);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch("/compliance-actions/:actionId", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.actionId);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
+    if (b.regulation !== undefined) { params.push(b.regulation); sets.push(`regulation=$${params.length}`); }
+    if (b.owner !== undefined) { params.push(b.owner); sets.push(`owner=$${params.length}`); }
+    if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete("/compliance-actions/:actionId", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.actionId);
+    await rawExecute(`DELETE FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get("/policies/:id/compliance-actions", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const policyId = Number(req.params.id);
+    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "policyId"=$1 AND "companyId"=$2 ORDER BY "createdAt"`, [policyId, scope.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.post("/policies/:id/compliance-actions", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const policyId = Number(req.params.id);
+    const b = req.body;
+    const r = await rawExecute(
+      `INSERT INTO policy_compliance_actions ("policyId","companyId",action,status,"responsiblePerson","dueDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [policyId, scope.companyId, b.action, b.status || 'not_implemented', b.responsiblePerson || null, b.dueDate || null, b.notes || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
+    res.status(201).json(row);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch("/compliance-actions/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.action !== undefined) { params.push(b.action); sets.push(`action=$${params.length}`); }
+    if (b.responsiblePerson !== undefined) { params.push(b.responsiblePerson); sets.push(`"responsiblePerson"=$${params.length}`); }
+    if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
+    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch("/risks/:id/treatment", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.treatmentPlan !== undefined) { params.push(b.treatmentPlan); sets.push(`"treatmentPlan"=$${params.length}`); }
+    if (b.treatmentOwner !== undefined) { params.push(b.treatmentOwner); sets.push(`"treatmentOwner"=$${params.length}`); }
+    if (b.treatmentDueDate !== undefined) { params.push(b.treatmentDueDate); sets.push(`"treatmentDueDate"=$${params.length}`); }
+    if (b.treatmentStatus !== undefined) { params.push(b.treatmentStatus); sets.push(`"treatmentStatus"=$${params.length}`); }
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get("/capa", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.post("/capa", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const r = await rawExecute(
+      `INSERT INTO governance_capa ("companyId","auditId",finding,"rootCause","correctiveAction","preventiveAction",status,"responsiblePerson","dueDate","completedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, b.auditId || null, b.finding, b.rootCause || null, b.correctiveAction || null, b.preventiveAction || null, b.status || 'open', b.responsiblePerson || null, b.dueDate || null, null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1`, [r.insertId]);
+    res.status(201).json(row);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch("/capa/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.finding !== undefined) { params.push(b.finding); sets.push(`finding=$${params.length}`); }
+    if (b.rootCause !== undefined) { params.push(b.rootCause); sets.push(`"rootCause"=$${params.length}`); }
+    if (b.correctiveAction !== undefined) { params.push(b.correctiveAction); sets.push(`"correctiveAction"=$${params.length}`); }
+    if (b.preventiveAction !== undefined) { params.push(b.preventiveAction); sets.push(`"preventiveAction"=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); if (b.status === 'closed') sets.push(`"completedAt"=NOW()`); }
+    if (b.responsiblePerson !== undefined) { params.push(b.responsiblePerson); sets.push(`"responsiblePerson"=$${params.length}`); }
+    if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1`, [id]);
+    res.json(row);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

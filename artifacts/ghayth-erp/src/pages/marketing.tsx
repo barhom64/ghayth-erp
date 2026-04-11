@@ -4,10 +4,10 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { Megaphone, Plus, DollarSign, Eye, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Megaphone, Plus, DollarSign, Eye, TrendingUp, Users, BarChart2, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -17,7 +17,102 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PaginationBar } from "@/components/data-table-wrapper";
 
-export default function MarketingPage() {
+const STAGE_LABELS: Record<string, string> = {
+  lead: "عميل محتمل",
+  qualified: "مؤهل",
+  proposal: "عرض",
+  negotiation: "تفاوض",
+  closed_won: "مغلق (ناجح)",
+  closed_lost: "مغلق (خسارة)",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  website: "الموقع الإلكتروني",
+  referral: "إحالة",
+  direct: "مباشر",
+  campaign: "حملة تسويقية",
+  social: "تواصل اجتماعي",
+  other: "آخر",
+};
+
+function FunnelTab() {
+  const { data: funnelResp, isLoading } = useApiQuery<any>(["mkt-funnel"], "/marketing/funnel");
+  const stages: any[] = funnelResp?.stages || [];
+  const sourceFunnel: any[] = funnelResp?.sourceFunnel || [];
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5 text-blue-600" />قمع المبيعات (CRM Funnel)</CardTitle></CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="h-32 bg-gray-100 rounded animate-pulse" />
+          ) : (
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+              {stages.map((s: any, i: number) => {
+                const maxCount = Math.max(...stages.map((x: any) => x.count), 1);
+                const pct = Math.round((s.count / maxCount) * 100);
+                return (
+                  <div key={s.stage} className="text-center">
+                    <div className="relative h-24 flex flex-col items-center justify-end mb-2">
+                      <div
+                        className="w-full rounded-t bg-gradient-to-t from-blue-600 to-blue-400 transition-all"
+                        style={{ height: `${Math.max(pct, 4)}%` }}
+                      />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800">{s.count}</p>
+                    <p className="text-xs text-gray-500">{STAGE_LABELS[s.stage] || s.stage}</p>
+                    {s.conversionFromPrev && (
+                      <p className="text-[10px] text-emerald-600 mt-0.5">↑ {s.conversionFromPrev}%</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {sourceFunnel.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Target className="h-5 w-5 text-purple-600" />تتبع مصادر العملاء</CardTitle></CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>المصدر</TableHead>
+                  <TableHead>إجمالي العملاء</TableHead>
+                  <TableHead>فرص ناجحة</TableHead>
+                  <TableHead>معدل التحويل</TableHead>
+                  <TableHead>إجمالي الإيرادات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <tbody>
+                {sourceFunnel.map((sf: any) => {
+                  const rate = sf.total > 0 ? ((sf.won / sf.total) * 100).toFixed(1) : "0";
+                  return (
+                    <TableRow key={sf.source}>
+                      <TableCell className="font-medium">{SOURCE_LABELS[sf.source] || sf.source}</TableCell>
+                      <TableCell>{sf.total}</TableCell>
+                      <TableCell className="text-green-700">{sf.won}</TableCell>
+                      <TableCell>
+                        <span className={cn("text-sm font-medium", Number(rate) >= 50 ? "text-green-600" : Number(rate) >= 25 ? "text-amber-600" : "text-red-600")}>
+                          {rate}%
+                        </span>
+                      </TableCell>
+                      <TableCell>{formatCurrency(Number(sf.wonValue) || 0)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function CampaignsTab() {
   const { data: stats } = useApiQuery<any>(["mkt-stats"], "/marketing/stats");
   const { data: campaignsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["mkt-campaigns"], "/marketing/campaigns");
   const items = asList(campaignsResp);
@@ -30,6 +125,7 @@ export default function MarketingPage() {
     { label: "القناة", key: "channel", type: "badge" },
     { label: "الميزانية", key: "budget", type: "currency" },
     { label: "المصروف", key: "spent", type: "currency" },
+    { label: "الإيرادات", key: "revenue", type: "currency" },
     { label: "الوصف", key: "description" },
     { label: "التاريخ", key: "createdAt", type: "date" },
     { label: "الحالة", key: "status", type: "status" },
@@ -58,16 +154,18 @@ export default function MarketingPage() {
     { key: "channel", label: "القناة" },
     { key: "budget", label: "الميزانية", type: "number" as const },
     { key: "spent", label: "المصروف", type: "number" as const },
+    { key: "revenue", label: "الإيرادات", type: "number" as const },
     { key: "status", label: "الحالة", type: "select" as const, options: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })) },
   ];
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "إجمالي الحملات", value: s.totalCampaigns || 0, icon: Megaphone, color: "text-pink-600 bg-pink-50" },
           { label: "حملات نشطة", value: s.activeCampaigns || 0, icon: Megaphone, color: "text-green-600 bg-green-50" },
-          { label: "الميزانية", value: formatCurrency(s.totalBudget || 0), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
-          { label: "المصروف", value: formatCurrency(s.totalSpent || 0), icon: DollarSign, color: "text-red-600 bg-red-50" },
+          { label: "الميزانية الكلية", value: formatCurrency(s.totalBudget || 0), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
+          { label: `ROAS — ${s.roas ? `${s.roas}×` : "—"}`, value: formatCurrency(s.totalRevenue || 0), icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
         ].map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
             <CardContent className="p-4 flex items-center gap-3">
@@ -80,8 +178,23 @@ export default function MarketingPage() {
         ))}
       </div>
 
+      {s.sourceCounts && s.sourceCounts.length > 0 && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2"><Users className="h-4 w-4" />مصادر العملاء</p>
+            <div className="flex flex-wrap gap-2">
+              {s.sourceCounts.map((sc: any) => (
+                <span key={sc.source} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                  {SOURCE_LABELS[sc.source] || sc.source}: {sc.count}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الحملات التسويقية</h1>
+        <h2 className="text-xl font-bold">الحملات التسويقية</h2>
         <Link href="/marketing/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />حملة جديدة</Button>
         </Link>
@@ -108,7 +221,7 @@ export default function MarketingPage() {
                 <SortableTableHead column="channel" label="القناة" sortState={sortState} onSort={handleSort} />
                 <SortableTableHead column="budget" label="الميزانية" sortState={sortState} onSort={handleSort} />
                 <SortableTableHead column="spent" label="المصروف" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
+                <TableHead>ROAS</TableHead>
                 <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
                 <TableHead className="text-right w-[100px]">إجراءات</TableHead>
               </TableRow>
@@ -124,47 +237,78 @@ export default function MarketingPage() {
               emptyIcon={<Megaphone className="h-6 w-6 text-slate-400" />}
               emptyAction={{ label: "حملة جديدة", onClick: () => window.location.href = "/marketing/create" }}
             >
-              {(paginatedData || [])?.map((c: any) => (
-                <Fragment key={c.id}>
-                  <TableRow className="hover:bg-gray-50">
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.channel || "-"}</TableCell>
-                    <TableCell>{formatCurrency(Number(c.budget) || 0)}</TableCell>
-                    <TableCell>{formatCurrency(Number(c.spent) || 0)}</TableCell>
-                    <TableCell>{formatDateAr(c.createdAt)}</TableCell>
-                    <TableCell><StatusBadge status={c.status} /></TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setPreviewCampaign(c)}><Eye className="h-4 w-4" /></Button>
-                        <RowActions
-                          onEdit={() => startEdit(c.id, { name: c.name, channel: c.channel || "", budget: Number(c.budget) || 0, spent: Number(c.spent) || 0, status: c.status || "draft" })}
-                          onDelete={() => startDelete(c.id)}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {editingId === c.id && (
-                    <TableRow key={`edit-${c.id}`}>
-                      <TableCell colSpan={7} className="p-2">
-                        <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+              {(paginatedData || [])?.map((c: any) => {
+                const spent = Number(c.spent) || 0;
+                const revenue = Number(c.revenue) || 0;
+                const roas = spent > 0 ? (revenue / spent).toFixed(2) : null;
+                return (
+                  <Fragment key={c.id}>
+                    <TableRow className="hover:bg-gray-50">
+                      <TableCell className="font-medium">{c.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{c.channel || "-"}</TableCell>
+                      <TableCell>{formatCurrency(Number(c.budget) || 0)}</TableCell>
+                      <TableCell>{formatCurrency(spent)}</TableCell>
+                      <TableCell>
+                        {roas ? (
+                          <span className={cn("text-sm font-medium", Number(roas) >= 3 ? "text-green-600" : Number(roas) >= 1 ? "text-amber-600" : "text-red-600")}>
+                            {roas}×
+                          </span>
+                        ) : <span className="text-gray-400">—</span>}
+                      </TableCell>
+                      <TableCell><StatusBadge status={c.status} /></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setPreviewCampaign(c)}><Eye className="h-4 w-4" /></Button>
+                          <RowActions
+                            onEdit={() => startEdit(c.id, { name: c.name, channel: c.channel || "", budget: Number(c.budget) || 0, spent: Number(c.spent) || 0, revenue: Number(c.revenue) || 0, status: c.status || "draft" })}
+                            onDelete={() => startDelete(c.id)}
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
-                  )}
-                  {deletingId === c.id && (
-                    <TableRow key={`del-${c.id}`}>
-                      <TableCell colSpan={7} className="p-2">
-                        <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.name} entityType="campaign" entityId={c.id} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              ))}
+                    {editingId === c.id && (
+                      <TableRow key={`edit-${c.id}`}>
+                        <TableCell colSpan={7} className="p-2">
+                          <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {deletingId === c.id && (
+                      <TableRow key={`del-${c.id}`}>
+                        <TableCell colSpan={7} className="p-2">
+                          <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.name} entityType="campaign" entityId={c.id} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                );
+              })}
             </DataTableWrapper>
           </Table>
           <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewCampaign} onOpenChange={() => setPreviewCampaign(null)} title="تفاصيل الحملة" data={previewCampaign} fields={campaignFields} />
+    </div>
+  );
+}
+
+export default function MarketingPage() {
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">التسويق والمبيعات</h1>
+      <Tabs defaultValue="campaigns">
+        <TabsList>
+          <TabsTrigger value="campaigns"><Megaphone className="h-4 w-4 me-1.5" />الحملات</TabsTrigger>
+          <TabsTrigger value="funnel"><BarChart2 className="h-4 w-4 me-1.5" />قمع المبيعات</TabsTrigger>
+        </TabsList>
+        <TabsContent value="campaigns" className="mt-4">
+          <CampaignsTab />
+        </TabsContent>
+        <TabsContent value="funnel" className="mt-4">
+          <FunnelTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

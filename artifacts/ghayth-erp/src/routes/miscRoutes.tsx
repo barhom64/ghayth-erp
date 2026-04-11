@@ -39,10 +39,14 @@ const MyPayslip = lazy(() => import("@/pages/my-payslip"));
 const MyPerformance = lazy(() => import("@/pages/my-performance"));
 const MyDocuments = lazy(() => import("@/pages/my-documents"));
 const ActionCenter = lazy(() => import("@/pages/action-center"));
+const ManagerBoard = lazy(() => import("@/pages/manager-board"));
 const ModuleDashboards = lazy(() => import("@/pages/module-dashboards"));
 const OperationsCenter = lazy(() => import("@/pages/operations-center"));
 const DailyClose = lazy(() => import("@/pages/daily-close"));
 const ScheduledReports = lazy(() => import("@/pages/reports/scheduled-reports"));
+const ProjectGantt = lazy(() => import("@/pages/projects/gantt"));
+const ProjectRisks = lazy(() => import("@/pages/projects/risks"));
+const InventoryCount = lazy(() => import("@/pages/warehouse/inventory-count"));
 
 export const miscRoutes: { path: string; component: any; module?: ModuleType; minRoleLevel?: number }[] = [
   { path: "/my-space", component: MySpace },
@@ -53,6 +57,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-performance", component: MyPerformance },
   { path: "/my-documents", component: MyDocuments },
   { path: "/action-center", component: ActionCenter },
+  { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
   { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },
   { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 40 },
   { path: "/clients", component: Clients, module: "crm" },
@@ -67,6 +72,8 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/projects/create", component: ProjectsCreate, module: "operations" },
   { path: "/projects/tasks", component: Tasks, module: "operations" },
   { path: "/projects/expenses", component: Projects, module: "operations" },
+  { path: "/projects/gantt", component: ProjectGantt, module: "operations" },
+  { path: "/projects/risks", component: ProjectRisks, module: "operations" },
   { path: "/projects/:id", component: ProjectDetail, module: "operations" },
   { path: "/warehouse", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/create", component: WarehouseCreate, module: "warehouse" },
@@ -76,6 +83,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/warehouse/movements", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/categories", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/suppliers", component: VendorsPage, module: "warehouse" },
+  { path: "/warehouse/inventory-count", component: InventoryCount, module: "warehouse" },
   { path: "/support", component: Support, module: "support" },
   { path: "/support/create", component: SupportCreate, module: "support" },
   { path: "/support/replies", component: SupportReplies, module: "support" },

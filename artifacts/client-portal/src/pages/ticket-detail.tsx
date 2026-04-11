@@ -170,6 +170,74 @@ export default function TicketDetail() {
           </div>
         )}
       </div>
+
+      {["resolved", "closed"].includes(ticket.status) && (
+        <CSATWidget ticketId={Number(id)} />
+      )}
+    </div>
+  );
+}
+
+function CSATWidget({ ticketId }: { ticketId: number }) {
+  const [score, setScore] = useState<number | null>(null);
+  const [comment, setComment] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    if (!score) return;
+    setLoading(true);
+    setError("");
+    try {
+      await apiFetch(`/tickets/${ticketId}/csat`, { method: "POST", body: JSON.stringify({ score, comment }) });
+      setSubmitted(true);
+    } catch (e: any) {
+      setError(e?.message || "خطأ في الإرسال");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (submitted) return (
+    <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+      <p className="text-sm font-medium text-green-700">شكراً على تقييمك! 🎉</p>
+    </div>
+  );
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <h3 className="text-base font-semibold text-gray-800">قيّم تجربتك</h3>
+      <div className="flex items-center gap-2 justify-center">
+        {[1, 2, 3, 4, 5].map(s => (
+          <button
+            key={s}
+            onClick={() => setScore(s)}
+            className={`w-10 h-10 rounded-full text-lg transition-transform hover:scale-110 ${score === s ? "bg-amber-100 ring-2 ring-amber-400 scale-110" : "hover:bg-gray-100"}`}
+          >
+            {["😞", "😕", "😐", "😊", "😃"][s - 1]}
+          </button>
+        ))}
+      </div>
+      {score && (
+        <>
+          <textarea
+            rows={2}
+            placeholder="تعليقك (اختياري)..."
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <button
+            onClick={submit}
+            disabled={loading}
+            className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {loading ? "جاري الإرسال..." : "إرسال التقييم"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

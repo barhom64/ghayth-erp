@@ -1056,8 +1056,302 @@ router.get("/stats", requirePermission("fleet:read"), async (req, res) => {
     const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1`, [cid]);
     const [trips] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1`, [cid]);
     const [fuel] = await rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1`, [cid]);
-    res.json({ vehicles, trips, totalFuelCost: Number(fuel.totalFuelCost) });
+    const [insurance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1`, [cid]);
+    const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [drivers] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]);
+    res.json({
+      totalVehicles: Number(vehicles.total), availableVehicles: Number(vehicles.available),
+      inUseVehicles: Number(vehicles.inUse), inMaintenanceVehicles: Number(vehicles.inMaintenance),
+      totalTrips: Number(trips.total), completedTrips: Number(trips.completed),
+      totalFuelCost: Number(fuel.totalFuelCost), totalInsurance: Number(insurance.total),
+      totalMaintenance: Number(maintenance.total), activeAlerts: Number(alerts.total),
+      totalDrivers: Number(drivers.total),
+      vehicles, trips,
+    });
   } catch (err) { handleRouteError(err, res, "Fleet stats error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PREVENTIVE MAINTENANCE PLANS — خطة الصيانة الوقائية
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { vehicleId } = req.query as any;
+    const conditions = [`p."companyId"=$1`];
+    const params: any[] = [scope.companyId];
+    if (vehicleId) { params.push(Number(vehicleId)); conditions.push(`p."vehicleId"=$${params.length}`); }
+    const rows = await rawQuery<any>(
+      `SELECT p.*, v."plateNumber", v."currentMileage"
+       FROM fleet_preventive_plans p
+       JOIN fleet_vehicles v ON v.id=p."vehicleId"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY p."nextServiceDate" ASC`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Preventive plans error:"); }
+});
+
+router.post("/preventive-plans", requirePermission("fleet:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.vehicleId || !b.serviceType) {
+      res.status(400).json({ error: "المركبة ونوع الخدمة مطلوبان" }); return;
+    }
+
+    // Auto-compute nextServiceDate and nextServiceMileage from intervals + last service values
+    // "due by whichever comes first" — both are computed; the earlier triggers the service
+    let nextServiceDate: string | null = b.nextServiceDate || null;
+    let nextServiceMileage: number | null = b.nextServiceMileage ? Number(b.nextServiceMileage) : null;
+
+    if (!nextServiceDate && b.lastServiceDate && b.intervalDays) {
+      const lastDate = new Date(b.lastServiceDate);
+      lastDate.setDate(lastDate.getDate() + Number(b.intervalDays));
+      nextServiceDate = lastDate.toISOString().split("T")[0];
+    }
+    if (!nextServiceMileage && b.lastServiceMileage && b.intervalKm) {
+      nextServiceMileage = Number(b.lastServiceMileage) + Number(b.intervalKm);
+    }
+
+    // If neither interval was provided, also try fetching vehicle current mileage
+    if (!nextServiceMileage && b.intervalKm) {
+      const [vehicle] = await rawQuery<any>(
+        `SELECT "currentMileage" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`,
+        [b.vehicleId, scope.companyId]
+      );
+      if (vehicle?.currentMileage) {
+        nextServiceMileage = Number(vehicle.currentMileage) + Number(b.intervalKm);
+      }
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_preventive_plans
+       ("companyId","vehicleId","serviceType","intervalKm","intervalDays","lastServiceDate","lastServiceMileage","nextServiceDate","nextServiceMileage","estimatedCost",status,notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',$11)`,
+      [scope.companyId, b.vehicleId, b.serviceType,
+       b.intervalKm || null, b.intervalDays || null,
+       b.lastServiceDate || null, b.lastServiceMileage || null,
+       nextServiceDate, nextServiceMileage,
+       b.estimatedCost || 0, b.notes || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_preventive_plans WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create preventive plan error:"); }
+});
+
+router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+
+    // Fetch existing plan to recompute due values when last service is updated
+    const [existing] = await rawQuery<any>(
+      `SELECT p.*, v."currentMileage" FROM fleet_preventive_plans p
+       JOIN fleet_vehicles v ON v.id=p."vehicleId"
+       WHERE p.id=$1 AND p."companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!existing) { res.status(404).json({ error: "الخطة غير موجودة" }); return; }
+
+    if (b.nextServiceDate !== undefined) { params.push(b.nextServiceDate); sets.push(`"nextServiceDate"=$${params.length}`); }
+    if (b.nextServiceMileage !== undefined) { params.push(b.nextServiceMileage); sets.push(`"nextServiceMileage"=$${params.length}`); }
+    if (b.lastServiceDate !== undefined) { params.push(b.lastServiceDate); sets.push(`"lastServiceDate"=$${params.length}`); }
+    if (b.lastServiceMileage !== undefined) { params.push(b.lastServiceMileage); sets.push(`"lastServiceMileage"=$${params.length}`); }
+    if (b.estimatedCost !== undefined) { params.push(b.estimatedCost); sets.push(`"estimatedCost"=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+
+    // When last service date/mileage is updated and no explicit next values, recompute from intervals
+    const effectiveLastDate = b.lastServiceDate ?? existing.lastServiceDate;
+    const effectiveLastMileage = b.lastServiceMileage ?? existing.lastServiceMileage;
+
+    if ((b.lastServiceDate !== undefined || b.lastServiceMileage !== undefined) && b.nextServiceDate === undefined) {
+      if (effectiveLastDate && existing.intervalDays) {
+        const d = new Date(effectiveLastDate);
+        d.setDate(d.getDate() + Number(existing.intervalDays));
+        const nextDate = d.toISOString().split("T")[0];
+        params.push(nextDate); sets.push(`"nextServiceDate"=$${params.length}`);
+      }
+    }
+    if ((b.lastServiceMileage !== undefined) && b.nextServiceMileage === undefined) {
+      if (effectiveLastMileage && existing.intervalKm) {
+        const nextKm = Number(effectiveLastMileage) + Number(existing.intervalKm);
+        params.push(nextKm); sets.push(`"nextServiceMileage"=$${params.length}`);
+      }
+    }
+
+    if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
+    params.push(id); params.push(scope.companyId);
+    const rows = await rawQuery<any>(
+      `UPDATE fleet_preventive_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      params
+    );
+    if (!rows[0]) { res.status(404).json({ error: "الخطة غير موجودة" }); return; }
+
+    // If parts were consumed during this service, deduct from warehouse inventory
+    if (b.partsUsed && Array.isArray(b.partsUsed) && b.partsUsed.length > 0) {
+      for (const part of b.partsUsed) {
+        try {
+          await rawExecute(
+            `UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+            [part.quantity, part.productId, scope.companyId]
+          );
+          await rawExecute(
+            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,'out',$3,$4,$5,$6,$7)`,
+            [scope.companyId, part.productId, part.quantity, part.unitCost || 0, `PM-PLAN-${id}`, `صيانة وقائية - خطة #${id} (${existing.serviceType})`, scope.userId]
+          );
+        } catch (partErr) {
+          console.error(`Failed to deduct spare part ${part.productId} for preventive plan ${id}:`, partErr);
+        }
+      }
+    }
+
+    res.json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Update preventive plan error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRAFFIC VIOLATIONS — مخالفات مرورية
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/traffic-violations", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { vehicleId, driverId } = req.query as any;
+    const conditions = [`tv."companyId"=$1`];
+    const params: any[] = [scope.companyId];
+    if (vehicleId) { params.push(Number(vehicleId)); conditions.push(`tv."vehicleId"=$${params.length}`); }
+    if (driverId) { params.push(Number(driverId)); conditions.push(`tv."driverId"=$${params.length}`); }
+    const rows = await rawQuery<any>(
+      `SELECT tv.*, v."plateNumber", d.name AS "driverName"
+       FROM fleet_traffic_violations tv
+       LEFT JOIN fleet_vehicles v ON v.id=tv."vehicleId"
+       LEFT JOIN fleet_drivers d ON d.id=tv."driverId"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY tv."violationDate" DESC`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
+});
+
+router.post("/traffic-violations", requirePermission("fleet:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.vehicleId || !b.violationType) {
+      res.status(400).json({ error: "المركبة ونوع المخالفة مطلوبان" }); return;
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_traffic_violations
+       ("companyId","vehicleId","driverId","violationType","violationDate","fineAmount","location","violationNumber",status,notes,"paidAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10)`,
+      [scope.companyId, b.vehicleId, b.driverId || null, b.violationType,
+       b.violationDate || new Date().toISOString().split('T')[0],
+       b.fineAmount || 0, b.location || null, b.violationNumber || null,
+       b.notes || null, null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
+});
+
+router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    await rawExecute(
+      `UPDATE fleet_traffic_violations SET status='paid', "paidAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [id]);
+    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Pay violation error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TCO ANALYSIS — تحليل التكلفة الكلية للمركبة
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vehicleId = Number(req.params.id);
+
+    const [vehicle] = await rawQuery<any>(
+      `SELECT v.*, d.name AS "driverName"
+       FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id=v."assignedDriverId"
+       WHERE v.id=$1 AND v."companyId"=$2`,
+      [vehicleId, scope.companyId]
+    );
+    if (!vehicle) { res.status(404).json({ error: "المركبة غير موجودة" }); return; }
+
+    const [fuelCost] = await rawQuery<any>(
+      `SELECT COALESCE(SUM("totalCost"),0) AS total, COALESCE(SUM(liters),0) AS liters,
+              COALESCE(SUM(CASE WHEN "mileageAtFuel" IS NOT NULL THEN "totalCost" ELSE 0 END),0) AS "withMileage"
+       FROM fleet_fuel_logs WHERE "vehicleId"=$1`,
+      [vehicleId]
+    );
+    const [maintenanceCost] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(cost),0) AS total FROM fleet_maintenance WHERE "vehicleId"=$1 AND "deletedAt" IS NULL`,
+      [vehicleId]
+    );
+    const [insuranceCost] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(premium),0) AS total FROM fleet_insurance WHERE "vehicleId"=$1`,
+      [vehicleId]
+    );
+    const [tripRevenue] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(cost),0) AS revenue, COUNT(*) AS trips,
+              COALESCE(SUM(distance),0) AS "totalKm"
+       FROM fleet_trips WHERE "vehicleId"=$1 AND status='completed'`,
+      [vehicleId]
+    );
+    const [trafficFines] = await rawQuery<any>(
+      `SELECT COALESCE(SUM("fineAmount"),0) AS total FROM fleet_traffic_violations WHERE "vehicleId"=$1 AND "companyId"=$2`,
+      [vehicleId, scope.companyId]
+    );
+
+    const purchasePrice = Number(vehicle.purchasePrice || 0);
+    const yearsSincePurchase = vehicle.purchaseDate
+      ? (Date.now() - new Date(vehicle.purchaseDate).getTime()) / (365.25 * 24 * 3600 * 1000)
+      : 1;
+    const annualDepreciation = purchasePrice > 0 ? purchasePrice * 0.2 : 0;
+    const totalDepreciation = Math.round(annualDepreciation * yearsSincePurchase * 100) / 100;
+
+    const fuelTotal = Number(fuelCost.total);
+    const maintenanceTotal = Number(maintenanceCost.total);
+    const insuranceTotal = Number(insuranceCost.total);
+    const finesTotal = Number(trafficFines?.total || 0);
+    const totalCost = fuelTotal + maintenanceTotal + insuranceTotal + totalDepreciation + purchasePrice + finesTotal;
+    const totalKm = Number(tripRevenue.totalKm) || Number(vehicle.currentMileage) || 1;
+    const costPerKm = totalKm > 0 ? Math.round((totalCost / totalKm) * 100) / 100 : 0;
+
+    res.json({
+      vehicleId, plateNumber: vehicle.plateNumber, make: vehicle.make, model: vehicle.model, year: vehicle.year,
+      purchasePrice, totalDepreciation,
+      fuelCost: fuelTotal, maintenanceCost: maintenanceTotal,
+      insuranceCost: insuranceTotal, trafficFines: finesTotal,
+      totalCost: Math.round(totalCost * 100) / 100,
+      totalKm, costPerKm,
+      totalTrips: Number(tripRevenue.trips),
+      yearsSincePurchase: Math.round(yearsSincePurchase * 100) / 100,
+      breakdown: {
+        purchase: purchasePrice,
+        depreciation: totalDepreciation,
+        fuel: fuelTotal,
+        maintenance: maintenanceTotal,
+        insurance: insuranceTotal,
+        fines: finesTotal,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "TCO analysis error:"); }
 });
 
 export default router;

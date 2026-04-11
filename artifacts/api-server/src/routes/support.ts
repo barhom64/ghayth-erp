@@ -340,13 +340,135 @@ router.get("/stats", async (req, res) => {
     const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1`, [cid]);
     const [avgRes] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL`, [cid]);
     const [firstResponse] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL`, [cid]);
+    const [csat] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch(() => [{ avg: null, total: 0 }]);
     res.json({
       totalTickets: Number(tickets.total), openTickets: Number(tickets.open),
       resolvedTickets: Number(tickets.resolved), slaBreach: Number(tickets.slaBreach),
       avgResolutionHours: Number(avgRes?.avgHours || 0).toFixed(1),
       avgFirstResponseHours: Number(firstResponse?.avgHours || 0).toFixed(1),
+      csatAvg: csat?.avg ? Number(csat.avg).toFixed(2) : null,
+      csatTotal: Number(csat?.total || 0),
     });
   } catch (err) { handleRouteError(err, res, "Support stats error:"); }
+});
+
+router.post("/tickets/:id/csat", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const ticketId = Number(req.params.id);
+    const { score, comment } = req.body;
+    if (!score || score < 1 || score > 5) { res.status(400).json({ error: "التقييم يجب أن يكون بين 1 و 5" }); return; }
+    const [ticket] = await rawQuery<any>(`SELECT id, "assigneeId", status FROM support_tickets WHERE id=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
+    if (!ticket) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
+    if (!['resolved', 'closed'].includes(ticket.status)) { res.status(400).json({ error: "لا يمكن تقييم تذكرة غير محلولة" }); return; }
+    await rawExecute(
+      `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
+      [ticketId, scope.companyId, ticket.assigneeId, score, comment || null]
+    );
+    res.status(201).json({ ticketId, score, comment });
+  } catch (err) { handleRouteError(err, res, "CSAT error:"); }
+});
+
+router.get("/csat", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT cr.*, t.ref AS "ticketRef", t.title AS "ticketTitle", e.name AS "assigneeName"
+       FROM ticket_csat_ratings cr
+       LEFT JOIN support_tickets t ON t.id=cr."ticketId"
+       LEFT JOIN employees e ON e.id=cr."assigneeId"
+       WHERE cr."companyId"=$1 ORDER BY cr."createdAt" DESC LIMIT 100`,
+      [scope.companyId]
+    );
+    const [avg] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [scope.companyId]);
+    const agentStats = await rawQuery<any>(
+      `SELECT cr."assigneeId", e.name AS "assigneeName", AVG(cr.score) AS avg, COUNT(*) AS total
+       FROM ticket_csat_ratings cr LEFT JOIN employees e ON e.id=cr."assigneeId"
+       WHERE cr."companyId"=$1 AND cr."assigneeId" IS NOT NULL
+       GROUP BY cr."assigneeId", e.name ORDER BY avg DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, avg: avg?.avg ? Number(avg.avg).toFixed(2) : null, total: Number(avg?.total || 0), agentStats });
+  } catch (err) { handleRouteError(err, res, "CSAT list error:"); }
+});
+
+router.get("/kb", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { q, category } = req.query as any;
+    const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`];
+    const params: any[] = [scope.companyId];
+    if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
+    if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
+    const rows = await rawQuery<any>(`SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt", "updatedAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC`, params);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "KB list error:"); }
+});
+
+router.get("/kb/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    if (!row) { res.status(404).json({ error: "المقالة غير موجودة" }); return; }
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(() => {});
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "KB article error:"); }
+});
+
+router.post("/kb", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { title, content, category, tags } = req.body;
+    if (!title) { res.status(400).json({ error: "عنوان المقالة مطلوب" }); return; }
+    const { insertId } = await rawExecute(
+      `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,
+      [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "KB create error:"); }
+});
+
+router.patch("/kb/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
+    if (b.content !== undefined) { params.push(b.content); sets.push(`content=$${params.length}`); }
+    if (b.category !== undefined) { params.push(b.category); sets.push(`category=$${params.length}`); }
+    if (b.tags !== undefined) { params.push(b.tags); sets.push(`tags=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "KB update error:"); }
+});
+
+router.delete("/kb/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    await rawExecute(`DELETE FROM kb_articles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json({ message: "تم حذف المقالة بنجاح" });
+  } catch (err) { handleRouteError(err, res, "KB delete error:"); }
+});
+
+router.post("/kb/:id/feedback", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { helpful } = req.body;
+    if (helpful === true || helpful === 'true') {
+      await rawExecute(`UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1`, [id]);
+    } else {
+      await rawExecute(`UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1`, [id]);
+    }
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "KB feedback error:"); }
 });
 
 export default router;

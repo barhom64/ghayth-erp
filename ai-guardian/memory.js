@@ -1,7 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const memoryDir = path.resolve(process.cwd(), 'ai-guardian-data');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const memoryDir = path.resolve(__dirname, '..', 'ai-guardian-data');
 const memoryFile = path.join(memoryDir, 'memory.json');
 
 function ensureMemory() {

@@ -500,6 +500,51 @@ export default function MySpace() {
                 </Link>
               </div>
             )}
+            {monthlyStats && (
+              <div className="mt-4 pt-4 border-t space-y-2">
+                <p className="text-xs font-medium text-gray-600">تقدم الشهر الحالي</p>
+                {(() => {
+                  const now = new Date();
+                  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                  const dayOfMonth = now.getDate();
+                  const monthPct = Math.round((dayOfMonth / daysInMonth) * 100);
+                  const attendPct = monthlyStats.workingDays > 0
+                    ? Math.round((monthlyStats.presentDays / monthlyStats.workingDays) * 100)
+                    : 0;
+                  return (
+                    <>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>أيام الحضور: {monthlyStats.presentDays || 0} / {monthlyStats.workingDays || 0}</span>
+                          <span className={cn("font-medium", attendPct >= 90 ? "text-emerald-600" : attendPct >= 75 ? "text-amber-600" : "text-red-600")}>{attendPct}%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className={cn("h-full rounded-full transition-all duration-500", attendPct >= 90 ? "bg-emerald-500" : attendPct >= 75 ? "bg-amber-400" : "bg-red-500")}
+                            style={{ width: `${attendPct}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>تقدم الشهر</span>
+                          <span>اليوم {dayOfMonth} / {daysInMonth}</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-blue-400 transition-all duration-500" style={{ width: `${monthPct}%` }} />
+                        </div>
+                      </div>
+                      {monthlyStats.lateMinutes > 0 && (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-600">
+                          <Timer className="w-3 h-3" />
+                          إجمالي التأخر هذا الشهر: {monthlyStats.lateMinutes} دقيقة
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -721,7 +766,7 @@ export default function MySpace() {
             </CardTitle>
             <Link href="/hr/leaves">
               <Button variant="ghost" size="sm" className="text-xs gap-1">
-                عرض الكل <ChevronLeft className="w-3 h-3" />
+                طلب إجازة <ChevronLeft className="w-3 h-3" />
               </Button>
             </Link>
           </CardHeader>
@@ -729,18 +774,33 @@ export default function MySpace() {
             {leaveBalances.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-4">لا توجد أنواع إجازات</p>
             ) : (
-              <div className="space-y-2">
-                {leaveBalances.map((b: any) => (
-                  <div key={b.leaveTypeId} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50">
-                    <span className="text-sm font-medium text-gray-700">{b.name}</span>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-gray-400">مستخدم: {b.used}</span>
-                      <Badge className={cn("text-xs", b.remaining > 5 ? "bg-green-100 text-green-700" : b.remaining > 0 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700")}>
-                        متبقي: {b.remaining}
-                      </Badge>
+              <div className="space-y-4">
+                {leaveBalances.map((b: any) => {
+                  const total = (b.used || 0) + (b.remaining || 0);
+                  const usedPct = total > 0 ? Math.min(100, Math.round(((b.used || 0) / total) * 100)) : 0;
+                  const isLow = b.remaining <= 3;
+                  const isOut = b.remaining <= 0;
+                  return (
+                    <div key={b.leaveTypeId} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">{b.name}</span>
+                        <span className={cn("text-xs font-semibold", isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-emerald-600")}>
+                          {b.remaining} / {total} يوم
+                        </span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className={cn("h-full rounded-full transition-all duration-500", isOut ? "bg-red-500" : isLow ? "bg-amber-400" : "bg-emerald-500")}
+                          style={{ width: `${usedPct}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-gray-400">
+                        <span>مستخدم: {b.used || 0} يوم</span>
+                        <span>{usedPct}% مستخدم</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

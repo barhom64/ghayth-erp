@@ -17,6 +17,9 @@ const FleetAlertsCreate = lazy(() => import("@/pages/create/fleet/alerts-create"
 const FleetReports = lazy(() => import("@/pages/fleet/reports"));
 const VehicleDetail = lazy(() => import("@/pages/details/vehicle-detail"));
 const VehicleStatusChange = lazy(() => import("@/pages/create/fleet/vehicle-status-change"));
+const PreventivePlans = lazy(() => import("@/pages/fleet/preventive-plans"));
+const TrafficViolations = lazy(() => import("@/pages/fleet/traffic-violations"));
+const TCO = lazy(() => import("@/pages/fleet/tco"));
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
@@ -34,6 +37,9 @@ export const fleetRoutes = [
   { path: "/fleet/alerts", component: FleetAlerts },
   { path: "/fleet/alerts/create", component: FleetAlertsCreate },
   { path: "/fleet/reports", component: FleetReports },
+  { path: "/fleet/preventive-plans", component: PreventivePlans },
+  { path: "/fleet/traffic-violations", component: TrafficViolations },
+  { path: "/fleet/tco", component: TCO },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];

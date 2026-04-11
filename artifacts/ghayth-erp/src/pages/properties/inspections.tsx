@@ -1,0 +1,172 @@
+import { useState } from "react";
+import { useApiQuery, asList } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ClipboardList, Plus, CheckCircle, Clock, Star } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
+
+const TYPES: Record<string, string> = {
+  move_in: "دخول مستأجر",
+  move_out: "خروج مستأجر",
+  routine: "دوري",
+  maintenance: "صيانة",
+};
+
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  scheduled: { label: "مجدول", color: "bg-blue-100 text-blue-700" },
+  completed: { label: "مكتمل", color: "bg-green-100 text-green-700" },
+  cancelled: { label: "ملغى", color: "bg-gray-100 text-gray-600" },
+};
+
+export default function InspectionsPage() {
+  const [showForm, setShowForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [form, setForm] = useState({ unitId: "", type: "routine", scheduledDate: "", inspectorName: "", conditionRating: "", notes: "" });
+
+  const { data, refetch } = useApiQuery<any>(
+    ["inspections", statusFilter],
+    `/properties/inspections${statusFilter !== "all" ? `?status=${statusFilter}` : ""}`
+  );
+  const inspections = asList(data?.data || data);
+
+  const { data: units } = useApiQuery<any>(["property-units"], "/properties/units?limit=200");
+  const unitList = asList(units?.data || units);
+
+  const handleSave = async () => {
+    if (!form.unitId || !form.type) { toast({ title: "الوحدة والنوع مطلوبان", variant: "destructive" }); return; }
+    try {
+      await apiFetch("/properties/inspections", { method: "POST", body: JSON.stringify({ ...form, unitId: Number(form.unitId), conditionRating: form.conditionRating ? Number(form.conditionRating) : null }) });
+      toast({ title: "تم جدولة الفحص" });
+      setShowForm(false);
+      setForm({ unitId: "", type: "routine", scheduledDate: "", inspectorName: "", conditionRating: "", notes: "" });
+      refetch();
+    } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+  };
+
+  const handleComplete = async (id: number) => {
+    const rating = prompt("تقييم حالة الوحدة (1-5):");
+    const notes = prompt("ملاحظات الفحص:");
+    try {
+      await apiFetch(`/properties/inspections/${id}`, { method: "PATCH", body: JSON.stringify({
+        status: "completed",
+        inspectionDate: new Date().toISOString().split("T")[0],
+        conditionRating: rating ? Number(rating) : null,
+        notes: notes || null,
+      }) });
+      refetch();
+      toast({ title: "تم إكمال الفحص" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  return (
+    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <ClipboardList className="w-6 h-6 text-primary" />
+          <div>
+            <h1 className="text-xl font-bold">فحص الوحدات العقارية</h1>
+            <p className="text-sm text-gray-500">جدولة وتتبع عمليات فحص الوحدات</p>
+          </div>
+        </div>
+        <Button onClick={() => setShowForm(!showForm)} size="sm">
+          <Plus className="w-4 h-4 me-1" /> جدولة فحص
+        </Button>
+      </div>
+
+      {showForm && (
+        <Card className="border-2 border-primary/20">
+          <CardHeader className="pb-2"><CardTitle className="text-base">جدولة فحص جديد</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-3 gap-4">
+            <div>
+              <Label>الوحدة *</Label>
+              <Select value={form.unitId} onValueChange={(v) => setForm({ ...form, unitId: v })}>
+                <SelectTrigger><SelectValue placeholder="اختر وحدة" /></SelectTrigger>
+                <SelectContent>{unitList.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber} — {u.buildingName}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>نوع الفحص *</Label>
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>تاريخ الفحص</Label>
+              <Input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
+            </div>
+            <div>
+              <Label>اسم المفتش</Label>
+              <Input value={form.inspectorName} onChange={(e) => setForm({ ...form, inspectorName: e.target.value })} placeholder="اسم المفتش" />
+            </div>
+            <div>
+              <Label>التقييم الأولي (1-5)</Label>
+              <Input type="number" min="1" max="5" value={form.conditionRating} onChange={(e) => setForm({ ...form, conditionRating: e.target.value })} />
+            </div>
+            <div>
+              <Label>ملاحظات</Label>
+              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            </div>
+            <div className="col-span-3 flex gap-2">
+              <Button onClick={handleSave}>حفظ</Button>
+              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex gap-2">
+        {["all", "scheduled", "completed", "cancelled"].map((s) => (
+          <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)}>
+            {s === "all" ? "الكل" : STATUS_MAP[s]?.label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {inspections.length === 0 ? (
+          <Card><CardContent className="py-8 text-center text-gray-400">لا توجد عمليات فحص</CardContent></Card>
+        ) : inspections.map((insp: any) => (
+          <Card key={insp.id} className="hover:shadow-md">
+            <CardContent className="p-4 flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{insp.unitNumber} — {insp.buildingName}</span>
+                  <Badge className={STATUS_MAP[insp.status]?.color || "bg-gray-100 text-gray-600"}>{STATUS_MAP[insp.status]?.label || insp.status}</Badge>
+                  <Badge className="bg-gray-100 text-gray-600">{TYPES[insp.type] || insp.type}</Badge>
+                </div>
+                <div className="text-sm text-gray-500 mt-1 space-y-0.5">
+                  {insp.inspectorName && <p>المفتش: {insp.inspectorName}</p>}
+                  <p>
+                    {insp.status === "scheduled" ? "موعد الفحص:" : "تاريخ الفحص:"}
+                    {" "}{(insp.inspectionDate || insp.scheduledDate)?.split("T")[0]}
+                  </p>
+                  {insp.notes && <p>{insp.notes}</p>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {insp.conditionRating && (
+                  <div className="flex items-center gap-1 text-yellow-500">
+                    <Star className="w-4 h-4 fill-current" />
+                    <span className="text-sm font-medium">{insp.conditionRating}/5</span>
+                  </div>
+                )}
+                {insp.status === "scheduled" && (
+                  <Button size="sm" onClick={() => handleComplete(insp.id)}>
+                    <CheckCircle className="w-3.5 h-3.5 me-1" /> إتمام
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}

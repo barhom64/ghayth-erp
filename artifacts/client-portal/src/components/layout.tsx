@@ -5,6 +5,7 @@ const navLinks = [
   { href: "/", label: "الرئيسية", icon: "🏠" },
   { href: "/invoices", label: "الفواتير", icon: "📄" },
   { href: "/tickets", label: "الطلبات", icon: "🎫" },
+  { href: "/kb", label: "المساعدة", icon: "📚" },
   { href: "/profile", label: "ملفي", icon: "👤" },
 ];
 

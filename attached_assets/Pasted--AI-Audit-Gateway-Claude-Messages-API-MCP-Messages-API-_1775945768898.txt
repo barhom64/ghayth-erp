@@ -1,0 +1,273 @@
+تبني AI Audit Gateway داخل غيث، وتربطه بـ Claude عبر Messages API أو عبر MCP. الـ Messages API يدعم tool use، وMCP معيار مفتوح لربط الوكلاء بالأدوات والأنظمة الخارجية. Claude Code أيضًا يدعم الاتصال بأدوات خارجية عبر MCP.
+
+هنا تعطيه أدوات مثل:
+scan_codebase_structure
+list_broken_imports
+check_api_frontend_alignment
+find_unprotected_routes
+find_missing_audit_hooks
+find_translation_gaps
+check_env_dependencies
+run_tests
+read_logs
+inspect_build_errors
+inspect_database_migrations
+compare_routes_to_menu
+find_dead_pages
+find_unreachable_components
+
+Claude لا يروح بنفسه للملفات أو الداتابيس بعشوائية؛
+هو يطلب الأداة، وأنت تنفذها وترجع له النتيجة. هذا هو نمط tool use الرسمي.
+
+أنا أشوف لك أفضل تصميم الآن
+طبقة 1: Code Reviewer
+
+يفحص:
+
+syntax
+imports
+exports
+duplicate logic
+dead code
+weak naming
+missing validations
+exception handling
+async issues
+state management issues
+طبقة 2: System Auditor
+
+يفحص:
+
+ربط الصفحات
+ربط الـ API
+الحقول الناقصة
+الصلاحيات
+الـ audit
+الـ logs
+الـ workflow
+completeness
+طبقة 3: Architecture Guardian
+
+يفحص:
+
+هل المسارات متعارضة؟
+هل فيه duplication؟
+هل في breach بين modules؟
+هل services صارت leaders بالغلط؟
+هل فيه تجاوز للحوكمة؟
+هل فيه منطق مشتت في أكثر من مكان؟
+طبقة 4: Fix Planner
+
+يعطيك:
+
+قائمة المشاكل
+خطورتها
+سببها
+أثرها
+الملفات المتأثرة
+الإصلاح المقترح
+patch مقترح
+أولوية التنفيذ
+وش الهدف الحقيقي؟
+
+الهدف مو فقط “لقط bug”.
+الهدف أنك تبني رقيب ذكي يسأل عن كل شيء مثل:
+
+هل هذه الصفحة تعمل فعلاً؟
+هل الزر مربوط؟
+هل الـ endpoint موجود؟
+هل الصلاحيات صحيحة؟
+هل audit اشتغل؟
+هل الترجمة ناقصة؟
+هل هذه الشاشة مجرد واجهة بدون وظيفة؟
+هل هذا الحقل محفوظ في قاعدة البيانات؟
+هل هذا المسار ينكسر إذا تغير branch أو persona؟
+هل توجد ميزة مذكورة في الواجهة لكن غير منفذة؟
+هل يوجد endpoint غير محمي؟
+هل يوجد report بدون مصدر بيانات صحيح؟
+هل يوجد menu item يقود إلى صفحة ميتة؟
+هل يوجد workflow غير مكتمل؟
+أهم قاعدة
+
+لا تجعله “يستخدم كل شيء” دفعة واحدة.
+خله “يرى كل شيء” بالتدريج، و”ينفذ” على مراحل.
+
+الترتيب الصحيح:
+
+المرحلة 1 — Read Only
+قراءة المستودع
+قراءة الملفات
+قراءة logs
+قراءة test results
+قراءة build output
+قراءة routes
+قراءة swagger / contracts
+قراءة migrations
+المرحلة 2 — Controlled Actions
+تشغيل lint
+تشغيل tests
+تشغيل build
+فتح issue
+كتابة تقرير
+اقتراح PR
+كتابة patch
+المرحلة 3 — Semi-Autonomous
+إنشاء PR للإصلاح
+تحديث tests
+إصلاح imports
+إصلاح typing
+إصلاح dead routes
+لكن بعد Approval
+المرحلة 4 — Production Guard
+يوقف merge إذا اكتشف خلل خطير
+يمنع release إذا:
+audit ناقص
+endpoint غير محمي
+build فاشل
+page dead
+migration مكسورة
+event contract ناقص
+هذا أهم شيء لك في غيث
+
+أنت نظامك كبير ومتشعب، فالمراجعة العامة ما تكفي.
+لازم تعطيه checklists متخصصة.
+
+مثال Checklist للواجهة
+كل صفحة في القائمة لها route
+كل route له component فعلي
+كل component له data source
+كل form له submit فعلي
+كل button له action حقيقي
+لا يوجد placeholder production
+لا يوجد fake stats
+لا يوجد text hardcoded غير مترجم
+RTL سليم
+responsive سليم
+Checklist للـ API
+كل endpoint له validation
+كل endpoint له auth
+كل endpoint له permission check
+كل endpoint له error handling
+كل endpoint له audit إن لزم
+العقود موحدة
+response schema ثابت
+Checklist للحوكمة
+لا يوجد bypass للصلاحيات
+لا يوجد تعديل بدون سجل
+لا يوجد اعتماد نهائي بلا موافقة
+لا يوجد cross-module breach
+لا يوجد duplicated ownership للكيانات
+Checklist للتكامل
+frontend field names = backend contract
+backend logic = database columns
+migrations = actual schema
+reports = real data
+filters = backend-supported
+صيغة التقرير اللي يطلع لك
+
+خلّ Claude يخرج لك دائمًا بهذا الشكل:
+
+1) Executive Summary
+حالة النظام العامة
+أهم 10 مخاطر
+نسبة الجاهزية التقريبية
+2) Critical Errors
+أخطاء تمنع التشغيل أو تسبب كسرًا مباشرًا
+3) Functional Gaps
+ميزات ظاهرة لكنها غير مكتملة
+4) Structural Defects
+عيوب معمارية
+5) Security / Permission Issues
+مشاكل الحماية والصلاحيات
+6) Data Integrity Risks
+مخاطر البيانات
+7) UX / Flow Defects
+مشاكل التجربة والتدفق
+8) Recommended Fix Order
+ترتيب الإصلاحات
+9) Suggested Patches
+إصلاحات مقترحة
+أفضل تنفيذ لك الآن
+
+أنا أنصحك بالجمع بين الاثنين:
+
+أولًا
+
+Claude على GitHub
+عشان:
+
+يراجع المستودع
+يراجع PRs
+يكتب تقارير
+يقترح إصلاحات
+وهذا مدعوم رسميًا من Anthropic عبر GitHub Actions وGitHub integration.
+ثانيًا
+
+وكيل داخلي Read-Only
+داخل غيث، بأدوات:
+
+قراءة routes
+قراءة logs
+قراءة config
+قراءة contracts
+فحص الربط
+فحص الـ audit
+فحص الصلاحيات
+ثالثًا
+
+Approval-based Fixing
+إذا عطاك إصلاحات جيدة:
+
+ينشئ branch
+يكتب patch
+يفتح PR
+وأنت تعتمد
+مهم جدًا
+
+ابدأ من هذا السؤال:
+وش نوع الأخطاء اللي أبيه يصيدها؟
+
+وأنت عندك 5 أصناف رئيسية:
+
+أخطاء كود
+أخطاء ربط
+نواقص وظائف
+عيوب معمارية
+ثغرات حوكمة وصلاحيات
+
+إذا بنيته على هذا الأساس، بيصير فعلاً “كلب النظام”.
+
+نموذج دور واضح له
+
+اكتب له دور داخلي قريب من هذا:
+
+أنت رقيب تقني وتشغيلي لنظام غيث.
+مهمتك تحليل الكود والربط والبنية والصلاحيات والتدفقات التشغيلية واكتشاف الأخطاء والنواقص والتعارضات والمخاطر.
+لا تنفذ أي تعديل مباشر إلا من خلال أدوات مصرّح بها.
+عند اكتشاف مشكلة، صنفها حسب الخطورة، واشرح السبب والأثر والملفات المتأثرة والإصلاح المقترح.
+لا تفترض اكتمال أي ميزة لمجرد وجود واجهة لها.
+اعتبر أي صفحة بلا بيانات فعلية أو مسار أو إجراء أو صلاحية أو تسجيل تدقيقي ميزة ناقصة.
+أي إجراء إصلاحي يجب أن يكون بصيغة patch أو PR مقترح ما لم تصدر موافقة صريحة.
+
+الخلاصة
+
+نعم، تقدر تخليه الآن رقيب شامل للنظام، وهذا هو الاستخدام الأنسب في مرحلة بناء نظام جديد.
+والتنفيذ الصحيح يكون هكذا:
+
+Claude Code + GitHub لمراجعة الكود وPRs
+Messages API + tool use لوكيل داخلي يقرأ ويحلل أدوات نظامك
+MCP إذا تبغى توسيع الربط مع أدواتك ومصادرك بطريقة موحدة
+ابدأ Read-Only
+ثم تقارير
+ثم اقتراحات إصلاح
+ثم PRs بموافقة
+ثم لاحقًا منع الدمج إذا اكتشف أخطاء حرجة
+
+أقدر أكتب لك الآن مباشرة تصور تنفيذي كامل لوكيل “حارس غيث” يشمل:
+
+الهيكل
+الأدوات
+الصلاحيات
+أنواع الفحوصات
+نموذج التقارير
+وخطة تشغيله على GitHub وداخل النظام معًا.

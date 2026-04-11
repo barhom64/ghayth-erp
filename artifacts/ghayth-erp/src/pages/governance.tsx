@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTableWrapper } from "@/components/data-table-wrapper";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, FileCheck, AlertTriangle, ClipboardCheck, Plus, Eye, GitBranch } from "lucide-react";
+import { Shield, FileCheck, AlertTriangle, ClipboardCheck, Plus, Eye, GitBranch, CheckCircle2, LayoutDashboard, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { formatDateAr } from "@/lib/formatters";
@@ -42,9 +42,11 @@ function StatsCards({ stats }: { stats: any }) {
     { label: "المخاطر المفتوحة", value: stats?.openRisks || 0, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
     { label: "التدقيق النشط", value: stats?.activeAudits || 0, icon: ClipboardCheck, color: "text-purple-600 bg-purple-50" },
     { label: "عدم الامتثال", value: stats?.nonCompliant || 0, icon: Shield, color: "text-amber-600 bg-amber-50" },
+    { label: "إجراءات الامتثال", value: stats?.complianceActions || 0, icon: Activity, color: "text-indigo-600 bg-indigo-50" },
+    { label: "CAPA مفتوحة", value: stats?.openCapas || 0, icon: CheckCircle2, color: "text-rose-600 bg-rose-50" },
   ];
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
       {cards.map((c) => (
         <Card key={c.label} className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
@@ -522,6 +524,327 @@ function ComplianceTab() {
   );
 }
 
+function ComplianceDashboardTab() {
+  const { data: dashResp, isLoading } = useApiQuery<any>(["gov-compliance-dashboard"], "/governance/compliance-dashboard");
+  const dash = dashResp || {};
+  return (
+    <div className="space-y-4">
+      {isLoading ? (
+        <div className="h-32 bg-gray-100 rounded animate-pulse" />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="border-0 shadow-sm"><CardContent className="p-4"><p className="text-2xl font-bold text-green-600">{dash.compliant || 0}</p><p className="text-xs text-gray-500">ممتثل</p></CardContent></Card>
+            <Card className="border-0 shadow-sm"><CardContent className="p-4"><p className="text-2xl font-bold text-red-600">{dash.nonCompliant || 0}</p><p className="text-xs text-gray-500">غير ممتثل</p></CardContent></Card>
+            <Card className="border-0 shadow-sm"><CardContent className="p-4"><p className="text-2xl font-bold text-amber-600">{dash.partial || 0}</p><p className="text-xs text-gray-500">جزئي</p></CardContent></Card>
+            <Card className="border-0 shadow-sm"><CardContent className="p-4"><p className="text-2xl font-bold text-blue-600">{dash.complianceRate || 0}%</p><p className="text-xs text-gray-500">معدل الامتثال</p></CardContent></Card>
+          </div>
+          {(dash.byModule || []).length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>الامتثال حسب الوحدة</CardTitle></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>الوحدة</TableHead><TableHead>ممتثل</TableHead><TableHead>غير ممتثل</TableHead><TableHead>جزئي</TableHead><TableHead>معدل الامتثال</TableHead>
+                  </TableRow></TableHeader>
+                  <tbody>
+                    {(dash.byModule || []).map((m: any) => (
+                      <TableRow key={m.module}>
+                        <TableCell className="font-medium">{m.module}</TableCell>
+                        <TableCell className="text-green-700">{m.compliant}</TableCell>
+                        <TableCell className="text-red-700">{m.nonCompliant}</TableCell>
+                        <TableCell className="text-amber-700">{m.partial}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-gray-100 rounded-full">
+                              <div className="h-2 bg-green-500 rounded-full" style={{ width: `${m.rate || 0}%` }} />
+                            </div>
+                            <span className="text-xs text-gray-600 w-8">{m.rate}%</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </tbody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+          {(dash.overdueActions || []).length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-red-600">إجراءات امتثال متأخرة</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {(dash.overdueActions || []).map((a: any) => (
+                    <div key={a.id} className="flex items-center justify-between p-2 bg-red-50 rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium">{a.title}</p>
+                        <p className="text-xs text-muted-foreground">{a.regulation} — {a.owner}</p>
+                      </div>
+                      <Badge variant="destructive" className="text-xs">{formatDateAr(a.dueDate)}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ComplianceActionsTab() {
+  const { data: actionsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-compliance-actions"], "/governance/compliance-actions");
+  const items = asList(actionsResp);
+  const [filters, setFilters] = useFilters();
+  const [previewItem, setPreviewItem] = useState<any>(null);
+  const { roleLevel } = useAppContext();
+  const canWrite = roleLevel >= 50;
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const filteredItems = applyFilters(items, filters, { searchFields: ["title", "regulation", "owner"], statusField: "status", dateField: "dueDate" });
+  const { sortedData, sortState, handleSort } = useSortedData(filteredItems);
+
+  const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
+    endpoint: "/governance/compliance-actions",
+    queryKeys: [["gov-compliance-actions"], ["gov-stats"]],
+    onSuccess: () => refetch(),
+  });
+
+  const editFields = [
+    { key: "title", label: "العنوان" },
+    { key: "regulation", label: "اللائحة" },
+    { key: "owner", label: "المسؤول" },
+    { key: "dueDate", label: "تاريخ الاستحقاق", type: "date" as const },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "done", label: "منجز" }, { value: "overdue", label: "متأخر" }] },
+  ];
+
+  const [newForm, setNewForm] = useState({ title: "", regulation: "", owner: "", dueDate: "", description: "", status: "open" });
+  const [showNew, setShowNew] = useState(false);
+  const handleCreate = async () => {
+    if (!newForm.title) return;
+    try {
+      await import("@/lib/api").then(({ apiFetch }) => apiFetch("/governance/compliance-actions", {
+        method: "POST",
+        body: JSON.stringify(newForm),
+      }));
+      toast({ title: "تم إنشاء الإجراء" });
+      setShowNew(false);
+      setNewForm({ title: "", regulation: "", owner: "", dueDate: "", description: "", status: "open" });
+      qc.invalidateQueries({ queryKey: ["gov-compliance-actions"] });
+    } catch { toast({ variant: "destructive", title: "خطأ في الحفظ" }); }
+  };
+
+  const previewFields: PreviewField[] = [
+    { label: "العنوان", key: "title" },
+    { label: "اللائحة", key: "regulation" },
+    { label: "المسؤول", key: "owner" },
+    { label: "الوصف", key: "description" },
+    { label: "تاريخ الاستحقاق", key: "dueDate", type: "date" },
+    { label: "الحالة", key: "status", type: "status" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        <div className="flex-1">
+          <AdvancedFilters config={{ searchPlaceholder: "بحث بالإجراء أو اللائحة...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "done", label: "منجز" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
+        </div>
+        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء جديد</Button>}
+      </div>
+      {showNew && (
+        <Card className="border-dashed">
+          <CardContent className="p-4 grid grid-cols-2 gap-3">
+            {editFields.map(f => (
+              <div key={f.key}>
+                <label className="text-xs text-gray-500 mb-1 block">{f.label}</label>
+                {f.type === "select" ? (
+                  <select className="w-full border rounded px-2 py-1 text-sm" value={(newForm as any)[f.key]} onChange={e => setNewForm(p => ({ ...p, [f.key]: e.target.value }))}>
+                    {f.options!.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                ) : (
+                  <input type={f.type === "date" ? "date" : "text"} className="w-full border rounded px-2 py-1 text-sm" value={(newForm as any)[f.key]} onChange={e => setNewForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                )}
+              </div>
+            ))}
+            <div className="col-span-2">
+              <label className="text-xs text-gray-500 mb-1 block">الوصف</label>
+              <textarea className="w-full border rounded px-2 py-1 text-sm" rows={2} value={newForm.description} onChange={e => setNewForm(p => ({ ...p, description: e.target.value }))} />
+            </div>
+            <div className="col-span-2 flex gap-2">
+              <Button size="sm" onClick={handleCreate}>حفظ</Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card>
+        <CardHeader><CardTitle>إجراءات الامتثال</CardTitle></CardHeader>
+        <CardContent>
+          <Table><TableHeader><TableRow>
+            <SortableTableHead column="title" label="الإجراء" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="regulation" label="اللائحة" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="owner" label="المسؤول" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="dueDate" label="تاريخ الاستحقاق" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
+            <TableHead>إجراءات</TableHead>
+          </TableRow></TableHeader>
+          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredItems} colCount={6} emptyMessage="لا توجد إجراءات" emptyIcon={<Activity className="h-6 w-6 text-slate-400" />}>
+            {(sortedData || []).map((item: any) => (
+              <Fragment key={item.id}>
+                <TableRow className={cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}>
+                  <TableCell className="font-medium">{item.title}</TableCell>
+                  <TableCell className="text-muted-foreground">{item.regulation || "-"}</TableCell>
+                  <TableCell>{item.owner || "-"}</TableCell>
+                  <TableCell>{item.dueDate ? formatDateAr(item.dueDate) : "-"}</TableCell>
+                  <TableCell><StatusBadge status={item.status} /></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => setPreviewItem(item)}><Eye className="h-4 w-4" /></Button>
+                      <RowActions onEdit={() => startEdit(item.id, { title: item.title, regulation: item.regulation || "", owner: item.owner || "", dueDate: item.dueDate || "", status: item.status || "open" })} onDelete={() => startDelete(item.id)} />
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {editingId === item.id && <TableRow><TableCell colSpan={6} className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></TableCell></TableRow>}
+                {deletingId === item.id && <TableRow><TableCell colSpan={6} className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="compliance-action" entityId={item.id} /></TableCell></TableRow>}
+              </Fragment>
+            ))}
+          </DataTableWrapper></Table>
+        </CardContent>
+      </Card>
+      <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="تفاصيل الإجراء" data={previewItem} fields={previewFields} />
+    </div>
+  );
+}
+
+function CAPATab() {
+  const { data: capaResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-capa"], "/governance/capa");
+  const items = asList(capaResp);
+  const [filters, setFilters] = useFilters();
+  const [previewItem, setPreviewItem] = useState<any>(null);
+  const { roleLevel } = useAppContext();
+  const canWrite = roleLevel >= 50;
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const filteredItems = applyFilters(items, filters, { searchFields: ["finding", "rootCause", "responsiblePerson"], statusField: "status", dateField: "dueDate" });
+  const { sortedData, sortState, handleSort } = useSortedData(filteredItems);
+
+  const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
+    endpoint: "/governance/capa",
+    queryKeys: [["gov-capa"], ["gov-stats"]],
+    onSuccess: () => refetch(),
+  });
+
+  const editFields = [
+    { key: "finding", label: "الملاحظة" },
+    { key: "responsiblePerson", label: "المسؤول" },
+    { key: "dueDate", label: "تاريخ الاستحقاق", type: "date" as const },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }] },
+  ];
+
+  const [newForm, setNewForm] = useState({ finding: "", rootCause: "", correctiveAction: "", preventiveAction: "", responsiblePerson: "", dueDate: "", status: "open" });
+  const [showNew, setShowNew] = useState(false);
+  const handleCreate = async () => {
+    if (!newForm.finding) return;
+    try {
+      await import("@/lib/api").then(({ apiFetch }) => apiFetch("/governance/capa", {
+        method: "POST",
+        body: JSON.stringify(newForm),
+      }));
+      toast({ title: "تم إنشاء CAPA" });
+      setShowNew(false);
+      setNewForm({ finding: "", rootCause: "", correctiveAction: "", preventiveAction: "", responsiblePerson: "", dueDate: "", status: "open" });
+      qc.invalidateQueries({ queryKey: ["gov-capa"] });
+    } catch { toast({ variant: "destructive", title: "خطأ في الحفظ" }); }
+  };
+
+  const previewFields: PreviewField[] = [
+    { label: "الملاحظة", key: "finding" },
+    { label: "السبب الجذري", key: "rootCause" },
+    { label: "الإجراء التصحيحي", key: "correctiveAction" },
+    { label: "الإجراء الوقائي", key: "preventiveAction" },
+    { label: "المسؤول", key: "responsiblePerson" },
+    { label: "تاريخ الاستحقاق", key: "dueDate", type: "date" },
+    { label: "الحالة", key: "status", type: "status" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        <div className="flex-1">
+          <AdvancedFilters config={{ searchPlaceholder: "بحث بـ CAPA...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
+        </div>
+        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />CAPA جديد</Button>}
+      </div>
+      {showNew && (
+        <Card className="border-dashed">
+          <CardContent className="p-4 grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs text-gray-500 mb-1 block">الملاحظة *</label>
+              <input className="w-full border rounded px-2 py-1 text-sm" value={newForm.finding} onChange={e => setNewForm(p => ({ ...p, finding: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">المسؤول</label>
+              <input className="w-full border rounded px-2 py-1 text-sm" value={newForm.responsiblePerson} onChange={e => setNewForm(p => ({ ...p, responsiblePerson: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">تاريخ الاستحقاق</label>
+              <input type="date" className="w-full border rounded px-2 py-1 text-sm" value={newForm.dueDate} onChange={e => setNewForm(p => ({ ...p, dueDate: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">السبب الجذري</label>
+              <textarea className="w-full border rounded px-2 py-1 text-sm" rows={2} value={newForm.rootCause} onChange={e => setNewForm(p => ({ ...p, rootCause: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">الإجراء التصحيحي</label>
+              <textarea className="w-full border rounded px-2 py-1 text-sm" rows={2} value={newForm.correctiveAction} onChange={e => setNewForm(p => ({ ...p, correctiveAction: e.target.value }))} />
+            </div>
+            <div className="col-span-2 flex gap-2">
+              <Button size="sm" onClick={handleCreate}>حفظ</Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card>
+        <CardHeader><CardTitle>إجراءات التصحيح والوقاية (CAPA)</CardTitle></CardHeader>
+        <CardContent>
+          <Table><TableHeader><TableRow>
+            <SortableTableHead column="finding" label="الملاحظة" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="responsiblePerson" label="المسؤول" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="dueDate" label="الاستحقاق" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
+            <TableHead>إجراءات</TableHead>
+          </TableRow></TableHeader>
+          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredItems} colCount={5} emptyMessage="لا توجد CAPA" emptyIcon={<CheckCircle2 className="h-6 w-6 text-slate-400" />}>
+            {(sortedData || []).map((item: any) => (
+              <Fragment key={item.id}>
+                <TableRow className={cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}>
+                  <TableCell className="font-medium max-w-[200px] truncate">{item.finding}</TableCell>
+                  <TableCell>{item.responsiblePerson || "-"}</TableCell>
+                  <TableCell>{item.dueDate ? formatDateAr(item.dueDate) : "-"}</TableCell>
+                  <TableCell><StatusBadge status={item.status} /></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => setPreviewItem(item)}><Eye className="h-4 w-4" /></Button>
+                      <RowActions onEdit={() => startEdit(item.id, { finding: item.finding, responsiblePerson: item.responsiblePerson || "", dueDate: item.dueDate || "", status: item.status || "open" })} onDelete={() => startDelete(item.id)} />
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {editingId === item.id && <TableRow><TableCell colSpan={5} className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></TableCell></TableRow>}
+                {deletingId === item.id && <TableRow><TableCell colSpan={5} className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.finding} entityType="capa" entityId={item.id} /></TableCell></TableRow>}
+              </Fragment>
+            ))}
+          </DataTableWrapper></Table>
+        </CardContent>
+      </Card>
+      <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="تفاصيل CAPA" data={previewItem} fields={previewFields} />
+    </div>
+  );
+}
+
 export default function GovernancePage() {
   const { data: stats } = useApiQuery<any>(["gov-stats"], "/governance/stats");
 
@@ -533,16 +856,25 @@ export default function GovernancePage() {
       </div>
       <StatsCards stats={stats} />
       <Tabs defaultValue="policies" dir="rtl">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="policies">السياسات</TabsTrigger>
-          <TabsTrigger value="risks">المخاطر</TabsTrigger>
-          <TabsTrigger value="audits">التدقيق</TabsTrigger>
-          <TabsTrigger value="compliance">الامتثال</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="policies"><FileCheck className="h-4 w-4 me-1" />السياسات</TabsTrigger>
+          <TabsTrigger value="risks"><AlertTriangle className="h-4 w-4 me-1" />المخاطر</TabsTrigger>
+          <TabsTrigger value="audits"><ClipboardCheck className="h-4 w-4 me-1" />التدقيق</TabsTrigger>
+          <TabsTrigger value="compliance"><Shield className="h-4 w-4 me-1" />الامتثال</TabsTrigger>
+          <TabsTrigger value="actions"><Activity className="h-4 w-4 me-1" />الإجراءات</TabsTrigger>
+          <TabsTrigger value="capa"><CheckCircle2 className="h-4 w-4 me-1" />CAPA</TabsTrigger>
         </TabsList>
         <TabsContent value="policies"><PoliciesTab /></TabsContent>
         <TabsContent value="risks"><RisksTab /></TabsContent>
         <TabsContent value="audits"><AuditsTab /></TabsContent>
-        <TabsContent value="compliance"><ComplianceTab /></TabsContent>
+        <TabsContent value="compliance">
+          <div className="space-y-6">
+            <ComplianceDashboardTab />
+            <ComplianceTab />
+          </div>
+        </TabsContent>
+        <TabsContent value="actions"><ComplianceActionsTab /></TabsContent>
+        <TabsContent value="capa"><CAPATab /></TabsContent>
       </Tabs>
     </div>
   );
