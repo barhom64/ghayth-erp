@@ -70,21 +70,25 @@ router.get("/overview", async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [emps] = await rawQuery(`SELECT COUNT(*) as count FROM employee_assignments WHERE "companyId" = $1`, [cid]);
-    const [clients] = await rawQuery(`SELECT COUNT(*) as count FROM clients WHERE "companyId" = $1`, [cid]);
-    const [invoices] = await rawQuery(`SELECT COUNT(*) as count FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]);
-    const [projects] = await rawQuery(`SELECT COUNT(*) as count FROM projects WHERE "companyId" = $1`, [cid]);
-    const [vehicles] = await rawQuery(`SELECT COUNT(*) as count FROM fleet_vehicles WHERE "companyId" = $1`, [cid]);
-    const [tickets] = await rawQuery(`SELECT COUNT(*) as count FROM support_tickets WHERE "companyId" = $1 AND status='open'`, [cid]);
-    const [revenue] = await rawQuery(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "paidAmount" > 0`, [cid]);
+    const [row] = await rawQuery<any>(
+      `SELECT
+         (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1) AS employees,
+         (SELECT COUNT(*) FROM clients WHERE "companyId" = $1) AS clients,
+         (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS invoices,
+         (SELECT COUNT(*) FROM projects WHERE "companyId" = $1) AS projects,
+         (SELECT COUNT(*) FROM fleet_vehicles WHERE "companyId" = $1) AS vehicles,
+         (SELECT COUNT(*) FROM support_tickets WHERE "companyId" = $1 AND status = 'open') AS "openTickets",
+         (SELECT COALESCE(SUM("paidAmount"), 0) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "paidAmount" > 0) AS "totalRevenue"`,
+      [cid]
+    );
     res.json({
-      employees: Number(emps.count),
-      clients: Number(clients.count),
-      invoices: Number(invoices.count),
-      projects: Number(projects.count),
-      vehicles: Number(vehicles.count),
-      openTickets: Number(tickets.count),
-      totalRevenue: Number(revenue.total),
+      employees: Number(row.employees),
+      clients: Number(row.clients),
+      invoices: Number(row.invoices),
+      projects: Number(row.projects),
+      vehicles: Number(row.vehicles),
+      openTickets: Number(row.openTickets),
+      totalRevenue: Number(row.totalRevenue),
     });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

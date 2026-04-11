@@ -89,6 +89,14 @@ The project is structured as a pnpm workspace monorepo.
 -   **Government Integration Infrastructure**: Infrastructure for Saudi government system integration (Muqeem, TAM, Absher Business) with dedicated database fields, API routes, and cron jobs for expiry alerts.
 -   **Cron Scheduler**: 42 action-taking jobs for alerts, escalations, reporting, and automation.
 -   **Migration 032**: Adds `deletedAt` soft-delete columns to 22 tables, `subtype`/`accountSubtype`/`nature` to `chart_of_accounts`.
+-   **Technical Debt Cleanup (Task #112)**:
+    -   **EventBus DLQ**: `eventBus.ts` extended with Dead Letter Queue (`pushToDLQ`, `safeEmitEvent`, `flushDLQ`) — failed events no longer silently swallowed.
+    -   **Pagination Helper**: `paginationHelper.ts` with `parsePagination()` enforcing max 100 records per page.
+    -   **Finance Sub-Modules**: `finance-collection.ts` (6-stage collection pipeline), `finance-budget.ts` (budget CRUD + 4-level validation + fiscal period close), `finance-accounts.ts` (CoA, journal, ledger, summary), `finance-vendors.ts` (vendors, stats, receivables, commitments) — all mounted before monolithic `financeRouter` fallback.
+    -   **HR Sub-Module**: `hr-attendance.ts` (17-step check-in logic with GPS, overtime, late penalty tiers, early-departure detection) — mounted before monolithic `hrRouter` fallback.
+    -   **Drizzle ORM Schema**: `lib/db/src/schema/index.ts` fully populated with 22 tables, correct column types, FK references, and indexes.
+    -   **BI N+1 Fix**: `/bi/overview` now executes a single correlated-subquery SQL instead of 7 sequential `rawQuery` calls.
+    -   **DB Indexes Migration**: `lib/db/migrations/add_performance_indexes.sql` with 50+ `CREATE INDEX CONCURRENTLY IF NOT EXISTS` statements covering all high-traffic tables.
 -   **Client 360°**: Enhanced client view with comprehensive data.
 -   **Notification Engine**: Enterprise-grade multi-channel notification system with DB-driven routing rules, per-user preferences, editable templates, fallback/escalation chains, outbound webhooks, and unified delivery tracking.
 -   **System Monitoring**: Admin dashboard for health and security metrics.

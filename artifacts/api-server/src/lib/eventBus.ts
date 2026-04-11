@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import { rawExecute } from "./rawdb.js";
 
 export interface EventPayload {
   companyId?: number;
@@ -73,3 +74,69 @@ class EventBus extends EventEmitter {
 
 export const eventBus = new EventBus();
 eventBus.setMaxListeners(200);
+
+export interface DLQEntry {
+  type: "event" | "notification" | "audit" | "workflow";
+  payload: unknown;
+  error: string;
+  companyId?: number;
+  retryCount: number;
+  createdAt: Date;
+}
+
+const dlqBuffer: DLQEntry[] = [];
+let flushTimer: NodeJS.Timeout | null = null;
+
+function scheduleDLQFlush(): void {
+  if (flushTimer) return;
+  flushTimer = setTimeout(async () => {
+    flushTimer = null;
+    await flushDLQ();
+  }, 5000);
+}
+
+async function flushDLQ(): Promise<void> {
+  if (dlqBuffer.length === 0) return;
+  const batch = dlqBuffer.splice(0, dlqBuffer.length);
+  for (const entry of batch) {
+    try {
+      await rawExecute(
+        `INSERT INTO event_dlq (type, payload, error, "companyId", "retryCount", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT DO NOTHING`,
+        [
+          entry.type,
+          JSON.stringify(entry.payload),
+          entry.error,
+          entry.companyId ?? null,
+          entry.retryCount,
+          entry.createdAt,
+        ]
+      );
+    } catch (dbErr) {
+      console.error("[DLQ] Failed to persist DLQ entry:", dbErr);
+    }
+  }
+}
+
+export function pushToDLQ(
+  type: DLQEntry["type"],
+  payload: unknown,
+  error: unknown,
+  companyId?: number
+): void {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  dlqBuffer.push({ type, payload, error: errMsg, companyId, retryCount: 0, createdAt: new Date() });
+  scheduleDLQFlush();
+}
+
+export function safeEmitEvent(payload: unknown & { companyId?: number }): void {
+  const emitFn = (payload as any)?.action
+    ? () => eventBus.emit((payload as any).action as EventName, payload as EventPayload)
+    : () => {};
+  try {
+    emitFn();
+  } catch (err) {
+    pushToDLQ("event", payload, err, (payload as any)?.companyId);
+  }
+}
