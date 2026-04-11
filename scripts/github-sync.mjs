@@ -8,7 +8,15 @@ const BASE = "/home/runner/workspace";
 const CONCURRENCY = 5;
 const DELAY_MS = 600;
 
-const SKIP_DIRS = new Set(["node_modules", ".git"]);
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  ".cache",
+  ".config",
+  ".local",
+  ".agents",
+  ".upm",
+]);
 
 function walkDir(dir, basePath) {
   let results = [];
@@ -61,7 +69,7 @@ async function main() {
   console.log("[sync] Starting full GitHub sync...");
   const connectors = new ReplitConnectors();
   const files = walkDir(BASE, BASE);
-  console.log(`[sync] ${files.length} files (all project files)`);
+  console.log(`[sync] ${files.length} files to sync`);
 
   const refData = await ghApi(connectors, `/repos/${OWNER}/${REPO}/git/ref/heads/main`);
   const latestSha = refData.object?.sha;
