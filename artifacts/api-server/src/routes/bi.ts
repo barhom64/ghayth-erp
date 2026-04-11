@@ -657,4 +657,627 @@ router.get("/admin-reports/monthly", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Monthly report"); }
 });
 
+
+router.get("/ceo-dashboard", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0];
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0];
+
+    const [financial] = await rawQuery<any>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN DATE("createdAt") >= $2::date THEN "paidAmount" ELSE 0 END), 0) AS "revenueThisMonth",
+         COALESCE(SUM(CASE WHEN DATE("createdAt") >= $3::date AND DATE("createdAt") <= $4::date THEN "paidAmount" ELSE 0 END), 0) AS "revenueLastMonth",
+         COALESCE(SUM(CASE WHEN DATE("createdAt") >= $2::date THEN total ELSE 0 END), 0) AS "invoicedThisMonth",
+         COUNT(*) FILTER (WHERE status IN ('sent','partial','overdue') AND "dueDate" < CURRENT_DATE) AS "overdueInvoices",
+         COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('sent','partial','overdue') AND "dueDate" < CURRENT_DATE), 0) AS "overdueAmount"
+       FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+      [cid, thisMonthStart, lastMonthStart, lastMonthEnd]
+    ).catch(() => [{}]);
+
+    const [expenses] = await rawQuery<any>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN DATE("createdAt") >= $2::date THEN amount ELSE 0 END), 0) AS "expensesThisMonth",
+         COALESCE(SUM(CASE WHEN DATE("createdAt") >= $3::date AND DATE("createdAt") <= $4::date THEN amount ELSE 0 END), 0) AS "expensesLastMonth"
+       FROM vouchers WHERE "companyId" = $1 AND type = 'payment'`,
+      [cid, thisMonthStart, lastMonthStart, lastMonthEnd]
+    ).catch(() => [{}]);
+
+    const [hr] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'active') AS "totalEmployees",
+         COUNT(*) FILTER (WHERE status = 'pending') AS "pendingLeaveRequests"
+       FROM employee_assignments WHERE "companyId" = $1`,
+      [cid]
+    ).catch(() => [{}]);
+
+    const [attendance] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'present') AS "presentToday",
+         COUNT(*) AS "totalToday"
+       FROM attendance WHERE "companyId" = $1 AND date = CURRENT_DATE`,
+      [cid]
+    ).catch(() => [{}]);
+
+    const [pendingLeave] = await rawQuery<any>(
+      `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending'`,
+      [cid]
+    ).catch(() => [{ cnt: 0 }]);
+
+    const [ops] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS "overdueProjects",
+         COUNT(*) AS "totalProjects"
+       FROM projects WHERE "companyId" = $1`,
+      [cid]
+    ).catch(() => [{}]);
+
+    const [tickets] = await rawQuery<any>(
+      `SELECT COUNT(*) FILTER (WHERE status = 'open') AS "openTickets" FROM support_tickets WHERE "companyId" = $1`,
+      [cid]
+    ).catch(() => [{}]);
+
+    const [maintenance] = await rawQuery<any>(
+      `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1`,
+      [cid]
+    ).catch(() => [{}]);
+
+    const [contracts] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringContracts",
+         COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 90) AS "expiringContracts90"
+       FROM legal_contracts WHERE "companyId" = $1`,
+      [cid]
+    ).catch(() => [{}]);
+
+    const [docs] = await rawQuery<any>(
+      `SELECT COUNT(*) AS "expiringDocs" FROM employee_documents
+       WHERE "companyId" = $1 AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
+      [cid]
+    ).catch(() => [{}]);
+
+    const revenueThisMonth = Number(financial?.revenueThisMonth ?? 0);
+    const revenueLastMonth = Number(financial?.revenueLastMonth ?? 0);
+    const expensesThisMonth = Number(expenses?.expensesThisMonth ?? 0);
+    const expensesLastMonth = Number(expenses?.expensesLastMonth ?? 0);
+    const netProfitThisMonth = revenueThisMonth - expensesThisMonth;
+    const netProfitLastMonth = revenueLastMonth - expensesLastMonth;
+
+    res.json({
+      financial: {
+        revenueThisMonth,
+        revenueLastMonth,
+        revenueTrend: revenueLastMonth > 0 ? Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100) : 0,
+        expensesThisMonth,
+        expensesLastMonth,
+        expensesTrend: expensesLastMonth > 0 ? Math.round(((expensesThisMonth - expensesLastMonth) / expensesLastMonth) * 100) : 0,
+        netProfitThisMonth,
+        netProfitLastMonth,
+        netProfitTrend: netProfitLastMonth !== 0 ? Math.round(((netProfitThisMonth - netProfitLastMonth) / Math.abs(netProfitLastMonth)) * 100) : 0,
+        overdueInvoices: Number(financial?.overdueInvoices ?? 0),
+        overdueAmount: Number(financial?.overdueAmount ?? 0),
+      },
+      hr: {
+        totalEmployees: Number(hr?.totalEmployees ?? 0),
+        presentToday: Number(attendance?.presentToday ?? 0),
+        totalToday: Number(attendance?.totalToday ?? 0),
+        attendanceRate: Number(attendance?.totalToday ?? 0) > 0
+          ? Math.round((Number(attendance?.presentToday ?? 0) / Number(attendance?.totalToday ?? 1)) * 100) : 0,
+        pendingLeaveRequests: Number(pendingLeave?.cnt ?? 0),
+      },
+      operations: {
+        overdueProjects: Number(ops?.overdueProjects ?? 0),
+        totalProjects: Number(ops?.totalProjects ?? 0),
+        openTickets: Number(tickets?.openTickets ?? 0),
+        pendingMaintenance: Number(maintenance?.pendingMaintenance ?? 0),
+      },
+      risks: {
+        expiringContracts30: Number(contracts?.expiringContracts ?? 0),
+        expiringContracts90: Number(contracts?.expiringContracts90 ?? 0),
+        expiringDocs: Number(docs?.expiringDocs ?? 0),
+        overdueInvoices: Number(financial?.overdueInvoices ?? 0),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "CEO dashboard"); }
+});
+
+router.get("/reports/branch-performance", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const { from, to } = req.query as any;
+    const dateFrom = from || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+    const dateTo = to || new Date().toISOString().split("T")[0];
+
+    const branches = await rawQuery<any>(
+      `SELECT b.id, b.name FROM branches b WHERE b."companyId" = $1 ORDER BY b.name`,
+      [cid]
+    );
+
+    const result = await Promise.all(branches.map(async (branch: any) => {
+      const [revenue] = await rawQuery<any>(
+        `SELECT COALESCE(SUM("paidAmount"), 0) AS revenue, COALESCE(SUM(total), 0) AS invoiced,
+                COUNT(*) AS invoiceCount
+         FROM invoices WHERE "companyId" = $1 AND "branchId" = $2 AND "deletedAt" IS NULL
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
+        [cid, branch.id, dateFrom, dateTo]
+      ).catch(() => [{}]);
+
+      const [expenses] = await rawQuery<any>(
+        `SELECT COALESCE(SUM(amount), 0) AS expenses FROM vouchers
+         WHERE "companyId" = $1 AND "branchId" = $2 AND type = 'payment'
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
+        [cid, branch.id, dateFrom, dateTo]
+      ).catch(() => [{}]);
+
+      const [employees] = await rawQuery<any>(
+        `SELECT COUNT(*) AS total FROM employee_assignments
+         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'active'`,
+        [cid, branch.id]
+      ).catch(() => [{}]);
+
+      const [attRow] = await rawQuery<any>(
+        `SELECT
+           COUNT(*) FILTER (WHERE status = 'present') AS present,
+           COUNT(*) AS total
+         FROM attendance
+         WHERE "companyId" = $1 AND "branchId" = $2
+           AND date BETWEEN $3::date AND $4::date`,
+        [cid, branch.id, dateFrom, dateTo]
+      ).catch(() => [{}]);
+
+      const [ticketsRow] = await rawQuery<any>(
+        `SELECT COUNT(*) AS cnt FROM support_tickets
+         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'open'`,
+        [cid, branch.id]
+      ).catch(() => [{}]);
+
+      const [satisfactionRow] = await rawQuery<any>(
+        `SELECT COALESCE(AVG(rating), 0) AS avg FROM support_tickets
+         WHERE "companyId" = $1 AND "branchId" = $2 AND rating IS NOT NULL
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
+        [cid, branch.id, dateFrom, dateTo]
+      ).catch(() => [{}]);
+
+      const rev = Number(revenue?.revenue ?? 0);
+      const exp = Number(expenses?.expenses ?? 0);
+      const attTotal = Number(attRow?.total ?? 0);
+      const attPresent = Number(attRow?.present ?? 0);
+
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        revenue: rev,
+        expenses: exp,
+        netProfit: rev - exp,
+        invoiceCount: Number(revenue?.invoiceCount ?? 0),
+        employees: Number(employees?.total ?? 0),
+        attendanceRate: attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 0,
+        openTickets: Number(ticketsRow?.cnt ?? 0),
+        clientSatisfaction: Math.round(Number(satisfactionRow?.avg ?? 0) * 10) / 10,
+      };
+    }));
+
+    result.sort((a: any, b: any) => b.revenue - a.revenue);
+    result.forEach((r: any, i: number) => { r.rank = i + 1; });
+
+    res.json({ data: result, period: { from: dateFrom, to: dateTo } });
+  } catch (err) { handleRouteError(err, res, "Branch performance report"); }
+});
+
+router.get("/reports/vendor-performance", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const { from, to } = req.query as any;
+    const dateFrom = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0];
+    const dateTo = to || new Date().toISOString().split("T")[0];
+
+    const rows = await rawQuery<any>(
+      `SELECT
+         v.id AS "vendorId",
+         v.name AS "vendorName",
+         COUNT(po.id) AS "totalOrders",
+         COALESCE(SUM(po."totalAmount"), 0) AS "totalSpend",
+         ROUND(AVG(po."totalAmount"), 0) AS "avgOrderValue",
+         COUNT(po.id) FILTER (WHERE po."deliveredAt" IS NOT NULL AND po."expectedDelivery" IS NOT NULL
+           AND po."deliveredAt"::date <= po."expectedDelivery"::date) AS "onTimeDeliveries",
+         COUNT(po.id) FILTER (WHERE po."deliveredAt" IS NOT NULL) AS "deliveredOrders",
+         COUNT(po.id) FILTER (WHERE po.status IN ('returned','rejected')) AS "returnedOrders"
+       FROM vendors v
+       LEFT JOIN purchase_orders po ON po."vendorId" = v.id AND po."companyId" = $1
+         AND DATE(po."createdAt") BETWEEN $2::date AND $3::date
+       WHERE v."companyId" = $1
+       GROUP BY v.id, v.name
+       HAVING COUNT(po.id) > 0
+       ORDER BY "totalSpend" DESC`,
+      [cid, dateFrom, dateTo]
+    ).catch(() => []);
+
+    const data = rows.map((r: any) => {
+      const total = Number(r.totalOrders);
+      const delivered = Number(r.deliveredOrders);
+      const onTime = Number(r.onTimeDeliveries);
+      const returned = Number(r.returnedOrders);
+      return {
+        vendorId: r.vendorId,
+        vendorName: r.vendorName,
+        totalOrders: total,
+        totalSpend: Number(r.totalSpend),
+        avgOrderValue: Number(r.avgOrderValue),
+        onTimeDeliveryRate: delivered > 0 ? Math.round((onTime / delivered) * 100) : 0,
+        returnRate: total > 0 ? Math.round((returned / total) * 100) : 0,
+        qualityScore: total > 0 ? Math.round(100 - (returned / total) * 100) : 100,
+      };
+    });
+
+    res.json({ data, period: { from: dateFrom, to: dateTo } });
+  } catch (err) { handleRouteError(err, res, "Vendor performance report"); }
+});
+
+router.get("/reports/fleet-tco", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const rows = await rawQuery<any>(
+      `SELECT
+         fv.id AS "vehicleId",
+         fv."plateNumber",
+         fv.make,
+         fv.model,
+         fv.year,
+         fv.status,
+         COALESCE(fv."purchasePrice", 0) AS "purchasePrice",
+         COALESCE(fv."monthlyLeaseCost", 0) AS "monthlyLeaseCost",
+         COALESCE(fm_total.total, 0) AS "maintenanceCost",
+         COALESCE(fuel_total.total, 0) AS "fuelCost",
+         COALESCE(ins_total.total, 0) AS "insuranceCost",
+         fv."odometer"
+       FROM fleet_vehicles fv
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(cost), 0) AS total FROM fleet_maintenance
+         WHERE "vehicleId" = fv.id AND "companyId" = $1
+       ) fm_total ON true
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(amount), 0) AS total FROM fleet_fuel_logs
+         WHERE "vehicleId" = fv.id AND "companyId" = $1
+       ) fuel_total ON true
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM("premiumAmount"), 0) AS total FROM fleet_insurance
+         WHERE "vehicleId" = fv.id AND "companyId" = $1
+       ) ins_total ON true
+       WHERE fv."companyId" = $1
+       ORDER BY fv."plateNumber"`,
+      [cid]
+    ).catch(() => []);
+
+    const data = rows.map((r: any) => {
+      const purchasePrice = Number(r.purchasePrice);
+      const maintenanceCost = Number(r.maintenanceCost);
+      const fuelCost = Number(r.fuelCost);
+      const insuranceCost = Number(r.insuranceCost);
+      const yearsOld = r.year ? new Date().getFullYear() - Number(r.year) : 0;
+      const depreciation = purchasePrice > 0 ? Math.round(purchasePrice * 0.2 * Math.min(yearsOld, 5)) : 0;
+      const tco = purchasePrice + maintenanceCost + fuelCost + insuranceCost + depreciation;
+      const odometer = Number(r.odometer ?? 0);
+      return {
+        vehicleId: r.vehicleId,
+        plateNumber: r.plateNumber,
+        make: r.make,
+        model: r.model,
+        year: r.year,
+        status: r.status,
+        purchasePrice,
+        maintenanceCost,
+        fuelCost,
+        insuranceCost,
+        depreciation,
+        tco,
+        odometer,
+        costPerKm: odometer > 0 ? Math.round((tco / odometer) * 100) / 100 : 0,
+      };
+    });
+
+    res.json({ data });
+  } catch (err) { handleRouteError(err, res, "Fleet TCO report"); }
+});
+
+router.get("/reports/department-leave-balance", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const year = new Date().getFullYear();
+
+    const rows = await rawQuery<any>(
+      `SELECT
+         COALESCE(d.name, 'بدون قسم') AS department,
+         d.id AS "departmentId",
+         COUNT(DISTINCT ea.id) AS "totalEmployees",
+         COUNT(DISTINCT ea.id) FILTER (
+           WHERE EXISTS (
+             SELECT 1 FROM hr_leave_requests lr
+             WHERE lr."employeeId" = ea."employeeId"
+               AND lr.status = 'approved'
+               AND CURRENT_DATE BETWEEN lr."startDate" AND lr."endDate"
+           )
+         ) AS "onLeaveNow",
+         ROUND(AVG(COALESCE(lb.balance, lb.entitled, 0)), 1) AS "avgRemainingBalance",
+         SUM(COALESCE(lb.used, 0)) AS "totalUsedDays",
+         SUM(COALESCE(lb.balance, lb.entitled, 0)) AS "totalRemainingDays"
+       FROM employee_assignments ea
+       LEFT JOIN departments d ON d.id = ea."departmentId"
+       LEFT JOIN hr_leave_balances lb ON lb."employeeId" = ea."employeeId"
+         AND lb."companyId" = $1 AND lb.year = $2
+       WHERE ea."companyId" = $1 AND ea.status = 'active'
+       GROUP BY d.id, d.name
+       ORDER BY department`,
+      [cid, year]
+    ).catch(() => []);
+
+    const data = rows.map((r: any) => {
+      const total = Number(r.totalEmployees);
+      const onLeave = Number(r.onLeaveNow);
+      const onLeavePct = total > 0 ? Math.round((onLeave / total) * 100) : 0;
+      return {
+        department: r.department,
+        departmentId: r.departmentId,
+        totalEmployees: total,
+        onLeaveNow: onLeave,
+        onLeavePct,
+        avgRemainingBalance: Number(r.avgRemainingBalance ?? 0),
+        totalUsedDays: Number(r.totalUsedDays ?? 0),
+        totalRemainingDays: Number(r.totalRemainingDays ?? 0),
+        warning: onLeavePct >= 30,
+      };
+    });
+
+    res.json({ data, year });
+  } catch (err) { handleRouteError(err, res, "Department leave balance"); }
+});
+
+router.get("/reports/property-occupancy", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const rows = await rawQuery<any>(
+      `SELECT
+         pb.id AS "buildingId",
+         pb.name AS "buildingName",
+         pb.address,
+         COUNT(pu.id) AS "totalUnits",
+         COUNT(pu.id) FILTER (WHERE pu.status = 'occupied') AS "occupiedUnits",
+         COUNT(pu.id) FILTER (WHERE pu.status = 'vacant') AS "vacantUnits",
+         ROUND(AVG(rc."monthlyRent") FILTER (WHERE rc.status = 'active'), 0) AS "avgMonthlyRent",
+         COALESCE(SUM(rc."monthlyRent") FILTER (WHERE rc.status = 'active'), 0) AS "totalMonthlyRevenue"
+       FROM property_buildings pb
+       LEFT JOIN property_units pu ON pu."buildingId" = pb.id
+       LEFT JOIN rental_contracts rc ON rc."unitId" = pu.id AND rc.status = 'active'
+       WHERE pb."companyId" = $1
+       GROUP BY pb.id, pb.name, pb.address
+       ORDER BY pb.name`,
+      [cid]
+    ).catch(() => []);
+
+    const data = rows.map((r: any) => {
+      const total = Number(r.totalUnits);
+      const occupied = Number(r.occupiedUnits);
+      const vacant = Number(r.vacantUnits);
+      return {
+        buildingId: r.buildingId,
+        buildingName: r.buildingName,
+        address: r.address,
+        totalUnits: total,
+        occupiedUnits: occupied,
+        vacantUnits: vacant,
+        occupancyRate: total > 0 ? Math.round((occupied / total) * 100) : 0,
+        avgMonthlyRent: Number(r.avgMonthlyRent ?? 0),
+        totalMonthlyRevenue: Number(r.totalMonthlyRevenue ?? 0),
+        annualRevenue: Number(r.totalMonthlyRevenue ?? 0) * 12,
+      };
+    });
+
+    res.json({ data });
+  } catch (err) { handleRouteError(err, res, "Property occupancy report"); }
+});
+
+router.get("/reports/training-roi", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const { from, to } = req.query as any;
+    const dateFrom = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0];
+    const dateTo = to || new Date().toISOString().split("T")[0];
+
+    const [summary] = await rawQuery<any>(
+      `SELECT
+         COUNT(DISTINCT tp."employeeId") AS "trainedEmployees",
+         COUNT(*) AS "totalSessions",
+         COALESCE(SUM(tp.hours), 0) AS "totalHours",
+         COALESCE(SUM(t.cost), 0) AS "totalCost",
+         ROUND(AVG(tp.score), 1) AS "avgScore"
+       FROM training_participants tp
+       JOIN trainings t ON t.id = tp."trainingId"
+       WHERE t."companyId" = $1
+         AND DATE(t."startDate") BETWEEN $2::date AND $3::date`,
+      [cid, dateFrom, dateTo]
+    ).catch(() => [{}]);
+
+    const byProgram = await rawQuery<any>(
+      `SELECT
+         t.title AS "programName",
+         t.type,
+         COUNT(tp."employeeId") AS participants,
+         COALESCE(SUM(tp.hours), 0) AS "totalHours",
+         COALESCE(t.cost, 0) AS cost,
+         ROUND(AVG(tp.score), 1) AS "avgScore",
+         ROUND(COALESCE(t.cost, 0) / NULLIF(COUNT(tp."employeeId"), 0), 0) AS "costPerParticipant"
+       FROM trainings t
+       LEFT JOIN training_participants tp ON tp."trainingId" = t.id
+       WHERE t."companyId" = $1 AND DATE(t."startDate") BETWEEN $2::date AND $3::date
+       GROUP BY t.id, t.title, t.type, t.cost
+       ORDER BY cost DESC
+       LIMIT 20`,
+      [cid, dateFrom, dateTo]
+    ).catch(() => []);
+
+    res.json({
+      summary: {
+        trainedEmployees: Number(summary?.trainedEmployees ?? 0),
+        totalSessions: Number(summary?.totalSessions ?? 0),
+        totalHours: Number(summary?.totalHours ?? 0),
+        totalCost: Number(summary?.totalCost ?? 0),
+        avgScore: Number(summary?.avgScore ?? 0),
+        costPerEmployee: Number(summary?.trainedEmployees ?? 0) > 0
+          ? Math.round(Number(summary?.totalCost ?? 0) / Number(summary?.trainedEmployees ?? 1)) : 0,
+      },
+      byProgram,
+      period: { from: dateFrom, to: dateTo },
+    });
+  } catch (err) { handleRouteError(err, res, "Training ROI report"); }
+});
+
+router.get("/ai-insights", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const { priority, limit: limitParam } = req.query as any;
+    const pageSize = Math.min(Number(limitParam) || 50, 100);
+
+    const conditions = [`sa."companyId" = $1`, `sa."isDismissed" = false`];
+    const params: any[] = [cid];
+
+    if (priority && ["urgent", "warning", "info"].includes(priority)) {
+      params.push(priority);
+      conditions.push(`sa.severity = $${params.length}`);
+    }
+
+    const alerts = await rawQuery<any>(
+      `SELECT sa.id, sa.type, sa.title, sa.message, sa.severity, sa."createdAt",
+              sa."relatedType", sa."relatedId", sa."isDismissed", sa."isRead",
+              sa."suggestedAction"
+       FROM smart_alerts sa
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY
+         CASE sa.severity WHEN 'critical' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END,
+         sa."createdAt" DESC
+       LIMIT $${params.length + 1}`,
+      [...params, pageSize]
+    ).catch(() => []);
+
+    const proactive = await rawQuery<any>(
+      `SELECT al.id, al."automationType", al."triggerReason", al."actionTaken",
+              al."entityType", al."entityId", al.status, al."createdAt"
+       FROM automation_logs al
+       WHERE al."companyId" = $1
+       ORDER BY al."createdAt" DESC
+       LIMIT 20`,
+      [cid]
+    ).catch(() => []);
+
+    const [counts] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) FILTER (WHERE severity = 'critical' AND "isDismissed" = false) AS critical,
+         COUNT(*) FILTER (WHERE severity = 'warning' AND "isDismissed" = false) AS warning,
+         COUNT(*) FILTER (WHERE severity = 'info' AND "isDismissed" = false) AS info,
+         COUNT(*) FILTER (WHERE "isDismissed" = false) AS total
+       FROM smart_alerts WHERE "companyId" = $1`,
+      [cid]
+    ).catch(() => [{}]);
+
+    res.json({
+      alerts,
+      proactiveActions: proactive,
+      counts: {
+        critical: Number(counts?.critical ?? 0),
+        warning: Number(counts?.warning ?? 0),
+        info: Number(counts?.info ?? 0),
+        total: Number(counts?.total ?? 0),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "AI insights"); }
+});
+
+router.patch("/ai-insights/:id/dismiss", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    await rawExecute(
+      `UPDATE smart_alerts SET "isDismissed" = true WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
+});
+
+router.patch("/ai-insights/:id/read", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    await rawExecute(
+      `UPDATE smart_alerts SET "isRead" = true WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Mark insight read"); }
+});
+
+router.get("/alert-fatigue/settings", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1`,
+      [scope.activeAssignmentId]
+    ).catch(() => []);
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
+});
+
+router.post("/alert-fatigue/mute", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { alertType, muteUntil, reason } = req.body;
+    if (!alertType) { res.status(400).json({ error: "alertType مطلوب" }); return; }
+
+    await rawExecute(
+      `INSERT INTO alert_mute_rules ("companyId", "assignmentId", "alertType", "muteUntil", reason, "createdAt")
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT ("assignmentId", "alertType") DO UPDATE
+         SET "muteUntil" = $4, reason = $5, "updatedAt" = NOW()`,
+      [scope.companyId, scope.activeAssignmentId, alertType, muteUntil || null, reason || null]
+    );
+    res.json({ success: true, message: `تم كتم تنبيهات "${alertType}"` });
+  } catch (err) { handleRouteError(err, res, "Mute alert type"); }
+});
+
+router.delete("/alert-fatigue/mute/:alertType", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { alertType } = req.params;
+    await rawExecute(
+      `DELETE FROM alert_mute_rules WHERE "assignmentId" = $1 AND "alertType" = $2`,
+      [scope.activeAssignmentId, alertType]
+    );
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Unmute alert type"); }
+});
+
+router.get("/alert-fatigue/daily-count", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<any>(
+      `SELECT COUNT(*) AS today_count FROM notifications
+       WHERE "assignmentId" = $1 AND DATE("createdAt") = CURRENT_DATE`,
+      [scope.activeAssignmentId]
+    ).catch(() => [{ today_count: 0 }]);
+    const limit = 50;
+    const count = Number(row?.today_count ?? 0);
+    res.json({ todayCount: count, dailyLimit: limit, isOverLimit: count >= limit });
+  } catch (err) { handleRouteError(err, res, "Alert fatigue daily count"); }
+});
+
 export default router;
