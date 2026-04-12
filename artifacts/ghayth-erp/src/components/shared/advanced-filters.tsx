@@ -187,7 +187,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
 
         {onExportCSV && (
           <Button variant="outline" size="sm" onClick={onExportCSV} className="gap-1 ms-auto">
-            <Download className="h-3.5 w-3.5" />تصدير CSV
+            <Download className="h-3.5 w-3.5" />تصدير جدولي
           </Button>
         )}
       </div>

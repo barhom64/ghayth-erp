@@ -68,7 +68,7 @@ export default function IDPPage() {
         <div className="flex items-center gap-3">
           <Target className="w-6 h-6 text-primary" />
           <div>
-            <h1 className="text-xl font-bold">خطط التطوير الفردي (IDP)</h1>
+            <h1 className="text-xl font-bold">خطط التطوير الفردي</h1>
             <p className="text-sm text-gray-500">تخطيط مسارات التطوير والنمو الوظيفي للموظفين</p>
           </div>
         </div>

@@ -242,7 +242,7 @@ export default function InvoicesCreate() {
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
             <span className="text-green-600">🏛</span>
-            ربط مع هيئة الزكاة والضريبة والجمارك (ZATCA)
+            ربط مع هيئة الزكاة والضريبة والجمارك
           </h3>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <div
@@ -281,7 +281,7 @@ export default function InvoicesCreate() {
             )}
             <div className="md:col-span-3 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-md">
               <span className="text-green-600 text-xs mt-0.5">✓</span>
-              <p className="text-xs text-green-700">سيتم ربط هذه الفاتورة مع منظومة الفوترة الإلكترونية ZATCA وتوليد كود QR متوافق عند الإرسال للهيئة.</p>
+              <p className="text-xs text-green-700">سيتم ربط هذه الفاتورة مع منظومة الفوترة الإلكترونية لهيئة الزكاة والضريبة وتوليد رمز استجابة سريعة متوافق عند الإرسال للهيئة.</p>
             </div>
           </div>
         )}

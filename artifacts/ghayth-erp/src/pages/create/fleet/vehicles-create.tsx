@@ -79,7 +79,7 @@ export default function VehiclesCreate() {
           <div><Label>الموديل</Label><Input className="mt-1" value={form.model} onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} placeholder="كامري، النترا..." /></div>
           <div><Label>سنة الصنع</Label><Input className="mt-1" type="number" value={form.year} onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))} placeholder="2024" /></div>
           <div><Label>اللون</Label><Input className="mt-1" value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))} placeholder="أبيض، أسود..." /></div>
-          <div><Label>رقم الهيكل (VIN)</Label><Input className="mt-1" dir="ltr" value={form.vinNumber} onChange={(e) => setForm((f) => ({ ...f, vinNumber: e.target.value }))} placeholder="رقم الهيكل" /></div>
+          <div><Label>رقم الهيكل</Label><Input className="mt-1" dir="ltr" value={form.vinNumber} onChange={(e) => setForm((f) => ({ ...f, vinNumber: e.target.value }))} placeholder="رقم الهيكل" /></div>
           <div>
             <Label>نوع الوقود</Label>
             <Select value={form.fuelType} onValueChange={(v) => setForm((f) => ({ ...f, fuelType: v }))}>

@@ -22,8 +22,8 @@ export default function FleetReports() {
         <h1 className="text-3xl font-bold tracking-tight">تقارير الأسطول</h1>
         <MultiExportButton
           exports={[
-            { endpoint: "/export/excel/fleet", filename: "fleet-report.xlsx", type: "excel", label: "تصدير Excel" },
-            { endpoint: "/export/pdf/fleet-trips", filename: "fleet-trips.pdf", type: "pdf", label: "تصدير PDF رحلات" },
+            { endpoint: "/export/excel/fleet", filename: "fleet-report.xlsx", type: "excel", label: "تصدير إكسل" },
+            { endpoint: "/export/pdf/fleet-trips", filename: "fleet-trips.pdf", type: "pdf", label: "تصدير ملف طباعي للرحلات" },
           ]}
         />
       </div>

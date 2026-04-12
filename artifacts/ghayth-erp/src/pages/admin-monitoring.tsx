@@ -69,7 +69,7 @@ export default function AdminMonitoring() {
           <CardContent className="p-4 flex items-center gap-3">
             <Server className={cn("w-8 h-8", services.api?.status === "healthy" ? "text-green-600" : "text-red-600")} />
             <div>
-              <p className="text-sm font-semibold">خادم API</p>
+              <p className="text-sm font-semibold">خادم الربط البرمجي</p>
               <p className="text-xs text-gray-500">{services.api?.status === "healthy" ? "يعمل" : "متوقف"}</p>
               <p className="text-xs text-gray-400">{formatUptime(services.api?.uptime || 0)}</p>
             </div>
@@ -114,7 +114,7 @@ export default function AdminMonitoring() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Cpu className="w-4 h-4" />استخدام الذاكرة</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            <div className="flex justify-between text-sm"><span>RSS</span><span>{formatBytes(memUsage.rss)}</span></div>
+            <div className="flex justify-between text-sm"><span>الذاكرة المقيمة</span><span>{formatBytes(memUsage.rss)}</span></div>
             <div className="flex justify-between text-sm"><span>الذاكرة المستخدمة</span><span>{formatBytes(memUsage.heapUsed)}</span></div>
             <div className="flex justify-between text-sm"><span>إجمالي الذاكرة</span><span>{formatBytes(memUsage.heapTotal)}</span></div>
             <div className="flex justify-between text-sm"><span>الذاكرة الخارجية</span><span>{formatBytes(memUsage.external)}</span></div>
@@ -124,7 +124,7 @@ export default function AdminMonitoring() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><HardDrive className="w-4 h-4" />إحصائيات التخزين</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            <div className="flex justify-between text-sm"><span>حجم قاعدة البيانات</span><span className="font-semibold">{services.database?.size || "N/A"}</span></div>
+            <div className="flex justify-between text-sm"><span>حجم قاعدة البيانات</span><span className="font-semibold">{services.database?.size || "غير متوفر"}</span></div>
             <div className="flex justify-between text-sm"><span>عدد الجداول</span><span className="font-semibold">{services.database?.tables || 0}</span></div>
           </CardContent>
         </Card>

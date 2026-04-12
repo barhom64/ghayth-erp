@@ -331,7 +331,7 @@ export default function Evaluation360DetailPage() {
                         { key: "late_days", label: "أيام التأخير", suffix: " يوم" },
                         { key: "task_completion_rate", label: "إنجاز المهام", suffix: "%" },
                         { key: "on_time_rate", label: "الالتزام بالمواعيد", suffix: "%" },
-                        { key: "sla_adherence", label: "الالتزام بـ SLA", suffix: "%" },
+                        { key: "sla_adherence", label: "الالتزام بمستوى الخدمة", suffix: "%" },
                         { key: "client_satisfaction", label: "رضا العملاء", suffix: "/5" },
                         { key: "reopen_rate", label: "معدل إعادة الفتح", suffix: "%" },
                         { key: "support_response_rate", label: "معدل الاستجابة للدعم", suffix: "%" },

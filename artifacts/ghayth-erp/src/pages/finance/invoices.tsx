@@ -98,7 +98,7 @@ export default function InvoicesPage() {
     },
     {
       key: "zatca",
-      header: "ZATCA",
+      header: "هيئة الزكاة",
       render: (inv) => inv.isTaxLinked ? (
         <Badge className={`text-xs gap-1 ${inv.zatcaStatus === "accepted" ? "bg-green-100 text-green-700" : (inv.zatcaStatus === "rejected" || inv.zatcaStatus === "error") ? "bg-red-100 text-red-700" : inv.zatcaStatus === "submitted" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>
           <Zap className="h-3 w-3" />

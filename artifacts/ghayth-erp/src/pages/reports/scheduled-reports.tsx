@@ -18,7 +18,7 @@ const REPORT_TYPES = [
   { value: "income-statement", label: "قائمة الدخل", format: "جدول بيانات", icon: FileSpreadsheet },
   { value: "payroll", label: "كشف الرواتب", format: "جدول بيانات", icon: FileSpreadsheet },
   { value: "attendance", label: "سجل الحضور", format: "جدول بيانات", icon: FileSpreadsheet },
-  { value: "trial-balance-pdf", label: "ميزان المراجعة (PDF)", format: "PDF", icon: FileText },
+  { value: "trial-balance-pdf", label: "ميزان المراجعة (طباعي)", format: "ملف طباعي", icon: FileText },
 ];
 
 const FREQUENCY_LABELS: Record<string, string> = {

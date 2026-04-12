@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -39,7 +38,7 @@ function FunnelTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5 text-blue-600" />قمع المبيعات (CRM Funnel)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5 text-blue-600" />قمع المبيعات (مسار علاقات العملاء)</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="h-32 bg-gray-100 rounded animate-pulse" />
@@ -72,36 +71,31 @@ function FunnelTab() {
       {sourceFunnel.length > 0 && (
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Target className="h-5 w-5 text-purple-600" />تتبع مصادر العملاء</CardTitle></CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>المصدر</TableHead>
-                  <TableHead>إجمالي العملاء</TableHead>
-                  <TableHead>فرص ناجحة</TableHead>
-                  <TableHead>معدل التحويل</TableHead>
-                  <TableHead>إجمالي الإيرادات</TableHead>
-                </TableRow>
-              </TableHeader>
-              <tbody>
-                {sourceFunnel.map((sf: any) => {
-                  const rate = sf.total > 0 ? ((sf.won / sf.total) * 100).toFixed(1) : "0";
-                  return (
-                    <TableRow key={sf.source}>
-                      <TableCell className="font-medium">{SOURCE_LABELS[sf.source] || sf.source}</TableCell>
-                      <TableCell>{sf.total}</TableCell>
-                      <TableCell className="text-green-700">{sf.won}</TableCell>
-                      <TableCell>
-                        <span className={cn("text-sm font-medium", Number(rate) >= 50 ? "text-green-600" : Number(rate) >= 25 ? "text-amber-600" : "text-red-600")}>
-                          {rate}%
-                        </span>
-                      </TableCell>
-                      <TableCell>{formatCurrency(Number(sf.wonValue) || 0)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </tbody>
-            </Table>
+          <CardContent className="p-0">
+            <DataTable<any>
+              noToolbar
+              pageSize={0}
+              rowKey={(sf) => sf.source}
+              data={sourceFunnel}
+              columns={[
+                { key: "source", header: "المصدر", className: "font-medium", render: (sf) => SOURCE_LABELS[sf.source] || sf.source },
+                { key: "total", header: "إجمالي العملاء", render: (sf) => sf.total },
+                { key: "won", header: "فرص ناجحة", className: "text-green-700", render: (sf) => sf.won },
+                {
+                  key: "rate",
+                  header: "معدل التحويل",
+                  render: (sf) => {
+                    const rate = sf.total > 0 ? ((sf.won / sf.total) * 100).toFixed(1) : "0";
+                    return (
+                      <span className={cn("text-sm font-medium", Number(rate) >= 50 ? "text-green-600" : Number(rate) >= 25 ? "text-amber-600" : "text-red-600")}>
+                        {rate}%
+                      </span>
+                    );
+                  },
+                },
+                { key: "wonValue", header: "إجمالي الإيرادات", render: (sf) => formatCurrency(Number(sf.wonValue) || 0) },
+              ]}
+            />
           </CardContent>
         </Card>
       )}
@@ -159,7 +153,7 @@ function CampaignsTab() {
     { key: "spent", header: "المصروف", sortable: true, render: (c) => formatCurrency(Number(c.spent) || 0) },
     {
       key: "roas",
-      header: "ROAS",
+      header: "عائد الإنفاق",
       render: (c) => {
         const spent = Number(c.spent) || 0;
         const revenue = Number(c.revenue) || 0;
@@ -197,7 +191,7 @@ function CampaignsTab() {
           { label: "إجمالي الحملات", value: s.totalCampaigns || 0, icon: Megaphone, color: "text-pink-600 bg-pink-50" },
           { label: "حملات نشطة", value: s.activeCampaigns || 0, icon: Megaphone, color: "text-green-600 bg-green-50" },
           { label: "الميزانية الكلية", value: formatCurrency(s.totalBudget || 0), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
-          { label: `ROAS — ${s.roas ? `${s.roas}×` : "—"}`, value: formatCurrency(s.totalRevenue || 0), icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
+          { label: `عائد الإنفاق — ${s.roas ? `${s.roas}×` : "—"}`, value: formatCurrency(s.totalRevenue || 0), icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
         ].map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
             <CardContent className="p-4 flex items-center gap-3">

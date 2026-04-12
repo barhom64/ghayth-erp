@@ -78,7 +78,7 @@ export const STATUSES: Record<string, string> = {
 };
 
 export const CLASSIFICATIONS: Record<string, string> = {
-  vip: "VIP",
+  vip: "كبار العملاء",
   premium: "مميز",
   regular: "عادي",
   prospect: "محتمل",

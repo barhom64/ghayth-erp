@@ -1,14 +1,10 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield, FileCheck, AlertTriangle, ClipboardCheck, Plus, Eye, GitBranch, CheckCircle2, LayoutDashboard, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,7 +24,7 @@ function StatsCards({ stats }: { stats: any }) {
     { label: "التدقيق النشط", value: stats?.activeAudits || 0, icon: ClipboardCheck, color: "text-purple-600 bg-purple-50" },
     { label: "عدم الامتثال", value: stats?.nonCompliant || 0, icon: Shield, color: "text-amber-600 bg-amber-50" },
     { label: "إجراءات الامتثال", value: stats?.complianceActions || 0, icon: Activity, color: "text-indigo-600 bg-indigo-50" },
-    { label: "CAPA مفتوحة", value: stats?.openCapas || 0, icon: CheckCircle2, color: "text-rose-600 bg-rose-50" },
+    { label: "إجراءات تصحيحية مفتوحة", value: stats?.openCapas || 0, icon: CheckCircle2, color: "text-rose-600 bg-rose-50" },
   ];
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -533,29 +529,29 @@ function ComplianceDashboardTab() {
             <Card>
               <CardHeader><CardTitle>الامتثال حسب الوحدة</CardTitle></CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader><TableRow>
-                    <TableHead>الوحدة</TableHead><TableHead>ممتثل</TableHead><TableHead>غير ممتثل</TableHead><TableHead>جزئي</TableHead><TableHead>معدل الامتثال</TableHead>
-                  </TableRow></TableHeader>
-                  <tbody>
-                    {(dash.byModule || []).map((m: any) => (
-                      <TableRow key={m.module}>
-                        <TableCell className="font-medium">{m.module}</TableCell>
-                        <TableCell className="text-green-700">{m.compliant}</TableCell>
-                        <TableCell className="text-red-700">{m.nonCompliant}</TableCell>
-                        <TableCell className="text-amber-700">{m.partial}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-gray-100 rounded-full">
-                              <div className="h-2 bg-green-500 rounded-full" style={{ width: `${m.rate || 0}%` }} />
-                            </div>
-                            <span className="text-xs text-gray-600 w-8">{m.rate}%</span>
+                <DataTable<any>
+                  columns={[
+                    { key: "module", header: "الوحدة", sortable: true, searchable: true, render: (m) => <span className="font-medium">{m.module}</span> },
+                    { key: "compliant", header: "ممتثل", sortable: true, render: (m) => <span className="text-green-700">{m.compliant}</span> },
+                    { key: "nonCompliant", header: "غير ممتثل", sortable: true, render: (m) => <span className="text-red-700">{m.nonCompliant}</span> },
+                    { key: "partial", header: "جزئي", sortable: true, render: (m) => <span className="text-amber-700">{m.partial}</span> },
+                    {
+                      key: "rate", header: "معدل الامتثال", sortable: true,
+                      render: (m) => (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-gray-100 rounded-full">
+                            <div className="h-2 bg-green-500 rounded-full" style={{ width: `${m.rate || 0}%` }} />
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </tbody>
-                </Table>
+                          <span className="text-xs text-gray-600 w-8">{m.rate}%</span>
+                        </div>
+                      ),
+                    },
+                  ]}
+                  data={dash.byModule || []}
+                  rowKey={(m) => m.module}
+                  noToolbar
+                  pageSize={0}
+                />
               </CardContent>
             </Card>
           )}
@@ -594,7 +590,6 @@ function ComplianceActionsTab() {
   const qc = useQueryClient();
 
   const filteredItems = applyFilters(items, filters, { searchFields: ["title", "regulation", "owner"], statusField: "status", dateField: "dueDate" });
-  const { sortedData, sortState, handleSort } = useSortedData(filteredItems);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/governance/compliance-actions",
@@ -672,35 +667,39 @@ function ComplianceActionsTab() {
       <Card>
         <CardHeader><CardTitle>إجراءات الامتثال</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="title" label="الإجراء" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="regulation" label="اللائحة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="owner" label="المسؤول" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="dueDate" label="تاريخ الاستحقاق" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead>إجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredItems} colCount={6} emptyMessage="لا توجد إجراءات" emptyIcon={<Activity className="h-6 w-6 text-slate-400" />}>
-            {(sortedData || []).map((item: any) => (
-              <Fragment key={item.id}>
-                <TableRow className={cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}>
-                  <TableCell className="font-medium">{item.title}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.regulation || "-"}</TableCell>
-                  <TableCell>{item.owner || "-"}</TableCell>
-                  <TableCell>{item.dueDate ? formatDateAr(item.dueDate) : "-"}</TableCell>
-                  <TableCell><StatusBadge status={item.status} /></TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setPreviewItem(item)}><Eye className="h-4 w-4" /></Button>
-                      <RowActions onEdit={() => startEdit(item.id, { title: item.title, regulation: item.regulation || "", owner: item.owner || "", dueDate: item.dueDate || "", status: item.status || "open" })} onDelete={() => startDelete(item.id)} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === item.id && <TableRow><TableCell colSpan={6} className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></TableCell></TableRow>}
-                {deletingId === item.id && <TableRow><TableCell colSpan={6} className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="compliance-action" entityId={item.id} /></TableCell></TableRow>}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={[
+              { key: "title", header: "الإجراء", sortable: true, searchable: true, render: (item) => <span className="font-medium">{item.title}</span> },
+              { key: "regulation", header: "اللائحة", sortable: true, searchable: true, render: (item) => <span className="text-muted-foreground">{item.regulation || "-"}</span> },
+              { key: "owner", header: "المسؤول", sortable: true, searchable: true, render: (item) => <span>{item.owner || "-"}</span> },
+              { key: "dueDate", header: "تاريخ الاستحقاق", sortable: true, render: (item) => item.dueDate ? formatDateAr(item.dueDate) : "-" },
+              { key: "status", header: "الحالة", sortable: true, render: (item) => <StatusBadge status={item.status} /> },
+              {
+                key: "actions", header: "إجراءات",
+                render: (item) => (
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => setPreviewItem(item)}><Eye className="h-4 w-4" /></Button>
+                    <RowActions onEdit={() => startEdit(item.id, { title: item.title, regulation: item.regulation || "", owner: item.owner || "", dueDate: item.dueDate || "", status: item.status || "open" })} onDelete={() => startDelete(item.id)} />
+                  </div>
+                ),
+              },
+            ]}
+            data={filteredItems}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد إجراءات"
+            emptyIcon={<Activity className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+            rowClassName={(item) => cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}
+            renderRowExtras={(item) => {
+              if (editingId === item.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === item.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="compliance-action" entityId={item.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="تفاصيل الإجراء" data={previewItem} fields={previewFields} />
@@ -719,7 +718,6 @@ function CAPATab() {
   const qc = useQueryClient();
 
   const filteredItems = applyFilters(items, filters, { searchFields: ["finding", "rootCause", "responsiblePerson"], statusField: "status", dateField: "dueDate" });
-  const { sortedData, sortState, handleSort } = useSortedData(filteredItems);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/governance/capa",
@@ -743,7 +741,7 @@ function CAPATab() {
         method: "POST",
         body: JSON.stringify(newForm),
       }));
-      toast({ title: "تم إنشاء CAPA" });
+      toast({ title: "تم إنشاء الإجراء التصحيحي" });
       setShowNew(false);
       setNewForm({ finding: "", rootCause: "", correctiveAction: "", preventiveAction: "", responsiblePerson: "", dueDate: "", status: "open" });
       qc.invalidateQueries({ queryKey: ["gov-capa"] });
@@ -764,9 +762,9 @@ function CAPATab() {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <div className="flex-1">
-          <AdvancedFilters config={{ searchPlaceholder: "بحث بـ CAPA...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
+          <AdvancedFilters config={{ searchPlaceholder: "بحث بالإجراءات التصحيحية...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
         </div>
-        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />CAPA جديد</Button>}
+        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء تصحيحي جديد</Button>}
       </div>
       {showNew && (
         <Card className="border-dashed">
@@ -799,38 +797,43 @@ function CAPATab() {
         </Card>
       )}
       <Card>
-        <CardHeader><CardTitle>إجراءات التصحيح والوقاية (CAPA)</CardTitle></CardHeader>
+        <CardHeader><CardTitle>الإجراءات التصحيحية والوقائية</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="finding" label="الملاحظة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="responsiblePerson" label="المسؤول" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="dueDate" label="الاستحقاق" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead>إجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredItems} colCount={5} emptyMessage="لا توجد CAPA" emptyIcon={<CheckCircle2 className="h-6 w-6 text-slate-400" />}>
-            {(sortedData || []).map((item: any) => (
-              <Fragment key={item.id}>
-                <TableRow className={cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}>
-                  <TableCell className="font-medium max-w-[200px] truncate">{item.finding}</TableCell>
-                  <TableCell>{item.responsiblePerson || "-"}</TableCell>
-                  <TableCell>{item.dueDate ? formatDateAr(item.dueDate) : "-"}</TableCell>
-                  <TableCell><StatusBadge status={item.status} /></TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setPreviewItem(item)}><Eye className="h-4 w-4" /></Button>
-                      <RowActions onEdit={() => startEdit(item.id, { finding: item.finding, responsiblePerson: item.responsiblePerson || "", dueDate: item.dueDate || "", status: item.status || "open" })} onDelete={() => startDelete(item.id)} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === item.id && <TableRow><TableCell colSpan={5} className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></TableCell></TableRow>}
-                {deletingId === item.id && <TableRow><TableCell colSpan={5} className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.finding} entityType="capa" entityId={item.id} /></TableCell></TableRow>}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={[
+              { key: "finding", header: "الملاحظة", sortable: true, searchable: true, render: (item) => <span className="font-medium max-w-[200px] truncate inline-block">{item.finding}</span> },
+              { key: "responsiblePerson", header: "المسؤول", sortable: true, searchable: true, render: (item) => <span>{item.responsiblePerson || "-"}</span> },
+              { key: "dueDate", header: "الاستحقاق", sortable: true, render: (item) => item.dueDate ? formatDateAr(item.dueDate) : "-" },
+              { key: "status", header: "الحالة", sortable: true, render: (item) => <StatusBadge status={item.status} /> },
+              {
+                key: "actions", header: "إجراءات",
+                render: (item) => (
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => setPreviewItem(item)}><Eye className="h-4 w-4" /></Button>
+                    <RowActions onEdit={() => startEdit(item.id, { finding: item.finding, responsiblePerson: item.responsiblePerson || "", dueDate: item.dueDate || "", status: item.status || "open" })} onDelete={() => startDelete(item.id)} />
+                  </div>
+                ),
+              },
+            ]}
+            data={filteredItems}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد إجراءات تصحيحية"
+            emptyIcon={<CheckCircle2 className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+            rowClassName={(item) => cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}
+            renderRowExtras={(item) => {
+              if (editingId === item.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === item.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.finding} entityType="capa" entityId={item.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
-      <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="تفاصيل CAPA" data={previewItem} fields={previewFields} />
+      <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="تفاصيل الإجراء التصحيحي" data={previewItem} fields={previewFields} />
     </div>
   );
 }
@@ -852,7 +855,7 @@ export default function GovernancePage() {
           <TabsTrigger value="audits"><ClipboardCheck className="h-4 w-4 me-1" />التدقيق</TabsTrigger>
           <TabsTrigger value="compliance"><Shield className="h-4 w-4 me-1" />الامتثال</TabsTrigger>
           <TabsTrigger value="actions"><Activity className="h-4 w-4 me-1" />الإجراءات</TabsTrigger>
-          <TabsTrigger value="capa"><CheckCircle2 className="h-4 w-4 me-1" />CAPA</TabsTrigger>
+          <TabsTrigger value="capa"><CheckCircle2 className="h-4 w-4 me-1" />الإجراءات التصحيحية والوقائية</TabsTrigger>
         </TabsList>
         <TabsContent value="policies"><PoliciesTab /></TabsContent>
         <TabsContent value="risks"><RisksTab /></TabsContent>

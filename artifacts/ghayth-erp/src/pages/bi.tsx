@@ -4,11 +4,7 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -65,7 +61,7 @@ function CEODashboardTab() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">لوحة المالك / CEO — صحة المنشأة</h1>
+      <h1 className="text-2xl font-bold">لوحة المالك / الرئيس التنفيذي — صحة المنشأة</h1>
 
       <div className="space-y-2">
         <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2"><DollarSign className="h-5 w-5 text-green-600" />الملخص المالي</h2>
@@ -193,53 +189,46 @@ function CEODashboardTab() {
 }
 
 function BranchPerformanceTab() {
-  const { data, isLoading, isError } = useApiQuery<any>(["bi-branch-perf"], "/bi/reports/branch-performance");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-branch-perf"], "/bi/reports/branch-performance");
   const rows = (data?.data || []) as any[];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "rank", header: "الترتيب", sortable: true, render: (r) => <Badge variant={r.rank === 1 ? "default" : "outline"}>{r.rank}</Badge> },
+    { key: "branchName", header: "الفرع", sortable: true, searchable: true, className: "font-medium", render: (r) => r.branchName },
+    { key: "revenue", header: "الإيرادات", sortable: true, className: "text-emerald-600 font-medium", render: (r) => formatNumber(r.revenue) },
+    { key: "expenses", header: "المصروفات", sortable: true, className: "text-red-600", render: (r) => formatNumber(r.expenses) },
+    { key: "netProfit", header: "صافي الربح", sortable: true, render: (r) => <span className={cn("font-bold", r.netProfit >= 0 ? "text-emerald-700" : "text-red-700")}>{formatNumber(r.netProfit)}</span> },
+    { key: "employees", header: "الموظفون", sortable: true, render: (r) => r.employees },
+    {
+      key: "attendanceRate", header: "نسبة الحضور", sortable: true,
+      render: (r) => (
+        <div className="flex items-center gap-1">
+          <div className="w-16 bg-gray-200 rounded-full h-1.5">
+            <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${r.attendanceRate}%` }} />
+          </div>
+          <span className="text-xs">{r.attendanceRate}%</span>
+        </div>
+      ),
+    },
+    { key: "openTickets", header: "تذاكر مفتوحة", sortable: true, render: (r) => <Badge variant={r.openTickets > 10 ? "destructive" : "outline"}>{r.openTickets}</Badge> },
+    { key: "clientSatisfaction", header: "رضا العملاء", sortable: true, render: (r) => r.clientSatisfaction > 0 ? `${r.clientSatisfaction}/5` : "-" },
+  ];
 
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold">مقارنة أداء الفروع</h2>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableCell className="font-semibold">الترتيب</TableCell>
-                <TableCell className="font-semibold">الفرع</TableCell>
-                <TableCell className="font-semibold">الإيرادات</TableCell>
-                <TableCell className="font-semibold">المصروفات</TableCell>
-                <TableCell className="font-semibold">صافي الربح</TableCell>
-                <TableCell className="font-semibold">الموظفون</TableCell>
-                <TableCell className="font-semibold">نسبة الحضور</TableCell>
-                <TableCell className="font-semibold">تذاكر مفتوحة</TableCell>
-                <TableCell className="font-semibold">رضا العملاء</TableCell>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} data={rows} colCount={9} emptyMessage="لا توجد فروع" emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}>
-              {rows.map((r: any) => (
-                <TableRow key={r.branchId}>
-                  <TableCell><Badge variant={r.rank === 1 ? "default" : "outline"}>{r.rank}</Badge></TableCell>
-                  <TableCell className="font-medium">{r.branchName}</TableCell>
-                  <TableCell className="text-emerald-600 font-medium">{formatNumber(r.revenue)}</TableCell>
-                  <TableCell className="text-red-600">{formatNumber(r.expenses)}</TableCell>
-                  <TableCell className={cn("font-bold", r.netProfit >= 0 ? "text-emerald-700" : "text-red-700")}>{formatNumber(r.netProfit)}</TableCell>
-                  <TableCell>{r.employees}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                        <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${r.attendanceRate}%` }} />
-                      </div>
-                      <span className="text-xs">{r.attendanceRate}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell><Badge variant={r.openTickets > 10 ? "destructive" : "outline"}>{r.openTickets}</Badge></TableCell>
-                  <TableCell>{r.clientSatisfaction > 0 ? `${r.clientSatisfaction}/5` : "-"}</TableCell>
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable<any>
+        columns={columns}
+        data={rows}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        rowKey={(r) => r.branchId}
+        searchPlaceholder="بحث باسم الفرع..."
+        emptyMessage="لا توجد فروع"
+        emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}
+      />
 
       {rows.length > 0 && (
         <Card>
@@ -263,104 +252,89 @@ function BranchPerformanceTab() {
 }
 
 function VendorPerformanceTab() {
-  const { data, isLoading, isError } = useApiQuery<any>(["bi-vendor-perf"], "/bi/reports/vendor-performance");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-vendor-perf"], "/bi/reports/vendor-performance");
   const rows = (data?.data || []) as any[];
-  const { sortedData, sortState, handleSort } = useSortedData(rows);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "vendorName", header: "المورد", sortable: true, searchable: true, className: "font-medium", render: (r) => r.vendorName },
+    { key: "totalOrders", header: "عدد الطلبات", sortable: true, render: (r) => r.totalOrders },
+    { key: "totalSpend", header: "إجمالي المشتريات", sortable: true, className: "text-blue-600", render: (r) => formatNumber(r.totalSpend) },
+    { key: "avgOrderValue", header: "متوسط الطلب", sortable: true, render: (r) => formatNumber(r.avgOrderValue) },
+    {
+      key: "onTimeDeliveryRate", header: "معدل الالتزام بالمواعيد", sortable: true,
+      render: (r) => (
+        <div className="flex items-center gap-1">
+          <div className="w-16 bg-gray-200 rounded-full h-1.5">
+            <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${r.onTimeDeliveryRate}%` }} />
+          </div>
+          <span className="text-xs">{r.onTimeDeliveryRate}%</span>
+        </div>
+      ),
+    },
+    { key: "returnRate", header: "معدل الإرجاع", sortable: true, render: (r) => <Badge variant={r.returnRate > 10 ? "destructive" : "outline"}>{r.returnRate}%</Badge> },
+    {
+      key: "qualityScore", header: "نقاط الجودة", sortable: true,
+      render: (r) => (
+        <Badge className={cn(
+          r.qualityScore >= 90 ? "bg-emerald-100 text-emerald-700" :
+          r.qualityScore >= 70 ? "bg-amber-100 text-amber-700" :
+          "bg-red-100 text-red-700"
+        )}>{r.qualityScore}</Badge>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold">أداء الموردين</h2>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="vendorName" label="المورد" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="totalOrders" label="عدد الطلبات" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="totalSpend" label="إجمالي المشتريات" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="avgOrderValue" label="متوسط الطلب" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="onTimeDeliveryRate" label="معدل الالتزام بالمواعيد" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="returnRate" label="معدل الإرجاع" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="qualityScore" label="نقاط الجودة" sortState={sortState} onSort={handleSort} />
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} data={rows} colCount={7} emptyMessage="لا توجد بيانات موردين" emptyIcon={<BarChart3 className="h-6 w-6 text-slate-400" />}>
-              {(sortedData || []).map((r: any) => (
-                <TableRow key={r.vendorId}>
-                  <TableCell className="font-medium">{r.vendorName}</TableCell>
-                  <TableCell>{r.totalOrders}</TableCell>
-                  <TableCell className="text-blue-600">{formatNumber(r.totalSpend)}</TableCell>
-                  <TableCell>{formatNumber(r.avgOrderValue)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                        <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${r.onTimeDeliveryRate}%` }} />
-                      </div>
-                      <span className="text-xs">{r.onTimeDeliveryRate}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell><Badge variant={r.returnRate > 10 ? "destructive" : "outline"}>{r.returnRate}%</Badge></TableCell>
-                  <TableCell>
-                    <Badge className={cn(
-                      r.qualityScore >= 90 ? "bg-emerald-100 text-emerald-700" :
-                      r.qualityScore >= 70 ? "bg-amber-100 text-amber-700" :
-                      "bg-red-100 text-red-700"
-                    )}>{r.qualityScore}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable<any>
+        columns={columns}
+        data={rows}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        rowKey={(r) => r.vendorId}
+        searchPlaceholder="بحث باسم المورد..."
+        emptyMessage="لا توجد بيانات موردين"
+        emptyIcon={<BarChart3 className="h-6 w-6 text-slate-400" />}
+      />
     </div>
   );
 }
 
 function FleetTCOTab() {
-  const { data, isLoading, isError } = useApiQuery<any>(["bi-fleet-tco"], "/bi/reports/fleet-tco");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-fleet-tco"], "/bi/reports/fleet-tco");
   const rows = (data?.data || []) as any[];
-  const { sortedData, sortState, handleSort } = useSortedData(rows);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "plateNumber", header: "رقم اللوحة", sortable: true, searchable: true, className: "font-medium", render: (r) => r.plateNumber },
+    { key: "make", header: "النوع", sortable: true, searchable: true, render: (r) => `${r.make} ${r.model}` },
+    { key: "year", header: "السنة", sortable: true, render: (r) => r.year || "-" },
+    { key: "purchasePrice", header: "سعر الشراء", sortable: true, render: (r) => formatNumber(r.purchasePrice) },
+    { key: "maintenanceCost", header: "تكلفة الصيانة", sortable: true, className: "text-orange-600", render: (r) => formatNumber(r.maintenanceCost) },
+    { key: "fuelCost", header: "تكلفة الوقود", sortable: true, className: "text-amber-600", render: (r) => formatNumber(r.fuelCost) },
+    { key: "insuranceCost", header: "التأمين", sortable: true, render: (r) => formatNumber(r.insuranceCost) },
+    { key: "depreciation", header: "الإهلاك", sortable: true, render: (r) => formatNumber(r.depreciation) },
+    { key: "tco", header: "التكلفة الإجمالية", sortable: true, className: "font-bold text-blue-600", render: (r) => formatNumber(r.tco) },
+    { key: "costPerKm", header: "تكلفة/كم", sortable: true, className: "text-sm", render: (r) => r.costPerKm > 0 ? `${r.costPerKm} ر/كم` : "-" },
+  ];
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">تكلفة الأسطول الإجمالية (TCO)</h2>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="plateNumber" label="رقم اللوحة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="make" label="النوع" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="year" label="السنة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="purchasePrice" label="سعر الشراء" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="maintenanceCost" label="تكلفة الصيانة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="fuelCost" label="تكلفة الوقود" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="insuranceCost" label="التأمين" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="depreciation" label="الإهلاك" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="tco" label="التكلفة الإجمالية" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="costPerKm" label="تكلفة/كم" sortState={sortState} onSort={handleSort} />
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} data={rows} colCount={10} emptyMessage="لا توجد مركبات" emptyIcon={<Car className="h-6 w-6 text-slate-400" />}>
-              {(sortedData || []).map((r: any) => (
-                <TableRow key={r.vehicleId}>
-                  <TableCell className="font-medium">{r.plateNumber}</TableCell>
-                  <TableCell>{r.make} {r.model}</TableCell>
-                  <TableCell>{r.year || "-"}</TableCell>
-                  <TableCell>{formatNumber(r.purchasePrice)}</TableCell>
-                  <TableCell className="text-orange-600">{formatNumber(r.maintenanceCost)}</TableCell>
-                  <TableCell className="text-amber-600">{formatNumber(r.fuelCost)}</TableCell>
-                  <TableCell>{formatNumber(r.insuranceCost)}</TableCell>
-                  <TableCell>{formatNumber(r.depreciation)}</TableCell>
-                  <TableCell className="font-bold text-blue-600">{formatNumber(r.tco)}</TableCell>
-                  <TableCell className="text-sm">{r.costPerKm > 0 ? `${r.costPerKm} ر/كم` : "-"}</TableCell>
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
-        </CardContent>
-      </Card>
+      <h2 className="text-xl font-bold">تكلفة الأسطول الإجمالية</h2>
+      <DataTable<any>
+        columns={columns}
+        data={rows}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        rowKey={(r) => r.vehicleId}
+        searchPlaceholder="بحث بلوحة أو نوع المركبة..."
+        emptyMessage="لا توجد مركبات"
+        emptyIcon={<Car className="h-6 w-6 text-slate-400" />}
+      />
     </div>
   );
 }
@@ -426,45 +400,37 @@ function PropertyOccupancyTab() {
           </CardContent>
         </Card>
       )}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableCell className="font-semibold">المبنى</TableCell>
-                <TableCell className="font-semibold">إجمالي الوحدات</TableCell>
-                <TableCell className="font-semibold">مؤجرة</TableCell>
-                <TableCell className="font-semibold">شاغرة</TableCell>
-                <TableCell className="font-semibold">نسبة الإشغال</TableCell>
-                <TableCell className="font-semibold">متوسط الإيجار</TableCell>
-                <TableCell className="font-semibold">الإيرادات الشهرية</TableCell>
-                <TableCell className="font-semibold">الإيرادات السنوية</TableCell>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} data={rows} colCount={8} emptyMessage="لا توجد مبانٍ" emptyIcon={<Building className="h-6 w-6 text-slate-400" />}>
-              {rows.map((r: any) => (
-                <TableRow key={r.buildingId}>
-                  <TableCell className="font-medium">{r.buildingName}</TableCell>
-                  <TableCell>{r.totalUnits}</TableCell>
-                  <TableCell className="text-emerald-600">{r.occupiedUnits}</TableCell>
-                  <TableCell className="text-red-600">{r.vacantUnits}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 bg-gray-200 rounded-full h-2">
-                        <div className={cn("h-2 rounded-full", r.occupancyRate >= 80 ? "bg-emerald-500" : r.occupancyRate >= 50 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${r.occupancyRate}%` }} />
-                      </div>
-                      <span className="text-sm font-medium">{r.occupancyRate}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{formatNumber(r.avgMonthlyRent)}</TableCell>
-                  <TableCell className="text-blue-600 font-medium">{formatNumber(r.totalMonthlyRevenue)}</TableCell>
-                  <TableCell className="text-indigo-600 font-medium">{formatNumber(r.annualRevenue)}</TableCell>
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable<any>
+        data={rows}
+        isLoading={isLoading}
+        isError={isError}
+        rowKey={(r) => r.buildingId}
+        searchPlaceholder="بحث باسم المبنى..."
+        emptyMessage="لا توجد مبانٍ"
+        emptyIcon={<Building className="h-10 w-10 opacity-30" />}
+        columns={[
+          { key: "buildingName", header: "المبنى", sortable: true, searchable: true, className: "font-medium", render: (r) => r.buildingName },
+          { key: "totalUnits", header: "إجمالي الوحدات", sortable: true, render: (r) => r.totalUnits },
+          { key: "occupiedUnits", header: "مؤجرة", sortable: true, className: "text-emerald-600", render: (r) => r.occupiedUnits },
+          { key: "vacantUnits", header: "شاغرة", sortable: true, className: "text-red-600", render: (r) => r.vacantUnits },
+          {
+            key: "occupancyRate",
+            header: "نسبة الإشغال",
+            sortable: true,
+            render: (r) => (
+              <div className="flex items-center gap-2">
+                <div className="w-16 bg-gray-200 rounded-full h-2">
+                  <div className={cn("h-2 rounded-full", r.occupancyRate >= 80 ? "bg-emerald-500" : r.occupancyRate >= 50 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${r.occupancyRate}%` }} />
+                </div>
+                <span className="text-sm font-medium">{r.occupancyRate}%</span>
+              </div>
+            ),
+          },
+          { key: "avgMonthlyRent", header: "متوسط الإيجار", sortable: true, render: (r) => formatNumber(r.avgMonthlyRent) },
+          { key: "totalMonthlyRevenue", header: "الإيرادات الشهرية", sortable: true, className: "text-blue-600 font-medium", render: (r) => formatNumber(r.totalMonthlyRevenue) },
+          { key: "annualRevenue", header: "الإيرادات السنوية", sortable: true, className: "text-indigo-600 font-medium", render: (r) => formatNumber(r.annualRevenue) },
+        ]}
+      />
     </div>
   );
 }
@@ -473,11 +439,10 @@ function TrainingROITab() {
   const { data, isLoading, isError } = useApiQuery<any>(["bi-training-roi"], "/bi/reports/training-roi");
   const summary = data?.summary || {};
   const programs = (data?.byProgram || []) as any[];
-  const { sortedData, sortState, handleSort } = useSortedData(programs);
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">عائد الاستثمار في التدريب (ROI)</h2>
+      <h2 className="text-xl font-bold">عائد الاستثمار في التدريب</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "موظفون مدربون", value: summary.trainedEmployees || 0 },
@@ -495,35 +460,23 @@ function TrainingROITab() {
           </Card>
         ))}
       </div>
-      <Card>
-        <CardHeader><CardTitle>البرامج التدريبية</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="programName" label="البرنامج" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="participants" label="المشاركون" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="totalHours" label="الساعات" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="cost" label="التكلفة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="costPerParticipant" label="تكلفة/مشارك" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="avgScore" label="متوسط الدرجات" sortState={sortState} onSort={handleSort} />
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} data={programs} colCount={6} emptyMessage="لا توجد بيانات تدريب" emptyIcon={<TrendingUp className="h-6 w-6 text-slate-400" />}>
-              {(sortedData || []).map((r: any, i: number) => (
-                <TableRow key={i}>
-                  <TableCell className="font-medium">{r.programName}</TableCell>
-                  <TableCell>{r.participants}</TableCell>
-                  <TableCell>{r.totalHours}</TableCell>
-                  <TableCell>{formatNumber(r.cost)}</TableCell>
-                  <TableCell>{formatNumber(r.costPerParticipant)}</TableCell>
-                  <TableCell>{r.avgScore > 0 ? `${r.avgScore}%` : "-"}</TableCell>
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable<any>
+        data={programs}
+        isLoading={isLoading}
+        isError={isError}
+        rowKey={(r, i) => r.programName ?? i}
+        searchPlaceholder="بحث باسم البرنامج..."
+        emptyMessage="لا توجد بيانات تدريب"
+        emptyIcon={<TrendingUp className="h-10 w-10 opacity-30" />}
+        columns={[
+          { key: "programName", header: "البرنامج", sortable: true, searchable: true, className: "font-medium", render: (r) => r.programName },
+          { key: "participants", header: "المشاركون", sortable: true, render: (r) => r.participants },
+          { key: "totalHours", header: "الساعات", sortable: true, render: (r) => r.totalHours },
+          { key: "cost", header: "التكلفة", sortable: true, render: (r) => formatNumber(r.cost) },
+          { key: "costPerParticipant", header: "تكلفة/مشارك", sortable: true, render: (r) => formatNumber(r.costPerParticipant) },
+          { key: "avgScore", header: "متوسط الدرجات", sortable: true, render: (r) => r.avgScore > 0 ? `${r.avgScore}%` : "-" },
+        ]}
+      />
     </div>
   );
 }
@@ -626,32 +579,19 @@ function AIInsightsTab() {
       {proactive.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-semibold text-gray-700 flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-purple-500" />إجراءات الأتمتة الأخيرة</h3>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableCell className="font-semibold">النوع</TableCell>
-                    <TableCell className="font-semibold">السبب</TableCell>
-                    <TableCell className="font-semibold">الإجراء المتخذ</TableCell>
-                    <TableCell className="font-semibold">الحالة</TableCell>
-                    <TableCell className="font-semibold">التاريخ</TableCell>
-                  </TableRow>
-                </TableHeader>
-                <tbody>
-                  {proactive.slice(0, 10).map((p: any) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="text-xs font-medium">{p.automationType}</TableCell>
-                      <TableCell className="text-xs text-gray-600">{p.triggerReason}</TableCell>
-                      <TableCell className="text-xs">{p.actionTaken}</TableCell>
-                      <TableCell><Badge variant={p.status === "success" ? "default" : "destructive"} className="text-xs">{p.status === "success" ? "نجاح" : "فشل"}</Badge></TableCell>
-                      <TableCell className="text-xs text-gray-400">{formatDateAr(p.createdAt)}</TableCell>
-                    </TableRow>
-                  ))}
-                </tbody>
-              </Table>
-            </CardContent>
-          </Card>
+          <DataTable<any>
+            data={proactive.slice(0, 10)}
+            rowKey={(p) => p.id}
+            searchPlaceholder="بحث..."
+            emptyMessage="لا توجد إجراءات"
+            columns={[
+              { key: "automationType", header: "النوع", sortable: true, searchable: true, className: "text-xs font-medium", render: (p) => p.automationType },
+              { key: "triggerReason", header: "السبب", searchable: true, className: "text-xs text-gray-600", render: (p) => p.triggerReason },
+              { key: "actionTaken", header: "الإجراء المتخذ", className: "text-xs", render: (p) => p.actionTaken },
+              { key: "status", header: "الحالة", sortable: true, render: (p) => <Badge variant={p.status === "success" ? "default" : "destructive"} className="text-xs">{p.status === "success" ? "نجاح" : "فشل"}</Badge> },
+              { key: "createdAt", header: "التاريخ", sortable: true, className: "text-xs text-gray-400", render: (p) => formatDateAr(p.createdAt) },
+            ]}
+          />
         </div>
       )}
     </div>
@@ -740,29 +680,20 @@ function AlertFatigueTab() {
       </Card>
 
       {settings.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>قواعد الكتم النشطة</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableCell className="font-semibold">نوع التنبيه</TableCell>
-                  <TableCell className="font-semibold">مكتوم حتى</TableCell>
-                  <TableCell className="font-semibold">السبب</TableCell>
-                </TableRow>
-              </TableHeader>
-              <tbody>
-                {settings.map((s: any, i: number) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-sm">{s.alertType}</TableCell>
-                    <TableCell className="text-sm">{s.muteUntil ? formatDateAr(s.muteUntil) : "دائم"}</TableCell>
-                    <TableCell className="text-sm text-gray-500">{s.reason || "-"}</TableCell>
-                  </TableRow>
-                ))}
-              </tbody>
-            </Table>
-          </CardContent>
-        </Card>
+        <div className="space-y-2">
+          <h3 className="font-semibold text-gray-700">قواعد الكتم النشطة</h3>
+          <DataTable<any>
+            data={settings}
+            rowKey={(s, i) => s.alertType ?? i}
+            searchPlaceholder="بحث بنوع التنبيه..."
+            emptyMessage="لا توجد قواعد كتم"
+            columns={[
+              { key: "alertType", header: "نوع التنبيه", sortable: true, searchable: true, className: "font-mono text-sm", render: (s) => s.alertType },
+              { key: "muteUntil", header: "مكتوم حتى", sortable: true, className: "text-sm", render: (s) => s.muteUntil ? formatDateAr(s.muteUntil) : "دائم" },
+              { key: "reason", header: "السبب", searchable: true, className: "text-sm text-gray-500", render: (s) => s.reason || "-" },
+            ]}
+          />
+        </div>
       )}
 
       <Card className="bg-blue-50 border-blue-100">
@@ -1005,7 +936,7 @@ export default function BIPage() {
     <div className="space-y-6">
       <Tabs defaultValue="ceo" dir="rtl">
         <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10 gap-1 h-auto flex-wrap">
-          <TabsTrigger value="ceo" className="text-xs">لوحة CEO</TabsTrigger>
+          <TabsTrigger value="ceo" className="text-xs">لوحة الرئيس التنفيذي</TabsTrigger>
           <TabsTrigger value="overview" className="text-xs">نظرة عامة</TabsTrigger>
           <TabsTrigger value="branches" className="text-xs">الفروع</TabsTrigger>
           <TabsTrigger value="vendors" className="text-xs">الموردون</TabsTrigger>

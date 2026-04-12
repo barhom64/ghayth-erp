@@ -89,8 +89,8 @@ function GeneralSettings() {
         <div><Label>الهاتف</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
         <div><Label>البريد الإلكتروني</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
         <div className="md:col-span-2"><Label>العنوان</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-        <div><Label>العملة</Label><select className="w-full border rounded-md p-2" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}><option value="SAR">ريال سعودي (SAR)</option><option value="USD">دولار أمريكي (USD)</option><option value="AED">درهم إماراتي (AED)</option></select></div>
-        <div><Label>المنطقة الزمنية</Label><select className="w-full border rounded-md p-2" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}><option value="Asia/Riyadh">الرياض (UTC+3)</option><option value="Asia/Dubai">دبي (UTC+4)</option></select></div>
+        <div><Label>العملة</Label><select className="w-full border rounded-md p-2" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}><option value="SAR">ريال سعودي</option><option value="USD">دولار أمريكي</option><option value="AED">درهم إماراتي</option></select></div>
+        <div><Label>المنطقة الزمنية</Label><select className="w-full border rounded-md p-2" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}><option value="Asia/Riyadh">الرياض (توقيت غرينتش+3)</option><option value="Asia/Dubai">دبي (توقيت غرينتش+4)</option></select></div>
         <div><Label>التقويم الافتراضي</Label><select className="w-full border rounded-md p-2" value={form.calendarMode} onChange={(e) => setForm({ ...form, calendarMode: e.target.value })}><option value="hijri">هجري</option><option value="gregorian">ميلادي</option><option value="both">كلاهما (هجري وميلادي)</option></select></div>
         <div className="md:col-span-2 pt-2"><Button onClick={handleSave} disabled={saving}><Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الإعدادات"}</Button></div>
       </CardContent></Card>
@@ -512,7 +512,7 @@ function CompaniesTab() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               {editingId ? <Pencil className="h-4 w-4" /> : <Zap className="h-4 w-4 text-blue-600" />}
-              {editingId ? "تعديل بيانات الشركة" : "إنشاء شركة جديدة (مع Bootstrap تلقائي)"}
+              {editingId ? "تعديل بيانات الشركة" : "إنشاء شركة جديدة (تهيئة تلقائية)"}
             </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -705,7 +705,7 @@ function LetterheadSettings() {
                   <div><Label>الموقع الإلكتروني</Label><Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></div>
                   <div><Label>الرقم الضريبي</Label><Input value={form.taxNumber} onChange={(e) => setForm({ ...form, taxNumber: e.target.value })} /></div>
                   <div><Label>رقم السجل التجاري</Label><Input value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} /></div>
-                  <div className="md:col-span-2"><Label>رابط الشعار (URL)</Label><Input value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://example.com/logo.png" /></div>
+                  <div className="md:col-span-2"><Label>رابط الشعار</Label><Input value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://example.com/logo.png" /></div>
                   <div className="md:col-span-2"><Label>العنوان التفصيلي</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
                   <div className="md:col-span-2"><Label>نص التذييل</Label><textarea className="w-full border rounded-md p-2 h-16" value={form.footerText} onChange={(e) => setForm({ ...form, footerText: e.target.value })} placeholder="يظهر في أسفل كل مطبوعة..." /></div>
                 </div>
@@ -1138,7 +1138,7 @@ function WorkflowDefinitionsTab() {
         </h3>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setShowSlaForm(!showSlaForm)}>
-            <Clock className="h-4 w-4 me-1" />{showSlaForm ? "إخفاء" : "إعدادات SLA"}
+            <Clock className="h-4 w-4 me-1" />{showSlaForm ? "إخفاء" : "إعدادات مستوى الخدمة"}
           </Button>
           <Button size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
             {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />تعريف جديد</>}
@@ -1148,7 +1148,7 @@ function WorkflowDefinitionsTab() {
 
       {showSlaForm && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4" />إعدادات المهل (SLA)</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4" />إعدادات المهل الزمنية</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -1173,7 +1173,7 @@ function WorkflowDefinitionsTab() {
                 </label>
               </div>
             </div>
-            <Button size="sm" onClick={handleSaveSla}><Save className="h-4 w-4 me-1" />حفظ SLA</Button>
+            <Button size="sm" onClick={handleSaveSla}><Save className="h-4 w-4 me-1" />حفظ إعدادات مستوى الخدمة</Button>
 
             {slas.length > 0 && (
               <div className="border rounded-lg overflow-hidden mt-4">
@@ -1526,7 +1526,7 @@ function AccountingMappingsTab() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs text-gray-500 mb-1 block">الحساب المدين (Debit)</Label>
+                      <Label className="text-xs text-gray-500 mb-1 block">الحساب المدين</Label>
                       <select
                         className="w-full border rounded-md p-2 text-sm"
                         value={getValue(mapping, "debitAccountId")}
@@ -1544,7 +1544,7 @@ function AccountingMappingsTab() {
                       )}
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-500 mb-1 block">الحساب الدائن (Credit)</Label>
+                      <Label className="text-xs text-gray-500 mb-1 block">الحساب الدائن</Label>
                       <select
                         className="w-full border rounded-md p-2 text-sm"
                         value={getValue(mapping, "creditAccountId")}
@@ -1648,7 +1648,7 @@ function ZatcaSettingsTab() {
         method: "PUT",
         body: JSON.stringify({ ...form, enabled: form.enabled ? "true" : "false" }),
       });
-      toast({ title: "تم الحفظ", description: "تم حفظ إعدادات ZATCA بنجاح" });
+      toast({ title: "تم الحفظ", description: "تم حفظ إعدادات هيئة الزكاة والضريبة بنجاح" });
       refetch();
     } catch (e: any) {
       toast({ title: "خطأ", description: e.message || "فشل حفظ الإعدادات", variant: "destructive" });
@@ -1681,7 +1681,7 @@ function ZatcaSettingsTab() {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Zap className="h-5 w-5 text-green-600" />
-          ربط هيئة الزكاة والضريبة والجمارك (ZATCA)
+          ربط هيئة الزكاة والضريبة والجمارك
         </h3>
         {connectionStatus && (
           <Badge className={connectionStatus === "connected" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
@@ -1719,8 +1719,8 @@ function ZatcaSettingsTab() {
           <div>
             <Label>بيئة التشغيل</Label>
             <select className="w-full border rounded-md p-2 mt-1" value={form.environment} onChange={e => setForm(f => ({ ...f, environment: e.target.value }))}>
-              <option value="sandbox">بيئة الاختبار (Sandbox)</option>
-              <option value="production">بيئة الإنتاج (Production)</option>
+              <option value="sandbox">بيئة الاختبار</option>
+              <option value="production">بيئة الإنتاج</option>
             </select>
           </div>
           {form.environment === "production" && (
@@ -1735,7 +1735,7 @@ function ZatcaSettingsTab() {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm">بيانات التسجيل</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>الرقم الضريبي (VAT Registration Number)</Label><Input className="mt-1" value={form.vatRegistrationNumber} onChange={e => setForm(f => ({ ...f, vatRegistrationNumber: e.target.value }))} placeholder="300XXXXXXXXX0003" /></div>
+          <div><Label>الرقم الضريبي</Label><Input className="mt-1" value={form.vatRegistrationNumber} onChange={e => setForm(f => ({ ...f, vatRegistrationNumber: e.target.value }))} placeholder="300XXXXXXXXX0003" /></div>
           <div><Label>رقم السجل التجاري</Label><Input className="mt-1" value={form.crNumber} onChange={e => setForm(f => ({ ...f, crNumber: e.target.value }))} placeholder="رقم السجل التجاري" /></div>
           <div><Label>اسم المنشأة (عربي)</Label><Input className="mt-1" value={form.organizationName} onChange={e => setForm(f => ({ ...f, organizationName: e.target.value }))} placeholder="اسم الشركة كما هو في السجل" /></div>
           <div><Label>اسم المنشأة (إنجليزي)</Label><Input className="mt-1" value={form.organizationNameEn} onChange={e => setForm(f => ({ ...f, organizationNameEn: e.target.value }))} placeholder="اسم المنشأة بالإنجليزية" /></div>
@@ -1748,14 +1748,14 @@ function ZatcaSettingsTab() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">مفاتيح الربط التقني (API Keys)</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">مفاتيح الربط التقني</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>معرّف العميل (OAuth)</Label><Input className="mt-1" value={form.oauthClientId} onChange={e => setForm(f => ({ ...f, oauthClientId: e.target.value }))} placeholder="معرّف العميل من بوابة فاتورة" dir="ltr" /></div>
-          <div><Label>المفتاح السري (OAuth)</Label><Input className="mt-1" type="password" value={form.oauthClientSecret} onChange={e => setForm(f => ({ ...f, oauthClientSecret: e.target.value }))} placeholder="المفتاح السري من بوابة فاتورة" dir="ltr" /></div>
-          <div><Label>معرّف الختم التشفيري (CSID)</Label><Input className="mt-1" value={form.csid} onChange={e => setForm(f => ({ ...f, csid: e.target.value }))} placeholder="معرّف الختم التشفيري" dir="ltr" /></div>
-          <div><Label>هاش الفاتورة السابقة (PIH)</Label><Input className="mt-1" value={form.pihKey} onChange={e => setForm(f => ({ ...f, pihKey: e.target.value }))} placeholder="هاش الفاتورة السابقة" dir="ltr" /></div>
+          <div><Label>معرّف العميل لتفويض الدخول</Label><Input className="mt-1" value={form.oauthClientId} onChange={e => setForm(f => ({ ...f, oauthClientId: e.target.value }))} placeholder="معرّف العميل من بوابة فاتورة" dir="ltr" /></div>
+          <div><Label>المفتاح السري لتفويض الدخول</Label><Input className="mt-1" type="password" value={form.oauthClientSecret} onChange={e => setForm(f => ({ ...f, oauthClientSecret: e.target.value }))} placeholder="المفتاح السري من بوابة فاتورة" dir="ltr" /></div>
+          <div><Label>معرّف الختم التشفيري</Label><Input className="mt-1" value={form.csid} onChange={e => setForm(f => ({ ...f, csid: e.target.value }))} placeholder="معرّف الختم التشفيري" dir="ltr" /></div>
+          <div><Label>بصمة الفاتورة السابقة</Label><Input className="mt-1" value={form.pihKey} onChange={e => setForm(f => ({ ...f, pihKey: e.target.value }))} placeholder="بصمة الفاتورة السابقة" dir="ltr" /></div>
           <div className="md:col-span-2">
-            <p className="text-xs text-gray-500">المفاتيح التقنية تُوفّر من بوابة ZATCA بعد التسجيل وإكمال عملية الاعتماد. هذه الإعدادات تُستخدم للتوقيع الرقمي وإرسال الفواتير.</p>
+            <p className="text-xs text-gray-500">المفاتيح التقنية تُوفّر من بوابة هيئة الزكاة والضريبة بعد التسجيل وإكمال عملية الاعتماد. هذه الإعدادات تُستخدم للتوقيع الرقمي وإرسال الفواتير.</p>
           </div>
         </CardContent>
       </Card>
@@ -1844,7 +1844,7 @@ function CommunicationChannelsTab() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <span className="text-lg">📱</span>
-              SMS — رسائل نصية (Twilio)
+              الرسائل النصية القصيرة
             </CardTitle>
             <div className="flex items-center gap-2">
               <Label className="text-xs text-gray-500">تفعيل</Label>
@@ -1856,7 +1856,7 @@ function CommunicationChannelsTab() {
               />
             </div>
           </div>
-          <p className="text-xs text-gray-500">أدخل بيانات حساب Twilio لإرسال الرسائل النصية. يمكنك إنشاء حساب مجاني على twilio.com</p>
+          <p className="text-xs text-gray-500">أدخل بيانات حساب مزود خدمة الرسائل لإرسال الرسائل النصية. يمكنك إنشاء حساب مجاني من موقع المزود.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1883,7 +1883,7 @@ function CommunicationChannelsTab() {
               />
             </div>
             <div>
-              <Label className="text-xs">رقم الإرسال (From)</Label>
+              <Label className="text-xs">رقم الإرسال</Label>
               <Input
                 value={smsForm.sms_from_number}
                 onChange={(e) => setSmsForm({ ...smsForm, sms_from_number: e.target.value })}
@@ -1894,7 +1894,7 @@ function CommunicationChannelsTab() {
           </div>
           <Button size="sm" onClick={() => handleSave(smsForm, [{ key: "sms_auth_token", configured: smsTokenConfigured }])} disabled={saving}>
             <Save className="h-3.5 w-3.5 me-1" />
-            حفظ إعدادات SMS
+            حفظ إعدادات الرسائل النصية
           </Button>
         </CardContent>
       </Card>
@@ -1916,7 +1916,7 @@ function CommunicationChannelsTab() {
               />
             </div>
           </div>
-          <p className="text-xs text-gray-500">أدخل بيانات WhatsApp Business API من Meta for Developers. تحتاج إلى حساب تجاري معتمد على developers.facebook.com</p>
+          <p className="text-xs text-gray-500">أدخل بيانات واجهة ربط أعمال واتساب من منصة ميتا للمطورين. تحتاج إلى حساب تجاري معتمد من ميتا.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1943,7 +1943,7 @@ function CommunicationChannelsTab() {
               />
             </div>
             <div>
-              <Label className="text-xs">Verify Token (للـ Webhook)</Label>
+              <Label className="text-xs">رمز التحقق (لخطاف الاستدعاء)</Label>
               <Input
                 value={waForm.whatsapp_verify_token}
                 onChange={(e) => setWaForm({ ...waForm, whatsapp_verify_token: e.target.value })}
@@ -1953,7 +1953,7 @@ function CommunicationChannelsTab() {
             </div>
           </div>
           <div className="bg-blue-50 rounded-md p-3 text-xs text-blue-700 space-y-1">
-            <p className="font-medium">رابط الـ Webhook:</p>
+            <p className="font-medium">رابط خطاف الاستدعاء:</p>
             <code className="bg-blue-100 px-2 py-1 rounded block" dir="ltr">{window.location.origin}/api/communications/whatsapp/webhook</code>
           </div>
           <Button size="sm" onClick={() => handleSave(waForm, [{ key: "whatsapp_access_token", configured: waTokenConfigured }])} disabled={saving}>
@@ -1968,7 +1968,7 @@ function CommunicationChannelsTab() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <span className="text-lg">🔔</span>
-              إشعارات المتصفح (Push Notifications)
+              إشعارات المتصفح الفورية
             </CardTitle>
             <div className="flex items-center gap-2">
               <Label className="text-xs text-gray-500">تفعيل</Label>
@@ -2165,17 +2165,17 @@ function GovIntegrationsTab() {
                   <div className="mt-4 pt-4 border-t space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-xs flex items-center gap-1"><Key className="h-3 w-3" />مفتاح API</Label>
+                        <Label className="text-xs flex items-center gap-1"><Key className="h-3 w-3" />مفتاح الربط البرمجي</Label>
                         <Input
                           className="mt-1 text-sm font-mono"
                           type="password"
-                          placeholder="أدخل مفتاح الـ API"
+                          placeholder="أدخل مفتاح الربط"
                           value={editForm.apiKey}
                           onChange={(e) => setEditForm({ ...editForm, apiKey: e.target.value })}
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">رابط الخدمة (Base URL)</Label>
+                        <Label className="text-xs">رابط الخدمة</Label>
                         <Input
                           className="mt-1 text-sm"
                           placeholder="https://api.gov.sa/..."
@@ -2235,7 +2235,7 @@ export default function SettingsPage() {
           <TabsTrigger value="accounting">التوجيه المحاسبي</TabsTrigger>
           <TabsTrigger value="audit">التدقيق</TabsTrigger>
           <TabsTrigger value="resolved">الوراثة</TabsTrigger>
-          <TabsTrigger value="zatca">ZATCA</TabsTrigger>
+          <TabsTrigger value="zatca">هيئة الزكاة والضريبة</TabsTrigger>
           <TabsTrigger value="gov">التكاملات الحكومية</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><GeneralSettings /></TabsContent>

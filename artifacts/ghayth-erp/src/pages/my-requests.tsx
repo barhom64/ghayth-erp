@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: Clock },
+  pending: { label: "معلق", color: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: Clock },
   in_review: { label: "قيد المراجعة", color: "bg-blue-100 text-blue-700 border-blue-200", icon: AlertCircle },
-  approved: { label: "معتمد", color: "bg-green-100 text-green-700 border-green-200", icon: CheckCircle2 },
+  approved: { label: "موافق", color: "bg-green-100 text-green-700 border-green-200", icon: CheckCircle2 },
   rejected: { label: "مرفوض", color: "bg-red-100 text-red-700 border-red-200", icon: XCircle },
   returned: { label: "مُعاد", color: "bg-orange-100 text-orange-700 border-orange-200", icon: RefreshCw },
   escalated: { label: "مُصعَّد", color: "bg-purple-100 text-purple-700 border-purple-200", icon: AlertCircle },
@@ -134,7 +134,7 @@ export default function MyRequests() {
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
                         <StatusBadge status={req.status} />
                         {req.slaStatus && req.slaStatus !== "on_track" && (
-                          <span className="text-xs text-orange-600">{req.slaStatus === "warning" ? "⚠ تحذير SLA" : "⛔ تجاوز SLA"}</span>
+                          <span className="text-xs text-orange-600">{req.slaStatus === "warning" ? "⚠ تحذير مستوى الخدمة" : "⛔ تجاوز مستوى الخدمة"}</span>
                         )}
                       </div>
                     </div>

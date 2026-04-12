@@ -174,7 +174,7 @@ export default function Login() {
             </div>
             <div>
               <h1 className="text-2xl font-extrabold text-white tracking-wide">منصة غيث</h1>
-              <p className="text-blue-200 text-xs font-medium tracking-widest uppercase">Ghayth ERP Platform</p>
+              <p className="text-blue-200 text-xs font-medium tracking-widest">منصة غيث لتخطيط موارد المؤسسات</p>
             </div>
           </div>
 
@@ -469,7 +469,7 @@ export default function Login() {
               >
                 سياسة الخصوصية
               </a>{" "}
-              وفق نظام حماية البيانات الشخصية (PDPL)
+              وفق نظام حماية البيانات الشخصية
             </p>
           </div>
         </div>

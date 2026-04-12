@@ -98,7 +98,7 @@ function AnnotatedScreenshot({
           <div className="w-3 h-3 rounded-full bg-emerald-400" />
         </div>
         <div className="flex-1 bg-white rounded text-xs text-gray-400 px-3 py-1 text-center max-w-xs mx-auto">
-          غيث ERP — إدارة الأملاك
+          نظام غيث — إدارة الأملاك
         </div>
       </div>
       <div className="relative">
@@ -375,7 +375,7 @@ function UnitsMockScreen() {
         <span className="text-gray-300 text-sm">🔍</span>
         <span className="text-[10px] text-gray-400 flex-1">بحث برقم الوحدة أو المبنى...</span>
         <span className="text-[9px] border rounded px-1.5 py-0.5 text-gray-500">الحالة ▾</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5 text-emerald-600">تصدير CSV</span>
+        <span className="text-[9px] border rounded px-1.5 py-0.5 text-emerald-600">تصدير جدولي</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
         <div className="grid grid-cols-6 bg-gray-50 border-b">
@@ -416,7 +416,7 @@ function TenantsMockScreen() {
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300 text-sm">🔍</span>
         <span className="text-[10px] text-gray-400 flex-1">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5 text-emerald-600">تصدير CSV</span>
+        <span className="text-[9px] border rounded px-1.5 py-0.5 text-emerald-600">تصدير جدولي</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
         <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr" }}>
@@ -932,7 +932,7 @@ const sections: Section[] = [
           { id: 3, x: 37, y: 26, color: "emerald", title: "عدد الوحدات المتاحة", description: "الوحدات الشاغرة الجاهزة للإيجار. انقر على البطاقة للتصفية وعرض المتاحة فقط." },
           { id: 4, x: 62, y: 26, color: "blue", title: "عدد الوحدات المؤجرة", description: "الوحدات المؤجرة حالياً. انقر للتصفية وعرض المؤجرة فقط." },
           { id: 5, x: 88, y: 26, color: "violet", title: "إجمالي التحصيل", description: "مجموع كل المبالغ المحصلة من إيجارات الوحدات تاريخياً." },
-          { id: 6, x: 50, y: 43, color: "amber", title: "شريط البحث والتصفية", description: "ابحث برقم الوحدة أو اسم المبنى، صفّ حسب الحالة، وصدّر البيانات لملف Excel." },
+          { id: 6, x: 50, y: 43, color: "amber", title: "شريط البحث والتصفية", description: "ابحث برقم الوحدة أو اسم المبنى، صفّ حسب الحالة، وصدّر البيانات لملف إكسل." },
           { id: 7, x: 10, y: 65, color: "teal", title: "رقم الوحدة (رابط)", description: "انقر على رقم الوحدة للذهاب لصفحة تفاصيل الوحدة الكاملة التي تعرض: العقد الحالي، المستأجر، وسجل المدفوعات." },
           { id: 8, x: 88, y: 65, color: "red", title: "حالة الوحدة", description: "متاحة (أخضر) - مؤجرة (أزرق) - تحت الصيانة (برتقالي). يمكن تغيير الحالة من زر 'تغيير الحالة' في صفحة التفاصيل." },
         ],
@@ -1089,7 +1089,7 @@ const sections: Section[] = [
         tips: [
           "الدفعات المتأخرة تظهر بخلفية حمراء لتسهيل التمييز — تابعها أولاً",
           "سجّل رقم المرجع للشيك أو التحويل البنكي دائماً للمراجعة لاحقاً",
-          "يمكنك تصدير كشف المدفوعات لملف Excel لمشاركته مع المحاسب",
+          "يمكنك تصدير كشف المدفوعات لملف إكسل لمشاركته مع المحاسب",
         ],
       },
     ],
@@ -1209,7 +1209,7 @@ const sections: Section[] = [
           { id: 3, x: 55, y: 25, color: "emerald", title: "عدد الوحدات المؤجرة", description: "الوحدات التي يوجد عليها عقد إيجار نشط حالياً." },
           { id: 4, x: 77, y: 25, color: "blue", title: "عدد الوحدات المتاحة", description: "الوحدات الشاغرة الجاهزة للإيجار — كلما زادت كلما انخفض الإشغال." },
           { id: 5, x: 95, y: 25, color: "violet", title: "الإيجار الشهري الكلي", description: "مجموع الإيجار الشهري لجميع الوحدات المؤجرة. يعكس الإيراد الشهري المتوقع." },
-          { id: 6, x: 25, y: 56, color: "teal", title: "مخطط توزيع الوحدات", description: "رسم بياني دائري (Pie Chart) يعرض نسبة كل حالة: مؤجرة (أخضر) / متاحة (أزرق) / صيانة (برتقالي)." },
+          { id: 6, x: 25, y: 56, color: "teal", title: "مخطط توزيع الوحدات", description: "رسم بياني دائري يعرض نسبة كل حالة: مؤجرة (أخضر) / متاحة (أزرق) / صيانة (برتقالي)." },
           { id: 7, x: 75, y: 56, color: "orange", title: "الإشغال حسب المبنى", description: "مقارنة نسبة إشغال كل مبنى مع شريط تقدم. يساعدك على تحديد المباني الأقل أداءً." },
           { id: 8, x: 50, y: 82, color: "amber", title: "القائمة التفصيلية", description: "كل الوحدات بحالتها والمستأجر الحالي وسعر الإيجار وتاريخ انتهاء العقد — مرجع شامل." },
         ],
@@ -1265,7 +1265,7 @@ export default function PropertiesGuide() {
             <BookOpen className="h-5 w-5 text-blue-600" />
             <div>
               <h1 className="text-base font-bold text-gray-800">دليل إدارة الأملاك</h1>
-              <p className="text-[10px] text-gray-400">دليل إرشادي مصور — نظام غيث ERP</p>
+              <p className="text-[10px] text-gray-400">دليل إرشادي مصور — نظام غيث لتخطيط موارد المؤسسات</p>
             </div>
           </div>
           <Link href="/properties/dashboard">

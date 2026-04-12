@@ -148,7 +148,7 @@ function OpportunitiesTab() {
               { key: "probability", label: "الاحتمالية" },
               { key: "assigneeName", label: "المسؤول" },
               { key: "status", label: "الحالة" },
-            ], "فرص CRM")}
+            ], "فرص المبيعات")}
             resultCount={filtered?.length}
           />
         </div>

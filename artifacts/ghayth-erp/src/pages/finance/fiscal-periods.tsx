@@ -1,30 +1,65 @@
-import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, CheckCircle, Clock, Lock, Search } from "lucide-react";
-import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Calendar, CheckCircle, Clock, Lock } from "lucide-react";
+import { formatCurrency } from "@/lib/formatters";
+import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
+
+const STATUS_CONFIG: Record<string, { icon: any; color: string; label: string }> = {
+  active: { icon: CheckCircle, color: "bg-green-100 text-green-700", label: "نشطة" },
+  closed: { icon: Lock, color: "bg-gray-100 text-gray-700", label: "مغلقة" },
+  future: { icon: Clock, color: "bg-blue-100 text-blue-700", label: "مستقبلية" },
+};
 
 export default function FiscalPeriodsPage() {
-  const { data, isLoading } = useApiQuery<any>(["fiscal-periods"], "/finance/fiscal-periods");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fiscal-periods"], "/finance/fiscal-periods");
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
 
   const filtered = applyFilters(items, filters, { searchFields: ["name", "period"], statusField: "status" });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
 
   const activeCount = items.filter((p: any) => p.status === "active").length;
   const closedCount = items.filter((p: any) => p.status === "closed").length;
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "period",
+      header: "الفترة",
+      sortable: true,
+      className: "font-mono text-blue-600",
+      render: (p) => p.period,
+    },
+    {
+      key: "name",
+      header: "الاسم",
+      sortable: true,
+      className: "font-medium",
+      render: (p) => p.name,
+    },
+    {
+      key: "entries",
+      header: "عدد القيود",
+      sortable: true,
+      render: (p) => p.entries,
+    },
+    {
+      key: "totalAmount",
+      header: "إجمالي الحركات",
+      sortable: true,
+      className: "font-semibold",
+      render: (p) => formatCurrency(Number(p.totalAmount || 0)),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (p) => {
+        const s = STATUS_CONFIG[p.status] || STATUS_CONFIG.future;
+        return <Badge className={s.color}>{s.label}</Badge>;
+      },
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -55,49 +90,24 @@ export default function FiscalPeriodsPage() {
           ],
         }}
         values={filters}
-        onChange={(v) => { setFilters(v); setPage(1); }}
+        onChange={setFilters}
         resultCount={filtered.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="period" label="الفترة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="name" label="الاسم" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="entries" label="عدد القيود" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="totalAmount" label="إجمالي الحركات" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(6)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={5} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-            )) : filtered.length === 0 ? (
-              <tr><td colSpan={5} className="p-12 text-center text-gray-400">
-                <Calendar className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>لا توجد فترات</p>
-              </td></tr>
-            ) : (paginatedData || []).map((p: any) => {
-              const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
-                active: { icon: CheckCircle, color: "bg-green-100 text-green-700", label: "نشطة" },
-                closed: { icon: Lock, color: "bg-gray-100 text-gray-700", label: "مغلقة" },
-                future: { icon: Clock, color: "bg-blue-100 text-blue-700", label: "مستقبلية" },
-              };
-              const s = statusConfig[p.status] || statusConfig.future;
-
-              return (
-                <tr key={p.period} className={`border-b hover:bg-gray-50 ${p.status === "active" ? "bg-green-50/50" : ""}`}>
-                  <td className="p-3 font-mono text-blue-600">{p.period}</td>
-                  <td className="p-3 font-medium">{p.name}</td>
-                  <td className="p-3">{p.entries}</td>
-                  <td className="p-3 font-semibold">{formatCurrency(Number(p.totalAmount || 0))}</td>
-                  <td className="p-3"><Badge className={s.color}>{s.label}</Badge></td>
-                </tr>
-              );
-            })}
-          </TableBody>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
-      </div></div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={refetch}
+        noToolbar
+        rowKey={(p) => p.period}
+        rowClassName={(p) => (p.status === "active" ? "bg-green-50/50" : undefined)}
+        emptyMessage="لا توجد فترات"
+        emptyIcon={<Calendar className="h-10 w-10 opacity-30" />}
+        pageSize={20}
+      />
     </div>
   );
 }

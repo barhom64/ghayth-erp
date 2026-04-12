@@ -61,7 +61,7 @@ export default function WarehouseCreate() {
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><Label>اسم المنتج</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم المنتج" /></div>
-          <div><Label>رمز المنتج (SKU)</Label><Input className="mt-1" value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} placeholder="رمز المنتج" /></div>
+          <div><Label>رمز المنتج</Label><Input className="mt-1" value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} placeholder="رمز المنتج" /></div>
           <div>
             <Label>التصنيف</Label>
             <Select value={form.categoryId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v === "_none" ? "" : v }))}>

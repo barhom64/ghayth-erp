@@ -3,10 +3,9 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, ChevronDown, ChevronRight, AlertTriangle, Clock, Building2 } from "lucide-react";
+import { DataTable, DataTableColumn } from "@/components/ui/data-table";
+import { Download, AlertTriangle, Clock, Building2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 
 function csvEscape(val: string): string {
@@ -30,24 +29,45 @@ function exportCSV(data: any[], filename: string) {
   link.click();
 }
 
+const BUCKETS = [
+  { key: "current", label: "حالي", color: "bg-green-100 text-green-700" },
+  { key: "1_30", label: "1-30 يوم", color: "bg-yellow-100 text-yellow-700" },
+  { key: "31_60", label: "31-60 يوم", color: "bg-orange-100 text-orange-700" },
+  { key: "61_90", label: "61-90 يوم", color: "bg-red-100 text-red-700" },
+  { key: "over90", label: "+90 يوم", color: "bg-red-200 text-red-800" },
+];
+
 export default function ApAgingPage() {
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split("T")[0]);
   const [expanded, setExpanded] = useState<string | number | null>(null);
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["ap-aging", asOfDate],
     `/finance/ap-aging?asOfDate=${asOfDate}`
   );
 
-  const suppliers = data?.suppliers || [];
+  const suppliers = (data?.suppliers || []) as any[];
   const summary = data?.summary || {};
 
-  const buckets = [
-    { key: "current", label: "حالي", color: "bg-green-100 text-green-700" },
-    { key: "1_30", label: "1-30 يوم", color: "bg-yellow-100 text-yellow-700" },
-    { key: "31_60", label: "31-60 يوم", color: "bg-orange-100 text-orange-700" },
-    { key: "61_90", label: "61-90 يوم", color: "bg-red-100 text-red-700" },
-    { key: "over90", label: "+90 يوم", color: "bg-red-200 text-red-800" },
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "supplierName",
+      header: "المورد",
+      sortable: true,
+      searchable: true,
+      render: (s) => (
+        <div>
+          <p className="font-semibold text-sm">{s.supplierName}</p>
+          <p className="text-xs text-gray-500">{s.orders?.length ?? 0} أمر شراء</p>
+        </div>
+      ),
+    },
+    { key: "current", header: "حالي", sortable: true, render: (s) => s.current > 0 ? <Badge className="bg-green-100 text-green-700">{formatCurrency(s.current)}</Badge> : "—" },
+    { key: "1_30", header: "1-30 يوم", sortable: true, render: (s) => s["1_30"] > 0 ? <Badge className="bg-yellow-100 text-yellow-700">{formatCurrency(s["1_30"])}</Badge> : "—" },
+    { key: "31_60", header: "31-60 يوم", sortable: true, render: (s) => s["31_60"] > 0 ? <Badge className="bg-orange-100 text-orange-700">{formatCurrency(s["31_60"])}</Badge> : "—" },
+    { key: "61_90", header: "61-90 يوم", sortable: true, render: (s) => s["61_90"] > 0 ? <Badge className="bg-red-100 text-red-700">{formatCurrency(s["61_90"])}</Badge> : "—" },
+    { key: "over90", header: "+90 يوم", sortable: true, render: (s) => s.over90 > 0 ? <Badge className="bg-red-200 text-red-800">{formatCurrency(s.over90)}</Badge> : "—" },
+    { key: "total", header: "الإجمالي", sortable: true, className: "font-bold text-blue-600", render: (s) => formatCurrency(s.total) },
   ];
 
   return (
@@ -55,18 +75,18 @@ export default function ApAgingPage() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Clock className="h-6 w-6 text-blue-500" />
-          تقرير تقادم الذمم الدائنة (AP Aging)
+          تقرير تقادم الذمم الدائنة
         </h1>
         <div className="flex items-center gap-2 flex-wrap">
           <DatePicker value={asOfDate} onChange={setAsOfDate} className="w-44" placeholder="تاريخ التقرير" />
           <Button variant="outline" size="sm" onClick={() => exportCSV(suppliers, `ap-aging-${asOfDate}.csv`)}>
-            <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+            <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </Button>
         </div>
       </div>
 
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
-        {buckets.map(b => (
+        {BUCKETS.map(b => (
           <Card key={b.key}>
             <CardContent className="p-4 text-center">
               <p className="text-xs text-gray-500 mb-1">{b.label}</p>
@@ -89,80 +109,51 @@ export default function ApAgingPage() {
         </CardContent>
       </Card>
 
-      <div className="space-y-2">
-        {isLoading ? (
-          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)
-        ) : suppliers.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center text-gray-400">
-              <Building2 className="h-10 w-10 mx-auto mb-2 opacity-30" />
-              <p>لا توجد ذمم دائنة مستحقة</p>
-            </CardContent>
-          </Card>
-        ) : suppliers.map((supplier: any) => {
-          const sid = supplier.supplierId ?? supplier.supplierName;
-          const isOpen = expanded === sid;
-          const hasOverdue = supplier["31_60"] > 0 || supplier["61_90"] > 0 || supplier.over90 > 0;
+      <DataTable<any>
+        columns={columns}
+        data={suppliers}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        searchPlaceholder="بحث باسم المورد..."
+        emptyMessage="لا توجد ذمم دائنة مستحقة"
+        emptyIcon={<Building2 className="h-10 w-10 opacity-30" />}
+        rowKey={(s) => s.supplierId ?? s.supplierName}
+        rowClassName={(s) => (s["31_60"] > 0 || s["61_90"] > 0 || s.over90 > 0) ? "border-r-2 border-red-400" : undefined}
+        onRowClick={(s) => {
+          const sid = s.supplierId ?? s.supplierName;
+          setExpanded(expanded === sid ? null : sid);
+        }}
+        renderRowExtras={(s) => {
+          const sid = s.supplierId ?? s.supplierName;
+          if (expanded !== sid || !s.orders?.length) return null;
           return (
-            <Card key={sid} className={hasOverdue ? "border-red-200" : ""}>
-              <CardContent className="p-0">
-                <button
-                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 text-right"
-                  onClick={() => setExpanded(isOpen ? null : sid)}
-                >
-                  <div className="flex items-center gap-2">
-                    {isOpen ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
-                    <div>
-                      <p className="font-semibold">{supplier.supplierName}</p>
-                      <p className="text-xs text-gray-500">{supplier.orders?.length ?? 0} أمر شراء</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-wrap justify-end">
-                    {buckets.map(b => supplier[b.key] > 0 && (
-                      <div key={b.key} className="text-end">
-                        <p className="text-xs text-gray-400">{b.label}</p>
-                        <Badge className={b.color + " text-xs"}>{formatCurrency(supplier[b.key])}</Badge>
-                      </div>
-                    ))}
-                    <div className="text-end">
-                      <p className="text-xs text-gray-500">الإجمالي</p>
-                      <p className="font-bold text-blue-600">{formatCurrency(supplier.total)}</p>
-                    </div>
-                  </div>
-                </button>
-                {isOpen && supplier.orders?.length > 0 && (
-                  <div className="border-t overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>المرجع</TableHead>
-                          <TableHead>تاريخ الاستحقاق</TableHead>
-                          <TableHead>المستحق</TableHead>
-                          <TableHead>الفترة</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {supplier.orders.map((po: any) => (
-                          <TableRow key={po.id}>
-                            <TableCell className="font-mono text-blue-600 text-xs">{po.ref}</TableCell>
-                            <TableCell className="text-xs text-gray-500">{po.dueDate ? formatDateAr(po.dueDate) : "-"}</TableCell>
-                            <TableCell className="font-semibold">{formatCurrency(po.outstanding)}</TableCell>
-                            <TableCell>
-                              <Badge className={buckets.find(b => b.key === po.bucket)?.color ?? ""}>
-                                {buckets.find(b => b.key === po.bucket)?.label ?? po.bucket}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <div className="border-t bg-gray-50/30 p-3">
+              <DataTable<any>
+                noToolbar
+                pageSize={0}
+                data={s.orders}
+                rowKey={(po) => po.id}
+                emptyMessage="لا توجد أوامر"
+                columns={[
+                  { key: "ref", header: "المرجع", className: "font-mono text-blue-600 text-xs", render: (po) => po.ref },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-gray-500", render: (po) => po.dueDate ? formatDateAr(po.dueDate) : "-" },
+                  { key: "outstanding", header: "المستحق", className: "font-semibold", render: (po) => formatCurrency(po.outstanding) },
+                  {
+                    key: "bucket",
+                    header: "الفترة",
+                    render: (po) => {
+                      const b = BUCKETS.find(x => x.key === po.bucket);
+                      return <Badge className={b?.color ?? ""}>{b?.label ?? po.bucket}</Badge>;
+                    },
+                  },
+                ]}
+              />
+            </div>
           );
-        })}
-      </div>
+        }}
+      />
     </div>
   );
 }

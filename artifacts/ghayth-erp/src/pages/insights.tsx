@@ -21,7 +21,7 @@ import { apiFetch } from "@/lib/api";
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316", "#84cc16"];
 
 const SEGMENT_LABELS: Record<string, string> = {
-  vip: "VIP",
+  vip: "كبار العملاء",
   loyal: "مخلص",
   regular: "منتظم",
   at_risk: "معرض للمغادرة",
@@ -274,7 +274,7 @@ export default function Insights() {
         <TabsContent value="clients" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
-              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4" /> تصنيف العملاء (RFM)</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4" /> تصنيف العملاء (الحداثة والتكرار والقيمة)</CardTitle></CardHeader>
               <CardContent>
                 {segmentData.length === 0 ? (
                   <div className="text-center py-8">
@@ -332,7 +332,7 @@ export default function Insights() {
 
           {(clientAnalytics.topClients ?? []).length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Star className="h-4 w-4 text-amber-500" /> أفضل العملاء (بناءً على RFM)</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Star className="h-4 w-4 text-amber-500" /> أفضل العملاء (بناءً على الحداثة والتكرار والقيمة)</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {(clientAnalytics.topClients ?? []).slice(0, 8).map((c: any, idx: number) => (

@@ -297,7 +297,7 @@ export default function LettersPage() {
       <Tabs defaultValue="hr" dir="rtl">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="hr" className="gap-2">
-            <FileSignature className="h-4 w-4" /> الخطابات الرسمية (HR)
+            <FileSignature className="h-4 w-4" /> خطابات الموارد البشرية الرسمية
           </TabsTrigger>
           <TabsTrigger value="general" className="gap-2">
             <Mail className="h-4 w-4" /> المراسلات العامة
