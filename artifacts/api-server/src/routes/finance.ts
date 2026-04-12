@@ -792,18 +792,25 @@ router.post("/purchase-requests", async (req, res) => {
       [effectiveCompanyId, ref, scope.activeAssignmentId, supplierId ?? null, calculatedTotal, notes ?? null, branchId ?? scope.branchId, costCenter ?? null, expectedDelivery ?? null]
     );
 
-    // Insert request items
-    for (const item of items) {
-      await rawExecute(
-        `INSERT INTO purchase_request_items ("requestId","productId",quantity,"unitPrice","totalPrice")
-         VALUES ($1,$2,$3,$4,$5)`,
-        [
+    // Insert request items in a single bulk INSERT.
+    if (items.length > 0) {
+      const valuesSql: string[] = [];
+      const params: any[] = [];
+      for (const item of items) {
+        const base = params.length;
+        valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
+        params.push(
           prId,
           item.productId ?? null,
           Number(item.quantity ?? 1),
           Number(item.unitPrice ?? 0),
-          Number(item.quantity ?? 1) * Number(item.unitPrice ?? 0),
-        ]
+          Number(item.quantity ?? 1) * Number(item.unitPrice ?? 0)
+        );
+      }
+      await rawExecute(
+        `INSERT INTO purchase_request_items ("requestId","productId",quantity,"unitPrice","totalPrice")
+         VALUES ${valuesSql.join(",")}`,
+        params
       );
     }
 

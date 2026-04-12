@@ -274,15 +274,20 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
     );
 
     if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
+      const valuesSql: string[] = [];
+      const params: any[] = [];
       for (const depId of b.dependsOn) {
-        try {
-          await rawExecute(
-            `INSERT INTO project_task_dependencies ("taskId","dependsOnId") VALUES ($1,$2) ON CONFLICT DO NOTHING`,
-            [insertId, depId]
-          );
-        } catch (depErr) {
-          console.error(`Failed to create task dependency ${insertId} -> ${depId}:`, depErr);
-        }
+        const base = params.length;
+        valuesSql.push(`($${base + 1},$${base + 2})`);
+        params.push(insertId, depId);
+      }
+      try {
+        await rawExecute(
+          `INSERT INTO project_task_dependencies ("taskId","dependsOnId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
+          params
+        );
+      } catch (depErr) {
+        console.error(`Failed to create task dependencies for ${insertId}:`, depErr);
       }
 
       const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');

@@ -87,11 +87,25 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
       [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null]
     );
 
-    for (const item of items) {
+    if (Array.isArray(items) && items.length > 0) {
+      const valuesSql: string[] = [];
+      const params: any[] = [];
+      for (const item of items) {
+        const base = params.length;
+        valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
+        params.push(
+          insertId,
+          item.itemName || item.description || "بند",
+          Number(item.quantity ?? 1),
+          Number(item.unitPrice ?? 0),
+          Number(item.quantity ?? 1) * Number(item.unitPrice ?? 0),
+          item.notes ?? null
+        );
+      }
       await rawExecute(
         `INSERT INTO purchase_request_items ("requestId","itemName",quantity,"unitPrice","lineTotal",notes)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [insertId, item.itemName || item.description || "بند", Number(item.quantity ?? 1), Number(item.unitPrice ?? 0), Number(item.quantity ?? 1) * Number(item.unitPrice ?? 0), item.notes ?? null]
+         VALUES ${valuesSql.join(",")}`,
+        params
       );
     }
 
@@ -166,11 +180,18 @@ purchaseRouter.post("/purchase-requests/:id/convert", async (req, res) => {
       [scope.companyId, scope.branchId, poRef, totalAmount, vatAmount, pr.supplierId ?? null, pr.notes ?? null, scope.activeAssignmentId]
     );
 
-    for (const item of items) {
+    if (Array.isArray(items) && items.length > 0) {
+      const valuesSql: string[] = [];
+      const params: any[] = [];
+      for (const item of items) {
+        const base = params.length;
+        valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
+        params.push(poId, item.itemName, item.quantity, item.unitPrice, item.lineTotal);
+      }
       await rawExecute(
         `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
-         VALUES ($1,$2,$3,$4,$5)`,
-        [poId, item.itemName, item.quantity, item.unitPrice, item.lineTotal]
+         VALUES ${valuesSql.join(",")}`,
+        params
       ).catch(() => {});
     }
 
@@ -236,9 +257,17 @@ purchaseRouter.post("/purchase-orders", async (req, res) => {
     );
 
     if (Array.isArray(items) && items.length > 0) {
+      const valuesSql: string[] = [];
+      const params: any[] = [];
       for (const item of items) {
-        await rawExecute(`INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal") VALUES ($1,$2,$3,$4,$5)`, [insertId, item.itemName || "بند", Number(item.quantity ?? 1), Number(item.unitPrice ?? 0), Number(item.lineTotal ?? 0)]).catch(() => {});
+        const base = params.length;
+        valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
+        params.push(insertId, item.itemName || "بند", Number(item.quantity ?? 1), Number(item.unitPrice ?? 0), Number(item.lineTotal ?? 0));
       }
+      await rawExecute(
+        `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal") VALUES ${valuesSql.join(",")}`,
+        params
+      ).catch(() => {});
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "procurement", refType: "purchase_order", refId: insertId, amount: Number(totalAmount) });

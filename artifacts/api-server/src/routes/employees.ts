@@ -208,12 +208,19 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         [effectiveCompanyId]
       );
       const year = new Date().getFullYear();
-      for (const lt of leaveTypesRes.rows) {
+      if (leaveTypesRes.rows.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        for (const lt of leaveTypesRes.rows) {
+          const base = params.length;
+          valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},0,0)`);
+          params.push(effectiveCompanyId, empId, assignmentId, lt.id, year, Number(lt.annualDays ?? 21));
+        }
         await client.query(
           `INSERT INTO hr_leave_balances ("companyId","employeeId","assignmentId","leaveTypeId",year,entitled,used,reserved)
-           VALUES ($1,$2,$3,$4,$5,$6,0,0)
+           VALUES ${valuesSql.join(",")}
            ON CONFLICT DO NOTHING`,
-          [effectiveCompanyId, empId, assignmentId, lt.id, year, Number(lt.annualDays ?? 21)]
+          params
         );
       }
 
@@ -292,12 +299,19 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         `SELECT id FROM salary_components WHERE "companyId" = $1 AND "isActive" = true`,
         [effectiveCompanyId]
       );
-      for (const sc of compSalaryComponents.rows) {
+      if (compSalaryComponents.rows.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        for (const sc of compSalaryComponents.rows) {
+          const base = params.length;
+          valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},true,NOW())`);
+          params.push(empId, assignmentId, effectiveCompanyId, sc.id);
+        }
         await client.query(
           `INSERT INTO employee_salary_components ("employeeId","assignmentId","companyId","componentId","isActive","createdAt")
-           VALUES ($1,$2,$3,$4,true,NOW())
+           VALUES ${valuesSql.join(",")}
            ON CONFLICT DO NOTHING`,
-          [empId, assignmentId, effectiveCompanyId, sc.id]
+          params
         ).catch(() => {});
       }
 
