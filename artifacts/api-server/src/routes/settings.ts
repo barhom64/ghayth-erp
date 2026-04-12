@@ -339,32 +339,55 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
 
 router.post("/departments", requirePermission("settings:write"), async (req, res) => {
   try {
+    const scope = req.scope!;
     const { name, nameEn, manager } = req.body;
     if (!name) {
       res.status(400).json({ error: "اسم القسم مطلوب" });
       return;
     }
-    const r = await rawExecute(`INSERT INTO departments (name, "nameEn", manager) VALUES ($1,$2,$3)`, [name, nameEn || null, manager || null]);
+    const r = await rawExecute(
+      `INSERT INTO departments (name, "nameEn", manager, "companyId") VALUES ($1,$2,$3,$4)`,
+      [name, nameEn || null, manager || null, scope.companyId]
+    );
     res.status(201).json({ id: r.insertId, ...req.body });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.put("/departments/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    const { id } = req.params;
+    const scope = req.scope!;
+    const id = Number(req.params.id);
     const { name, nameEn, manager } = req.body;
     if (!name) {
       res.status(400).json({ error: "اسم القسم مطلوب" });
       return;
     }
-    await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 RETURNING id`, [name, nameEn || null, manager || null, id]);
+    const result = await rawExecute(
+      `UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 AND "companyId" = ANY($5)`,
+      [name, nameEn || null, manager || null, id, scope.allowedCompanies]
+    );
+    if (!result.affectedRows) {
+      res.status(404).json({ error: "القسم غير موجود" });
+      return;
+    }
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/departments/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    const { id } = req.params;
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    // Verify the department belongs to a company the caller has access to
+    // before doing anything else, to prevent cross-tenant deletion.
+    const [dept] = await rawQuery<any>(
+      `SELECT id FROM departments WHERE id = $1 AND "companyId" = ANY($2)`,
+      [id, scope.allowedCompanies]
+    );
+    if (!dept) {
+      res.status(404).json({ error: "القسم غير موجود" });
+      return;
+    }
     const [empCheck] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active'`,
       [id]
@@ -373,7 +396,10 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
       res.status(400).json({ error: "لا يمكن حذف القسم لأن هناك موظفين مرتبطين به" });
       return;
     }
-    await rawExecute(`DELETE FROM departments WHERE id=$1`, [id]);
+    await rawExecute(
+      `DELETE FROM departments WHERE id = $1 AND "companyId" = ANY($2)`,
+      [id, scope.allowedCompanies]
+    );
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -541,7 +567,15 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
 
 router.delete("/approval-config/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    await rawExecute(`DELETE FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
+    const scope = req.scope!;
+    const result = await rawExecute(
+      `DELETE FROM approval_chains WHERE id = $1 AND "companyId" = ANY($2)`,
+      [Number(req.params.id), scope.allowedCompanies]
+    );
+    if (!result.affectedRows) {
+      res.status(404).json({ error: "سلسلة الموافقة غير موجودة" });
+      return;
+    }
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
