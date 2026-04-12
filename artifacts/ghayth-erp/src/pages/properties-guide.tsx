@@ -687,6 +687,66 @@ function InspectionsMockScreen() {
   );
 }
 
+function DepositsMockScreen() {
+  return (
+    <div className="p-4 bg-gray-50 min-h-[340px] text-xs" dir="rtl">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-lg font-bold text-gray-800">ودائع الضمان</div>
+          <div className="text-gray-400 text-[10px]">إدارة ودائع ضمان المستأجرين</div>
+        </div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ تسجيل وديعة</div>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="border rounded-lg p-2 text-center">
+          <div className="text-xl font-bold">5</div>
+          <div className="text-[9px] text-gray-500">إجمالي الودائع</div>
+        </div>
+        <div className="border border-blue-200 bg-blue-50/30 rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-blue-600">47,500 ر.س</div>
+          <div className="text-[9px] text-gray-500">ودائع محتجزة</div>
+        </div>
+        <div className="border border-green-200 bg-green-50/30 rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-green-600">12,000 ر.س</div>
+          <div className="text-[9px] text-gray-500">مُستردة</div>
+        </div>
+      </div>
+      <div className="flex gap-1 mb-3">
+        {["الكل", "محتجزة", "مستردة"].map((s, i) => (
+          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500")}>{s}</span>
+        ))}
+      </div>
+      <div className="space-y-2">
+        {[
+          { tenant: "أحمد السعيد", unit: "A-101", bld: "برج النخيل", amount: "8,500", received: "2024/01/10", status: "محتجزة", sColor: "bg-blue-100 text-blue-700", refund: null },
+          { tenant: "خالد العمري", unit: "C-305", bld: "المركز التجاري", amount: "12,000", received: "2023/06/01", status: "مستردة", sColor: "bg-green-100 text-green-700", refund: "12,000" },
+          { tenant: "سارة الغامدي", unit: "B-201", bld: "مجمع الواحة", amount: "6,000", received: "2024/03/15", status: "محتجزة", sColor: "bg-blue-100 text-blue-700", refund: null },
+        ].map((d, i) => (
+          <div key={i} className="bg-white border rounded-lg p-3 flex items-center justify-between hover:shadow-sm">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-medium text-[10px]">{d.tenant}</span>
+                <span className="text-gray-500 text-[9px]">— {d.unit} ({d.bld})</span>
+                <span className={cn("text-[8px] px-1 rounded", d.sColor)}>{d.status}</span>
+              </div>
+              <div className="text-[9px] text-gray-500">
+                تاريخ الاستلام: {d.received}
+                {d.refund && <span className="mr-2 text-green-600"> · مُسترد: {d.refund} ر.س</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="font-bold text-[11px]">{d.amount} ر.س</div>
+              {d.status === "محتجزة" && (
+                <span className="text-[8px] border border-gray-300 rounded px-1.5 py-0.5 text-gray-600">استرداد</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OccupancyMockScreen() {
   return (
     <div className="p-4 bg-gray-50 min-h-[360px] text-xs" dir="rtl">
@@ -1100,6 +1160,33 @@ const sections: Section[] = [
           "افحص الوحدة دائماً عند دخول وخروج كل مستأجر لتوثيق حالتها",
           "الفحص عند الخروج يحدد ما إذا كان يجب خصم جزء من التأمين",
           "الفحص الدوري كل 6 أشهر يكشف عن مشاكل الصيانة مبكراً",
+        ],
+      },
+      {
+        id: "deposits",
+        title: "ودائع الضمان",
+        screenshot: <DepositsMockScreen />,
+        description: "تسجيل ودائع ضمان المستأجرين ومتابعة حالتها واسترداد المبالغ عند انتهاء العقد.",
+        callouts: [
+          { id: 1, x: 90, y: 10, color: "teal", title: "تسجيل وديعة جديدة", description: "انقر + تسجيل وديعة، اختر العقد النشط، أدخل مبلغ الوديعة وتاريخ الاستلام ثم احفظ." },
+          { id: 2, x: 17, y: 35, color: "blue", title: "إجمالي الودائع", description: "عدد جميع الودائع المسجلة في النظام بغض النظر عن حالتها." },
+          { id: 3, x: 50, y: 35, color: "indigo", title: "الودائع المحتجزة", description: "المبلغ الإجمالي لودائع الضمان التي لا تزال قيد الاحتجاز — ودائع عقود نشطة لم تُسترد بعد." },
+          { id: 4, x: 83, y: 35, color: "emerald", title: "الودائع المستردة", description: "المبلغ الإجمالي للودائع التي تمت إعادتها للمستأجرين عند انتهاء عقودهم." },
+          { id: 5, x: 18, y: 65, color: "amber", title: "فلاتر الحالة", description: "تصفية الودائع حسب: الكل / محتجزة (عقود نشطة) / مستردة (عقود منتهية)." },
+          { id: 6, x: 88, y: 82, color: "rose", title: "زر استرداد الوديعة", description: "عند انتهاء العقد، اضغط استرداد وأدخل المبلغ المُسترد (قد يختلف عن الوديعة الأصلية في حالة وجود خصومات) وسبب الاسترداد." },
+        ],
+        steps: [
+          { icon: "📄", text: "اختر عقداً نشطاً" },
+          { icon: "💰", text: "سجّل مبلغ الوديعة" },
+          { icon: "📅", text: "أدخل تاريخ الاستلام" },
+          { icon: "🔒", text: "الوديعة تصبح محتجزة" },
+          { icon: "✅", text: "عند الإنهاء: اضغط استرداد" },
+          { icon: "💸", text: "أدخل المبلغ المُسترد وسبب الخصم" },
+        ],
+        tips: [
+          "سجّل الوديعة عند توقيع العقد فوراً لضمان التوثيق الكامل",
+          "مبلغ الاسترداد قد يقل عن الوديعة الأصلية في حال وجود أضرار تثبتها نتيجة فحص الخروج",
+          "ربط ودائع الضمان بفحوصات الوحدة يحميك قانونياً عند النزاعات",
         ],
       },
     ],

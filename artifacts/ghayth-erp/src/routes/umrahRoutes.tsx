@@ -10,6 +10,8 @@ const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
 const UmrahImport = lazy(() => import("@/pages/umrah/import"));
 const PilgrimCreate = lazy(() => import("@/pages/umrah/pilgrim-create"));
 const PilgrimDetail = lazy(() => import("@/pages/umrah/pilgrim-detail"));
+const UmrahPackages = lazy(() => import("@/pages/umrah/packages"));
+const UmrahTransport = lazy(() => import("@/pages/umrah/transport"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -20,5 +22,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/seasons", component: UmrahSeasons, module: "operations" },
   { path: "/umrah/penalties", component: UmrahPenalties, module: "operations" },
   { path: "/umrah/invoices", component: UmrahInvoices, module: "operations" },
+  { path: "/umrah/packages", component: UmrahPackages, module: "operations" },
+  { path: "/umrah/transport", component: UmrahTransport, module: "operations" },
   { path: "/umrah/import", component: UmrahImport, module: "operations" },
 ];

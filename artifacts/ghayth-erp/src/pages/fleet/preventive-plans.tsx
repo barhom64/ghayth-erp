@@ -28,7 +28,7 @@ function getDueDays(nextDate?: string): number | null {
 
 export default function PreventivePlansPage() {
   const [showForm, setShowForm] = useState(false);
-  const [vehicleFilter, setVehicleFilter] = useState("");
+  const [vehicleFilter, setVehicleFilter] = useState("__all__");
   const [form, setForm] = useState({
     vehicleId: "", serviceType: "oil_change",
     intervalKm: "", intervalDays: "",
@@ -38,7 +38,7 @@ export default function PreventivePlansPage() {
 
   const { data, refetch } = useApiQuery<any>(
     ["preventive-plans", vehicleFilter],
-    `/fleet/preventive-plans${vehicleFilter ? `?vehicleId=${vehicleFilter}` : ""}`
+    `/fleet/preventive-plans${vehicleFilter && vehicleFilter !== "__all__" ? `?vehicleId=${vehicleFilter}` : ""}`
   );
   const plans = asList(data?.data || data);
 
@@ -148,7 +148,7 @@ export default function PreventivePlansPage() {
         <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
           <SelectTrigger className="w-48"><SelectValue placeholder="كل المركبات" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">كل المركبات</SelectItem>
+            <SelectItem value="__all__">كل المركبات</SelectItem>
             {vehicleList.map((v: any) => <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber}</SelectItem>)}
           </SelectContent>
         </Select>

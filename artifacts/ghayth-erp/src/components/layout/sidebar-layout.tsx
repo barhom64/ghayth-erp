@@ -103,6 +103,8 @@ const allNavSections: NavSection[] = [
         { label: "التوظيف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
         { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
         { label: "المخالفات والجزاءات", path: "/hr/violations", icon: Scale, subKey: "violations" },
+        { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
+        { label: "خطط التطوير", path: "/hr/development-plans", icon: TrendingUp, subKey: "performance" },
       ]},
       { label: "المالية", path: "/finance", icon: CreditCard, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
@@ -159,6 +161,8 @@ const allNavSections: NavSection[] = [
         { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel },
         { label: "التأمين", path: "/fleet/insurance", icon: Shield },
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell },
+        { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock },
+        { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle },
       ]},
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
         { label: "منتجات المخزون", path: "/warehouse", icon: Package },
@@ -179,6 +183,9 @@ const allNavSections: NavSection[] = [
         { label: "عقود الإيجار", path: "/properties/contracts", icon: FileSignature },
         { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
         { label: "طلبات الصيانة", path: "/properties/maintenance", icon: Hammer },
+        { label: "الفحص والتفتيش", path: "/properties/inspections", icon: ClipboardCheck },
+        { label: "ودائع الضمان", path: "/properties/deposits", icon: Banknote },
+        { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
         { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
       ]},
       { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support" },
@@ -190,6 +197,8 @@ const allNavSections: NavSection[] = [
         { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
         { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
         { label: "فواتير الوكلاء", path: "/umrah/invoices", icon: Receipt },
+        { label: "الباقات", path: "/umrah/packages", icon: Package },
+        { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
         { label: "الاستيراد", path: "/umrah/import", icon: FileText },
       ]},
     ],
@@ -201,12 +210,16 @@ const allNavSections: NavSection[] = [
       { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
         { label: "القضايا", path: "/legal/cases", icon: Briefcase },
         { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
+        { label: "الجلسات القادمة", path: "/legal/sessions", icon: Calendar },
+        { label: "الأحكام القضائية", path: "/legal/judgments", icon: CheckCircle },
+        { label: "المراسلات", path: "/legal/correspondence", icon: Mail },
       ]},
       { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
         { label: "السياسات", path: "/governance/policies", icon: FileCheck },
         { label: "المخاطر", path: "/governance/risks", icon: AlertTriangle },
         { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },
         { label: "الامتثال", path: "/governance/compliance", icon: CheckCircle },
+        { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
       ]},
       { label: "مركز الطلبات", path: "/requests", icon: ClipboardCheck, module: "requests", children: [
         { label: "تقديم طلب", path: "/requests", icon: ClipboardCheck },

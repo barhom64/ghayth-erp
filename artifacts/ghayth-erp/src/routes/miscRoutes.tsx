@@ -22,6 +22,7 @@ const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/warehouse/sup
 const Support = lazy(() => import("@/pages/support"));
 const SupportCreate = lazy(() => import("@/pages/create/support-create"));
 const SupportReplies = lazy(() => import("@/pages/support/replies"));
+const KnowledgeBase = lazy(() => import("@/pages/support/kb"));
 const TicketDetail = lazy(() => import("@/pages/details/ticket-detail"));
 const OpportunityDetail = lazy(() => import("@/pages/details/opportunity-detail"));
 const Marketing = lazy(() => import("@/pages/marketing"));
@@ -86,10 +87,11 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/warehouse/categories", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/suppliers", component: VendorsPage, module: "warehouse" },
   { path: "/warehouse/inventory-count", component: InventoryCount, module: "warehouse" },
-  { path: "/support", component: Support, module: "support" },
   { path: "/support/create", component: SupportCreate, module: "support" },
   { path: "/support/replies", component: SupportReplies, module: "support" },
+  { path: "/support/kb", component: KnowledgeBase, module: "support" },
   { path: "/support/:id", component: TicketDetail, module: "support" },
+  { path: "/support", component: Support, module: "support" },
   { path: "/marketing", component: Marketing, module: "marketing" },
   { path: "/marketing/create", component: MarketingCreate, module: "marketing" },
   { path: "/tasks/create", component: TasksCreate, module: "operations" },
