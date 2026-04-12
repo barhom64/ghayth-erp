@@ -15,7 +15,6 @@ import { processFallbackChains } from "./notificationEngine.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
 import { eventBus } from "./eventBus.js";
-import { decryptSecret } from "./secrets.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -1350,8 +1349,7 @@ async function processSmsQueue(): Promise<string> {
       skipped++;
       continue;
     }
-    const authToken = decryptSecret(sms.authToken);
-    if (!sms.accountSid || !authToken || !sms.fromNumber) {
+    if (!sms.accountSid || !sms.authToken || !sms.fromNumber) {
       await rawExecute(
         `UPDATE sms_queue SET "errorMessage"='بيانات Twilio غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات', "updatedAt"=NOW() WHERE id=$1`,
         [sms.id]
@@ -1361,7 +1359,7 @@ async function processSmsQueue(): Promise<string> {
     }
 
     try {
-      const credentials = Buffer.from(`${sms.accountSid}:${authToken}`).toString("base64");
+      const credentials = Buffer.from(`${sms.accountSid}:${sms.authToken}`).toString("base64");
       const resp = await fetch(
         `https://api.twilio.com/2010-04-01/Accounts/${sms.accountSid}/Messages.json`,
         {
@@ -1433,8 +1431,7 @@ async function processWhatsAppQueue(): Promise<string> {
       skipped++;
       continue;
     }
-    const accessToken = decryptSecret(msg.accessToken);
-    if (!accessToken || !msg.phoneNumberId) {
+    if (!msg.accessToken || !msg.phoneNumberId) {
       await rawExecute(
         `UPDATE whatsapp_queue SET "errorMessage"='بيانات Meta API غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات', "updatedAt"=NOW() WHERE id=$1`,
         [msg.id]
@@ -1449,7 +1446,7 @@ async function processWhatsAppQueue(): Promise<string> {
         {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${accessToken}`,
+            "Authorization": `Bearer ${msg.accessToken}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({

@@ -159,53 +159,19 @@ router.delete("/role-permissions", requirePermission("permissions:write"), async
   }
 });
 
-router.get("/user-permissions", async (req, res) => {
+router.get("/user-permissions", requirePermission("permissions:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { userId } = req.query as { userId?: string };
     const targetId = userId ? Number(userId) : scope.userId;
-
-    // Self-view is always permitted without explicit permission.
-    if (targetId === scope.userId) {
-      const rows = await rawQuery<any>(
-        `SELECT p.*, u.name AS "userName" FROM permissions p
-         LEFT JOIN users u ON u.id = p."userId"
-         WHERE p."userId" = $1 AND (p."companyId" IS NULL OR p."companyId" = $2)
-         ORDER BY p.permission`,
-        [targetId, scope.companyId]
-      );
-      res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-      return;
-    }
-
-    // Viewing another user's permissions requires explicit authorization
-    // AND the target user must belong to the caller's company.
-    const [targetUser] = await rawQuery<{ companyId: number }>(
-      `SELECT ea."companyId" FROM users u
-       JOIN employee_assignments ea ON ea."employeeId" = u."employeeId" AND ea.status = 'active'
-       WHERE u.id = $1 LIMIT 1`,
-      [targetId]
+    const rows = await rawQuery<any>(
+      `SELECT p.*, u.name AS "userName" FROM permissions p
+       LEFT JOIN users u ON u.id = p."userId"
+       WHERE p."userId" = $1 AND (p."companyId" IS NULL OR p."companyId" = $2)
+       ORDER BY p.permission`,
+      [targetId, scope.companyId]
     );
-    if (!targetUser || targetUser.companyId !== scope.companyId) {
-      res.status(403).json({ error: "المستخدم المستهدف خارج نطاق الشركة" });
-      return;
-    }
-
-    const checkPerm = requirePermission("permissions:read");
-    checkPerm(req, res, async () => {
-      try {
-        const rows = await rawQuery<any>(
-          `SELECT p.*, u.name AS "userName" FROM permissions p
-           LEFT JOIN users u ON u.id = p."userId"
-           WHERE p."userId" = $1 AND (p."companyId" IS NULL OR p."companyId" = $2)
-           ORDER BY p.permission`,
-          [targetId, scope.companyId]
-        );
-        res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-      } catch (err) {
-        handleRouteError(err, res, "Get user permissions error:");
-      }
-    });
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) {
     handleRouteError(err, res, "Get user permissions error:");
   }

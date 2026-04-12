@@ -2,15 +2,6 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Printer, Eye, X } from "lucide-react";
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 export interface BranchLetterhead {
   name?: string;
   nameEn?: string;
@@ -138,13 +129,12 @@ export function PrintPreviewModal({
     if (!content) return;
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
-    const safeTitle = escapeHtml(documentTitle || "طباعة");
     printWindow.document.write(`
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="utf-8" />
-        <title>${safeTitle}</title>
+        <title>${documentTitle || "طباعة"}</title>
         <style>
           @page { size: A4; margin: 1.5cm; }
           * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -239,13 +229,12 @@ export function directPrint(contentEl: HTMLElement | null, documentTitle?: strin
   if (!contentEl) return;
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
-  const safeTitle = escapeHtml(documentTitle || "طباعة");
   printWindow.document.write(`
     <!DOCTYPE html>
     <html dir="rtl" lang="ar">
     <head>
       <meta charset="utf-8" />
-      <title>${safeTitle}</title>
+      <title>${documentTitle || "طباعة"}</title>
       <style>
         @page { size: A4; margin: 1.5cm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }

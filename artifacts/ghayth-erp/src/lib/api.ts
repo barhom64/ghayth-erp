@@ -27,12 +27,6 @@ async function tryRefreshToken(): Promise<string | null> {
       const data = await res.json();
       if (data.token) {
         localStorage.setItem("erp_token", data.token);
-        // Server rotates refresh tokens on every /refresh call. Persist the
-        // new value so the next refresh succeeds; the previous one is now
-        // revoked server-side.
-        if (data.refreshToken) {
-          localStorage.setItem("erp_refresh_token", data.refreshToken);
-        }
         return data.token;
       }
       return null;

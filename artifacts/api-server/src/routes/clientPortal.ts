@@ -27,11 +27,8 @@ export interface PortalScope {
   type: string;
 }
 
-// Portal tokens are short-lived (1 hour) to bound the blast radius of
-// a leaked token from the browser. If the portal needs persistent
-// sessions, introduce a refresh-token flow analogous to the main app.
 function signPortalToken(payload: { accountId: number; clientId: number; companyId: number }) {
-  return jwt.sign({ ...payload, type: "client_portal" }, SECRET!, { expiresIn: "1h" });
+  return jwt.sign({ ...payload, type: "client_portal" }, SECRET!, { expiresIn: "7d" });
 }
 
 function verifyPortalToken(token: string): PortalScope {

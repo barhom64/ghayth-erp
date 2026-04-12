@@ -14,7 +14,6 @@ import { auditLog } from "../lib/audit.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
 import { eventBus } from "../lib/eventBus.js";
-import { encryptSecret } from "../lib/secrets.js";
 
 const publicRouter = Router();
 
@@ -339,55 +338,32 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
 
 router.post("/departments", requirePermission("settings:write"), async (req, res) => {
   try {
-    const scope = req.scope!;
     const { name, nameEn, manager } = req.body;
     if (!name) {
       res.status(400).json({ error: "اسم القسم مطلوب" });
       return;
     }
-    const r = await rawExecute(
-      `INSERT INTO departments (name, "nameEn", manager, "companyId") VALUES ($1,$2,$3,$4)`,
-      [name, nameEn || null, manager || null, scope.companyId]
-    );
+    const r = await rawExecute(`INSERT INTO departments (name, "nameEn", manager) VALUES ($1,$2,$3)`, [name, nameEn || null, manager || null]);
     res.status(201).json({ id: r.insertId, ...req.body });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.put("/departments/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
+    const { id } = req.params;
     const { name, nameEn, manager } = req.body;
     if (!name) {
       res.status(400).json({ error: "اسم القسم مطلوب" });
       return;
     }
-    const result = await rawExecute(
-      `UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 AND "companyId" = ANY($5)`,
-      [name, nameEn || null, manager || null, id, scope.allowedCompanies]
-    );
-    if (!result.affectedRows) {
-      res.status(404).json({ error: "القسم غير موجود" });
-      return;
-    }
+    await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 RETURNING id`, [name, nameEn || null, manager || null, id]);
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/departments/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    // Verify the department belongs to a company the caller has access to
-    // before doing anything else, to prevent cross-tenant deletion.
-    const [dept] = await rawQuery<any>(
-      `SELECT id FROM departments WHERE id = $1 AND "companyId" = ANY($2)`,
-      [id, scope.allowedCompanies]
-    );
-    if (!dept) {
-      res.status(404).json({ error: "القسم غير موجود" });
-      return;
-    }
+    const { id } = req.params;
     const [empCheck] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active'`,
       [id]
@@ -396,10 +372,7 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
       res.status(400).json({ error: "لا يمكن حذف القسم لأن هناك موظفين مرتبطين به" });
       return;
     }
-    await rawExecute(
-      `DELETE FROM departments WHERE id = $1 AND "companyId" = ANY($2)`,
-      [id, scope.allowedCompanies]
-    );
+    await rawExecute(`DELETE FROM departments WHERE id=$1`, [id]);
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -567,15 +540,7 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
 
 router.delete("/approval-config/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    const scope = req.scope!;
-    const result = await rawExecute(
-      `DELETE FROM approval_chains WHERE id = $1 AND "companyId" = ANY($2)`,
-      [Number(req.params.id), scope.allowedCompanies]
-    );
-    if (!result.affectedRows) {
-      res.status(404).json({ error: "سلسلة الموافقة غير موجودة" });
-      return;
-    }
+    await rawExecute(`DELETE FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -621,19 +586,16 @@ router.put("/channels", requirePermission("settings:write"), async (req, res) =>
 
     const SECRET_KEYS_PUT = new Set(["sms_auth_token", "whatsapp_access_token"]);
     const allowedKeys = new Set(CHANNEL_SETTING_KEYS);
-    for (const [key, rawValue] of Object.entries(entries)) {
+    for (const [key, value] of Object.entries(entries)) {
       if (!allowedKeys.has(key)) continue;
-      if (SECRET_KEYS_PUT.has(key) && rawValue === "__configured__") continue;
+      if (SECRET_KEYS_PUT.has(key) && value === "__configured__") continue;
 
-      if (rawValue === null || rawValue === undefined || rawValue === "") {
+      if (value === null || value === undefined || value === "") {
         await rawExecute(
           `DELETE FROM system_settings WHERE key=$1 AND "companyId"=$2`,
           [key, scope.companyId]
         );
       } else {
-        // Secret values are encrypted at rest. Non-secret channel flags
-        // (e.g. sms_enabled, whatsapp_phone_id) are stored as plain text.
-        const value = SECRET_KEYS_PUT.has(key) ? encryptSecret(String(rawValue)) : rawValue;
         const existing = await rawQuery(
           `SELECT id FROM system_settings WHERE key=$1 AND "companyId"=$2`,
           [key, scope.companyId]

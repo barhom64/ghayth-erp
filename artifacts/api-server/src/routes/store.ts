@@ -89,19 +89,14 @@ router.post("/orders", async (req, res) => {
     );
     const orderId = r.insertId;
     if (Array.isArray(items) && items.length > 0) {
-      const valuesSql: string[] = [];
-      const params: any[] = [];
       for (const item of items) {
         const unitPrice = Number(item.unitPrice || item.price || 0);
         const qty = Number(item.quantity || 1);
-        const base = params.length;
-        valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7})`);
-        params.push(orderId, item.productId || null, item.productName || item.name || null, qty, unitPrice, unitPrice * qty, item.notes || null);
+        await rawExecute(
+          `INSERT INTO store_order_items ("orderId","productId","productName",quantity,"unitPrice",total,notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [orderId, item.productId || null, item.productName || item.name || null, qty, unitPrice, unitPrice * qty, item.notes || null]
+        );
       }
-      await rawExecute(
-        `INSERT INTO store_order_items ("orderId","productId","productName",quantity,"unitPrice",total,notes) VALUES ${valuesSql.join(",")}`,
-        params
-      );
     }
     res.status(201).json({ id: orderId });
   } catch (e: any) { res.status(500).json({ error: e.message }); }

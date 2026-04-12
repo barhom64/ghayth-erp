@@ -1,7 +1,7 @@
 import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { signToken, signRefreshToken, hashRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
+import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { logger } from "../lib/logger.js";
@@ -154,15 +154,14 @@ router.post("/login", loginLimiter, async (req, res) => {
     });
 
     const refreshToken = signRefreshToken();
-    const refreshTokenHash = hashRefreshToken(refreshToken);
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
     const userAgent = req.headers["user-agent"] ?? null;
     const ipAddress = req.ip ?? null;
 
     await rawExecute(
-      `INSERT INTO refresh_tokens ("tokenHash", "userId", "expiresAt", "userAgent", "ipAddress")
+      `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress")
        VALUES ($1, $2, $3, $4, $5)`,
-      [refreshTokenHash, user.id, expiresAt.toISOString(), userAgent, ipAddress]
+      [refreshToken, user.id, expiresAt.toISOString(), userAgent, ipAddress]
     );
 
     res.json({ token, refreshToken, assignments, userRoles });
@@ -179,14 +178,12 @@ router.post("/refresh", async (req, res) => {
       return;
     }
 
-    const incomingHash = hashRefreshToken(refreshToken);
     const [rt] = await rawQuery<any>(
-      `SELECT rt.id, rt."userId", rt."expiresAt", rt."revokedAt",
-              u."isActive", u."employeeId", u."lockedUntil"
+      `SELECT rt.*, u."isActive", u."employeeId"
        FROM refresh_tokens rt
        JOIN users u ON u.id = rt."userId"
-       WHERE rt."tokenHash" = $1`,
-      [incomingHash]
+       WHERE rt.token = $1`,
+      [refreshToken]
     );
 
     if (!rt) {
@@ -195,18 +192,6 @@ router.post("/refresh", async (req, res) => {
     }
 
     if (rt.revokedAt) {
-      // Reuse of a revoked token: revoke every active session for this user
-      // as a defensive measure against refresh-token theft.
-      try {
-        await rawExecute(
-          `UPDATE refresh_tokens SET "revokedAt"=NOW()
-            WHERE "userId"=$1 AND "revokedAt" IS NULL`,
-          [rt.userId]
-        );
-      } catch (revokeErr) {
-        logger.error({ err: revokeErr, userId: rt.userId }, "Failed to revoke sessions after reuse detection");
-      }
-      logger.warn({ userId: rt.userId }, "Refresh token reuse detected — revoked all sessions");
       res.status(401).json({ error: "رمز التحديث ملغي" });
       return;
     }
@@ -218,11 +203,6 @@ router.post("/refresh", async (req, res) => {
 
     if (!rt.isActive) {
       res.status(403).json({ error: "الحساب موقوف" });
-      return;
-    }
-
-    if (rt.lockedUntil && new Date(rt.lockedUntil) > new Date()) {
-      res.status(429).json({ error: "الحساب مقفل مؤقتاً" });
       return;
     }
 
@@ -238,31 +218,13 @@ router.post("/refresh", async (req, res) => {
       return;
     }
 
-    // Rotate the refresh token: revoke the old one and issue a new one. This
-    // gives us per-use rotation and enables the reuse-detection branch above.
-    const newRefreshToken = signRefreshToken();
-    const newRefreshHash = hashRefreshToken(newRefreshToken);
-    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
-    const userAgent = req.headers["user-agent"] ?? null;
-    const ipAddress = req.ip ?? null;
-
-    await rawExecute(
-      `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE id=$1`,
-      [rt.id]
-    );
-    await rawExecute(
-      `INSERT INTO refresh_tokens ("tokenHash", "userId", "expiresAt", "userAgent", "ipAddress")
-       VALUES ($1, $2, $3, $4, $5)`,
-      [newRefreshHash, rt.userId, expiresAt.toISOString(), userAgent, ipAddress]
-    );
-
     const newToken = signToken({
       userId: rt.userId,
       assignmentId: primaryAssignment.id,
       role: primaryAssignment.role,
     });
 
-    res.json({ token: newToken, refreshToken: newRefreshToken });
+    res.json({ token: newToken });
   } catch (err) {
     handleRouteError(err, res, "Refresh token error:");
   }
@@ -275,8 +237,8 @@ router.post("/logout", authMiddleware, async (req, res) => {
     if (refreshToken) {
       try {
         await rawExecute(
-          `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "tokenHash"=$1 AND "userId"=$2`,
-          [hashRefreshToken(refreshToken), scope.userId]
+          `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE token=$1 AND "userId"=$2`,
+          [refreshToken, scope.userId]
         );
       } catch (revokeErr) {
         logger.error({ err: revokeErr, userId: scope.userId }, "Failed to revoke refresh token on logout");
@@ -359,12 +321,8 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
       res.status(400).json({ error: "كلمة المرور الحالية والجديدة مطلوبتان" });
       return;
     }
-    if (typeof newPassword !== "string" || newPassword.length < 8) {
-      res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل" });
-      return;
-    }
-    if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تحتوي على أحرف وأرقام" });
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل" });
       return;
     }
     const [user] = await rawQuery<any>(`SELECT id, "passwordHash" FROM users WHERE id=$1`, [scope.userId]);
