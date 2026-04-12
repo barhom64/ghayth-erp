@@ -227,14 +227,14 @@ export default function UmrahImport() {
       <Card>
         <CardHeader><CardTitle className="text-base">سجل الاستيراد</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={[
-              { key: "createdAt", header: "التاريخ", render: (l) => new Date(l.createdAt).toLocaleString("ar-SA") },
+              { key: "createdAt", header: "التاريخ", render: (l: any) => new Date(l.createdAt).toLocaleString("ar-SA") },
               { key: "fileName", header: "الملف" },
               { key: "totalRows", header: "الإجمالي" },
-              { key: "newRecords", header: "جديد", render: (l) => <span className="text-green-600">{l.newRecords}</span> },
-              { key: "updatedRecords", header: "محدث", render: (l) => <span className="text-blue-600">{l.updatedRecords}</span> },
-              { key: "errorRecords", header: "أخطاء", render: (l) => <span className="text-red-600">{l.errorRecords}</span> },
+              { key: "newRecords", header: "جديد", render: (l: any) => <span className="text-green-600">{l.newRecords}</span> },
+              { key: "updatedRecords", header: "محدث", render: (l: any) => <span className="text-blue-600">{l.updatedRecords}</span> },
+              { key: "errorRecords", header: "أخطاء", render: (l: any) => <span className="text-red-600">{l.errorRecords}</span> },
             ] as DataTableColumn<any>[]}
             data={logs?.data || []}
             noToolbar
