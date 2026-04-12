@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout, AutoField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -65,6 +65,7 @@ export default function InvoicesCreate() {
   const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("invoice-create", {
     clientId: copyDefaults?.clientId ? String(copyDefaults.clientId) : "",
     description: copyDefaults?.description || "",
+    date: new Date().toISOString().split("T")[0],
     dueDate: "",
     vatRate: copyDefaults?.vatRate ? String(copyDefaults.vatRate) : "15",
     branchId: selectedBranchId ? String(selectedBranchId) : "",
@@ -134,6 +135,7 @@ export default function InvoicesCreate() {
       await createMut.mutateAsync({
         clientId: Number(form.clientId),
         description: form.description || undefined,
+        date: form.date || undefined,
         dueDate: form.dueDate || undefined,
         vatRate: Number(form.vatRate),
         subtotal,
@@ -172,7 +174,10 @@ export default function InvoicesCreate() {
       <div data-form>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم الفاتورة" value={autoNumberRef.current} />
-        <CreationDateField />
+        <div>
+          <Label>التاريخ <span className="text-red-500">*</span></Label>
+          <Input className="mt-1" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
