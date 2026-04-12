@@ -10,7 +10,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 
 export default function VendorsPage() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const isWarehouseContext = location.startsWith("/warehouse");
   const createPath = isWarehouseContext ? "/warehouse/suppliers/create" : "/finance/vendors/create";
   const { scopeQueryString } = useAppContext();
@@ -32,7 +32,11 @@ export default function VendorsPage() {
       key: "name",
       header: "الاسم",
       sortable: true,
-      render: (v) => <span className="font-medium">{v.name}</span>,
+      render: (v) => (
+        <span className="font-medium text-blue-700 hover:text-blue-900 hover:underline cursor-pointer">
+          {v.name}
+        </span>
+      ),
     },
     {
       key: "contactPerson",
@@ -119,6 +123,7 @@ export default function VendorsPage() {
         isError={isError}
         error={error as Error | null}
         onRetry={() => refetch()}
+        onRowClick={(v) => navigate(`/finance/vendors/${v.id}`)}
         pageSize={pageSize}
         emptyMessage="لا يوجد موردين"
         emptyIcon={<Users className="h-6 w-6 text-slate-400" />}

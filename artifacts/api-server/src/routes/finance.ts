@@ -1764,6 +1764,27 @@ router.get("/vendors", async (req, res) => {
   }
 });
 
+router.get("/vendors/:id", async (req, res) => {
+  try {
+    const scope = (req as any).scope!;
+    const id = Number(req.params.id);
+    if (!id || isNaN(id)) { res.status(400).json({ error: "معرف غير صالح" }); return; }
+    const [vendor] = await rawQuery<any>(
+      `SELECT s.*,
+              COALESCE((SELECT SUM(total) FROM purchase_orders po WHERE po."supplierId" = s.id), 0)::numeric AS "totalPurchases",
+              COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po."supplierId" = s.id AND po.status IN ('pending','approved','sent')), 0)::int AS "activeOrders",
+              (SELECT MAX(po."createdAt") FROM purchase_orders po WHERE po."supplierId" = s.id) AS "lastOrderAt"
+       FROM suppliers s
+       WHERE s.id = $1 AND s."companyId" = ANY($2) AND s."deletedAt" IS NULL`,
+      [id, scope.allowedCompanies]
+    );
+    if (!vendor) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    res.json(vendor);
+  } catch (err) {
+    handleRouteError(err, res, "Get vendor error:");
+  }
+});
+
 router.post("/vendors", async (req, res) => {
   try {
     const scope = (req as any).scope!;
