@@ -134,11 +134,29 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         );
         const batches = batchRes.rows;
         let remaining = Number(b.quantity);
+        const updates: { id: number; newQty: number }[] = [];
         for (const batch of batches) {
           if (remaining <= 0) break;
           const take = Math.min(remaining, Number(batch.quantity));
           remaining -= take;
-          await client.query(`UPDATE warehouse_stock_batches SET quantity=$1 WHERE id=$2`, [Math.max(Number(batch.quantity) - take, 0), batch.id]);
+          updates.push({ id: batch.id, newQty: Math.max(Number(batch.quantity) - take, 0) });
+        }
+        if (updates.length > 0) {
+          // Single UPDATE ... FROM (VALUES ...) instead of one round-trip per batch.
+          const valuesSql: string[] = [];
+          const params: any[] = [];
+          for (const u of updates) {
+            const base = params.length;
+            valuesSql.push(`($${base + 1}::int, $${base + 2}::numeric)`);
+            params.push(u.id, u.newQty);
+          }
+          await client.query(
+            `UPDATE warehouse_stock_batches AS wsb
+             SET quantity = v.new_qty
+             FROM (VALUES ${valuesSql.join(",")}) AS v(id, new_qty)
+             WHERE wsb.id = v.id`,
+            params
+          );
         }
         unitCost = Number(product.costPrice ?? 0);
       }

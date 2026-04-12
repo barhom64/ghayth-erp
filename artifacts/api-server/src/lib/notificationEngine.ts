@@ -379,11 +379,18 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
 
       if (channel === "in_app") {
         const recipients = await resolveInAppRecipients(companyId, payload.assignmentId, payload.targetRole);
-        for (const aid of recipients) {
+        if (recipients.length > 0) {
+          // Bulk INSERT — assignmentId is the only column that varies per row.
+          const valuesSql: string[] = [];
+          const params: any[] = [companyId, eventCategory, title, body, priority, payload.targetRole ?? null, payload.actionUrl ?? null, payload.refType ?? null, payload.refId ?? null];
+          for (const aid of recipients) {
+            params.push(aid);
+            valuesSql.push(`($1, $${params.length}, $2, $3, $4, $5, $6, $7, $8, $9, false, NOW())`);
+          }
           await rawExecute(
             `INSERT INTO notifications ("companyId", "assignmentId", type, title, body, priority, "targetRole", "actionUrl", "refType", "refId", "isRead", "createdAt")
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, NOW())`,
-            [companyId, aid, eventCategory, title, body, priority, payload.targetRole ?? null, payload.actionUrl ?? null, payload.refType ?? null, payload.refId ?? null]
+             VALUES ${valuesSql.join(",")}`,
+            params
           );
         }
         const dlId = await insertDeliveryLog({

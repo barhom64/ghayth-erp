@@ -676,10 +676,16 @@ router.put("/role-permissions/bulk", async (req, res) => {
     }
     await withTransaction(async (tx) => {
       await tx.query(`DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`, [role, scope.companyId]);
-      for (const perm of permissions) {
+      if (permissions.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [role, scope.companyId];
+        for (const perm of permissions) {
+          params.push(perm);
+          valuesSql.push(`($1, $${params.length}, $2)`);
+        }
         await tx.query(
-          `INSERT INTO role_permissions (role, permission, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-          [role, perm, scope.companyId]
+          `INSERT INTO role_permissions (role, permission, "companyId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
+          params
         );
       }
     });
