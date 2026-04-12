@@ -1,5 +1,6 @@
 import { lazy } from "react";
 
+const PropertiesGuide = lazy(() => import("@/pages/properties-guide"));
 const Properties = lazy(() => import("@/pages/properties"));
 const PropertiesDashboard = lazy(() => import("@/pages/properties-dashboard"));
 const PropertiesBuildings = lazy(() => import("@/pages/properties-buildings"));
@@ -47,6 +48,8 @@ export const propertyRoutes = [
   { path: "/properties/inspections", component: PropertyInspections },
   { path: "/properties/deposits", component: PropertyDeposits },
   { path: "/properties/occupancy-report", component: OccupancyReport },
+  { path: "/guide/properties", component: PropertiesGuide },
+  { path: "/properties/guide", component: PropertiesGuide },
   { path: "/properties/:id/status", component: UnitStatusChange },
   { path: "/properties/:id", component: UnitDetail },
   { path: "/properties", component: Properties },

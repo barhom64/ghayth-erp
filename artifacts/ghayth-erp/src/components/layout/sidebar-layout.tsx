@@ -15,7 +15,7 @@ import {
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
-  Plus, Printer, CheckSquare, Download, Send, Star, Settings,
+  Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -179,6 +179,7 @@ const allNavSections: NavSection[] = [
         { label: "عقود الإيجار", path: "/properties/contracts", icon: FileSignature },
         { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
         { label: "طلبات الصيانة", path: "/properties/maintenance", icon: Hammer },
+        { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
       ]},
       { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support" },
       { label: "التسويق", path: "/marketing", icon: Megaphone, module: "marketing" },
