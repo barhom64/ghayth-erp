@@ -138,7 +138,11 @@ router.use("/projects", requireModule("operations"), projectsRouter);
 router.use("/support", requireModule("support"), supportRouter);
 router.use("/crm", requireModule("crm"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
-router.use("/automation", automationRouter);
+// /automation manages global cron jobs and event/automation logs.
+// These are platform-level resources, not per-tenant data, so any user
+// could otherwise toggle/trigger jobs that affect every company. Limit
+// to general_manager (90) and above.
+router.use("/automation", requireMinLevel(90), automationRouter);
 router.use("/communications", requireModule("comms"), communicationsRouter);
 router.use("/governance", requireModule("governance"), governanceRouter);
 router.use("/bi", requireModule("bi"), biRouter);
