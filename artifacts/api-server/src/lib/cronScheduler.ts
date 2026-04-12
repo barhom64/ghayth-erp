@@ -15,6 +15,9 @@ import { processFallbackChains } from "./notificationEngine.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
 import { eventBus } from "./eventBus.js";
+import { decryptSecret } from "./secrets.js";
+import { processDueRecurringJournals } from "../routes/finance-recurring.js";
+import { scanObligations } from "./obligationsEngine.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -1985,6 +1988,247 @@ async function weeklyDataCleanup(): Promise<string> {
   return `Data cleanup: ${cleaned} records cleaned`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// OBLIGATIONS SCANNER (Track C.2) — يرقّي الالتزامات المتأخرة وتصعيداتها
+// ─────────────────────────────────────────────────────────────────────────────
+async function hourlyObligationsScan(): Promise<string> {
+  const r = await scanObligations();
+  return `Obligations scan: breached=${r.breachedCount}, L1=${r.escalatedL1}, L2=${r.escalatedL2}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DUNNING AUTO-SEND (Track C.3) — يرسل خطابات التحصيل حسب المرحلة تلقائياً
+// ─────────────────────────────────────────────────────────────────────────────
+async function dailyDunningAutoSend(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(
+    `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+  );
+  let totalSent = 0;
+  let totalSkipped = 0;
+
+  for (const c of companies) {
+    try {
+      // Ensure dunning tables exist
+      await rawExecute(`
+        CREATE TABLE IF NOT EXISTS dunning_letters (
+          id SERIAL PRIMARY KEY,
+          "companyId" INTEGER NOT NULL,
+          "invoiceId" INTEGER NOT NULL,
+          "clientId" INTEGER,
+          stage INTEGER NOT NULL,
+          "daysPastDue" INTEGER NOT NULL,
+          "outstandingAmount" NUMERIC(18,2) NOT NULL,
+          "letterContent" TEXT,
+          "sentAt" TIMESTAMP DEFAULT NOW(),
+          "sentBy" INTEGER,
+          "sentVia" VARCHAR(16) DEFAULT 'manual',
+          status VARCHAR(16) DEFAULT 'sent'
+        )
+      `);
+      await rawExecute(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningStage" INTEGER DEFAULT 0`);
+      await rawExecute(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningAt" TIMESTAMP`);
+
+      // Find overdue invoices needing dunning
+      const today = new Date().toISOString().slice(0, 10);
+      const rows = await rawQuery<any>(
+        `SELECT i.id, i."invoiceNumber", i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
+                i."clientId", COALESCE(i."lastDunningStage",0) AS "lastStage", i."lastDunningAt",
+                GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
+         FROM invoices i
+         WHERE i."companyId"=$2
+           AND i.status NOT IN ('paid','cancelled')
+           AND COALESCE(i."deletedAt",NULL) IS NULL
+           AND i."dueDate" IS NOT NULL
+           AND i."dueDate"::date < $1::date
+           AND (i.total - COALESCE(i."paidAmount",0)) > 0
+         LIMIT 500`,
+        [today, c.id]
+      );
+
+      for (const r of rows) {
+        const days = Number(r.daysPastDue);
+        let stage: number;
+        if (days <= 14) stage = 1;
+        else if (days <= 30) stage = 2;
+        else if (days <= 60) stage = 3;
+        else if (days <= 90) stage = 4;
+        else stage = 5;
+
+        // Skip if already at this stage within last 24h or already past this stage
+        if (Number(r.lastStage) >= stage && r.lastDunningAt) {
+          const hoursSince = (Date.now() - new Date(r.lastDunningAt).getTime()) / 36e5;
+          if (hoursSince < 24) { totalSkipped++; continue; }
+        }
+
+        const outstanding = Math.round((Number(r.total) - Number(r.paidAmount)) * 100) / 100;
+        await rawExecute(
+          `INSERT INTO dunning_letters ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","sentVia")
+           VALUES ($1,$2,$3,$4,$5,$6,'auto')`,
+          [c.id, r.id, r.clientId, stage, days, outstanding]
+        );
+        await rawExecute(
+          `UPDATE invoices SET "lastDunningStage"=$1, "lastDunningAt"=NOW() WHERE id=$2`,
+          [stage, r.id]
+        );
+        totalSent++;
+      }
+    } catch (err) {
+      console.error(`Dunning auto-send error for company ${c.id}:`, err);
+    }
+  }
+  return `Dunning auto-send: sent=${totalSent}, skipped=${totalSkipped}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONTHLY BAD DEBT PROVISION REMINDER (Track C.3)
+// ─────────────────────────────────────────────────────────────────────────────
+async function monthlyBadDebtReminder(): Promise<string> {
+  const companies = await rawQuery<{ id: number; name: string }>(
+    `SELECT id, name FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+  );
+  let notified = 0;
+  for (const c of companies) {
+    try {
+      const [cfoRow] = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+         JOIN user_roles ur ON ur."userId" = ea."employeeId"
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         LIMIT 1`,
+        [c.id]
+      ).catch(() => [] as any);
+      const cfoId = cfoRow?.id;
+      if (!cfoId) continue;
+      await createNotification({
+        companyId: c.id,
+        assignmentId: cfoId,
+        type: "bad_debt_reminder",
+        title: "تذكير: احتساب مخصص الديون المشكوك فيها",
+        body: `تم دخول شهر جديد — يرجى مراجعة قائمة تقادم الذمم واحتساب مخصص الديون المشكوك في تحصيلها عبر /finance/bad-debt/post`,
+        priority: "medium",
+      });
+      notified++;
+    } catch (err) {
+      console.error(`Bad debt reminder error for company ${c.id}:`, err);
+    }
+  }
+  return `Bad debt reminders sent: ${notified}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONTHLY FX REVALUATION REMINDER (Track C.3)
+// ─────────────────────────────────────────────────────────────────────────────
+async function monthlyFxRevaluationReminder(): Promise<string> {
+  const companies = await rawQuery<{ id: number; name: string }>(
+    `SELECT id, name FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+  );
+  let notified = 0;
+  for (const c of companies) {
+    try {
+      // Only remind if company has foreign-currency exposure
+      const [fxExposure] = await rawQuery<any>(
+        `SELECT COUNT(*)::int AS n FROM invoices
+         WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled')`,
+        [c.id]
+      ).catch(() => [{ n: 0 }]);
+      if (!fxExposure || fxExposure.n === 0) continue;
+
+      const [cfoRow] = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+         JOIN user_roles ur ON ur."userId" = ea."employeeId"
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         LIMIT 1`,
+        [c.id]
+      ).catch(() => [] as any);
+      const cfoId = cfoRow?.id;
+      if (!cfoId) continue;
+      await createNotification({
+        companyId: c.id,
+        assignmentId: cfoId,
+        type: "fx_revaluation_reminder",
+        title: "تذكير: إعادة تقييم العملات الأجنبية",
+        body: `يوجد ${fxExposure.n} فاتورة بعملة أجنبية مفتوحة — يرجى ترحيل إعادة التقييم الشهرية عبر /finance/fx/revaluation/post`,
+        priority: "medium",
+      });
+      notified++;
+    } catch (err) {
+      console.error(`FX reminder error for company ${c.id}:`, err);
+    }
+  }
+  return `FX revaluation reminders sent: ${notified}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DAILY BUDGET VARIANCE ALERT (Track C.3)
+// ─────────────────────────────────────────────────────────────────────────────
+async function dailyBudgetVarianceAlert(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(
+    `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+  );
+  const period = new Date().toISOString().slice(0, 7);
+  let alerted = 0;
+
+  for (const c of companies) {
+    try {
+      const [y, m] = period.split("-").map(Number);
+      const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
+      const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+
+      // Find budgets near or over limit
+      const overBudget = await rawQuery<any>(
+        `SELECT b."accountCode", coa.name AS "accountName", b.amount AS "budgetAmount",
+                COALESCE((
+                  SELECT SUM(jl.debit - jl.credit)
+                  FROM journal_lines jl
+                  JOIN journal_entries je ON je.id = jl."journalId"
+                  WHERE je."companyId" = b."companyId" AND je."deletedAt" IS NULL
+                    AND jl."accountCode" = b."accountCode"
+                    AND je."createdAt"::date BETWEEN $2::date AND $3::date
+                ), 0) AS "actualAmount"
+         FROM budgets b
+         LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
+         WHERE b."companyId"=$1 AND b.period=$4 AND b.amount > 0`,
+        [c.id, periodStart, periodEnd, period]
+      );
+
+      const overages = overBudget.filter((r: any) => {
+        const actual = Number(r.actualAmount);
+        const budget = Number(r.budgetAmount);
+        return budget > 0 && actual > budget * 0.9;
+      });
+
+      if (overages.length === 0) continue;
+
+      const [cfoRow] = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+         JOIN user_roles ur ON ur."userId" = ea."employeeId"
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         LIMIT 1`,
+        [c.id]
+      ).catch(() => [] as any);
+      const cfoId = cfoRow?.id;
+      if (!cfoId) continue;
+
+      const summary = overages
+        .slice(0, 5)
+        .map((r: any) => `• ${r.accountName ?? r.accountCode}: ${Math.round((Number(r.actualAmount) / Number(r.budgetAmount)) * 100)}%`)
+        .join("\n");
+
+      await createNotification({
+        companyId: c.id,
+        assignmentId: cfoId,
+        type: "budget_variance_alert",
+        title: `تنبيه: ${overages.length} حساب قارب أو تجاوز الميزانية`,
+        body: summary + (overages.length > 5 ? `\n... و${overages.length - 5} حساب آخر` : ""),
+        priority: overages.some((r: any) => Number(r.actualAmount) > Number(r.budgetAmount)) ? "high" : "medium",
+      });
+      alerted++;
+    } catch (err) {
+      console.error(`Budget variance alert error for company ${c.id}:`, err);
+    }
+  }
+  return `Budget variance alerts sent: ${alerted}`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
@@ -2031,6 +2275,12 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_vendor_contract_expiry", description: "تنبيه انتهاء عقود الموردين (90/30 يوم)", schedule: "0 7 * * 1", handler: vendorContractExpiryAlerts },
   { name: "daily_system_health_report", description: "تقرير صحة النظام اليومي للمدير التقني", schedule: "0 6 * * *", handler: dailySystemHealthReport },
   { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
+  { name: "daily_recurring_journals", description: "تنفيذ القيود المحاسبية الدورية المستحقة", schedule: "0 1 * * *", handler: processDueRecurringJournals },
+  { name: "hourly_obligations_scan", description: "فحص الالتزامات — ترقية المتأخرات وتصعيد المهام", schedule: "15 * * * *", handler: hourlyObligationsScan },
+  { name: "daily_dunning_auto_send", description: "إرسال تلقائي لخطابات التحصيل حسب المرحلة", schedule: "0 9 * * *", handler: dailyDunningAutoSend },
+  { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
+  { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
+  { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
 ];
 
 export async function seedCronJobs(): Promise<void> {

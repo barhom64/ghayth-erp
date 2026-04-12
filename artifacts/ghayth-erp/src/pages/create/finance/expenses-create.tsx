@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -185,6 +185,7 @@ export default function ExpensesCreate() {
     sourceAccountCode: "",
     amount: "",
     description: "",
+    date: new Date().toISOString().split("T")[0],
     period: new Date().toISOString().slice(0, 7),
     operationType: "expense",
     expenseType: "operational",
@@ -263,6 +264,7 @@ export default function ExpensesCreate() {
         sourceAccountCode: form.sourceAccountCode || undefined,
         amount: Number(form.amount),
         description: form.description,
+        date: form.date || undefined,
         period: form.period || undefined,
         operationType: form.operationType,
         expenseType: form.expenseType,
@@ -325,7 +327,10 @@ export default function ExpensesCreate() {
       )}
       <div data-form>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <CreationDateField />
+          <div>
+            <Label>التاريخ <span className="text-red-500">*</span></Label>
+            <Input className="mt-1" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+          </div>
           <div>
             <Label>الفترة المالية</Label>
             <Input className="mt-1" type="month" value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} />

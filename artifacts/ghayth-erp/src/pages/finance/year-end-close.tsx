@@ -1,0 +1,238 @@
+import { useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { useMutation } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
+import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/formatters";
+import { Archive, TrendingUp, TrendingDown, Calculator, CheckCircle } from "lucide-react";
+
+interface YearEndPreview {
+  dryRun?: boolean;
+  year: number;
+  retainedEarningsAccountCode: string;
+  netIncome: number;
+  totalRevenue: number;
+  totalExpense: number;
+  revenues: Array<{ code: string; name: string; balance: number }>;
+  expenses: Array<{ code: string; name: string; balance: number }>;
+  lines: Array<{ accountCode: string; debit: number; credit: number; description?: string }>;
+  missingPeriods?: string[];
+  ref?: string;
+  id?: number;
+}
+
+export default function YearEndClosePage() {
+  const { toast } = useToast();
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState<string>(String(currentYear));
+  const [retainedEarningsAccountCode, setRetainedEarningsAccountCode] = useState<string>("3300");
+  const [force, setForce] = useState(false);
+  const [preview, setPreview] = useState<YearEndPreview | null>(null);
+  const [closed, setClosed] = useState(false);
+
+  const previewMut = useMutation({
+    mutationFn: () =>
+      apiFetch<YearEndPreview>(`/finance/fiscal-periods/${year}/year-end-close?dryRun=true`, {
+        method: "POST",
+        body: JSON.stringify({ retainedEarningsAccountCode, force }),
+      }),
+    onSuccess: (data) => {
+      setPreview(data);
+      setClosed(false);
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل المعاينة" }),
+  });
+
+  const confirmMut = useMutation({
+    mutationFn: () =>
+      apiFetch<YearEndPreview>(`/finance/fiscal-periods/${year}/year-end-close`, {
+        method: "POST",
+        body: JSON.stringify({ retainedEarningsAccountCode, force }),
+      }),
+    onSuccess: (data) => {
+      setPreview(data);
+      setClosed(true);
+      toast({ title: `تم إقفال السنة ${year} بنجاح` });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل الإقفال" }),
+  });
+
+  const wizardTab = () => (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>السنة المالية *</Label>
+              <Input
+                type="number"
+                className="mt-1"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                min="2000"
+                max="2100"
+              />
+            </div>
+            <div>
+              <Label>حساب الأرباح المحتجزة *</Label>
+              <Input
+                className="mt-1"
+                value={retainedEarningsAccountCode}
+                onChange={(e) => setRetainedEarningsAccountCode(e.target.value)}
+                placeholder="3300"
+              />
+            </div>
+            <div className="flex items-end">
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+                إقفال الفترات الشهرية المتبقية تلقائياً
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t">
+            <Button variant="outline" onClick={() => previewMut.mutate()} disabled={previewMut.isPending}>
+              <Calculator className="h-4 w-4 me-1" />
+              {previewMut.isPending ? "جاري الحساب..." : "معاينة"}
+            </Button>
+            <Button
+              onClick={() => {
+                if (!preview) {
+                  toast({ variant: "destructive", title: "قم بالمعاينة أولاً" });
+                  return;
+                }
+                if (confirm(`تأكيد إقفال السنة المالية ${year}؟ لا يمكن التراجع عن هذه العملية.`)) {
+                  confirmMut.mutate();
+                }
+              }}
+              disabled={!preview || confirmMut.isPending || closed}
+            >
+              <CheckCircle className="h-4 w-4 me-1" />
+              {confirmMut.isPending ? "جاري الإقفال..." : closed ? "تم الإقفال" : "تأكيد الإقفال"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {preview && (
+        <>
+          {preview.missingPeriods && preview.missingPeriods.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm font-semibold text-amber-700 mb-2">
+                  فترات شهرية غير مُقفلة ({preview.missingPeriods.length})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {preview.missingPeriods.map((p) => (
+                    <Badge key={p} className="bg-amber-100 text-amber-700">{p}</Badge>
+                  ))}
+                </div>
+                {!force && (
+                  <p className="text-xs text-amber-700 mt-2">
+                    فعّل خيار "إقفال الفترات الشهرية المتبقية تلقائياً" للمتابعة
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">إجمالي الإيرادات</p>
+                  <p className="text-lg font-bold text-green-700">{formatCurrency(preview.totalRevenue)}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <TrendingDown className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">إجمالي المصروفات</p>
+                  <p className="text-lg font-bold text-red-700">{formatCurrency(preview.totalExpense)}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <Archive className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">صافي الدخل</p>
+                  <p
+                    className={`text-lg font-bold ${preview.netIncome >= 0 ? "text-green-700" : "text-red-700"}`}
+                  >
+                    {formatCurrency(preview.netIncome)}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-sm font-semibold mb-3">
+                قيد إقفال السنة المقترح ({preview.lines.length} بند)
+              </p>
+              <div className="rounded-xl border overflow-hidden text-sm">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-right text-xs text-gray-500">الحساب</th>
+                      <th className="px-3 py-2 text-right text-xs text-gray-500">البيان</th>
+                      <th className="px-3 py-2 text-right text-xs text-gray-500">مدين</th>
+                      <th className="px-3 py-2 text-right text-xs text-gray-500">دائن</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.lines.map((l, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-3 py-2 font-mono text-xs">{l.accountCode}</td>
+                        <td className="px-3 py-2 text-xs">{l.description || "—"}</td>
+                        <td className="px-3 py-2 font-mono">{l.debit > 0 ? formatCurrency(l.debit) : ""}</td>
+                        <td className="px-3 py-2 font-mono">{l.credit > 0 ? formatCurrency(l.credit) : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {closed && preview.ref && (
+                <p className="text-sm text-green-700 mt-3">
+                  تم ترحيل القيد: <span className="font-mono">{preview.ref}</span> (#{preview.id})
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+
+  const tabs: EntityTab[] = [
+    { key: "wizard", label: "معالج الإقفال", icon: Archive, content: wizardTab },
+  ];
+
+  return (
+    <EntityDetailPage
+      title="إقفال السنة المالية"
+      subtitle="ترحيل الإيرادات والمصروفات إلى الأرباح المحتجزة وإقفال السنة"
+      avatar={{ icon: Archive, gradientFrom: "from-indigo-500", gradientTo: "to-purple-600" }}
+      backHref="/finance/fiscal-periods"
+      backLabel="العودة للفترات المالية"
+      tabs={tabs}
+      defaultTab="wizard"
+    />
+  );
+}

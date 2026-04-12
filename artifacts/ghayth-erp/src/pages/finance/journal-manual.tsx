@@ -4,11 +4,11 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr as formatDate } from "@/lib/formatters";
-import { Plus } from "lucide-react";
+import { Plus, ScrollText } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -55,6 +55,54 @@ export default function JournalManualPage() {
 
   const list = data?.data ?? data ?? [];
 
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "المرجع",
+      sortable: true,
+      render: (row) => <span className="font-mono text-blue-600 text-xs">{row.ref}</span>,
+    },
+    {
+      key: "createdAt",
+      header: "التاريخ",
+      sortable: true,
+      render: (row) => <span className="text-gray-500 text-xs">{row.createdAt ? formatDate(row.createdAt) : "-"}</span>,
+    },
+    { key: "description", header: "البيان", sortable: true },
+    { key: "createdByName", header: "أنشأه", sortable: true },
+    {
+      key: "approvalStatus",
+      header: "الحالة",
+      sortable: true,
+      render: (row) => {
+        const cfg = STATUS_CONFIG[row.approvalStatus] ?? STATUS_CONFIG.draft;
+        return <Badge variant="outline" className={`bg-${cfg.color}-100 text-${cfg.color}-700`}>{cfg.label}</Badge>;
+      },
+    },
+    { key: "reviewedByName", header: "راجعه", render: (row) => row.reviewedByName ?? "—" },
+    { key: "approvedByName", header: "اعتمده", render: (row) => row.approvedByName ?? "—" },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (row) => (
+        <div className="flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/finance/journal-manual/${row.id}`}>
+            <button className="text-blue-600 hover:underline text-xs">عرض</button>
+          </Link>
+          {row.approvalStatus === "draft" && (
+            <button onClick={() => setActionModal({ type: "submit", journal: row })} className="text-yellow-600 hover:underline text-xs">إرسال للمراجعة</button>
+          )}
+          {row.approvalStatus === "pending_review" && (
+            <button onClick={() => { setActionNotes(""); setActionModal({ type: "review", journal: row }); }} className="text-indigo-600 hover:underline text-xs">مراجعة</button>
+          )}
+          {row.approvalStatus === "approved" && (
+            <button onClick={() => setActionModal({ type: "post", journal: row })} className="text-green-600 hover:underline text-xs">ترحيل</button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -82,68 +130,15 @@ export default function JournalManualPage() {
         ))}
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-16 text-gray-400">جاري التحميل...</div>
-      ) : list.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">لا توجد قيود يدوية</div>
-      ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">المرجع</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">البيان</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">التاريخ</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">أنشأه</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">الحالة</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">راجعه</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">اعتمده</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((row: any) => {
-                  const cfg = STATUS_CONFIG[row.approvalStatus] ?? STATUS_CONFIG.draft;
-                  return (
-                    <tr
-                      key={row.id}
-                      className="border-b hover:bg-gray-50 cursor-pointer"
-                      onClick={() => navigate(`/finance/journal-manual/${row.id}`)}
-                    >
-                      <td className="px-3 py-3">{row.ref}</td>
-                      <td className="px-3 py-3">{row.description}</td>
-                      <td className="px-3 py-3 text-gray-500">{formatDate(row.createdAt)}</td>
-                      <td className="px-3 py-3">{row.createdByName}</td>
-                      <td className="px-3 py-3">
-                        <Badge variant="outline" className={`bg-${cfg.color}-100 text-${cfg.color}-700`}>{cfg.label}</Badge>
-                      </td>
-                      <td className="px-3 py-3">{row.reviewedByName ?? "—"}</td>
-                      <td className="px-3 py-3">{row.approvedByName ?? "—"}</td>
-                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex gap-2 flex-wrap">
-                          <Link href={`/finance/journal-manual/${row.id}`}>
-                            <button className="text-blue-600 hover:underline text-xs">عرض</button>
-                          </Link>
-                          {row.approvalStatus === "draft" && (
-                            <button onClick={() => setActionModal({ type: "submit", journal: row })} className="text-yellow-600 hover:underline text-xs">إرسال للمراجعة</button>
-                          )}
-                          {row.approvalStatus === "pending_review" && (
-                            <button onClick={() => { setActionNotes(""); setActionModal({ type: "review", journal: row }); }} className="text-indigo-600 hover:underline text-xs">مراجعة</button>
-                          )}
-                          {row.approvalStatus === "approved" && (
-                            <button onClick={() => setActionModal({ type: "post", journal: row })} className="text-green-600 hover:underline text-xs">ترحيل</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+      <DataTable
+        columns={columns}
+        data={list}
+        isLoading={isLoading}
+        emptyMessage="لا توجد قيود يدوية"
+        emptyIcon={<ScrollText className="h-6 w-6 text-slate-400" />}
+        onRowClick={(row) => navigate(`/finance/journal-manual/${row.id}`)}
+        noToolbar
+      />
 
       {actionModal && (
         <AlertDialog open={!!actionModal} onOpenChange={() => setActionModal(null)}>

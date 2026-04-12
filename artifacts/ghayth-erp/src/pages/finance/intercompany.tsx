@@ -3,11 +3,11 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Link } from "wouter";
 
 export default function IntercompanyPage() {
@@ -48,6 +48,50 @@ export default function IntercompanyPage() {
 
   const list = data?.data ?? data ?? [];
 
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "المرجع",
+      sortable: true,
+      render: (row) => <span className="font-mono text-blue-600 text-xs">{row.ref}</span>,
+    },
+    {
+      key: "transactionDate",
+      header: "التاريخ",
+      sortable: true,
+      render: (row) => <span className="text-gray-500 text-xs">{row.transactionDate ? formatDate(row.transactionDate) : "-"}</span>,
+    },
+    { key: "fromCompanyName", header: "الشركة المُرسِلة", sortable: true },
+    { key: "toCompanyName", header: "الشركة المُستقبِلة", sortable: true },
+    {
+      key: "amount",
+      header: "المبلغ",
+      sortable: true,
+      render: (row) => <span className="font-semibold">{formatCurrency(row.amount)}</span>,
+    },
+    { key: "description", header: "البيان" },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (row) => (
+        <Badge variant="outline" className={row.status === "posted" ? "bg-green-100 text-green-700" : row.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>
+          {row.status === "posted" ? "مُرحَّل" : row.status === "cancelled" ? "ملغي" : "مسودة"}
+        </Badge>
+      ),
+    },
+    {
+      key: "fromJournalId",
+      header: "قيد الإرسال",
+      render: (row) => row.fromJournalId ? <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">#{row.fromJournalId}</span> : "—",
+    },
+    {
+      key: "toJournalId",
+      header: "قيد الاستلام",
+      render: (row) => row.toJournalId ? <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">#{row.toJournalId}</span> : "—",
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -78,50 +122,14 @@ export default function IntercompanyPage() {
         </ul>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-16 text-gray-400">جاري التحميل...</div>
-      ) : list.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">لا توجد معاملات بينية</div>
-      ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">المرجع</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">الشركة المُرسِلة</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">الشركة المُستقبِلة</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">المبلغ</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">البيان</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">التاريخ</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">الحالة</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">قيد الإرسال</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">قيد الاستلام</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((row: any) => (
-                  <tr key={row.id} className="border-b hover:bg-gray-50">
-                    <td className="px-3 py-3">{row.ref}</td>
-                    <td className="px-3 py-3">{row.fromCompanyName}</td>
-                    <td className="px-3 py-3">{row.toCompanyName}</td>
-                    <td className="px-3 py-3 font-semibold">{formatCurrency(row.amount)}</td>
-                    <td className="px-3 py-3">{row.description}</td>
-                    <td className="px-3 py-3 text-gray-500">{formatDate(row.transactionDate)}</td>
-                    <td className="px-3 py-3">
-                      <Badge variant="outline" className={row.status === "posted" ? "bg-green-100 text-green-700" : row.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>
-                        {row.status === "posted" ? "مُرحَّل" : row.status === "cancelled" ? "ملغي" : "مسودة"}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3">{row.fromJournalId ? <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">#{row.fromJournalId}</span> : "—"}</td>
-                    <td className="px-3 py-3">{row.toJournalId ? <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">#{row.toJournalId}</span> : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+      <DataTable
+        columns={columns}
+        data={list}
+        isLoading={isLoading}
+        emptyMessage="لا توجد معاملات بينية"
+        emptyIcon={<ArrowLeftRight className="h-6 w-6 text-slate-400" />}
+        noToolbar
+      />
 
       {showCreate && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowCreate(false)}>
