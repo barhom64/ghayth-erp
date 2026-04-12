@@ -57,7 +57,8 @@ export default function Evaluation360UpwardPage() {
 
   const { data: cycleData } = useApiQuery<any>(
     ["evaluation-cycle-detail", cycleId],
-    `/hr/evaluation-cycles/${cycleId}`
+    `/hr/evaluation-cycles/${cycleId}`,
+    { enabled: !!cycleId }
   );
   // Use the cycle's participants to build the manager list — they are already company-scoped
   // and visible to the current user. This avoids calling /employees (restricted for employees).

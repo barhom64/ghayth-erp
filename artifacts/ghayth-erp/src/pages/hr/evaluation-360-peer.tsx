@@ -55,7 +55,8 @@ export default function Evaluation360PeerPage() {
 
   const { data: cycleData } = useApiQuery<any>(
     ["evaluation-cycle-detail", cycleId],
-    `/hr/evaluation-cycles/${cycleId}`
+    `/hr/evaluation-cycles/${cycleId}`,
+    { enabled: !!cycleId }
   );
   const submitMutation = useApiMutation(`/hr/evaluation-cycles/${cycleId}/peer-evaluation`, "POST");
 

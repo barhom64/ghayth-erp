@@ -22,7 +22,7 @@ export default function InventoryCostingPage() {
     { enabled: !!selectedProduct }
   );
 
-  const roundingSetup = useApiMutation("/finance/rounding-account/setup", "POST");
+  const roundingSetup = useApiMutation("/finance/rounding-account/setup", "POST", [["rounding-account"]]);
   const { data: roundingAccount } = useApiQuery<any>(["rounding-account"], "/finance/rounding-account");
 
   async function handleSetupRounding() {
