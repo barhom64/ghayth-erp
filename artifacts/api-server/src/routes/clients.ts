@@ -19,7 +19,9 @@ router.get("/", async (req, res) => {
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['name', 'email', 'phone']; }
 
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters);
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, {
+      enforceBranchScope: true,
+    });
     let where = baseWhere + ` AND "deletedAt" IS NULL`;
     let paramIdx = nextParamIndex;
 

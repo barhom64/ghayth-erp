@@ -29,7 +29,17 @@ export interface ScopedQueryOptions {
   orderBy?: string;
   limit?: number;
   offset?: number;
+  /**
+   * When true, routes that don't receive an explicit branchIds filter are
+   * automatically restricted to the user's `scope.allowedBranches` unless
+   * the user is owner or general_manager (who have company-wide access).
+   * This implements the branch/company/role cascade: a branch_manager or
+   * scoped manager only sees data from their assigned branches.
+   */
+  enforceBranchScope?: boolean;
 }
+
+const BRANCH_SCOPE_EXEMPT_ROLES = new Set(["owner", "general_manager"]);
 
 export function buildScopedWhere(
   scope: RequestScope,
@@ -59,9 +69,24 @@ export function buildScopedWhere(
   }
 
   const requestedBranchIds = filters.branchIds?.length ? filters.branchIds : [];
-  const branchIds = requestedBranchIds.length > 0
+  let branchIds: number[] = requestedBranchIds.length > 0
     ? requestedBranchIds.filter((id) => scope.allowedBranches.includes(id))
     : [];
+
+  // Cascade enforcement: when no explicit branch filter is provided and the
+  // caller opted in, apply the user's allowed branches so branch_managers
+  // and other scoped roles can't see data from branches they aren't
+  // assigned to. Owners and general_managers bypass this.
+  if (
+    branchIds.length === 0 &&
+    options.enforceBranchScope &&
+    !scope.isOwner &&
+    !BRANCH_SCOPE_EXEMPT_ROLES.has(scope.role) &&
+    scope.allowedBranches.length > 0
+  ) {
+    branchIds = scope.allowedBranches;
+  }
+
   if (branchIds.length === 1) {
     conditions.push(`${branchCol} = $${paramIdx}`);
     params.push(branchIds[0]);

@@ -30,6 +30,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
       companyColumn: 'ea."companyId"',
       branchColumn: 'ea."branchId"',
       extraConditions: [`ea.status = 'active'`],
+      enforceBranchScope: true,
     });
 
     let paramIdx = nextParamIndex;
