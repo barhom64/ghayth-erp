@@ -14,6 +14,7 @@ import {
   processApprovalStep,
   createJournalEntry,
   getAccountCodeFromMapping,
+  checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import {
@@ -4278,6 +4279,223 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
       },
     });
   } catch (err) { handleRouteError(err, res, "Gratuity calculation error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONTHLY HR ACCRUALS — إقفالات شهرية: إجازات + مكافأة نهاية الخدمة
+// Posts two liabilities to GL each month: accrued leave days (at current
+// daily rate) and accrued EOS gratuity (1/24 of salary for first 5 years,
+// then 1/12 afterwards). Idempotent per period via the JE ref check.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/accruals/monthly", requirePermission("hr:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { period } = (req.body || {}) as { period?: string };
+    const targetPeriod = period || new Date().toISOString().slice(0, 7);
+
+    if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
+      res.status(400).json({ error: "صيغة الفترة غير صحيحة (YYYY-MM)" });
+      return;
+    }
+
+    const accrualDate = `${targetPeriod}-01`;
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, accrualDate);
+    if (!periodCheck.open) {
+      res.status(422).json({ error: `لا يمكن تسجيل استحقاقات في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
+      return;
+    }
+
+    const ref = `HR-ACCRUAL-${targetPeriod}`;
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [scope.companyId, ref]
+    );
+    if (existing) {
+      res.status(409).json({ error: "تم تسجيل استحقاقات هذه الفترة مسبقاً", journalId: existing.id });
+      return;
+    }
+
+    const employees = await rawQuery<any>(
+      `SELECT ea."employeeId", ea.salary, ea."startDate",
+              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+       FROM employee_assignments ea
+       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
+                                      AND ec."companyId"=$1 AND ec.status='active'
+       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary > 0`,
+      [scope.companyId]
+    );
+
+    if (employees.length === 0) {
+      res.status(400).json({ error: "لا يوجد موظفون نشطون لاحتساب الاستحقاقات" });
+      return;
+    }
+
+    const periodEnd = new Date(`${targetPeriod}-28`);
+    let totalLeaveAccrual = 0;
+    let totalEosAccrual = 0;
+    const breakdown: any[] = [];
+    const DEFAULT_ANNUAL_LEAVE_DAYS = 21;
+
+    for (const emp of employees) {
+      const salary = Number(emp.salary) || 0;
+      if (salary <= 0) continue;
+
+      const dailyRate = salary / 30;
+      const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
+      const leaveAccrual = Math.round(dailyRate * monthlyLeaveDays * 100) / 100;
+
+      const startDate = new Date(emp.contractStart || emp.startDate);
+      const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
+      let monthlyEosAccrual = 0;
+      if (yearsOfService < 1) {
+        monthlyEosAccrual = salary / 24;
+      } else if (yearsOfService <= 5) {
+        monthlyEosAccrual = salary / 24;
+      } else {
+        monthlyEosAccrual = salary / 12;
+      }
+      monthlyEosAccrual = Math.round(monthlyEosAccrual * 100) / 100;
+
+      totalLeaveAccrual += leaveAccrual;
+      totalEosAccrual += monthlyEosAccrual;
+      breakdown.push({
+        employeeId: emp.employeeId,
+        salary,
+        leaveAccrual,
+        eosAccrual: monthlyEosAccrual,
+      });
+    }
+
+    totalLeaveAccrual = Math.round(totalLeaveAccrual * 100) / 100;
+    totalEosAccrual = Math.round(totalEosAccrual * 100) / 100;
+
+    if (totalLeaveAccrual <= 0 && totalEosAccrual <= 0) {
+      res.status(400).json({ error: "لا توجد مبالغ استحقاق لاحتسابها" });
+      return;
+    }
+
+    const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "hr_leave_accrual_expense", "debit", "5120"),
+      getAccountCodeFromMapping(scope.companyId, "hr_leave_accrual_liability", "credit", "2220"),
+      getAccountCodeFromMapping(scope.companyId, "hr_eos_accrual_expense", "debit", "5130"),
+      getAccountCodeFromMapping(scope.companyId, "hr_eos_accrual_liability", "credit", "2230"),
+    ]);
+
+    const lines = [
+      { accountCode: leaveExpenseCode, debit: totalLeaveAccrual, credit: 0 },
+      { accountCode: eosExpenseCode, debit: totalEosAccrual, credit: 0 },
+      { accountCode: leaveLiabilityCode, debit: 0, credit: totalLeaveAccrual },
+      { accountCode: eosLiabilityCode, debit: 0, credit: totalEosAccrual },
+    ].filter((l) => l.debit > 0 || l.credit > 0);
+
+    let journalId: number | null = null;
+    try {
+      journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: `استحقاقات شهرية: إجازات ${totalLeaveAccrual} + نهاية خدمة ${totalEosAccrual} (${employees.length} موظف)`,
+        lines,
+      });
+    } catch (journalErr) {
+      console.error("HR accrual journal entry failed:", journalErr);
+      res.status(500).json({ error: "فشل تسجيل قيد الاستحقاقات" });
+      return;
+    }
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "hr.accruals.posted",
+      entity: "journal_entries",
+      entityId: journalId,
+      details: JSON.stringify({ period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }),
+    }).catch(console.error);
+
+    res.status(201).json({
+      journalId,
+      ref,
+      period: targetPeriod,
+      totalLeaveAccrual,
+      totalEosAccrual,
+      employeeCount: employees.length,
+      breakdown,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "HR accruals error:");
+  }
+});
+
+// Preview accruals without posting
+router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const period = (req.query.period as string) || new Date().toISOString().slice(0, 7);
+
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      res.status(400).json({ error: "صيغة الفترة غير صحيحة (YYYY-MM)" });
+      return;
+    }
+
+    const ref = `HR-ACCRUAL-${period}`;
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [scope.companyId, ref]
+    );
+
+    const employees = await rawQuery<any>(
+      `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."startDate",
+              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+       FROM employee_assignments ea
+       JOIN employees e ON e.id=ea."employeeId"
+       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
+                                      AND ec."companyId"=$1 AND ec.status='active'
+       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary > 0
+       ORDER BY e.name`,
+      [scope.companyId]
+    );
+
+    const periodEnd = new Date(`${period}-28`);
+    const DEFAULT_ANNUAL_LEAVE_DAYS = 21;
+    let totalLeaveAccrual = 0;
+    let totalEosAccrual = 0;
+    const rows = employees.map((emp: any) => {
+      const salary = Number(emp.salary) || 0;
+      const dailyRate = salary / 30;
+      const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
+      const leaveAccrual = Math.round(dailyRate * monthlyLeaveDays * 100) / 100;
+      const startDate = new Date(emp.contractStart || emp.startDate);
+      const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
+      const monthlyEosAccrual = Math.round(
+        (yearsOfService > 5 ? salary / 12 : salary / 24) * 100
+      ) / 100;
+      totalLeaveAccrual += leaveAccrual;
+      totalEosAccrual += monthlyEosAccrual;
+      return {
+        employeeId: emp.employeeId,
+        employeeName: emp.employeeName,
+        salary,
+        yearsOfService: Math.round(yearsOfService * 100) / 100,
+        leaveAccrual,
+        eosAccrual: monthlyEosAccrual,
+      };
+    });
+
+    res.json({
+      period,
+      alreadyPosted: !!existing,
+      existingJournalId: existing?.id ?? null,
+      employeeCount: employees.length,
+      totalLeaveAccrual: Math.round(totalLeaveAccrual * 100) / 100,
+      totalEosAccrual: Math.round(totalEosAccrual * 100) / 100,
+      total: Math.round((totalLeaveAccrual + totalEosAccrual) * 100) / 100,
+      rows,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "HR accruals preview error:");
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
