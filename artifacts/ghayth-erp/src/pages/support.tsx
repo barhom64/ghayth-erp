@@ -1,12 +1,9 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -18,17 +15,10 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
-const TICKET_STATUS_OPTIONS = [
-  { value: "open", label: "مفتوحة" },
-  { value: "in_progress", label: "قيد المعالجة" },
-  { value: "resolved", label: "محلولة" },
-  { value: "closed", label: "مغلقة" },
-];
-
 export default function Support() {
   const { roleLevel } = useAppContext();
   const canManage = roleLevel >= 50;
-  const { data: stats } = useApiQuery(["support-stats"], "/support/stats");
+  const { data: stats } = useApiQuery<any>(["support-stats"], "/support/stats");
   const [page, setPage] = useState(1);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -50,8 +40,6 @@ export default function Support() {
   });
   const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
 
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/support/tickets",
     queryKeys: [["support-tickets", String(page)], ["support-stats"]],
@@ -70,6 +58,45 @@ export default function Support() {
     { label: "الفئة", key: "category" },
     { label: "المسؤول", key: "assigneeName" },
     { label: "الحالة", key: "status", type: "status" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "select", header: "", width: "2rem",
+      render: (t) => <BulkCheckbox checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} />,
+    },
+    { key: "ref", header: "الرقم", sortable: true, render: (t) => <span className="font-mono text-muted-foreground">{t.ref}</span> },
+    { key: "tags", header: "الوسوم", render: (t) => <EntityTags entityType="ticket" entityId={t.id} inline /> },
+    { key: "title", header: "العنوان", sortable: true, render: (t) => <span className="font-medium">{t.title}</span> },
+    { key: "category", header: "الفئة", sortable: true, render: (t) => t.category || "-" },
+    { key: "clientName", header: "العميل", sortable: true, render: (t) => t.clientName || "-" },
+    { key: "assigneeName", header: "المسؤول", sortable: true, render: (t) => t.assigneeName || "-" },
+    {
+      key: "priority", header: "الأولوية", sortable: true,
+      render: (t) => (
+        <div className="flex flex-col gap-1">
+          <StatusBadge status={t.priority} />
+          {t.slaBreached && <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />SLA خرق</Badge>}
+        </div>
+      ),
+    },
+    { key: "status", header: "الحالة", sortable: true, render: (t) => <StatusBadge status={t.status} /> },
+    {
+      key: "actions", header: "الإجراءات",
+      render: (t) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(t)}><Eye className="h-4 w-4" /></Button>
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(t.id, { status: t.status || "open", priority: t.priority || "medium", title: t.title || "" })}
+            onDelete={() => startDelete(t.id)}
+          />
+          <button onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="text-gray-400 hover:text-gray-600 p-1">
+            {expandedId === t.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -108,7 +135,7 @@ export default function Support() {
           }}
           values={filters}
           onChange={setFilters}
-          onExportCSV={() => exportToCSV(sortedData || [], [
+          onExportCSV={() => exportToCSV(filtered, [
             { key: "ref", label: "الرقم" },
             { key: "title", label: "العنوان" },
             { key: "category", label: "الفئة" },
@@ -117,17 +144,17 @@ export default function Support() {
             { key: "priority", label: "الأولوية" },
             { key: "status", label: "الحالة" },
           ], "تذاكر الدعم")}
-          resultCount={sortedData?.length}
+          resultCount={filtered.length}
         />
         <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
       </div>
 
       <BulkActionsBar
         entityType="ticket"
-        items={sortedData || []}
+        items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}
-        onToggleAll={() => toggleAll((sortedData || []).map((t: any) => t.id))}
+        onToggleAll={() => toggleAll(filtered.map((t: any) => t.id))}
         onClear={clearSelection}
         invalidateKeys={[["support-tickets", String(page)], ["support-stats"]]}
         csvColumns={[
@@ -143,83 +170,32 @@ export default function Support() {
       <Card>
         <CardHeader><CardTitle className="gap-2 flex items-center"><Headphones className="h-5 w-5" /> تذاكر الدعم</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <TableHead className="w-8"><BulkCheckbox checked={selectedIds.size === (sortedData || []).length && (sortedData || []).length > 0} indeterminate={selectedIds.size > 0 && selectedIds.size < (sortedData || []).length} onChange={() => toggleAll((sortedData || []).map((t: any) => t.id))} /></TableHead>
-            <SortableTableHead column="ref" label="الرقم" sortState={sortState} onSort={handleSort} />
-            <TableHead className="text-start">الوسوم</TableHead>
-            <SortableTableHead column="title" label="العنوان" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="category" label="الفئة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="clientName" label="العميل" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="assigneeName" label="المسؤول" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="priority" label="الأولوية" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead className="text-start">الإجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper
+          <DataTable<any>
+            columns={columns}
+            data={filtered}
             isLoading={isLoading}
             isError={isError}
-            error={error}
+            error={error as Error | null}
             onRetry={() => refetch()}
-            data={filtered}
-            colCount={10}
             emptyMessage="لا توجد تذاكر"
             emptyIcon={<Headphones className="h-6 w-6 text-slate-400" />}
-          >
-            {sortedData?.map(t => (
-              <Fragment key={t.id}>
-                <TableRow key={t.id} className={selectedIds.has(t.id) ? "bg-blue-50/50" : ""}>
-                  <TableCell><BulkCheckbox checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} /></TableCell>
-                  <TableCell className="font-mono text-muted-foreground">{t.ref}</TableCell>
-                  <TableCell><EntityTags entityType="ticket" entityId={t.id} inline /></TableCell>
-                  <TableCell className="font-medium">{t.title}</TableCell>
-                  <TableCell>{t.category || "-"}</TableCell>
-                  <TableCell>{t.clientName || "-"}</TableCell>
-                  <TableCell>{t.assigneeName || "-"}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <StatusBadge status={t.priority} />
-                      {t.slaBreached && <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />SLA خرق</Badge>}
-                    </div>
-                  </TableCell>
-                  <TableCell><StatusBadge status={t.status} /></TableCell>
-                  <TableCell className="text-start">
-                    <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => setPreviewItem(t)}><Eye className="h-4 w-4" /></Button>
-                    <RowActions
-                      canEdit={canManage}
-                      onEdit={() => startEdit(t.id, { status: t.status || "open", priority: t.priority || "medium", title: t.title || "" })}
-                      onDelete={() => startDelete(t.id)}
-                    />
-                    <button onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                      {expandedId === t.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {expandedId === t.id && (
-                  <TableRow key={`expand-${t.id}`}><TableCell colSpan={10} className="bg-gray-50/50">
-                    <div className="space-y-3 p-2">
-                      <EntityTags entityType="ticket" entityId={t.id} />
-                      <EntityComments entityType="ticket" entityId={t.id} />
-                    </div>
-                  </TableCell></TableRow>
-                )}
-                {editingId === t.id && (
-                  <TableRow key={`edit-${t.id}`}><TableCell colSpan={10}>
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(t.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === t.id && (
-                  <TableRow key={`del-${t.id}`}><TableCell colSpan={10}>
-                    <div className="space-y-3">
-                      <InlineDeleteConfirm onConfirm={() => handleDelete(t.id)} onCancel={cancelDelete} isPending={isPending} itemName={t.title} entityType="ticket" entityId={t.id} />
-                    </div>
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+            noToolbar
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            renderRowExtras={(t) => {
+              if (editingId === t.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(t.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === t.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(t.id)} onCancel={cancelDelete} isPending={isPending} itemName={t.title} entityType="ticket" entityId={t.id} />;
+              if (expandedId === t.id) return (
+                <div className="space-y-3 p-2 bg-gray-50/50">
+                  <EntityTags entityType="ticket" entityId={t.id} />
+                  <EntityComments entityType="ticket" entityId={t.id} />
+                </div>
+              );
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة التذكرة" data={previewItem} fields={previewFields} />

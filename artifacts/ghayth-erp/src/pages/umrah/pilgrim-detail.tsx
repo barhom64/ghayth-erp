@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Save, User, Calendar, AlertTriangle } from "lucide-react";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "لم يصل" },
@@ -118,28 +118,17 @@ export default function PilgrimDetail() {
           <Card>
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-red-500" />الغرامات ({data.penalties.length})</CardTitle></CardHeader>
             <CardContent>
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-start">النوع</TableHead>
-                      <TableHead className="text-start">أيام التأخر</TableHead>
-                      <TableHead className="text-start">المبلغ</TableHead>
-                      <TableHead className="text-start">الحالة</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.penalties.map((p: any) => (
-                      <TableRow key={p.id}>
-                        <TableCell>{p.type === "overstay" ? "تجاوز مدة" : p.type}</TableCell>
-                        <TableCell>{p.daysOverstayed} يوم</TableCell>
-                        <TableCell className="font-bold text-red-600">{Number(p.amount).toLocaleString()} ريال</TableCell>
-                        <TableCell><StatusBadge status={p.status} /></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable<any>
+                columns={[
+                  { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
+                  { key: "daysOverstayed", header: "أيام التأخر", render: (p) => `${p.daysOverstayed} يوم` },
+                  { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold text-red-600">{Number(p.amount).toLocaleString()} ريال</span> },
+                  { key: "status", header: "الحالة", render: (p) => <StatusBadge status={p.status} /> },
+                ] as DataTableColumn<any>[]}
+                data={data.penalties}
+                noToolbar
+                pageSize={0}
+              />
             </CardContent>
           </Card>
         )}

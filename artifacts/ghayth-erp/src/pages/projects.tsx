@@ -1,13 +1,10 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Progress } from "@/components/ui/progress";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
 import { FolderKanban, Plus, Activity, CheckCircle, DollarSign, Eye } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
@@ -46,8 +43,6 @@ export default function Projects() {
     dateField: "",
   });
 
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/projects",
     queryKeys: [["projects", String(page)], ["projects-stats"]],
@@ -68,6 +63,41 @@ export default function Projects() {
     { label: "تاريخ البدء", key: "startDate", type: "date" },
     { label: "تاريخ الانتهاء", key: "endDate", type: "date" },
     { label: "الحالة", key: "status", type: "status" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "المشروع", sortable: true, render: (p) => <span className="font-medium">{p.name}</span> },
+    { key: "clientName", header: "العميل", sortable: true, render: (p) => p.clientName || "-" },
+    { key: "startDate", header: "البدء", sortable: true, render: (p) => formatDateAr(p.startDate) },
+    { key: "endDate", header: "الانتهاء", sortable: true, render: (p) => formatDateAr(p.endDate) },
+    { key: "budget", header: "الميزانية", sortable: true, render: (p) => formatCurrency(p.budget || 0) },
+    {
+      key: "progress",
+      header: "التقدم",
+      sortable: true,
+      className: "w-[120px]",
+      render: (p) => (
+        <div className="flex items-center gap-2">
+          <Progress value={p.progress || 0} className="h-2" />
+          <span className="text-xs text-muted-foreground">{p.progress || 0}%</span>
+        </div>
+      ),
+    },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    {
+      key: "actions",
+      header: "الإجراءات",
+      render: (p) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(p)}><Eye className="h-4 w-4" /></Button>
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(p.id, { name: p.name, budget: p.budget || 0, progress: p.progress || 0, status: p.status || "active" })}
+            onDelete={() => startDelete(p.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -118,7 +148,7 @@ export default function Projects() {
           }}
           values={filters}
           onChange={setFilters}
-          onExportCSV={() => exportToCSV(sortedData || [], [
+          onExportCSV={() => exportToCSV(filtered || [], [
             { key: "name", label: "المشروع" },
             { key: "clientName", label: "العميل" },
             { key: "startDate", label: "تاريخ البدء" },
@@ -126,68 +156,37 @@ export default function Projects() {
             { key: "budget", label: "الميزانية" },
             { key: "status", label: "الحالة" },
           ], "المشاريع")}
-          resultCount={sortedData?.length}
+          resultCount={filtered?.length}
         />
       </div>
 
       <Card>
         <CardHeader><CardTitle className="gap-2 flex items-center"><FolderKanban className="h-5 w-5" /> المشاريع</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="name" label="المشروع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="clientName" label="العميل" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="startDate" label="البدء" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="endDate" label="الانتهاء" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="budget" label="الميزانية" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="progress" label="التقدم" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead className="text-start">الإجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper
+          <DataTable
+            columns={columns}
+            data={filtered}
             isLoading={isLoading}
             isError={isError}
-            error={error}
+            error={error as Error | null}
             onRetry={() => refetch()}
-            data={sortedData}
-            colCount={8}
             emptyMessage="لا توجد مشاريع"
             emptyIcon={<FolderKanban className="h-6 w-6 text-slate-400" />}
-          >
-            {sortedData?.map(p => (
-              <Fragment key={p.id}>
-                <TableRow>
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell>{p.clientName || "-"}</TableCell>
-                  <TableCell>{formatDateAr(p.startDate)}</TableCell>
-                  <TableCell>{formatDateAr(p.endDate)}</TableCell>
-                  <TableCell>{formatCurrency(p.budget || 0)}</TableCell>
-                  <TableCell className="w-[120px]"><div className="flex items-center gap-2"><Progress value={p.progress || 0} className="h-2" /><span className="text-xs text-muted-foreground">{p.progress || 0}%</span></div></TableCell>
-                  <TableCell><StatusBadge status={p.status} /></TableCell>
-                  <TableCell className="text-start">
-                    <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => setPreviewItem(p)}><Eye className="h-4 w-4" /></Button>
-                    <RowActions
-                      canEdit={canManage}
-                      onEdit={() => startEdit(p.id, { name: p.name, budget: p.budget || 0, progress: p.progress || 0, status: p.status || "active" })}
-                      onDelete={() => startDelete(p.id)}
-                    />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === p.id && (
-                  <TableRow key={`edit-${p.id}`}><TableCell colSpan={8}>
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === p.id && (
-                  <TableRow key={`del-${p.id}`}><TableCell colSpan={8}>
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="project" entityId={p.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+            noToolbar
+            pageSize={pageSize}
+            page={page}
+            total={total}
+            onPageChange={setPage}
+            renderRowExtras={(p) => {
+              if (editingId === p.id) {
+                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              }
+              if (deletingId === p.id) {
+                return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="project" entityId={p.id} />;
+              }
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة المشروع" data={previewItem} fields={previewFields} />

@@ -1,13 +1,10 @@
-import { useState, Fragment} from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
 import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -39,15 +36,10 @@ export default function Warehouse() {
   );
 }
 
-const PRODUCT_STATUS_OPTIONS = [
-  { value: "active", label: "نشط" },
-  { value: "inactive", label: "غير نشط" },
-];
-
 function ProductsTab() {
   const { roleLevel, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
-  const { data: stats } = useApiQuery(["warehouse-stats", scopeQueryString], `/warehouse/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
+  const { data: stats } = useApiQuery<any>(["warehouse-stats", scopeQueryString], `/warehouse/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
@@ -63,7 +55,6 @@ function ProductsTab() {
     statusField: "status",
     dateField: "createdAt",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/warehouse/products",
@@ -78,6 +69,27 @@ function ProductsTab() {
     { key: "costPrice", label: "سعر التكلفة", type: "number" as const },
     { key: "sellPrice", label: "سعر البيع", type: "number" as const },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "sku", header: "رمز المنتج", sortable: true, render: (p) => <span className="font-mono text-muted-foreground">{p.sku || "-"}</span> },
+    { key: "name", header: "المنتج", sortable: true, render: (p) => <span className="font-medium">{p.name}</span> },
+    { key: "categoryName", header: "التصنيف", sortable: true, render: (p) => p.categoryName || "-" },
+    { key: "currentStock", header: "المخزون", sortable: true, render: (p) => <span className={`font-bold ${p.currentStock <= p.minStock ? "text-rose-600" : ""}`}>{p.currentStock}</span> },
+    { key: "minStock", header: "الحد الأدنى", sortable: true, render: (p) => p.minStock },
+    { key: "costPrice", header: "سعر التكلفة", sortable: true, render: (p) => formatCurrency(p.costPrice || 0) },
+    { key: "sellPrice", header: "سعر البيع", sortable: true, render: (p) => formatCurrency(p.sellPrice || 0) },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    {
+      key: "actions", header: "الإجراءات",
+      render: (p) => (
+        <RowActions
+          canEdit={canManage}
+          onEdit={() => startEdit(p.id, { name: p.name, sku: p.sku || "", minStock: p.minStock || 0, costPrice: p.costPrice || 0, sellPrice: p.sellPrice || 0, status: p.status || "active" })}
+          onDelete={() => startDelete(p.id)}
+        />
+      ),
+    },
   ];
 
   return (
@@ -102,7 +114,7 @@ function ProductsTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered, [
               { key: "sku", label: "رمز المنتج" },
               { key: "name", label: "المنتج" },
               { key: "categoryName", label: "التصنيف" },
@@ -112,7 +124,7 @@ function ProductsTab() {
               { key: "sellPrice", label: "سعر البيع" },
               { key: "status", label: "الحالة" },
             ], "منتجات المستودع")}
-            resultCount={sortedData?.length}
+            resultCount={filtered.length}
           />
         </div>
         {canManage && <Link href="/warehouse/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة منتج</Button></Link>}
@@ -121,51 +133,26 @@ function ProductsTab() {
       <Card>
         <CardHeader><CardTitle>المنتجات</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="sku" label="رمز المنتج" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="name" label="المنتج" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="categoryName" label="التصنيف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="currentStock" label="المخزون" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="minStock" label="الحد الأدنى" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="costPrice" label="سعر التكلفة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="sellPrice" label="سعر البيع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead className="text-start">الإجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={9} emptyMessage="لا توجد منتجات" emptyIcon={<Package className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(p => (
-              <Fragment key={p.id}>
-                <TableRow key={p.id} className={p.currentStock <= p.minStock ? "bg-rose-50" : ""}>
-                  <TableCell className="font-mono text-muted-foreground">{p.sku || "-"}</TableCell>
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell>{p.categoryName || "-"}</TableCell>
-                  <TableCell className={`font-bold ${p.currentStock <= p.minStock ? "text-rose-600" : ""}`}>{p.currentStock}</TableCell>
-                  <TableCell>{p.minStock}</TableCell>
-                  <TableCell>{formatCurrency(p.costPrice || 0)}</TableCell>
-                  <TableCell>{formatCurrency(p.sellPrice || 0)}</TableCell>
-                  <TableCell><StatusBadge status={p.status} /></TableCell>
-                  <TableCell className="text-start">
-                    <RowActions
-                      canEdit={canManage}
-                      onEdit={() => startEdit(p.id, { name: p.name, sku: p.sku || "", minStock: p.minStock || 0, costPrice: p.costPrice || 0, sellPrice: p.sellPrice || 0, status: p.status || "active" })}
-                      onDelete={() => startDelete(p.id)}
-                    />
-                  </TableCell>
-                </TableRow>
-                {editingId === p.id && (
-                  <TableRow key={`edit-${p.id}`}><TableCell colSpan={9}>
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === p.id && (
-                  <TableRow key={`del-${p.id}`}><TableCell colSpan={9}>
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="warehouse_product" entityId={p.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+          <DataTable<any>
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد منتجات"
+            emptyIcon={<Package className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            renderRowExtras={(p) => {
+              if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="warehouse_product" entityId={p.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
     </div>
@@ -186,7 +173,21 @@ function MovementsTab() {
     searchFields: ["productName", "reference"],
     dateField: "createdAt",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "productName", header: "المنتج", sortable: true, render: (m) => m.productName || "-" },
+    {
+      key: "type", header: "النوع", sortable: true,
+      render: (m) => (
+        <span className={`px-2 py-1 rounded text-xs font-medium ${m.type === 'in' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+          {m.type === 'in' ? 'إدخال' : m.type === 'out' ? 'إخراج' : m.type}
+        </span>
+      ),
+    },
+    { key: "quantity", header: "الكمية", sortable: true, render: (m) => <span className="font-bold">{m.quantity}</span> },
+    { key: "reference", header: "المرجع", sortable: true, render: (m) => m.reference || "-" },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (m) => formatDateAr(m.createdAt) },
+  ];
 
   return (
     <div className="space-y-4">
@@ -199,14 +200,14 @@ function MovementsTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered, [
               { key: "productName", label: "المنتج" },
               { key: "type", label: "النوع" },
               { key: "quantity", label: "الكمية" },
               { key: "reference", label: "المرجع" },
               { key: "createdAt", label: "التاريخ" },
             ], "حركات المخزون")}
-            resultCount={sortedData?.length}
+            resultCount={filtered.length}
           />
         </div>
         <Link href="/warehouse/movements/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة حركة</Button></Link>
@@ -214,25 +215,21 @@ function MovementsTab() {
       <Card>
         <CardHeader><CardTitle>حركات المخزون</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="productName" label="المنتج" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="type" label="النوع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="quantity" label="الكمية" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="reference" label="المرجع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={5} emptyMessage="لا توجد حركات" emptyIcon={<ArrowLeftRight className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(m => (
-              <TableRow key={m.id}>
-                <TableCell>{m.productName || "-"}</TableCell>
-                <TableCell><span className={`px-2 py-1 rounded text-xs font-medium ${m.type === 'in' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{m.type === 'in' ? 'إدخال' : m.type === 'out' ? 'إخراج' : m.type}</span></TableCell>
-                <TableCell className="font-bold">{m.quantity}</TableCell>
-                <TableCell>{m.reference || "-"}</TableCell>
-                <TableCell>{formatDateAr(m.createdAt)}</TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper></Table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+          <DataTable<any>
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد حركات"
+            emptyIcon={<ArrowLeftRight className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>
@@ -248,7 +245,11 @@ function CategoriesTab() {
     searchFields: ["name"],
     dateField: "createdAt",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "الاسم", sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
+    { key: "createdAt", header: "تاريخ الإنشاء", sortable: true, render: (c) => formatDateAr(c.createdAt) },
+  ];
 
   return (
     <div className="space-y-4">
@@ -261,26 +262,29 @@ function CategoriesTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered, [
               { key: "name", label: "الاسم" },
               { key: "createdAt", label: "تاريخ الإنشاء" },
             ], "تصنيفات المستودع")}
-            resultCount={sortedData?.length}
+            resultCount={filtered.length}
           />
         </div>
         <Link href="/warehouse/categories/create"><Button className="gap-2"><Plus className="h-4 w-4" /> تصنيف جديد</Button></Link>
       </div>
       <Card>
         <CardContent className="pt-6">
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="name" label="الاسم" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="createdAt" label="تاريخ الإنشاء" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={2} emptyMessage="لا توجد تصنيفات" emptyIcon={<Layers className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(c => (
-              <TableRow key={c.id}><TableCell className="font-medium">{c.name}</TableCell><TableCell>{formatDateAr(c.createdAt)}</TableCell></TableRow>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد تصنيفات"
+            emptyIcon={<Layers className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+          />
         </CardContent>
       </Card>
     </div>
@@ -297,7 +301,14 @@ function SuppliersTab() {
     statusField: "status",
     dateField: "createdAt",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "المورد", sortable: true, render: (s) => <span className="font-medium">{s.name}</span> },
+    { key: "contactPerson", header: "جهة الاتصال", sortable: true, render: (s) => s.contactPerson || "-" },
+    { key: "phone", header: "الهاتف", sortable: true, ltr: true, render: (s) => s.phone || "-" },
+    { key: "rating", header: "التقييم", sortable: true, render: (s) => <span>⭐ {s.rating}</span> },
+    { key: "status", header: "الحالة", sortable: true, render: (s) => <StatusBadge status={s.status} /> },
+  ];
 
   return (
     <div className="space-y-4">
@@ -314,38 +325,32 @@ function SuppliersTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered, [
               { key: "name", label: "المورد" },
               { key: "contactPerson", label: "جهة الاتصال" },
               { key: "phone", label: "الهاتف" },
               { key: "rating", label: "التقييم" },
               { key: "status", label: "الحالة" },
             ], "موردون المستودع")}
-            resultCount={sortedData?.length}
+            resultCount={filtered.length}
           />
         </div>
         <Link href="/warehouse/suppliers/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة مورد</Button></Link>
       </div>
       <Card>
         <CardContent className="pt-6">
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="name" label="المورد" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="contactPerson" label="جهة الاتصال" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="phone" label="الهاتف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="rating" label="التقييم" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={5} emptyMessage="لا يوجد موردون" emptyIcon={<Truck className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(s => (
-              <TableRow key={s.id}>
-                <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>{s.contactPerson || "-"}</TableCell>
-                <TableCell dir="ltr" className="text-right">{s.phone || "-"}</TableCell>
-                <TableCell>⭐ {s.rating}</TableCell>
-                <TableCell><StatusBadge status={s.status} /></TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا يوجد موردون"
+            emptyIcon={<Truck className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+          />
         </CardContent>
       </Card>
     </div>

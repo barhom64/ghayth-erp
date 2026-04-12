@@ -1,16 +1,13 @@
-import { useState, useRef, useCallback } from "react";
+import { useRef, useCallback } from "react";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LineChart, LayoutDashboard, TrendingUp, FileBarChart, Plus, Users, Building2, CreditCard, Car, Headphones, FolderKanban, DollarSign, Download } from "lucide-react";
+import { LayoutDashboard, TrendingUp, FileBarChart, Plus, Users, Building2, CreditCard, Car, Headphones, FolderKanban, DollarSign, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -148,7 +145,13 @@ function KPIsTab() {
   const filtered = applyFilters(allItems, filters, {
     searchFields: ["name", "module", "description"],
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "المؤشر", sortable: true, render: (k) => <span className="font-medium">{k.name}</span> },
+    { key: "module", header: "الوحدة", sortable: true, render: (k) => <span className="text-muted-foreground">{k.module || "-"}</span> },
+    { key: "target", header: "الهدف", sortable: true, render: (k) => formatNumber(k.target || 0) },
+    { key: "currentValue", header: "القيمة الحالية", sortable: true, render: (k) => <span className="font-bold">{formatNumber(k.currentValue || 0)}</span> },
+  ];
 
   return (
     <div className="space-y-4">
@@ -161,7 +164,7 @@ function KPIsTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered || [], [
               { key: "name", label: "المؤشر" },
               { key: "module", label: "الوحدة" },
               { key: "target", label: "الهدف" },
@@ -175,22 +178,18 @@ function KPIsTab() {
       <Card>
         <CardHeader><CardTitle>مؤشرات الأداء</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="name" label="المؤشر" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="module" label="الوحدة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="target" label="الهدف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="currentValue" label="القيمة الحالية" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={4} emptyMessage="لا توجد مؤشرات" emptyIcon={<TrendingUp className="h-6 w-6 text-slate-400" />}>
-            {(sortedData || []).map((k: any) => (
-              <TableRow key={k.id}>
-                <TableCell className="font-medium">{k.name}</TableCell>
-                <TableCell className="text-muted-foreground">{k.module || "-"}</TableCell>
-                <TableCell>{formatNumber(k.target || 0)}</TableCell>
-                <TableCell className="font-bold">{formatNumber(k.currentValue || 0)}</TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد مؤشرات"
+            emptyIcon={<TrendingUp className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+          />
         </CardContent>
       </Card>
     </div>
@@ -206,7 +205,12 @@ function ReportsTab() {
   const filtered = applyFilters(allItems, filters, {
     searchFields: ["title", "type", "description"],
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "title", header: "العنوان", sortable: true, render: (r) => <span className="font-medium">{r.title}</span> },
+    { key: "type", header: "النوع", sortable: true, render: (r) => <span className="text-muted-foreground">{r.type || "-"}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.createdAt) },
+  ];
 
   return (
     <div className="space-y-4">
@@ -219,7 +223,7 @@ function ReportsTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered || [], [
               { key: "title", label: "العنوان" },
               { key: "type", label: "النوع" },
               { key: "createdAt", label: "التاريخ" },
@@ -232,20 +236,18 @@ function ReportsTab() {
       <Card>
         <CardHeader><CardTitle>التقارير</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="title" label="العنوان" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="type" label="النوع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={3} emptyMessage="لا توجد تقارير" emptyIcon={<FileBarChart className="h-6 w-6 text-slate-400" />}>
-            {(sortedData || []).map((r: any) => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.title}</TableCell>
-                <TableCell className="text-muted-foreground">{r.type || "-"}</TableCell>
-                <TableCell>{formatDateAr(r.createdAt)}</TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد تقارير"
+            emptyIcon={<FileBarChart className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+          />
         </CardContent>
       </Card>
     </div>

@@ -1,15 +1,12 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus } from "lucide-react";
 import { Link } from "wouter";
 import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 
 export default function UmrahPilgrims() {
@@ -20,15 +17,51 @@ export default function UmrahPilgrims() {
     ["umrah-pilgrims", filters.search, filters.status, String(page)],
     `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&page=${page}&limit=${pageSize}`
   );
-  const rawItems = resp?.data || [];
+  const items = resp?.data || [];
   const total = resp?.total || 0;
-  const { sortedData: items, sortState, handleSort } = useSortedData(rawItems);
 
   const kpiCards = [
     { label: "إجمالي المعتمرين", value: total, icon: Users, color: "text-blue-600 bg-blue-50" },
     { label: "داخل المملكة", value: items.filter((p: any) => ["arrived", "active"].includes(p.status)).length, icon: Plane, color: "text-green-600 bg-green-50" },
     { label: "متأخرين", value: items.filter((p: any) => p.status === "overstayed").length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
     { label: "بدون وكيل", value: items.filter((p: any) => !p.agentId).length, icon: UserPlus, color: "text-orange-600 bg-orange-50" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "fullName",
+      header: "الاسم",
+      sortable: true,
+      render: (p) => (
+        <Link href={`/umrah/pilgrims/${p.id}`} className="text-primary hover:underline font-medium">{p.fullName}</Link>
+      ),
+    },
+    { key: "passportNumber", header: "الجواز", sortable: true },
+    { key: "nationality", header: "الجنسية", sortable: true },
+    {
+      key: "agentName",
+      header: "الوكيل",
+      sortable: true,
+      render: (p) => p.agentName || <span className="text-orange-500">غير معيّن</span>,
+    },
+    {
+      key: "arrivalDate",
+      header: "الوصول",
+      sortable: true,
+      render: (p) => (p.arrivalDate ? new Date(p.arrivalDate).toLocaleDateString("ar-SA") : "-"),
+    },
+    {
+      key: "departureDate",
+      header: "المغادرة",
+      sortable: true,
+      render: (p) => (p.departureDate ? new Date(p.departureDate).toLocaleDateString("ar-SA") : "-"),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (p) => <StatusBadge status={p.status} />,
+    },
   ];
 
   return (
@@ -84,44 +117,21 @@ export default function UmrahPilgrims() {
         resultCount={total}
       />
 
-      <div className="border rounded-lg bg-card">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="fullName" label="الاسم" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="passportNumber" label="الجواز" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="nationality" label="الجنسية" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="agentName" label="الوكيل" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="arrivalDate" label="الوصول" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="departureDate" label="المغادرة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper
-            isLoading={isLoading}
-            isError={isError}
-            error={error}
-            onRetry={() => refetch()}
-            data={items}
-            colCount={7}
-            emptyMessage="لا يوجد معتمرين"
-            emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
-          >
-            {items.map((p: any) => (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/umrah/pilgrims/${p.id}`} className="text-primary hover:underline">{p.fullName}</Link>
-                </TableCell>
-                <TableCell>{p.passportNumber}</TableCell>
-                <TableCell>{p.nationality}</TableCell>
-                <TableCell>{p.agentName || <span className="text-orange-500">غير معيّن</span>}</TableCell>
-                <TableCell>{p.arrivalDate ? new Date(p.arrivalDate).toLocaleDateString("ar-SA") : "-"}</TableCell>
-                <TableCell>{p.departureDate ? new Date(p.departureDate).toLocaleDateString("ar-SA") : "-"}</TableCell>
-                <TableCell><StatusBadge status={p.status} /></TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
-      </div>
+      <DataTable
+        columns={columns}
+        data={items}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا يوجد معتمرين"
+        emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
+        pageSize={pageSize}
+        page={page}
+        total={total}
+        onPageChange={setPage}
+        noToolbar
+      />
     </div>
   );
 }

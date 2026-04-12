@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -226,33 +227,20 @@ export default function UmrahImport() {
       <Card>
         <CardHeader><CardTitle className="text-base">سجل الاستيراد</CardTitle></CardHeader>
         <CardContent>
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader><TableRow>
-                <TableHead className="text-start">التاريخ</TableHead>
-                <TableHead className="text-start">الملف</TableHead>
-                <TableHead className="text-start">الإجمالي</TableHead>
-                <TableHead className="text-start">جديد</TableHead>
-                <TableHead className="text-start">محدث</TableHead>
-                <TableHead className="text-start">أخطاء</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {(logs?.data || []).map((l: any) => (
-                  <TableRow key={l.id}>
-                    <TableCell>{new Date(l.createdAt).toLocaleString("ar-SA")}</TableCell>
-                    <TableCell>{l.fileName}</TableCell>
-                    <TableCell>{l.totalRows}</TableCell>
-                    <TableCell className="text-green-600">{l.newRecords}</TableCell>
-                    <TableCell className="text-blue-600">{l.updatedRecords}</TableCell>
-                    <TableCell className="text-red-600">{l.errorRecords}</TableCell>
-                  </TableRow>
-                ))}
-                {(logs?.data || []).length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">لا يوجد سجلات استيراد</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable<any>
+            columns={[
+              { key: "createdAt", header: "التاريخ", render: (l) => new Date(l.createdAt).toLocaleString("ar-SA") },
+              { key: "fileName", header: "الملف" },
+              { key: "totalRows", header: "الإجمالي" },
+              { key: "newRecords", header: "جديد", render: (l) => <span className="text-green-600">{l.newRecords}</span> },
+              { key: "updatedRecords", header: "محدث", render: (l) => <span className="text-blue-600">{l.updatedRecords}</span> },
+              { key: "errorRecords", header: "أخطاء", render: (l) => <span className="text-red-600">{l.errorRecords}</span> },
+            ] as DataTableColumn<any>[]}
+            data={logs?.data || []}
+            noToolbar
+            pageSize={20}
+            emptyMessage="لا يوجد سجلات استيراد"
+          />
         </CardContent>
       </Card>
     </div>

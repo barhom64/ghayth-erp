@@ -1,28 +1,22 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { Megaphone, Plus, DollarSign, Eye, Search } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { Megaphone, Plus, DollarSign, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 
 export default function MarketingPage() {
   const { data: stats } = useApiQuery<any>(["mkt-stats"], "/marketing/stats");
   const { data: campaignsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["mkt-campaigns"], "/marketing/campaigns");
   const items = asList(campaignsResp);
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
   const pageSize = 20;
   const [previewCampaign, setPreviewCampaign] = useState<any>(null);
   const campaignFields: PreviewField[] = [
@@ -44,8 +38,6 @@ export default function MarketingPage() {
   };
 
   const filtered = applyFilters(items, filters, { searchFields: ["name", "channel"], statusField: "status", dateField: "createdAt" });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/marketing/campaigns",
@@ -60,6 +52,31 @@ export default function MarketingPage() {
     { key: "spent", label: "المصروف", type: "number" as const },
     { key: "status", label: "الحالة", type: "select" as const, options: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })) },
   ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "الحملة", sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
+    { key: "channel", header: "القناة", sortable: true, render: (c) => <span className="text-muted-foreground">{c.channel || "-"}</span> },
+    { key: "budget", header: "الميزانية", sortable: true, render: (c) => formatCurrency(Number(c.budget) || 0) },
+    { key: "spent", header: "المصروف", sortable: true, render: (c) => formatCurrency(Number(c.spent) || 0) },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (c) => formatDateAr(c.createdAt) },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    {
+      key: "actions",
+      header: "إجراءات",
+      align: "end",
+      width: "100px",
+      render: (c) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setPreviewCampaign(c)}><Eye className="h-4 w-4" /></Button>
+          <RowActions
+            onEdit={() => startEdit(c.id, { name: c.name, channel: c.channel || "", budget: Number(c.budget) || 0, spent: Number(c.spent) || 0, status: c.status || "draft" })}
+            onDelete={() => startDelete(c.id)}
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -94,74 +111,34 @@ export default function MarketingPage() {
           showDateRange: true,
         }}
         values={filters}
-        onChange={(v) => { setFilters(v); setPage(1); }}
+        onChange={setFilters}
         resultCount={filtered.length}
       />
 
       <Card>
         <CardHeader><CardTitle>الحملات</CardTitle></CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="name" label="الحملة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="channel" label="القناة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="budget" label="الميزانية" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="spent" label="المصروف" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                <TableHead className="text-right w-[100px]">إجراءات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper
-              isLoading={isLoading}
-              isError={isError}
-              error={error}
-              onRetry={() => refetch()}
-              data={filtered}
-              colCount={7}
-              emptyMessage="لا توجد حملات"
-              emptyIcon={<Megaphone className="h-6 w-6 text-slate-400" />}
-              emptyAction={{ label: "حملة جديدة", onClick: () => window.location.href = "/marketing/create" }}
-            >
-              {(paginatedData || [])?.map((c: any) => (
-                <Fragment key={c.id}>
-                  <TableRow className="hover:bg-gray-50">
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.channel || "-"}</TableCell>
-                    <TableCell>{formatCurrency(Number(c.budget) || 0)}</TableCell>
-                    <TableCell>{formatCurrency(Number(c.spent) || 0)}</TableCell>
-                    <TableCell>{formatDateAr(c.createdAt)}</TableCell>
-                    <TableCell><StatusBadge status={c.status} /></TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setPreviewCampaign(c)}><Eye className="h-4 w-4" /></Button>
-                        <RowActions
-                          onEdit={() => startEdit(c.id, { name: c.name, channel: c.channel || "", budget: Number(c.budget) || 0, spent: Number(c.spent) || 0, status: c.status || "draft" })}
-                          onDelete={() => startDelete(c.id)}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {editingId === c.id && (
-                    <TableRow key={`edit-${c.id}`}>
-                      <TableCell colSpan={7} className="p-2">
-                        <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {deletingId === c.id && (
-                    <TableRow key={`del-${c.id}`}>
-                      <TableCell colSpan={7} className="p-2">
-                        <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.name} entityType="campaign" entityId={c.id} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              ))}
-            </DataTableWrapper>
-          </Table>
-          <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
+          <DataTable<any>
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد حملات"
+            emptyIcon={<Megaphone className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={pageSize}
+            renderRowExtras={(c) => {
+              if (editingId === c.id) {
+                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              }
+              if (deletingId === c.id) {
+                return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.name} entityType="campaign" entityId={c.id} />;
+              }
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewCampaign} onOpenChange={() => setPreviewCampaign(null)} title="تفاصيل الحملة" data={previewCampaign} fields={campaignFields} />

@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,7 +19,6 @@ export default function UmrahInvoices() {
   const [filters, setFilters] = useFilters();
   const [genAgent, setGenAgent] = useState("");
   const [genSeason, setGenSeason] = useState("");
-  const [page, setPage] = useState(1);
   const pageSize = 20;
   const { toast } = useToast();
 
@@ -41,7 +39,6 @@ export default function UmrahInvoices() {
     return true;
   });
 
-  const paginatedItems = filteredItems.slice((page - 1) * pageSize, page * pageSize);
   const totalAmount = items.reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0);
   const paidAmount = items.filter((inv: any) => inv.status === "paid").reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0);
 
@@ -110,48 +107,31 @@ export default function UmrahInvoices() {
           ],
         }}
         values={filters}
-        onChange={(v) => { setFilters(v); setPage(1); }}
+        onChange={setFilters}
         resultCount={filteredItems.length}
       />
 
-      <div className="border rounded-lg bg-card">
-        <Table>
-          <TableHeader><TableRow>
-            <TableHead className="text-start">المرجع</TableHead>
-            <TableHead className="text-start">الوكيل</TableHead>
-            <TableHead className="text-start">الموسم</TableHead>
-            <TableHead className="text-start">عدد المعتمرين</TableHead>
-            <TableHead className="text-start">الخدمات (ريال)</TableHead>
-            <TableHead className="text-start">الغرامات (ريال)</TableHead>
-            <TableHead className="text-start">الإجمالي (ريال)</TableHead>
-            <TableHead className="text-start">الحالة</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper
-            isLoading={isLoading}
-            isError={isError}
-            error={error}
-            onRetry={() => refetch()}
-            data={filteredItems}
-            colCount={8}
-            emptyMessage="لا يوجد فواتير"
-            emptyIcon={<Receipt className="h-6 w-6 text-slate-400" />}
-          >
-            {paginatedItems.map((inv: any) => (
-              <TableRow key={inv.id}>
-                <TableCell className="font-mono text-sm">{inv.ref}</TableCell>
-                <TableCell>{inv.agentName}</TableCell>
-                <TableCell>{inv.seasonTitle}</TableCell>
-                <TableCell>{inv.pilgrimCount}</TableCell>
-                <TableCell>{Number(inv.servicesTotal).toLocaleString()}</TableCell>
-                <TableCell className="text-red-600">{Number(inv.penaltiesTotal).toLocaleString()}</TableCell>
-                <TableCell className="font-bold">{Number(inv.total).toLocaleString()}</TableCell>
-                <TableCell><StatusBadge status={inv.status} /></TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={filteredItems.length} onPageChange={setPage} />
-      </div>
+      <DataTable<any>
+        columns={[
+          { key: "ref", header: "المرجع", render: (inv) => <span className="font-mono text-sm">{inv.ref}</span> },
+          { key: "agentName", header: "الوكيل" },
+          { key: "seasonTitle", header: "الموسم" },
+          { key: "pilgrimCount", header: "عدد المعتمرين" },
+          { key: "servicesTotal", header: "الخدمات (ريال)", render: (inv) => Number(inv.servicesTotal).toLocaleString() },
+          { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-red-600">{Number(inv.penaltiesTotal).toLocaleString()}</span> },
+          { key: "total", header: "الإجمالي (ريال)", render: (inv) => <span className="font-bold">{Number(inv.total).toLocaleString()}</span> },
+          { key: "status", header: "الحالة", render: (inv) => <StatusBadge status={inv.status} /> },
+        ] as DataTableColumn<any>[]}
+        data={filteredItems}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا يوجد فواتير"
+        emptyIcon={<Receipt className="h-6 w-6 text-slate-400" />}
+        noToolbar
+        pageSize={pageSize}
+      />
     </div>
   );
 }

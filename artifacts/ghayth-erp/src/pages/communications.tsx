@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -473,7 +470,18 @@ function CommLogTab() {
   const logs = asList(logsResp);
   const total = logsResp?.total || logs.length;
   const filtered = logs.filter((l: any) => !search || l.fromNumber?.includes(search) || l.toNumber?.includes(search) || l.subject?.includes(search));
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "channel", header: "القناة", sortable: true, render: (l) => <span className={`px-2 py-1 rounded text-xs font-medium ${l.channel === 'whatsapp' ? 'bg-emerald-100 text-emerald-700' : l.channel === 'sms' ? 'bg-blue-100 text-blue-700' : l.channel === 'email' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100'}`}>{l.channel}</span> },
+    { key: "direction", header: "الاتجاه", sortable: true, render: (l) => l.direction === 'inbound' ? 'وارد' : 'صادر' },
+    { key: "fromNumber", header: "من", sortable: true, ltr: true, render: (l) => l.fromNumber || "-" },
+    { key: "toNumber", header: "إلى", sortable: true, ltr: true, render: (l) => l.toNumber || "-" },
+    { key: "subject", header: "الموضوع", sortable: true, render: (l) => <span className="max-w-[200px] truncate inline-block">{l.subject || "-"}</span> },
+    { key: "status", header: "الحالة", sortable: true, render: (l) => <StatusBadge status={l.status} /> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => formatDateAr(l.createdAt) },
+    { key: "actions", header: "إجراء", render: (l) => l.relatedType ? <Badge variant="outline" className="text-[10px]">{l.relatedType}</Badge> : <ConvertCommButton logEntry={l} onSuccess={() => refetch()} /> },
+  ];
+
   return (
     <Card>
       <CardHeader><CardTitle>سجل الاتصالات</CardTitle></CardHeader>
@@ -482,37 +490,21 @@ function CommLogTab() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input className="ps-9" placeholder="بحث بالرقم أو الموضوع..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Table><TableHeader><TableRow>
-          <SortableTableHead column="channel" label="القناة" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="direction" label="الاتجاه" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="fromNumber" label="من" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="toNumber" label="إلى" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="subject" label="الموضوع" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-          <TableHead className="text-start">إجراء</TableHead>
-        </TableRow></TableHeader>
-        <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={8} emptyMessage="لا توجد سجلات اتصالات" emptyIcon={<Send className="h-6 w-6 text-slate-400" />}>
-          {sortedData?.map(l => (
-            <TableRow key={l.id}>
-              <TableCell><span className={`px-2 py-1 rounded text-xs font-medium ${l.channel === 'whatsapp' ? 'bg-emerald-100 text-emerald-700' : l.channel === 'sms' ? 'bg-blue-100 text-blue-700' : l.channel === 'email' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100'}`}>{l.channel}</span></TableCell>
-              <TableCell>{l.direction === 'inbound' ? 'وارد' : 'صادر'}</TableCell>
-              <TableCell dir="ltr" className="text-right">{l.fromNumber || "-"}</TableCell>
-              <TableCell dir="ltr" className="text-right">{l.toNumber || "-"}</TableCell>
-              <TableCell className="max-w-[200px] truncate">{l.subject || "-"}</TableCell>
-              <TableCell><StatusBadge status={l.status} /></TableCell>
-              <TableCell>{formatDateAr(l.createdAt)}</TableCell>
-              <TableCell>
-                {l.relatedType ? (
-                  <Badge variant="outline" className="text-[10px]">{l.relatedType}</Badge>
-                ) : (
-                  <ConvertCommButton logEntry={l} onSuccess={() => refetch()} />
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </DataTableWrapper></Table>
-        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+        <DataTable<any>
+          columns={columns}
+          data={filtered}
+          isLoading={isLoading}
+          isError={isError}
+          error={error as Error | null}
+          onRetry={() => refetch()}
+          emptyMessage="لا توجد سجلات اتصالات"
+          emptyIcon={<Send className="h-6 w-6 text-slate-400" />}
+          noToolbar
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+        />
       </CardContent>
     </Card>
   );
@@ -530,7 +522,16 @@ function WhatsAppTab() {
   const messages = asList(messagesResp);
   const total = messagesResp?.total || messages.length;
   const filtered = messages.filter((m: any) => !search || m.phone?.includes(search) || m.recipientPhone?.includes(search) || m.message?.includes(search));
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "phone", header: "الرقم", sortable: true, ltr: true, render: (m) => m.phone || m.recipientPhone || "-" },
+    { key: "recipientName", header: "المستلم", sortable: true, render: (m) => m.recipientName || "-" },
+    { key: "message", header: "الرسالة", sortable: true, render: (m) => <span className="max-w-[300px] truncate inline-block">{m.message}</span> },
+    { key: "status", header: "الحالة", sortable: true, render: (m) => <StatusBadge status={m.status} /> },
+    { key: "externalId", header: "معرف خارجي", render: (m) => <span className="text-xs text-gray-400">{m.externalId || "-"}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (m) => formatDateAr(m.createdAt) },
+  ];
+
   return (
     <Card>
       <CardHeader><CardTitle>رسائل واتساب</CardTitle></CardHeader>
@@ -547,27 +548,21 @@ function WhatsAppTab() {
             <option value="failed">فاشل</option>
           </select>
         </div>
-        <Table><TableHeader><TableRow>
-          <SortableTableHead column="phone" label="الرقم" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="recipientName" label="المستلم" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="message" label="الرسالة" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          <TableHead>معرف خارجي</TableHead>
-          <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-        </TableRow></TableHeader>
-        <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={6} emptyMessage="لا توجد رسائل واتساب" emptyIcon={<MessageCircle className="h-6 w-6 text-slate-400" />}>
-          {sortedData?.map(m => (
-            <TableRow key={m.id}>
-              <TableCell dir="ltr" className="text-right">{m.phone || m.recipientPhone || "-"}</TableCell>
-              <TableCell>{m.recipientName || "-"}</TableCell>
-              <TableCell className="max-w-[300px] truncate">{m.message}</TableCell>
-              <TableCell><StatusBadge status={m.status} /></TableCell>
-              <TableCell className="text-xs text-gray-400">{m.externalId || "-"}</TableCell>
-              <TableCell>{formatDateAr(m.createdAt)}</TableCell>
-            </TableRow>
-          ))}
-        </DataTableWrapper></Table>
-        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+        <DataTable<any>
+          columns={columns}
+          data={filtered}
+          isLoading={isLoading}
+          isError={isError}
+          error={error as Error | null}
+          onRetry={() => refetch()}
+          emptyMessage="لا توجد رسائل واتساب"
+          emptyIcon={<MessageCircle className="h-6 w-6 text-slate-400" />}
+          noToolbar
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+        />
       </CardContent>
     </Card>
   );
@@ -585,7 +580,16 @@ function SMSTab() {
   const messages = asList(messagesResp);
   const total = messagesResp?.total || messages.length;
   const filtered = messages.filter((m: any) => !search || m.recipientPhone?.includes(search) || m.message?.includes(search));
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "recipientPhone", header: "الرقم", sortable: true, ltr: true, render: (m) => m.recipientPhone || "-" },
+    { key: "message", header: "الرسالة", sortable: true, render: (m) => <span className="max-w-[300px] truncate inline-block">{m.message}</span> },
+    { key: "status", header: "الحالة", sortable: true, render: (m) => <StatusBadge status={m.status} /> },
+    { key: "externalId", header: "معرف خارجي", render: (m) => <span className="text-xs text-gray-400">{m.externalId || "-"}</span> },
+    { key: "attemptCount", header: "عدد المحاولات", align: "center", render: (m) => m.attemptCount ?? 0 },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (m) => formatDateAr(m.createdAt) },
+  ];
+
   return (
     <Card>
       <CardHeader><CardTitle>الرسائل النصية</CardTitle></CardHeader>
@@ -602,27 +606,21 @@ function SMSTab() {
             <option value="failed">فاشل</option>
           </select>
         </div>
-        <Table><TableHeader><TableRow>
-          <SortableTableHead column="recipientPhone" label="الرقم" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="message" label="الرسالة" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          <TableHead>معرف خارجي</TableHead>
-          <TableHead>عدد المحاولات</TableHead>
-          <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-        </TableRow></TableHeader>
-        <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={6} emptyMessage="لا توجد رسائل نصية" emptyIcon={<Mail className="h-6 w-6 text-slate-400" />}>
-          {sortedData?.map(m => (
-            <TableRow key={m.id}>
-              <TableCell dir="ltr" className="text-right">{m.recipientPhone || "-"}</TableCell>
-              <TableCell className="max-w-[300px] truncate">{m.message}</TableCell>
-              <TableCell><StatusBadge status={m.status} /></TableCell>
-              <TableCell className="text-xs text-gray-400">{m.externalId || "-"}</TableCell>
-              <TableCell className="text-center">{m.attemptCount ?? 0}</TableCell>
-              <TableCell>{formatDateAr(m.createdAt)}</TableCell>
-            </TableRow>
-          ))}
-        </DataTableWrapper></Table>
-        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+        <DataTable<any>
+          columns={columns}
+          data={filtered}
+          isLoading={isLoading}
+          isError={isError}
+          error={error as Error | null}
+          onRetry={() => refetch()}
+          emptyMessage="لا توجد رسائل نصية"
+          emptyIcon={<Mail className="h-6 w-6 text-slate-400" />}
+          noToolbar
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+        />
       </CardContent>
     </Card>
   );
@@ -636,7 +634,16 @@ function PBXTab() {
   const calls = asList(callsResp);
   const total = callsResp?.total || calls.length;
   const filtered = calls.filter((c: any) => !search || c.callerNumber?.includes(search) || c.calledNumber?.includes(search));
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "callerNumber", header: "المتصل", sortable: true, ltr: true, render: (c) => c.callerNumber || "-" },
+    { key: "calledNumber", header: "المستقبل", sortable: true, ltr: true, render: (c) => c.calledNumber || "-" },
+    { key: "direction", header: "الاتجاه", sortable: true, render: (c) => c.direction === 'inbound' ? 'وارد' : 'صادر' },
+    { key: "duration", header: "المدة", sortable: true, render: (c) => c.duration ? `${Math.floor(c.duration/60)}:${String(c.duration%60).padStart(2,'0')}` : "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (c) => formatDateAr(c.createdAt) },
+  ];
+
   return (
     <Card>
       <CardHeader><CardTitle>سجل المكالمات</CardTitle></CardHeader>
@@ -645,27 +652,21 @@ function PBXTab() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input className="ps-9" placeholder="بحث برقم المتصل أو المستقبل..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Table><TableHeader><TableRow>
-          <SortableTableHead column="callerNumber" label="المتصل" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="calledNumber" label="المستقبل" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="direction" label="الاتجاه" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="duration" label="المدة" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-        </TableRow></TableHeader>
-        <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={6} emptyMessage="لا توجد مكالمات مسجلة" emptyIcon={<Phone className="h-6 w-6 text-slate-400" />}>
-          {sortedData?.map(c => (
-            <TableRow key={c.id}>
-              <TableCell dir="ltr" className="text-right">{c.callerNumber || "-"}</TableCell>
-              <TableCell dir="ltr" className="text-right">{c.calledNumber || "-"}</TableCell>
-              <TableCell>{c.direction === 'inbound' ? 'وارد' : 'صادر'}</TableCell>
-              <TableCell>{c.duration ? `${Math.floor(c.duration/60)}:${String(c.duration%60).padStart(2,'0')}` : "-"}</TableCell>
-              <TableCell><StatusBadge status={c.status} /></TableCell>
-              <TableCell>{formatDateAr(c.createdAt)}</TableCell>
-            </TableRow>
-          ))}
-        </DataTableWrapper></Table>
-        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+        <DataTable<any>
+          columns={columns}
+          data={filtered}
+          isLoading={isLoading}
+          isError={isError}
+          error={error as Error | null}
+          onRetry={() => refetch()}
+          emptyMessage="لا توجد مكالمات مسجلة"
+          emptyIcon={<Phone className="h-6 w-6 text-slate-400" />}
+          noToolbar
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+        />
       </CardContent>
     </Card>
   );

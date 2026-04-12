@@ -2,9 +2,9 @@ import React from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
 
@@ -136,28 +136,19 @@ export default function UmrahDashboard() {
         <Card>
           <CardHeader><CardTitle className="text-base">آخر الواصلين</CardTitle></CardHeader>
           <CardContent>
-            <div className="border rounded-lg bg-card">
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead className="text-start">الاسم</TableHead>
-                  <TableHead className="text-start">الجواز</TableHead>
-                  <TableHead className="text-start">الجنسية</TableHead>
-                  <TableHead className="text-start">تاريخ الوصول</TableHead>
-                  <TableHead className="text-start">الحالة</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {(dash?.recentArrivals || []).map((r: any) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-medium">{r.fullName}</TableCell>
-                      <TableCell>{r.passportNumber}</TableCell>
-                      <TableCell>{r.nationality}</TableCell>
-                      <TableCell>{r.actualArrival ? new Date(r.actualArrival).toLocaleDateString("ar-SA") : "-"}</TableCell>
-                      <TableCell><StatusBadge status={r.status} /></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DataTable<any>
+              columns={[
+                { key: "fullName", header: "الاسم", render: (r) => <span className="font-medium">{r.fullName}</span> },
+                { key: "passportNumber", header: "الجواز" },
+                { key: "nationality", header: "الجنسية" },
+                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => r.actualArrival ? new Date(r.actualArrival).toLocaleDateString("ar-SA") : "-" },
+                { key: "status", header: "الحالة", render: (r) => <StatusBadge status={r.status} /> },
+              ] as DataTableColumn<any>[]}
+              data={dash?.recentArrivals || []}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد بيانات"
+            />
           </CardContent>
         </Card>
       )}

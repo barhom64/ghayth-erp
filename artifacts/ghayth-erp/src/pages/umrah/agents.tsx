@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +16,6 @@ export default function UmrahAgents() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>({});
   const { toast } = useToast();
-  const [page, setPage] = useState(1);
   const pageSize = 20;
 
   const save = async () => {
@@ -37,7 +35,13 @@ export default function UmrahAgents() {
     { label: "وكلاء موقوفون", value: items.length - activeCount, icon: Building2, color: "text-red-600 bg-red-50" },
   ];
 
-  const paginatedItems = items.slice((page - 1) * pageSize, page * pageSize);
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "الاسم", sortable: true, searchable: true, render: (a) => <span className="font-medium">{a.name}</span> },
+    { key: "country", header: "البلد", sortable: true, searchable: true },
+    { key: "phone", header: "الهاتف", searchable: true },
+    { key: "profitMargin", header: "نسبة الربح", sortable: true, render: (a) => `${a.profitMargin}%` },
+    { key: "status", header: "الحالة", sortable: true, render: (a) => <StatusBadge status={a.status} /> },
+  ];
 
   return (
     <div className="space-y-6">
@@ -79,38 +83,18 @@ export default function UmrahAgents() {
         </Card>
       )}
 
-      <div className="border rounded-lg bg-card">
-        <Table>
-          <TableHeader><TableRow>
-            <TableHead className="text-start">الاسم</TableHead>
-            <TableHead className="text-start">البلد</TableHead>
-            <TableHead className="text-start">الهاتف</TableHead>
-            <TableHead className="text-start">نسبة الربح</TableHead>
-            <TableHead className="text-start">الحالة</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper
-            isLoading={isLoading}
-            isError={isError}
-            error={error}
-            onRetry={() => refetch()}
-            data={items}
-            colCount={5}
-            emptyMessage="لا يوجد وكلاء"
-            emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}
-          >
-            {paginatedItems.map((a: any) => (
-              <TableRow key={a.id}>
-                <TableCell className="font-medium">{a.name}</TableCell>
-                <TableCell>{a.country}</TableCell>
-                <TableCell>{a.phone}</TableCell>
-                <TableCell>{a.profitMargin}%</TableCell>
-                <TableCell><StatusBadge status={a.status} /></TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={items.length} onPageChange={setPage} />
-      </div>
+      <DataTable
+        columns={columns}
+        data={items}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا يوجد وكلاء"
+        emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}
+        pageSize={pageSize}
+        searchPlaceholder="بحث عن وكيل..."
+      />
     </div>
   );
 }

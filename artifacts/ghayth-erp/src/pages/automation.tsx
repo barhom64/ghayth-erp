@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide-react";
@@ -69,10 +66,6 @@ export default function Automation() {
     l.actionTaken?.includes(autoLogSearch)
   );
 
-  const { sortedData: sortedJobs, sortState: jobsSortState, handleSort: handleJobsSort } = useSortedData(filteredJobs);
-  const { sortedData: sortedLogs, sortState: logsSortState, handleSort: handleLogsSort } = useSortedData(filteredLogs);
-  const { sortedData: sortedAutoLogs, sortState: autoLogsSortState, handleSort: handleAutoLogsSort } = useSortedData(filteredAutoLogs);
-
   const handleToggle = async (id: number) => {
     try {
       await apiFetch(`/automation/cron-jobs/${id}/toggle`, { method: "POST", body: "{}" });
@@ -97,6 +90,43 @@ export default function Automation() {
   };
 
   const activeProactiveCount = proactiveRules.filter((r: any) => r.isActive).length;
+
+  const autoLogColumns: DataTableColumn<any>[] = [
+    {
+      key: "automationType", header: "نوع الأتمتة", sortable: true,
+      render: (l) => (
+        <div className="flex items-center gap-2">
+          <Bot className="h-4 w-4 text-blue-500" />
+          <span className="font-medium text-sm">{AUTOMATION_TYPE_LABELS[l.automationType] || l.automationType}</span>
+        </div>
+      ),
+    },
+    { key: "triggerReason", header: "سبب التفعيل", sortable: true, render: (l) => <span className="max-w-[250px] truncate inline-block text-sm">{l.triggerReason}</span> },
+    { key: "actionTaken", header: "الإجراء", sortable: true, render: (l) => <span className="max-w-[200px] truncate inline-block text-sm">{l.actionTaken}</span> },
+    { key: "status", header: "الحالة", sortable: true, render: (l) => <StatusBadge status={l.status || "success"} /> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => <span className="text-sm">{formatDateAr(l.createdAt)}</span> },
+  ];
+
+  const jobColumns: DataTableColumn<any>[] = [
+    { key: "name", header: "المهمة", sortable: true, render: (j) => <span className="font-medium">{j.name}</span> },
+    { key: "description", header: "الوصف", sortable: true, render: (j) => <span className="max-w-[200px] truncate inline-block text-muted-foreground">{j.description || "-"}</span> },
+    { key: "schedule", header: "الجدول", sortable: true, render: (j) => <span className="font-mono text-xs">{j.schedule || "-"}</span> },
+    { key: "lastRunAt", header: "آخر تشغيل", sortable: true, render: (j) => formatDateAr(j.lastRunAt) },
+    { key: "lastStatus", header: "الحالة", sortable: true, render: (j) => <StatusBadge status={j.lastStatus || "idle"} /> },
+    { key: "isActive", header: "نشط", render: (j) => <Switch checked={j.isActive} onCheckedChange={() => handleToggle(j.id)} /> },
+    {
+      key: "actions", header: "الإجراءات",
+      render: (j) => <Button variant="outline" size="sm" className="gap-1" onClick={() => handleTrigger(j.id)}><Play className="h-3 w-3" /> تشغيل</Button>,
+    },
+  ];
+
+  const logColumns: DataTableColumn<any>[] = [
+    { key: "jobName", header: "المهمة", sortable: true, render: (l) => <span className="font-medium">{l.jobName}</span> },
+    { key: "status", header: "الحالة", sortable: true, render: (l) => <StatusBadge status={l.status} /> },
+    { key: "duration", header: "المدة", sortable: true, render: (l) => l.duration ? `${l.duration} مللي ثانية` : "-" },
+    { key: "result", header: "النتيجة", sortable: true, render: (l) => <span className="max-w-[200px] truncate inline-block">{l.result || l.error || "-"}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => formatDateAr(l.createdAt) },
+  ];
 
   return (
     <div className="space-y-6">
@@ -193,31 +223,21 @@ export default function Automation() {
                 </div>
               )}
 
-              <Table><TableHeader><TableRow>
-                <SortableTableHead column="automationType" label="نوع الأتمتة" sortState={autoLogsSortState} onSort={handleAutoLogsSort} />
-                <SortableTableHead column="triggerReason" label="سبب التفعيل" sortState={autoLogsSortState} onSort={handleAutoLogsSort} />
-                <SortableTableHead column="actionTaken" label="الإجراء" sortState={autoLogsSortState} onSort={handleAutoLogsSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={autoLogsSortState} onSort={handleAutoLogsSort} />
-                <SortableTableHead column="createdAt" label="التاريخ" sortState={autoLogsSortState} onSort={handleAutoLogsSort} />
-              </TableRow></TableHeader>
-              <DataTableWrapper isLoading={loadingAutoLogs} isError={isAutoLogsError} error={autoLogsError} onRetry={() => refetchAutoLogs()} data={filteredAutoLogs} colCount={5} emptyMessage="لا توجد سجلات أتمتة بعد" emptyIcon={<Activity className="h-6 w-6 text-slate-400" />}>
-                {sortedAutoLogs?.map((l: any) => (
-                  <TableRow key={l.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Bot className="h-4 w-4 text-blue-500" />
-                        <span className="font-medium text-sm">{AUTOMATION_TYPE_LABELS[l.automationType] || l.automationType}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-[250px] truncate text-sm">{l.triggerReason}</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-sm">{l.actionTaken}</TableCell>
-                    <TableCell><StatusBadge status={l.status || "success"} /></TableCell>
-                    <TableCell className="text-sm">{formatDateAr(l.createdAt)}</TableCell>
-                  </TableRow>
-                ))}
-              </DataTableWrapper>
-              </Table>
-              <PaginationBar page={autoLogPage} pageSize={pageSize} total={autoLogsTotal} onPageChange={setAutoLogPage} />
+              <DataTable<any>
+                columns={autoLogColumns}
+                data={filteredAutoLogs}
+                isLoading={loadingAutoLogs}
+                isError={isAutoLogsError}
+                error={autoLogsError as Error | null}
+                onRetry={() => refetchAutoLogs()}
+                emptyMessage="لا توجد سجلات أتمتة بعد"
+                emptyIcon={<Activity className="h-6 w-6 text-slate-400" />}
+                noToolbar
+                total={autoLogsTotal}
+                page={autoLogPage}
+                pageSize={pageSize}
+                onPageChange={setAutoLogPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -230,30 +250,21 @@ export default function Automation() {
                 <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input className="ps-9" placeholder="بحث بالاسم أو الوصف..." value={jobSearch} onChange={(e) => setJobSearch(e.target.value)} />
               </div>
-              <Table><TableHeader><TableRow>
-                <SortableTableHead column="name" label="المهمة" sortState={jobsSortState} onSort={handleJobsSort} />
-                <SortableTableHead column="description" label="الوصف" sortState={jobsSortState} onSort={handleJobsSort} />
-                <SortableTableHead column="schedule" label="الجدول" sortState={jobsSortState} onSort={handleJobsSort} />
-                <SortableTableHead column="lastRunAt" label="آخر تشغيل" sortState={jobsSortState} onSort={handleJobsSort} />
-                <SortableTableHead column="lastStatus" label="الحالة" sortState={jobsSortState} onSort={handleJobsSort} />
-                <TableHead>نشط</TableHead>
-                <TableHead>الإجراءات</TableHead>
-              </TableRow></TableHeader>
-              <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredJobs} colCount={7} emptyMessage="لا توجد مهام مجدولة" emptyIcon={<Cog className="h-6 w-6 text-slate-400" />}>
-                {sortedJobs?.map((j: any) => (
-                  <TableRow key={j.id}>
-                    <TableCell className="font-medium">{j.name}</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-muted-foreground">{j.description || "-"}</TableCell>
-                    <TableCell className="font-mono text-xs">{j.schedule || "-"}</TableCell>
-                    <TableCell>{formatDateAr(j.lastRunAt)}</TableCell>
-                    <TableCell><StatusBadge status={j.lastStatus || "idle"} /></TableCell>
-                    <TableCell><Switch checked={j.isActive} onCheckedChange={() => handleToggle(j.id)} /></TableCell>
-                    <TableCell><Button variant="outline" size="sm" className="gap-1" onClick={() => handleTrigger(j.id)}><Play className="h-3 w-3" /> تشغيل</Button></TableCell>
-                  </TableRow>
-                ))}
-              </DataTableWrapper>
-              </Table>
-              <PaginationBar page={page} pageSize={pageSize} total={cronTotal} onPageChange={setPage} />
+              <DataTable<any>
+                columns={jobColumns}
+                data={filteredJobs}
+                isLoading={isLoading}
+                isError={isError}
+                error={error as Error | null}
+                onRetry={() => refetch()}
+                emptyMessage="لا توجد مهام مجدولة"
+                emptyIcon={<Cog className="h-6 w-6 text-slate-400" />}
+                noToolbar
+                total={cronTotal}
+                page={page}
+                pageSize={pageSize}
+                onPageChange={setPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -266,26 +277,21 @@ export default function Automation() {
                 <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input className="ps-9" placeholder="بحث في سجل التشغيل..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
               </div>
-              <Table><TableHeader><TableRow>
-                <SortableTableHead column="jobName" label="المهمة" sortState={logsSortState} onSort={handleLogsSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={logsSortState} onSort={handleLogsSort} />
-                <SortableTableHead column="duration" label="المدة" sortState={logsSortState} onSort={handleLogsSort} />
-                <SortableTableHead column="result" label="النتيجة" sortState={logsSortState} onSort={handleLogsSort} />
-                <SortableTableHead column="createdAt" label="التاريخ" sortState={logsSortState} onSort={handleLogsSort} />
-              </TableRow></TableHeader>
-              <DataTableWrapper isLoading={loadingLogs} isError={isLogsError} error={logsError} onRetry={() => refetchLogs()} data={filteredLogs} colCount={5} emptyMessage="لا توجد سجلات تشغيل" emptyIcon={<Clock className="h-6 w-6 text-slate-400" />}>
-                {sortedLogs?.map((l: any) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="font-medium">{l.jobName}</TableCell>
-                    <TableCell><StatusBadge status={l.status} /></TableCell>
-                    <TableCell>{l.duration ? `${l.duration} مللي ثانية` : "-"}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{l.result || l.error || "-"}</TableCell>
-                    <TableCell>{formatDateAr(l.createdAt)}</TableCell>
-                  </TableRow>
-                ))}
-              </DataTableWrapper>
-              </Table>
-              <PaginationBar page={logPage} pageSize={pageSize} total={logsTotal} onPageChange={setLogPage} />
+              <DataTable<any>
+                columns={logColumns}
+                data={filteredLogs}
+                isLoading={loadingLogs}
+                isError={isLogsError}
+                error={logsError as Error | null}
+                onRetry={() => refetchLogs()}
+                emptyMessage="لا توجد سجلات تشغيل"
+                emptyIcon={<Clock className="h-6 w-6 text-slate-400" />}
+                noToolbar
+                total={logsTotal}
+                page={logPage}
+                pageSize={pageSize}
+                onPageChange={setLogPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>

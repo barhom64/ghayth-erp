@@ -1,13 +1,12 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -201,6 +200,26 @@ function IntegrationLogs() {
     }
   };
 
+  const columns: DataTableColumn<any>[] = [
+    { key: "channel", header: "القناة", render: (log) => <Badge variant="outline">{CHANNEL_LABELS[log.channel] || log.channel}</Badge> },
+    { key: "recipient", header: "المستلم", render: (log) => <span className="max-w-[150px] truncate inline-block">{log.recipient || "-"}</span> },
+    { key: "subject", header: "الموضوع", render: (log) => <span className="max-w-[200px] truncate inline-block">{log.subject || "-"}</span> },
+    {
+      key: "status", header: "الحالة",
+      render: (log) => (
+        <div>
+          <div className="flex items-center gap-1">
+            {statusIcon(log.status)}
+            <StatusBadge status={log.status} />
+          </div>
+          {log.errorMessage && <p className="text-xs text-red-500 mt-1 truncate max-w-[200px]">{log.errorMessage}</p>}
+        </div>
+      ),
+    },
+    { key: "retryAttempt", header: "المحاولة", render: (log) => log.retryAttempt || 0 },
+    { key: "createdAt", header: "التاريخ", render: (log) => <span className="text-xs">{formatDateAr(log.createdAt)}</span> },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -211,38 +230,18 @@ function IntegrationLogs() {
       </div>
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>القناة</TableHead>
-                <TableHead>المستلم</TableHead>
-                <TableHead>الموضوع</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead>المحاولة</TableHead>
-                <TableHead>التاريخ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={logs} colCount={6} emptyMessage="لا توجد سجلات إرسال" emptyIcon={<Mail className="h-6 w-6 text-slate-400" />}>
-              {logs.map((log: any) => (
-                <TableRow key={log.id}>
-                  <TableCell>
-                    <Badge variant="outline">{CHANNEL_LABELS[log.channel] || log.channel}</Badge>
-                  </TableCell>
-                  <TableCell className="max-w-[150px] truncate">{log.recipient || "-"}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">{log.subject || "-"}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      {statusIcon(log.status)}
-                      <StatusBadge status={log.status} />
-                    </div>
-                    {log.errorMessage && <p className="text-xs text-red-500 mt-1 truncate max-w-[200px]">{log.errorMessage}</p>}
-                  </TableCell>
-                  <TableCell>{log.retryAttempt || 0}</TableCell>
-                  <TableCell className="text-xs">{formatDateAr(log.createdAt)}</TableCell>
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
+          <DataTable<any>
+            columns={columns}
+            data={logs}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد سجلات إرسال"
+            emptyIcon={<Mail className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+          />
         </CardContent>
       </Card>
     </div>

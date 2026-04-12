@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useApiQuery, asList } from "@/lib/api";
 import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, AlertTriangle, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function Intelligence() {
   const { data: overview, isLoading: loadingOverview } = useApiQuery(["intelligence-overview"], "/intelligence/overview");
@@ -27,8 +25,16 @@ export default function Intelligence() {
   const tasks = (schedule?.tasks || []).filter((t: any) => !taskSearch || t.title?.includes(taskSearch) || t.assigneeName?.includes(taskSearch));
   const attendance = (schedule?.attendance || []).filter((a: any) => !attendSearch || a.employeeName?.includes(attendSearch));
 
-  const { sortedData: sortedTasks, sortState: taskSortState, handleSort: handleTaskSort } = useSortedData(tasks);
-  const { sortedData: sortedAttend, sortState: attendSortState, handleSort: handleAttendSort } = useSortedData(attendance);
+  const taskColumns: DataTableColumn<any>[] = [
+    { key: "title", header: "المهمة", sortable: true, render: (t) => <span className="font-medium">{t.title}</span> },
+    { key: "assigneeName", header: "المسؤول", sortable: true, render: (t) => t.assigneeName || "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (t) => <StatusBadge status={t.status} /> },
+  ];
+  const attendColumns: DataTableColumn<any>[] = [
+    { key: "employeeName", header: "الموظف", sortable: true, render: (a) => <span className="font-medium">{a.employeeName}</span> },
+    { key: "checkIn", header: "وقت الدخول", sortable: true, ltr: true, render: (a) => a.checkIn || "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (a) => <StatusBadge status={a.status} /> },
+  ];
 
   return (
     <div className="space-y-6">
@@ -84,25 +90,13 @@ export default function Intelligence() {
                     <Input className="ps-8 h-7 text-xs" placeholder="بحث..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
                   </div>
                 </div>
-                {tasks.length === 0 ? <p className="text-muted-foreground text-sm">لا توجد مهام اليوم</p> :
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <SortableTableHead column="title" label="المهمة" sortState={taskSortState} onSort={handleTaskSort} />
-                      <SortableTableHead column="assigneeName" label="المسؤول" sortState={taskSortState} onSort={handleTaskSort} />
-                      <SortableTableHead column="status" label="الحالة" sortState={taskSortState} onSort={handleTaskSort} />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(sortedTasks || []).slice(0, 5).map((t: any) => (
-                      <TableRow key={t.id}>
-                        <TableCell className="font-medium">{t.title}</TableCell>
-                        <TableCell>{t.assigneeName || "-"}</TableCell>
-                        <TableCell><StatusBadge status={t.status} /></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>}
+                <DataTable
+                  columns={taskColumns}
+                  data={tasks.slice(0, 5)}
+                  noToolbar
+                  pageSize={0}
+                  emptyMessage="لا توجد مهام اليوم"
+                />
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -112,25 +106,13 @@ export default function Intelligence() {
                     <Input className="ps-8 h-7 text-xs" placeholder="بحث..." value={attendSearch} onChange={(e) => setAttendSearch(e.target.value)} />
                   </div>
                 </div>
-                {attendance.length === 0 ? <p className="text-muted-foreground text-sm">لا يوجد حضور مسجل</p> :
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <SortableTableHead column="employeeName" label="الموظف" sortState={attendSortState} onSort={handleAttendSort} />
-                      <SortableTableHead column="checkIn" label="وقت الدخول" sortState={attendSortState} onSort={handleAttendSort} />
-                      <SortableTableHead column="status" label="الحالة" sortState={attendSortState} onSort={handleAttendSort} />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(sortedAttend || []).slice(0, 5).map((a: any) => (
-                      <TableRow key={a.id}>
-                        <TableCell className="font-medium">{a.employeeName}</TableCell>
-                        <TableCell dir="ltr">{a.checkIn || "-"}</TableCell>
-                        <TableCell><StatusBadge status={a.status} /></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>}
+                <DataTable
+                  columns={attendColumns}
+                  data={attendance.slice(0, 5)}
+                  noToolbar
+                  pageSize={0}
+                  emptyMessage="لا يوجد حضور مسجل"
+                />
               </div>
             </div>
           </CardContent>

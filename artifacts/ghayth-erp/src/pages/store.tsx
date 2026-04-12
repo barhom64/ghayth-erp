@@ -1,22 +1,18 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShoppingCart, Package, Plus, X, DollarSign, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 
 function ProductsTab() {
   const { data: productsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -32,10 +28,7 @@ function ProductsTab() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filteredProducts);
-  const [page, setPage] = useState(1);
   const pageSize = 20;
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
 
   const handleSubmit = async () => {
     await createMut.mutateAsync({ ...form, price: Number(form.price), costPrice: Number(form.costPrice), quantity: Number(form.quantity) });
@@ -57,6 +50,23 @@ function ProductsTab() {
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
   ];
 
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "المنتج", sortable: true, render: (p) => <span className="font-medium">{p.name}</span> },
+    { key: "sku", header: "رمز المنتج", sortable: true, render: (p) => <span className="text-muted-foreground font-mono">{p.sku || "-"}</span> },
+    { key: "price", header: "السعر", sortable: true, render: (p) => formatCurrency(Number(p.price) || 0) },
+    { key: "quantity", header: "الكمية", sortable: true, render: (p) => p.quantity },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    {
+      key: "actions", header: "إجراءات",
+      render: (p) => (
+        <RowActions
+          onEdit={() => startEdit(p.id, { name: p.name, sku: p.sku || "", price: Number(p.price) || 0, quantity: p.quantity || 0, status: p.status || "active" })}
+          onDelete={() => startDelete(p.id)}
+        />
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -72,14 +82,14 @@ function ProductsTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filteredProducts, [
               { key: "name", label: "المنتج" },
               { key: "sku", label: "رمز المنتج" },
               { key: "price", label: "السعر" },
               { key: "quantity", label: "الكمية" },
               { key: "status", label: "الحالة" },
             ], "منتجات المتجر")}
-            resultCount={sortedData?.length}
+            resultCount={filteredProducts.length}
           />
         </div>
         <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة منتج</>}</Button>
@@ -98,62 +108,23 @@ function ProductsTab() {
       <Card>
         <CardHeader><CardTitle>المنتجات</CardTitle></CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="name" label="المنتج" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="sku" label="رمز المنتج" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="price" label="السعر" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="quantity" label="الكمية" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                <TableHead>إجراءات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper
-              isLoading={isLoading}
-              isError={isError}
-              error={error}
-              onRetry={() => refetch()}
-              data={filteredProducts}
-              colCount={6}
-              emptyMessage="لا توجد منتجات"
-              emptyIcon={<Package className="h-6 w-6 text-slate-400" />}
-              emptyAction={{ label: "إضافة منتج", onClick: () => setShowForm(true) }}
-            >
-              {paginatedData?.map((p: any) => (
-                <Fragment key={p.id}>
-                  <TableRow>
-                    <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell className="text-muted-foreground font-mono">{p.sku || "-"}</TableCell>
-                    <TableCell>{formatCurrency(Number(p.price) || 0)}</TableCell>
-                    <TableCell>{p.quantity}</TableCell>
-                    <TableCell><StatusBadge status={p.status} /></TableCell>
-                    <TableCell>
-                      <RowActions
-                        onEdit={() => startEdit(p.id, { name: p.name, sku: p.sku || "", price: Number(p.price) || 0, quantity: p.quantity || 0, status: p.status || "active" })}
-                        onDelete={() => startDelete(p.id)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                  {editingId === p.id && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="p-2">
-                        <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {deletingId === p.id && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="p-2">
-                        <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="store_product" entityId={p.id} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              ))}
-            </DataTableWrapper>
-          </Table>
-          <PaginationBar page={page} pageSize={pageSize} total={filteredProducts.length} onPageChange={setPage} />
+          <DataTable<any>
+            columns={columns}
+            data={filteredProducts}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد منتجات"
+            emptyIcon={<Package className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={pageSize}
+            renderRowExtras={(p) => {
+              if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="store_product" entityId={p.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
     </div>
@@ -174,7 +145,6 @@ function OrdersTab() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filteredOrders);
 
   const handleSubmit = async () => {
     await createMut.mutateAsync({ ...form, totalAmount: Number(form.totalAmount) });
@@ -195,6 +165,28 @@ function OrdersTab() {
     { key: "notes", label: "ملاحظات" },
   ];
 
+  const columns: DataTableColumn<any>[] = [
+    { key: "orderNumber", header: "رقم الطلب", sortable: true, render: (o) => <span className="font-mono">{o.orderNumber || `#${o.id}`}</span> },
+    { key: "customerName", header: "العميل", sortable: true, render: (o) => <span className="font-medium">{o.customerName}</span> },
+    { key: "totalAmount", header: "المبلغ", sortable: true, render: (o) => <span className="font-bold">{formatCurrency(Number(o.totalAmount) || 0)}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (o) => formatDateAr(o.createdAt) },
+    { key: "status", header: "الحالة", sortable: true, render: (o) => <StatusBadge status={o.status} /> },
+    {
+      key: "actions", header: "إجراءات",
+      render: (o) => (
+        <div className="flex items-center gap-1">
+          <Link href={`/store/orders/${o.id}`}>
+            <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
+          </Link>
+          <RowActions
+            onEdit={() => startEdit(o.id, { customerName: o.customerName || "", totalAmount: Number(o.totalAmount) || 0, status: o.status || "pending", notes: o.notes || "" })}
+            onDelete={() => startDelete(o.id)}
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -212,14 +204,14 @@ function OrdersTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filteredOrders, [
               { key: "orderNumber", label: "رقم الطلب" },
               { key: "customerName", label: "العميل" },
               { key: "totalAmount", label: "المبلغ" },
               { key: "createdAt", label: "التاريخ" },
               { key: "status", label: "الحالة" },
             ], "طلبات المتجر")}
-            resultCount={sortedData?.length}
+            resultCount={filteredOrders.length}
           />
         </div>
         <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}</Button>
@@ -236,66 +228,23 @@ function OrdersTab() {
       <Card>
         <CardHeader><CardTitle>الطلبات</CardTitle></CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="orderNumber" label="رقم الطلب" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="customerName" label="العميل" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="totalAmount" label="المبلغ" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                <TableHead>إجراءات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper
-              isLoading={isLoading}
-              isError={isError}
-              error={error}
-              onRetry={() => refetch()}
-              data={filteredOrders}
-              colCount={6}
-              emptyMessage="لا توجد طلبات"
-              emptyIcon={<ShoppingCart className="h-6 w-6 text-slate-400" />}
-              emptyAction={{ label: "طلب جديد", onClick: () => setShowForm(true) }}
-            >
-              {sortedData?.map((o: any) => (
-                <Fragment key={o.id}>
-                  <TableRow>
-                    <TableCell className="font-mono">{o.orderNumber || `#${o.id}`}</TableCell>
-                    <TableCell className="font-medium">{o.customerName}</TableCell>
-                    <TableCell className="font-bold">{formatCurrency(Number(o.totalAmount) || 0)}</TableCell>
-                    <TableCell>{formatDateAr(o.createdAt)}</TableCell>
-                    <TableCell><StatusBadge status={o.status} /></TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Link href={`/store/orders/${o.id}`}>
-                          <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                        </Link>
-                        <RowActions
-                          onEdit={() => startEdit(o.id, { customerName: o.customerName || "", totalAmount: Number(o.totalAmount) || 0, status: o.status || "pending", notes: o.notes || "" })}
-                          onDelete={() => startDelete(o.id)}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {editingId === o.id && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="p-2">
-                        <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(o.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {deletingId === o.id && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="p-2">
-                        <InlineDeleteConfirm onConfirm={() => handleDelete(o.id)} onCancel={cancelDelete} isPending={isPending} itemName={o.orderNumber || `#${o.id}`} entityType="store_order" entityId={o.id} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              ))}
-            </DataTableWrapper>
-          </Table>
+          <DataTable<any>
+            columns={columns}
+            data={filteredOrders}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد طلبات"
+            emptyIcon={<ShoppingCart className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+            renderRowExtras={(o) => {
+              if (editingId === o.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(o.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === o.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(o.id)} onCancel={cancelDelete} isPending={isPending} itemName={o.orderNumber || `#${o.id}`} entityType="store_order" entityId={o.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
     </div>

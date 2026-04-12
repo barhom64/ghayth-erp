@@ -1,40 +1,21 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield, FileCheck, AlertTriangle, ClipboardCheck, Plus, Eye, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
-import { SortableTableHead } from "@/components/sortable-table-head";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
-
-const MODULE_OPTIONS = [
-  { value: "hr", label: "الموارد البشرية" },
-  { value: "finance", label: "المالية" },
-  { value: "fleet", label: "الأسطول" },
-  { value: "property", label: "الأملاك" },
-  { value: "operations", label: "العمليات" },
-  { value: "warehouse", label: "المستودعات" },
-  { value: "governance", label: "الحوكمة" },
-  { value: "legal", label: "القانونية" },
-  { value: "crm", label: "المبيعات" },
-  { value: "support", label: "الدعم" },
-  { value: "comms", label: "التواصل" },
-  { value: "store", label: "المتجر" },
-  { value: "marketing", label: "التسويق" },
-];
 
 function StatsCards({ stats }: { stats: any }) {
   const cards = [
@@ -82,7 +63,6 @@ function PoliciesTab() {
     { label: "الحالة", key: "status", type: "status" },
   ];
   const filteredPolicies = applyFilters(policies, filters, { searchFields: ["title", "category"], statusField: "status", dateField: "effectiveDate" });
-  const { sortedData: sortedPolicies, sortState: policySortState, handleSort: handlePolicySort } = useSortedData(filteredPolicies);
 
   const handleNewVersion = async (policyId: number) => {
     try {
@@ -109,6 +89,42 @@ function PoliciesTab() {
     { key: "description", label: "الوصف" },
     { key: "effectiveDate", label: "تاريخ النفاذ", type: "date" as const },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "draft", label: "مسودة" }, { value: "archived", label: "مؤرشف" }] },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "title", header: "العنوان", sortable: true,
+      render: (p) => (
+        <div>
+          <span className="font-medium">{p.title}</span>
+          {p.parentId && <Badge variant="outline" className="ms-2 text-[10px]">فرعي</Badge>}
+        </div>
+      ),
+    },
+    { key: "category", header: "التصنيف", sortable: true, render: (p) => <span className="text-muted-foreground">{p.category || "-"}</span> },
+    {
+      key: "version", header: "الإصدار", sortable: true,
+      render: (p) => (
+        <Badge variant="outline" className="text-xs">
+          <GitBranch className="w-3 h-3 me-1" />v{p.version || 1}
+        </Badge>
+      ),
+    },
+    { key: "effectiveDate", header: "تاريخ النفاذ", sortable: true, render: (p) => p.effectiveDate ? formatDateAr(p.effectiveDate) : "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    {
+      key: "actions", header: "إجراءات",
+      render: (p) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(p)}><Eye className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={() => handleNewVersion(p.id)} title="إصدار جديد"><GitBranch className="h-4 w-4" /></Button>
+          <RowActions
+            onEdit={() => startEdit(p.id, { title: p.title, category: p.category || "", description: p.description || "", effectiveDate: p.effectiveDate || "", status: p.status || "draft" })}
+            onDelete={() => startDelete(p.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -146,56 +162,23 @@ function PoliciesTab() {
       <Card>
         <CardHeader><CardTitle>السياسات</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="title" label="العنوان" sortState={policySortState} onSort={handlePolicySort} />
-            <SortableTableHead column="category" label="التصنيف" sortState={policySortState} onSort={handlePolicySort} />
-            <SortableTableHead column="version" label="الإصدار" sortState={policySortState} onSort={handlePolicySort} />
-            <SortableTableHead column="effectiveDate" label="تاريخ النفاذ" sortState={policySortState} onSort={handlePolicySort} />
-            <SortableTableHead column="status" label="الحالة" sortState={policySortState} onSort={handlePolicySort} />
-            <TableHead>إجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredPolicies} colCount={6} emptyMessage="لا توجد سياسات" emptyIcon={<FileCheck className="h-6 w-6 text-slate-400" />}>
-            {(sortedPolicies || [])?.map((p: any) => (
-              <Fragment key={p.id}>
-                <TableRow className={cn(editingId === p.id && "bg-muted/50", deletingId === p.id && "bg-destructive/5")}>
-                  <TableCell>
-                    <div>
-                      <span className="font-medium">{p.title}</span>
-                      {p.parentId && <Badge variant="outline" className="ms-2 text-[10px]">فرعي</Badge>}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{p.category || "-"}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      <GitBranch className="w-3 h-3 me-1" />v{p.version || 1}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{p.effectiveDate ? formatDateAr(p.effectiveDate) : "-"}</TableCell>
-                  <TableCell><StatusBadge status={p.status} /></TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setPreviewItem(p)}><Eye className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleNewVersion(p.id)} title="إصدار جديد"><GitBranch className="h-4 w-4" /></Button>
-                      <RowActions
-                        onEdit={() => startEdit(p.id, { title: p.title, category: p.category || "", description: p.description || "", effectiveDate: p.effectiveDate || "", status: p.status || "draft" })}
-                        onDelete={() => startDelete(p.id)}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === p.id && (
-                  <TableRow><TableCell colSpan={6} className="p-2 bg-muted/30">
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === p.id && (
-                  <TableRow><TableCell colSpan={6} className="p-2 bg-destructive/5">
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.title} entityType="policy" entityId={p.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={columns}
+            data={filteredPolicies}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد سياسات"
+            emptyIcon={<FileCheck className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+            renderRowExtras={(p) => {
+              if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.title} entityType="policy" entityId={p.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="تفاصيل السياسة" data={previewItem} fields={policyFields} />
@@ -219,7 +202,6 @@ function RisksTab() {
     { label: "الحالة", key: "status", type: "status" },
   ];
   const filteredRisks = applyFilters(risks, filters, { searchFields: ["title", "description"], statusField: "status", dateField: "createdAt" });
-  const { sortedData: sortedRisks, sortState: riskSortState, handleSort: handleRiskSort } = useSortedData(filteredRisks);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/governance/risks",
@@ -232,6 +214,25 @@ function RisksTab() {
     { key: "severity", label: "الشدة", type: "select" as const, options: [{ value: "low", label: "منخفض" }, { value: "medium", label: "متوسط" }, { value: "high", label: "عالي" }] },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "closed", label: "مغلق" }] },
     { key: "description", label: "الوصف" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "title", header: "الخطر", sortable: true, render: (r) => <span className="font-medium">{r.title}</span> },
+    { key: "severity", header: "الشدة", sortable: true, render: (r) => <StatusBadge status={r.severity} /> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.createdAt) },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <StatusBadge status={r.status} /> },
+    {
+      key: "actions", header: "إجراءات",
+      render: (r) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setPreviewRisk(r)}><Eye className="h-4 w-4" /></Button>
+          <RowActions
+            onEdit={() => startEdit(r.id, { title: r.title, severity: r.severity || "medium", status: r.status || "open", description: r.description || "" })}
+            onDelete={() => startDelete(r.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -270,40 +271,23 @@ function RisksTab() {
       <Card>
         <CardHeader><CardTitle>المخاطر</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="title" label="الخطر" sortState={riskSortState} onSort={handleRiskSort} /><SortableTableHead column="severity" label="الشدة" sortState={riskSortState} onSort={handleRiskSort} /><SortableTableHead column="createdAt" label="التاريخ" sortState={riskSortState} onSort={handleRiskSort} /><SortableTableHead column="status" label="الحالة" sortState={riskSortState} onSort={handleRiskSort} /><TableHead>إجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredRisks} colCount={5} emptyMessage="لا توجد مخاطر" emptyIcon={<AlertTriangle className="h-6 w-6 text-slate-400" />}>
-            {(sortedRisks || [])?.map((r: any) => (
-              <Fragment key={r.id}>
-                <TableRow className={cn(editingId === r.id && "bg-muted/50", deletingId === r.id && "bg-destructive/5")}>
-                  <TableCell className="font-medium">{r.title}</TableCell>
-                  <TableCell><StatusBadge status={r.severity} /></TableCell>
-                  <TableCell>{formatDateAr(r.createdAt)}</TableCell>
-                  <TableCell><StatusBadge status={r.status} /></TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setPreviewRisk(r)}><Eye className="h-4 w-4" /></Button>
-                      <RowActions
-                        onEdit={() => startEdit(r.id, { title: r.title, severity: r.severity || "medium", status: r.status || "open", description: r.description || "" })}
-                        onDelete={() => startDelete(r.id)}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === r.id && (
-                  <TableRow><TableCell colSpan={5} className="p-2 bg-muted/30">
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(r.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === r.id && (
-                  <TableRow><TableCell colSpan={5} className="p-2 bg-destructive/5">
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(r.id)} onCancel={cancelDelete} isPending={isPending} itemName={r.title} entityType="risk" entityId={r.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={columns}
+            data={filteredRisks}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد مخاطر"
+            emptyIcon={<AlertTriangle className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+            renderRowExtras={(r) => {
+              if (editingId === r.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(r.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === r.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(r.id)} onCancel={cancelDelete} isPending={isPending} itemName={r.title} entityType="risk" entityId={r.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewRisk} onOpenChange={() => setPreviewRisk(null)} title="تفاصيل الخطر" data={previewRisk} fields={riskFields} />
@@ -327,7 +311,6 @@ function AuditsTab() {
     { label: "الحالة", key: "status", type: "status" },
   ];
   const filteredAudits = applyFilters(audits, filters, { searchFields: ["title", "auditorName"], statusField: "status", dateField: "createdAt" });
-  const { sortedData: sortedAudits, sortState: auditSortState, handleSort: handleAuditSort } = useSortedData(filteredAudits);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/governance/audits",
@@ -340,6 +323,25 @@ function AuditsTab() {
     { key: "auditorName", label: "المدقق" },
     { key: "scope", label: "النطاق" },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "planned", label: "مخطط" }, { value: "in_progress", label: "جاري" }, { value: "completed", label: "مكتمل" }] },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "title", header: "العنوان", sortable: true, render: (a) => <span className="font-medium">{a.title}</span> },
+    { key: "auditorName", header: "المدقق", sortable: true, render: (a) => <span className="text-muted-foreground">{a.auditorName || "-"}</span> },
+    { key: "scope", header: "النطاق", sortable: true, render: (a) => <span className="max-w-[200px] truncate inline-block">{a.scope || "-"}</span> },
+    { key: "status", header: "الحالة", sortable: true, render: (a) => <StatusBadge status={a.status} /> },
+    {
+      key: "actions", header: "إجراءات",
+      render: (a) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setPreviewAudit(a)}><Eye className="h-4 w-4" /></Button>
+          <RowActions
+            onEdit={() => startEdit(a.id, { title: a.title, auditorName: a.auditorName || "", scope: a.scope || "", status: a.status || "planned" })}
+            onDelete={() => startDelete(a.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -376,40 +378,23 @@ function AuditsTab() {
       <Card>
         <CardHeader><CardTitle>التدقيق</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="title" label="العنوان" sortState={auditSortState} onSort={handleAuditSort} /><SortableTableHead column="auditorName" label="المدقق" sortState={auditSortState} onSort={handleAuditSort} /><SortableTableHead column="scope" label="النطاق" sortState={auditSortState} onSort={handleAuditSort} /><SortableTableHead column="status" label="الحالة" sortState={auditSortState} onSort={handleAuditSort} /><TableHead>إجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredAudits} colCount={5} emptyMessage="لا يوجد تدقيق" emptyIcon={<ClipboardCheck className="h-6 w-6 text-slate-400" />}>
-            {(sortedAudits || [])?.map((a: any) => (
-              <Fragment key={a.id}>
-                <TableRow className={cn(editingId === a.id && "bg-muted/50", deletingId === a.id && "bg-destructive/5")}>
-                  <TableCell className="font-medium">{a.title}</TableCell>
-                  <TableCell className="text-muted-foreground">{a.auditorName || "-"}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">{a.scope || "-"}</TableCell>
-                  <TableCell><StatusBadge status={a.status} /></TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setPreviewAudit(a)}><Eye className="h-4 w-4" /></Button>
-                      <RowActions
-                        onEdit={() => startEdit(a.id, { title: a.title, auditorName: a.auditorName || "", scope: a.scope || "", status: a.status || "planned" })}
-                        onDelete={() => startDelete(a.id)}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === a.id && (
-                  <TableRow><TableCell colSpan={5} className="p-2 bg-muted/30">
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(a.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === a.id && (
-                  <TableRow><TableCell colSpan={5} className="p-2 bg-destructive/5">
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(a.id)} onCancel={cancelDelete} isPending={isPending} itemName={a.title} entityType="audit" entityId={a.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={columns}
+            data={filteredAudits}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا يوجد تدقيق"
+            emptyIcon={<ClipboardCheck className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+            renderRowExtras={(a) => {
+              if (editingId === a.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(a.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === a.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(a.id)} onCancel={cancelDelete} isPending={isPending} itemName={a.title} entityType="audit" entityId={a.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewAudit} onOpenChange={() => setPreviewAudit(null)} title="تفاصيل التدقيق" data={previewAudit} fields={auditFields} />
@@ -432,7 +417,6 @@ function ComplianceTab() {
     { label: "الحالة", key: "status", type: "status" },
   ];
   const filteredCompliance = applyFilters(items, filters, { searchFields: ["regulation", "responsiblePerson"], statusField: "status", dateField: "createdAt" });
-  const { sortedData: sortedCompliance, sortState: compSortState, handleSort: handleCompSort } = useSortedData(filteredCompliance);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/governance/compliance",
@@ -445,6 +429,25 @@ function ComplianceTab() {
     { key: "responsiblePerson", label: "المسؤول" },
     { key: "description", label: "الوصف" },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "compliant", label: "ممتثل" }, { value: "non_compliant", label: "غير ممتثل" }, { value: "partial", label: "جزئي" }] },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "regulation", header: "اللائحة", sortable: true, render: (i) => <span className="font-medium">{i.regulation}</span> },
+    { key: "responsiblePerson", header: "المسؤول", sortable: true, render: (i) => <span className="text-muted-foreground">{i.responsiblePerson || "-"}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (i) => formatDateAr(i.createdAt) },
+    { key: "status", header: "الحالة", sortable: true, render: (i) => <StatusBadge status={i.status} /> },
+    {
+      key: "actions", header: "إجراءات",
+      render: (i) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setPreviewComp(i)}><Eye className="h-4 w-4" /></Button>
+          <RowActions
+            onEdit={() => startEdit(i.id, { regulation: i.regulation, responsiblePerson: i.responsiblePerson || "", description: i.description || "", status: i.status || "compliant" })}
+            onDelete={() => startDelete(i.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -481,40 +484,23 @@ function ComplianceTab() {
       <Card>
         <CardHeader><CardTitle>الامتثال</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="regulation" label="اللائحة" sortState={compSortState} onSort={handleCompSort} /><SortableTableHead column="responsiblePerson" label="المسؤول" sortState={compSortState} onSort={handleCompSort} /><SortableTableHead column="createdAt" label="التاريخ" sortState={compSortState} onSort={handleCompSort} /><SortableTableHead column="status" label="الحالة" sortState={compSortState} onSort={handleCompSort} /><TableHead>إجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredCompliance} colCount={5} emptyMessage="لا توجد بيانات" emptyIcon={<Shield className="h-6 w-6 text-slate-400" />}>
-            {(sortedCompliance || [])?.map((item: any) => (
-              <Fragment key={item.id}>
-                <TableRow className={cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}>
-                  <TableCell className="font-medium">{item.regulation}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.responsiblePerson || "-"}</TableCell>
-                  <TableCell>{formatDateAr(item.createdAt)}</TableCell>
-                  <TableCell><StatusBadge status={item.status} /></TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setPreviewComp(item)}><Eye className="h-4 w-4" /></Button>
-                      <RowActions
-                        onEdit={() => startEdit(item.id, { regulation: item.regulation, responsiblePerson: item.responsiblePerson || "", description: item.description || "", status: item.status || "compliant" })}
-                        onDelete={() => startDelete(item.id)}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === item.id && (
-                  <TableRow><TableCell colSpan={5} className="p-2 bg-muted/30">
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === item.id && (
-                  <TableRow><TableCell colSpan={5} className="p-2 bg-destructive/5">
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.regulation} entityType="compliance" entityId={item.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={columns}
+            data={filteredCompliance}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد بيانات"
+            emptyIcon={<Shield className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+            renderRowExtras={(i) => {
+              if (editingId === i.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(i.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === i.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(i.id)} onCancel={cancelDelete} isPending={isPending} itemName={i.regulation} entityType="compliance" entityId={i.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewComp} onOpenChange={() => setPreviewComp(null)} title="تفاصيل الامتثال" data={previewComp} fields={compFields} />

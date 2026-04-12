@@ -1,15 +1,12 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
-import { FileText, Gavel, Plus, Scale, Search, Copy, ExternalLink } from "lucide-react";
+import { FileText, Gavel, Plus, Scale, Copy, ExternalLink } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
@@ -32,15 +29,8 @@ export default function Legal() {
   );
 }
 
-const CONTRACT_STATUS_OPTIONS = [
-  { value: "draft", label: "مسودة" },
-  { value: "active", label: "ساري" },
-  { value: "expired", label: "منتهي" },
-  { value: "terminated", label: "ملغي" },
-];
-
 function ContractsTab() {
-  const { data: stats } = useApiQuery(["legal-stats"], "/legal/stats");
+  const { data: stats } = useApiQuery<any>(["legal-stats"], "/legal/stats");
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
@@ -57,7 +47,6 @@ function ContractsTab() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/legal/contracts",
@@ -71,6 +60,33 @@ function ContractsTab() {
     { key: "partyName", label: "الطرف" },
     { key: "value", label: "القيمة", type: "number" as const },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "draft", label: "مسودة" }, { value: "active", label: "ساري" }, { value: "expired", label: "منتهي" }, { value: "terminated", label: "ملغي" }] },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "title", header: "العنوان", sortable: true, render: (c) => <span className="font-medium">{c.title}</span> },
+    { key: "contractType", header: "النوع", sortable: true, render: (c) => c.contractType || "-" },
+    { key: "partyName", header: "الطرف", sortable: true, render: (c) => c.partyName || "-" },
+    { key: "startDate", header: "من", sortable: true, render: (c) => formatDateAr(c.startDate) },
+    { key: "endDate", header: "إلى", sortable: true, render: (c) => formatDateAr(c.endDate) },
+    { key: "value", header: "القيمة", sortable: true, render: (c) => c.value ? formatCurrency(Number(c.value)) : "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    {
+      key: "actions", header: "الإجراءات",
+      render: (c) => (
+        <div className="flex items-center gap-1">
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(c.id, { title: c.title, contractType: c.contractType || "", partyName: c.partyName || "", value: Number(c.value) || 0, status: c.status || "draft" })}
+            onDelete={() => startDelete(c.id)}
+          />
+          <Link href={`/legal/create?copyFrom=${c.id}`}>
+            <Button variant="ghost" size="sm" className="h-7 px-2" title="نسخ العقد">
+              <Copy className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -96,7 +112,7 @@ function ContractsTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered, [
               { key: "title", label: "العنوان" },
               { key: "contractType", label: "النوع" },
               { key: "partyName", label: "الطرف" },
@@ -105,7 +121,7 @@ function ContractsTab() {
               { key: "value", label: "القيمة" },
               { key: "status", label: "الحالة" },
             ], "العقود")}
-            resultCount={sortedData?.length}
+            resultCount={filtered.length}
           />
         </div>
         {canManage && <Link href="/legal/create"><Button className="gap-2"><Plus className="h-4 w-4" /> عقد جديد</Button></Link>}
@@ -114,56 +130,26 @@ function ContractsTab() {
       <Card>
         <CardHeader><CardTitle>العقود القانونية</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="title" label="العنوان" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="contractType" label="النوع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="partyName" label="الطرف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="startDate" label="من" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="endDate" label="إلى" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="value" label="القيمة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead className="text-start">الإجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={8} emptyMessage="لا توجد عقود" emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(c => (
-              <Fragment key={c.id}>
-                <TableRow>
-                  <TableCell className="font-medium">{c.title}</TableCell>
-                  <TableCell>{c.contractType || "-"}</TableCell>
-                  <TableCell>{c.partyName || "-"}</TableCell>
-                  <TableCell>{formatDateAr(c.startDate)}</TableCell>
-                  <TableCell>{formatDateAr(c.endDate)}</TableCell>
-                  <TableCell>{c.value ? formatCurrency(Number(c.value)) : "-"}</TableCell>
-                  <TableCell><StatusBadge status={c.status} /></TableCell>
-                  <TableCell className="text-start">
-                    <div className="flex items-center gap-1">
-                      <RowActions
-                        canEdit={canManage}
-                        onEdit={() => startEdit(c.id, { title: c.title, contractType: c.contractType || "", partyName: c.partyName || "", value: Number(c.value) || 0, status: c.status || "draft" })}
-                        onDelete={() => startDelete(c.id)}
-                      />
-                      <Link href={`/legal/create?copyFrom=${c.id}`}>
-                        <Button variant="ghost" size="sm" className="h-7 px-2" title="نسخ العقد">
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === c.id && (
-                  <TableRow><TableCell colSpan={8}>
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === c.id && (
-                  <TableRow><TableCell colSpan={8}>
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_contract" entityId={c.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+          <DataTable<any>
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد عقود"
+            emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            renderRowExtras={(c) => {
+              if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_contract" entityId={c.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
     </div>
@@ -182,7 +168,6 @@ function CasesTab() {
     searchFields: ["title", "opposingParty", "caseNumber"],
     statusField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/legal/cases",
@@ -198,6 +183,34 @@ function CasesTab() {
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "won", label: "ربح" }, { value: "lost", label: "خسارة" }] },
     { key: "priority", label: "الأولوية", type: "select" as const, options: [{ value: "low", label: "منخفضة" }, { value: "medium", label: "متوسطة" }, { value: "high", label: "عالية" }] },
   ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "caseNumber", header: "رقم القضية", sortable: true, render: (c) => <span className="font-mono">{c.caseNumber || "-"}</span> },
+    {
+      key: "title", header: "العنوان", sortable: true,
+      render: (c) => (
+        <button onClick={() => setLocation(`/legal/cases/${c.id}`)} className="hover:underline text-blue-700 flex items-center gap-1 font-medium">
+          {c.title} <ExternalLink className="h-3 w-3 opacity-50" />
+        </button>
+      ),
+    },
+    { key: "court", header: "المحكمة", sortable: true, render: (c) => c.court || "-" },
+    { key: "opposingParty", header: "الخصم", sortable: true, render: (c) => c.opposingParty || "-" },
+    { key: "lawyerName", header: "المحامي", sortable: true, render: (c) => c.lawyerName || "-" },
+    { key: "priority", header: "الأولوية", sortable: true, render: (c) => <StatusBadge status={c.priority} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    {
+      key: "actions", header: "الإجراءات",
+      render: (c) => (
+        <RowActions
+          canEdit={canManage}
+          onEdit={() => startEdit(c.id, { title: c.title, court: c.court || "", opposingParty: c.opposingParty || "", lawyerName: c.lawyerName || "", status: c.status || "open", priority: c.priority || "medium" })}
+          onDelete={() => startDelete(c.id)}
+        />
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -216,7 +229,7 @@ function CasesTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered, [
               { key: "caseNumber", label: "رقم القضية" },
               { key: "title", label: "العنوان" },
               { key: "court", label: "المحكمة" },
@@ -225,59 +238,30 @@ function CasesTab() {
               { key: "priority", label: "الأولوية" },
               { key: "status", label: "الحالة" },
             ], "القضايا")}
-            resultCount={sortedData?.length}
+            resultCount={filtered.length}
           />
         </div>
         <Link href="/legal/cases/create"><Button className="gap-2"><Plus className="h-4 w-4" /> قضية جديدة</Button></Link>
       </div>
       <Card>
         <CardContent className="pt-6">
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="caseNumber" label="رقم القضية" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="title" label="العنوان" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="court" label="المحكمة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="opposingParty" label="الخصم" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="lawyerName" label="المحامي" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="priority" label="الأولوية" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead className="text-start">الإجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={8} emptyMessage="لا توجد قضايا" emptyIcon={<Scale className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(c => (
-              <Fragment key={c.id}>
-                <TableRow>
-                  <TableCell className="font-mono">{c.caseNumber || "-"}</TableCell>
-                  <TableCell className="font-medium">
-                    <button onClick={() => setLocation(`/legal/cases/${c.id}`)} className="hover:underline text-blue-700 flex items-center gap-1">
-                      {c.title} <ExternalLink className="h-3 w-3 opacity-50" />
-                    </button>
-                  </TableCell>
-                  <TableCell>{c.court || "-"}</TableCell>
-                  <TableCell>{c.opposingParty || "-"}</TableCell>
-                  <TableCell>{c.lawyerName || "-"}</TableCell>
-                  <TableCell><StatusBadge status={c.priority} /></TableCell>
-                  <TableCell><StatusBadge status={c.status} /></TableCell>
-                  <TableCell className="text-start">
-                    <RowActions
-                      canEdit={canManage}
-                      onEdit={() => startEdit(c.id, { title: c.title, court: c.court || "", opposingParty: c.opposingParty || "", lawyerName: c.lawyerName || "", status: c.status || "open", priority: c.priority || "medium" })}
-                      onDelete={() => startDelete(c.id)}
-                    />
-                  </TableCell>
-                </TableRow>
-                {editingId === c.id && (
-                  <TableRow><TableCell colSpan={8}>
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === c.id && (
-                  <TableRow><TableCell colSpan={8}>
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_case" entityId={c.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد قضايا"
+            emptyIcon={<Scale className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={20}
+            renderRowExtras={(c) => {
+              if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_case" entityId={c.id} />;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
     </div>
