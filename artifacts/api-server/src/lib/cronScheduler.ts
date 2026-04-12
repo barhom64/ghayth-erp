@@ -16,6 +16,7 @@ import { checkSlaStatus } from "./workflowEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
+import { processDueRecurringJournals } from "../routes/finance-recurring.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -2034,6 +2035,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_vendor_contract_expiry", description: "تنبيه انتهاء عقود الموردين (90/30 يوم)", schedule: "0 7 * * 1", handler: vendorContractExpiryAlerts },
   { name: "daily_system_health_report", description: "تقرير صحة النظام اليومي للمدير التقني", schedule: "0 6 * * *", handler: dailySystemHealthReport },
   { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
+  { name: "daily_recurring_journals", description: "تنفيذ القيود المحاسبية الدورية المستحقة", schedule: "0 1 * * *", handler: processDueRecurringJournals },
 ];
 
 export async function seedCronJobs(): Promise<void> {

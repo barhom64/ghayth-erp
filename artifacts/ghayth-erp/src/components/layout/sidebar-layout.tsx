@@ -131,6 +131,9 @@ const allNavSections: NavSection[] = [
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
         { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
+        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
+        { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
+        { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },

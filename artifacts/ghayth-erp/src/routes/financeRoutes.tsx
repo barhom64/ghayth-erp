@@ -49,6 +49,12 @@ const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast")
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
+const OpeningBalances = lazy(() => import("@/pages/finance/opening-balances"));
+const OpeningBalancesCreate = lazy(() => import("@/pages/create/finance/opening-balances-create"));
+const RecurringJournals = lazy(() => import("@/pages/finance/recurring-journals"));
+const RecurringJournalsCreate = lazy(() => import("@/pages/create/finance/recurring-journals-create"));
+const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-journal-detail"));
+const YearEndClose = lazy(() => import("@/pages/finance/year-end-close"));
 
 export const financeRoutes = [
   { path: "/finance", component: Accounts },
@@ -101,4 +107,10 @@ export const financeRoutes = [
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
+  { path: "/finance/opening-balances", component: OpeningBalances },
+  { path: "/finance/opening-balances/create", component: OpeningBalancesCreate },
+  { path: "/finance/recurring-journals", component: RecurringJournals },
+  { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
+  { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
+  { path: "/finance/year-end-close", component: YearEndClose },
 ];

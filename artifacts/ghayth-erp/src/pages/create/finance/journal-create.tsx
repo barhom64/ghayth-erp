@@ -17,6 +17,9 @@ interface JournalLine {
   description: string;
   debit: string;
   credit: string;
+  costCenter?: string;
+  departmentId?: string;
+  projectId?: string;
 }
 
 const DRAFT_KEY = "finance_journal_create";
@@ -28,13 +31,17 @@ export default function JournalCreate() {
   const createMut = useApiMutation("/finance/journal", "POST", [["journal"]]);
   const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
+  const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
+  const departments = departmentsData?.data || [];
+  const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
+  const projects = projectsData?.data || [];
 
   const autoNumberRef = useRef(`JE-${Date.now().toString(36).toUpperCase()}`);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [lines, setLines] = useState<JournalLine[]>([
-    { accountCode: "", description: "", debit: "", credit: "" },
-    { accountCode: "", description: "", debit: "", credit: "" },
+    { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" },
+    { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" },
   ]);
 
   const updateLine = (idx: number, field: keyof JournalLine, value: string) => {
@@ -43,7 +50,7 @@ export default function JournalCreate() {
     setLines(updated);
   };
 
-  const addLine = () => setLines([...lines, { accountCode: "", description: "", debit: "", credit: "" }]);
+  const addLine = () => setLines([...lines, { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" }]);
   const removeLine = (idx: number) => { if (lines.length > 2) setLines(lines.filter((_, i) => i !== idx)); };
 
   const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
@@ -69,6 +76,9 @@ export default function JournalCreate() {
           description: l.description,
           debit: Number(l.debit) || 0,
           credit: Number(l.credit) || 0,
+          costCenter: l.costCenter || undefined,
+          departmentId: l.departmentId ? Number(l.departmentId) : undefined,
+          projectId: l.projectId ? Number(l.projectId) : undefined,
         })),
       });
       clearDraft();
@@ -104,22 +114,50 @@ export default function JournalCreate() {
               <span>الحساب</span><span>البيان</span><span>مدين</span><span>دائن</span><span></span>
             </div>
             {lines.map((line, idx) => (
-              <div key={idx} className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2">
-                <Select value={line.accountCode || "_none"} onValueChange={(v) => updateLine(idx, "accountCode", v === "_none" ? "" : v)}>
-                  <SelectTrigger className="text-sm h-9">
-                    <SelectValue placeholder="اختر الحساب" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">اختر الحساب</SelectItem>
-                    {accounts.map((a: any) => (
-                      <SelectItem key={a.code || a.id} value={String(a.code || a.id)}>{a.code} - {a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="وصف البند" />
-                <Input type="number" value={line.debit} onChange={(e) => updateLine(idx, "debit", e.target.value)} placeholder="0" />
-                <Input type="number" value={line.credit} onChange={(e) => updateLine(idx, "credit", e.target.value)} placeholder="0" />
-                <Button variant="ghost" size="icon" onClick={() => removeLine(idx)} disabled={lines.length <= 2}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              <div key={idx} className="space-y-1">
+                <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2">
+                  <Select value={line.accountCode || "_none"} onValueChange={(v) => updateLine(idx, "accountCode", v === "_none" ? "" : v)}>
+                    <SelectTrigger className="text-sm h-9">
+                      <SelectValue placeholder="اختر الحساب" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">اختر الحساب</SelectItem>
+                      {accounts.map((a: any) => (
+                        <SelectItem key={a.code || a.id} value={String(a.code || a.id)}>{a.code} - {a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="وصف البند" />
+                  <Input type="number" value={line.debit} onChange={(e) => updateLine(idx, "debit", e.target.value)} placeholder="0" />
+                  <Input type="number" value={line.credit} onChange={(e) => updateLine(idx, "credit", e.target.value)} placeholder="0" />
+                  <Button variant="ghost" size="icon" onClick={() => removeLine(idx)} disabled={lines.length <= 2}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </div>
+                <div className="grid grid-cols-3 gap-2 ps-1">
+                  <Input
+                    className="h-8 text-xs"
+                    value={line.costCenter || ""}
+                    onChange={(e) => updateLine(idx, "costCenter", e.target.value)}
+                    placeholder="مركز التكلفة (اختياري)"
+                  />
+                  <Select value={line.departmentId || "_none"} onValueChange={(v) => updateLine(idx, "departmentId", v === "_none" ? "" : v)}>
+                    <SelectTrigger className="text-xs h-8"><SelectValue placeholder="القسم (اختياري)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">بدون قسم</SelectItem>
+                      {departments.map((d: any) => (
+                        <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={line.projectId || "_none"} onValueChange={(v) => updateLine(idx, "projectId", v === "_none" ? "" : v)}>
+                    <SelectTrigger className="text-xs h-8"><SelectValue placeholder="المشروع (اختياري)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">بدون مشروع</SelectItem>
+                      {projects.map((p: any) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name || p.title || `مشروع #${p.id}`}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             ))}
             <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2 pt-2 border-t font-semibold text-sm">

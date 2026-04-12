@@ -68,6 +68,7 @@ import { collectionRouter } from "./finance-collection.js";
 import { budgetRouter } from "./finance-budget.js";
 import { accountsRouter } from "./finance-accounts.js";
 import { vendorsRouter } from "./finance-vendors.js";
+import { recurringRouter } from "./finance-recurring.js";
 import { attendanceRouter } from "./hr-attendance.js";
 import digitalSignatureRouter from "./digital-signature.js";
 
@@ -129,6 +130,7 @@ router.use("/finance", requireModule("finance"), collectionRouter);
 router.use("/finance", requireModule("finance"), budgetRouter);
 router.use("/finance", requireModule("finance"), accountsRouter);
 router.use("/finance", requireModule("finance"), vendorsRouter);
+router.use("/finance", requireModule("finance"), recurringRouter);
 router.use("/finance", requireModule("finance"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), financeRouter);
 router.use("/notifications", notificationsRouter);
