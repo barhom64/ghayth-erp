@@ -15,7 +15,7 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
     const { search, status } = req.query as any;
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['p.name', 'p.sku']; }
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"', branchColumn: 'p."branchId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"', branchColumn: 'p."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND p.status = $${paramIdx}`; params.push(status); paramIdx++; }
@@ -98,7 +98,7 @@ router.get("/movements", requirePermission("warehouse:read"), async (req, res) =
     const scope = req.scope!;
     const { productId } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (productId) { where += ` AND m."productId" = $${paramIdx}`; params.push(Number(productId)); paramIdx++; }

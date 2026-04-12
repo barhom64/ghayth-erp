@@ -29,7 +29,7 @@ purchaseRouter.get("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"' });
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"', enforceBranchScope: true });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
 
     let extraWhere = "";
@@ -206,7 +206,7 @@ purchaseRouter.get("/purchase-orders", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"' });
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
 
     let extraWhere = "";

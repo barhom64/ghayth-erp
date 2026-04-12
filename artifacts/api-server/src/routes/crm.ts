@@ -25,7 +25,7 @@ router.get("/opportunities", requirePermission("crm:read"), async (req, res) => 
     const scope = req.scope!;
     const { stage, status } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'o."companyId"', branchColumn: 'o."branchId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'o."companyId"', branchColumn: 'o."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (stage) { where += ` AND o.stage = $${paramIdx}`; params.push(stage); paramIdx++; }

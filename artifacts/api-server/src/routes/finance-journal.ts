@@ -63,7 +63,7 @@ journalRouter.get("/journal", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT je.*, json_agg(jl.*) AS lines FROM journal_entries je LEFT JOIN journal_lines jl ON jl."journalId" = je.id WHERE ${where} AND je."deletedAt" IS NULL GROUP BY je.id ORDER BY je."createdAt" DESC LIMIT 100`,
       params
@@ -90,7 +90,7 @@ journalRouter.get("/expenses", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je."createdAt", je.status,
               je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
@@ -284,7 +284,7 @@ journalRouter.get("/vouchers", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS type,

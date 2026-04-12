@@ -64,7 +64,7 @@ router.get("/collection", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
     const overdueInvoices = await rawQuery<any>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate",
               i.status, c.name AS "clientName", c.phone AS "clientPhone",
@@ -236,7 +236,7 @@ router.get("/budget", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
@@ -349,7 +349,7 @@ router.get("/expenses", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je."createdAt", je.status,
               je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
@@ -738,7 +738,7 @@ router.get("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT pr.*, s.name AS "supplierName",
               e.name AS "requestedByName"
@@ -1020,7 +1020,7 @@ router.get("/purchase-orders", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName"
        FROM purchase_orders po
@@ -1524,7 +1524,7 @@ router.get("/journal", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT je.*, json_agg(jl.*) AS lines
        FROM journal_entries je
@@ -1574,7 +1574,7 @@ router.get("/vouchers", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS type,
@@ -1808,7 +1808,7 @@ router.get("/stats", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters);
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { enforceBranchScope: true });
     const monthStart = new Date().toISOString().slice(0, 7) + "-01";
     params.push(monthStart);
 

@@ -502,7 +502,7 @@ router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
     const monthStr = month ?? new Date().toISOString().slice(0, 7);
 
     const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'a."companyId"', branchColumn: 'a."branchId"' });
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'a."companyId"', branchColumn: 'a."branchId"', enforceBranchScope: true });
     params.push(monthStr);
 
     const records = await rawQuery<any>(
@@ -613,6 +613,7 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, {
       companyColumn: 'lr."companyId"',
       branchColumn: 'lr."branchId"',
+      enforceBranchScope: true,
     });
     let finalWhere = where;
     let paramIdx = nextParamIndex;

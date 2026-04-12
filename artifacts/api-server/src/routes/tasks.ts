@@ -17,6 +17,7 @@ router.get("/", async (req, res) => {
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, {
       companyColumn: 't."companyId"',
       branchColumn: 't."branchId"',
+      enforceBranchScope: true,
     });
     let where = baseWhere;
     let paramIdx = nextParamIndex;

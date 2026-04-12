@@ -25,7 +25,7 @@ budgetRouter.get("/budget", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b

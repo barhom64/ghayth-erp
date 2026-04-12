@@ -36,7 +36,7 @@ collectionRouter.get("/collection", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
     const overdueInvoices = await rawQuery<any>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate",
               i.status, c.name AS "clientName", c.phone AS "clientPhone",

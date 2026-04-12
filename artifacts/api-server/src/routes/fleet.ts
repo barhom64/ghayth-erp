@@ -18,7 +18,7 @@ router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
     const { status, search } = req.query as any;
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['v."plateNumber"', 'v.make', 'v.model']; }
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'v."companyId"', branchColumn: 'v."branchId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'v."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND v.status = $${paramIdx}`; params.push(status); paramIdx++; }
@@ -58,7 +58,7 @@ router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"', branchColumn: 'd."branchId"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"', branchColumn: 'd."branchId"', enforceBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT d.*, e.name AS "employeeName", e."empNumber" AS "employeeNumber",
               ea."jobTitle" AS "employeeJobTitle"
@@ -249,7 +249,7 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
     const scope = req.scope!;
     const { status } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
@@ -539,7 +539,7 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
@@ -781,7 +781,7 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
@@ -867,7 +867,7 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }

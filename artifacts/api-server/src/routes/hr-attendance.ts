@@ -387,7 +387,7 @@ attendanceRouter.get("/attendance", requirePermission("hr:read"), async (req, re
     const monthStr = month ?? new Date().toISOString().slice(0, 7);
 
     const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'a."companyId"', branchColumn: 'a."branchId"' });
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'a."companyId"', branchColumn: 'a."branchId"', enforceBranchScope: true });
     params.push(monthStr);
 
     const records = await rawQuery<any>(
