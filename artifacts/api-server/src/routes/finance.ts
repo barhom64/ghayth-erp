@@ -1289,6 +1289,49 @@ router.post("/purchase-orders/:id/match-invoice", async (req, res) => {
       ]
     );
 
+    // On successful match, clear GRNI and book accounts payable. This
+    // completes the second leg of the PO→GRN→Invoice three-way match:
+    //   DR 2115 GRNI            (clearing the GRN accrual)
+    //   CR 2100 Accounts payable (recognizing the supplier liability)
+    // The GRN journal (DR inventory / CR GRNI) was posted at /receive.
+    let matchJournalId: number | null = null;
+    if (isMatched) {
+      const invoiceDate = invoicedDate || new Date().toISOString();
+      const periodCheck = await checkFinancialPeriodOpen(scope.companyId, invoiceDate);
+      if (periodCheck.open) {
+        const [grniAccount, apAccount] = await Promise.all([
+          getAccountCodeFromMapping(scope.companyId, "purchase_grni", "debit", "2115"),
+          getAccountCodeFromMapping(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+        ]);
+        try {
+          matchJournalId = await createJournalEntry({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            createdBy: scope.activeAssignmentId,
+            ref: `AP-${supplierInvoiceRef}`,
+            description: `فاتورة مورد ${supplierInvoiceRef} — أمر ${po.ref}`,
+            lines: [
+              { accountCode: grniAccount, debit: invAmount, credit: 0 },
+              { accountCode: apAccount, debit: 0, credit: invAmount },
+            ],
+          });
+        } catch (journalErr) {
+          console.error("AP match journal error:", journalErr);
+        }
+
+        // Update cumulative invoicedQty on PO items (pro-rata if amount differs)
+        try {
+          const ratio = receivedTotal > 0 ? invAmount / receivedTotal : 1;
+          await rawExecute(
+            `UPDATE purchase_order_items
+               SET "invoicedQty" = LEAST(quantity, COALESCE("invoicedQty",0) + COALESCE("receivedQty",0) * $1)
+             WHERE "orderId" = $2`,
+            [ratio, Number(id)]
+          );
+        } catch (e) { console.error("Update invoicedQty error:", e); }
+      }
+    }
+
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -1314,6 +1357,7 @@ router.post("/purchase-orders/:id/match-invoice", async (req, res) => {
     res.json({
       message: isMatched ? "تمت المطابقة الثلاثية بنجاح" : "عدم تطابق في المطابقة الثلاثية",
       isMatched,
+      journalId: matchJournalId,
       threeWayMatch: {
         purchaseRequest: prTotal,
         purchaseOrder: poTotal,
