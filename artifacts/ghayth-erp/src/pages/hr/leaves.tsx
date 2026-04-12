@@ -1,17 +1,14 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { formatDateAr } from "@/lib/formatters";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Plus, Calendar, Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Timer, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { ProcessStages, EntityTimeline } from "@/components/shared/entity-timeline";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -101,7 +98,6 @@ export default function LeavesPage() {
     statusField: "status",
     dateField: "startDate",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const handleApprovalDone = () => {
     refetch();
@@ -110,6 +106,106 @@ export default function LeavesPage() {
     qc.invalidateQueries({ queryKey: ["leave-balance"] });
     qc.invalidateQueries({ queryKey: ["leave-stages"] });
   };
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "employeeName",
+      header: "الموظف",
+      sortable: true,
+      render: (l) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-xs font-bold">
+            {(l.employeeName || "؟").charAt(0)}
+          </div>
+          <span className="font-medium">{l.employeeName}</span>
+        </div>
+      ),
+    },
+    {
+      key: "leaveType",
+      header: "النوع",
+      sortable: true,
+      render: (l) => l.leaveTypeName || typeMap[l.leaveType] || l.leaveType || "-",
+    },
+    {
+      key: "startDate",
+      header: "من",
+      sortable: true,
+      render: (l) => <span className="text-gray-500">{l.startDate}</span>,
+    },
+    {
+      key: "endDate",
+      header: "إلى",
+      sortable: true,
+      render: (l) => <span className="text-gray-500">{l.endDate}</span>,
+    },
+    {
+      key: "days",
+      header: "الأيام",
+      sortable: true,
+      render: (l) => <span className="font-medium">{l.days || "-"}</span>,
+    },
+    {
+      key: "reason",
+      header: "السبب",
+      sortable: true,
+      className: "max-w-32 truncate",
+      render: (l) => (
+        <div className="text-gray-500">
+          {l.reason || "-"}
+          <NotesDisplay status={l.status} notes={l.rejectedReason} returnReason={l.returnReason} rejectionReason={l.rejectedReason} />
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (l) => <StatusBadge status={l.status} />,
+    },
+    {
+      key: "approval",
+      header: "إجراءات الموافقة",
+      render: (l) => (
+        <ApprovalActions
+          entityType="leave"
+          entityId={l.id}
+          currentStatus={l.status}
+          approveEndpoint={`/hr/leave-requests/${l.id}/approve`}
+          rejectEndpoint={`/hr/leave-requests/${l.id}/approve`}
+          returnEndpoint={`/hr/leave-requests/${l.id}/approve`}
+          approveMethod="PATCH"
+          rejectMethod="PATCH"
+          returnMethod="PATCH"
+          approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
+          rejectBody={(notes) => ({ approved: false, reason: notes })}
+          returnBody={(notes) => ({ approved: "returned", reason: notes })}
+          pendingStatuses={["pending"]}
+          onDone={handleApprovalDone}
+        />
+      ),
+    },
+    {
+      key: "more",
+      header: "",
+      width: "80px",
+      render: (l) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/hr/leaves/create?copyLeaveType=${encodeURIComponent(l.leaveTypeId || l.leaveType || "")}&copyReason=${encodeURIComponent(l.reason || "")}`}>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500" title="نسخ الطلب">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+          <button
+            onClick={() => setExpandedId(expandedId === l.id ? null : l.id)}
+            className="text-gray-400 hover:text-gray-600 p-1"
+          >
+            {expandedId === l.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   const kpis = [
     { label: "إجمالي الطلبات", value: stats?.total ?? items.length, icon: Calendar, color: "text-blue-600 bg-blue-50" },
@@ -160,97 +256,24 @@ export default function LeavesPage() {
         }}
         values={filters}
         onChange={setFilters}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="leaveType" label="النوع" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="startDate" label="من" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="endDate" label="إلى" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="days" label="الأيام" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="reason" label="السبب" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                <TableHead>إجراءات الموافقة</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper
-              isLoading={false}
-              data={sortedData}
-              colCount={9}
-              emptyMessage="لا توجد طلبات إجازة"
-            >
-              {(sortedData || []).map((l: any) => (
-                <Fragment key={l.id}>
-                  <TableRow className="hover:bg-gray-50 transition-colors">
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-xs font-bold">
-                          {(l.employeeName || "؟").charAt(0)}
-                        </div>
-                        <span className="font-medium">{l.employeeName}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{l.leaveTypeName || typeMap[l.leaveType] || l.leaveType || "-"}</TableCell>
-                    <TableCell className="text-gray-500">{l.startDate}</TableCell>
-                    <TableCell className="text-gray-500">{l.endDate}</TableCell>
-                    <TableCell className="font-medium">{l.days || "-"}</TableCell>
-                    <TableCell className="text-gray-500 max-w-32 truncate">
-                      <div>
-                        {l.reason || "-"}
-                        <NotesDisplay status={l.status} notes={l.rejectedReason} returnReason={l.returnReason} rejectionReason={l.rejectedReason} />
-                      </div>
-                    </TableCell>
-                    <TableCell><StatusBadge status={l.status} /></TableCell>
-                    <TableCell>
-                      <ApprovalActions
-                        entityType="leave"
-                        entityId={l.id}
-                        currentStatus={l.status}
-                        approveEndpoint={`/hr/leave-requests/${l.id}/approve`}
-                        rejectEndpoint={`/hr/leave-requests/${l.id}/approve`}
-                        returnEndpoint={`/hr/leave-requests/${l.id}/approve`}
-                        approveMethod="PATCH"
-                        rejectMethod="PATCH"
-                        returnMethod="PATCH"
-                        approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
-                        rejectBody={(notes) => ({ approved: false, reason: notes })}
-                        returnBody={(notes) => ({ approved: "returned", reason: notes })}
-                        pendingStatuses={["pending"]}
-                        onDone={handleApprovalDone}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Link href={`/hr/leaves/create?copyLeaveType=${encodeURIComponent(l.leaveTypeId || l.leaveType || "")}&copyReason=${encodeURIComponent(l.reason || "")}`}>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500" title="نسخ الطلب">
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
-                        </Link>
-                        <button onClick={() => setExpandedId(expandedId === l.id ? null : l.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                          {expandedId === l.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {expandedId === l.id && (
-                    <TableRow><TableCell colSpan={9} className="p-4 bg-gray-50/50 space-y-4">
-                      <LeaveApprovalStages leaveId={l.id} leaveStatus={l.status} />
-                      <ActionHistory entityType="leave" entityId={l.id} defaultOpen />
-                      <EntityTimeline entityType="hr_leave_requests" entityId={l.id} maxItems={10} />
-                    </TableCell></TableRow>
-                  )}
-                </Fragment>
-              ))}
-            </DataTableWrapper>
-          </Table>
-        </div>
-      </div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        emptyMessage="لا توجد طلبات إجازة"
+        noToolbar
+        renderRowExtras={(l) =>
+          expandedId === l.id ? (
+            <div className="p-4 bg-gray-50/50 space-y-4">
+              <LeaveApprovalStages leaveId={l.id} leaveStatus={l.status} />
+              <ActionHistory entityType="leave" entityId={l.id} defaultOpen />
+              <EntityTimeline entityType="hr_leave_requests" entityId={l.id} maxItems={10} />
+            </div>
+          ) : null
+        }
+      />
     </div>
   );
 }
