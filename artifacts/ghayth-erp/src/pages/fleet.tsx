@@ -1,13 +1,10 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
 import { Car, Users, MapPin, Wrench, Fuel, Plus, Eye, FileCheck, Link2, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -40,16 +37,10 @@ export default function Fleet() {
   );
 }
 
-const VEHICLE_STATUS_OPTIONS = [
-  { value: "available", label: "متاحة" },
-  { value: "in_use", label: "قيد الاستخدام" },
-  { value: "maintenance", label: "في الصيانة" },
-];
-
 function VehiclesTab() {
   const { permissions, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
-  const { data: stats } = useApiQuery(["fleet-stats", scopeQueryString], `/fleet/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
+  const { data: stats } = useApiQuery<any>(["fleet-stats", scopeQueryString], `/fleet/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
   const [page, setPage] = useState(1);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [filters, setFilters] = useFilters();
@@ -66,7 +57,6 @@ function VehiclesTab() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/fleet/vehicles",
@@ -88,6 +78,68 @@ function VehiclesTab() {
     { label: "الموديل", key: "model" },
     { label: "السنة", key: "year" },
     { label: "الحالة", key: "status", type: "status" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "plateNumber",
+      header: "اللوحة",
+      sortable: true,
+      className: "font-mono",
+      render: (v) => <Link href={`/fleet/${v.id}`} className="hover:underline text-primary font-medium">{v.plateNumber}</Link>,
+    },
+    {
+      key: "make",
+      header: "المركبة",
+      sortable: true,
+      render: (v) => `${v.make} ${v.model} ${v.year}`,
+    },
+    { key: "color", header: "اللون", sortable: true, render: (v) => v.color || "-" },
+    {
+      key: "currentMileage",
+      header: "المسافة",
+      sortable: true,
+      ltr: true,
+      className: "text-right",
+      render: (v) => `${formatNumber(v.currentMileage || 0)} كم`,
+    },
+    { key: "driverName", header: "السائق", sortable: true, render: (v) => v.driverName || "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (v) => <StatusBadge status={v.status} /> },
+    {
+      key: "registration",
+      header: "الاستمارة",
+      render: (v) => (
+        <div className="flex flex-col gap-1">
+          {v.registrationExpiry ? (() => {
+            const daysLeft = Math.ceil((new Date(v.registrationExpiry).getTime() - Date.now()) / 86400000);
+            return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><FileCheck className="h-3 w-3" />استمارة منتهية</Badge>
+              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-amber-100 text-amber-700 hover:bg-amber-100"><FileCheck className="h-3 w-3" />استمارة: {daysLeft} يوم</Badge>
+              : <Badge variant="outline" className="text-xs gap-1 text-green-700"><FileCheck className="h-3 w-3" />استمارة سارية</Badge>;
+          })() : <span className="text-xs text-muted-foreground">—</span>}
+          {v.insuranceExpiry ? (() => {
+            const daysLeft = Math.ceil((new Date(v.insuranceExpiry).getTime() - Date.now()) / 86400000);
+            return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><ShieldAlert className="h-3 w-3" />تأمين منتهٍ</Badge>
+              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-orange-100 text-orange-700 hover:bg-orange-100"><ShieldAlert className="h-3 w-3" />تأمين: {daysLeft} يوم</Badge>
+              : null;
+          })() : null}
+          {v.govLinkCount > 0 && <Badge variant="secondary" className="text-xs gap-1"><Link2 className="h-3 w-3" />مرتبط ({v.govLinkCount})</Badge>}
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      header: "الإجراءات",
+      render: (v) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(v)}><Eye className="h-4 w-4" /></Button>
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(v.id, { plateNumber: v.plateNumber, make: v.make || "", model: v.model || "", color: v.color || "", status: v.status || "available" })}
+            onDelete={() => startDelete(v.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -113,7 +165,7 @@ function VehiclesTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered || [], [
               { key: "plateNumber", label: "اللوحة" },
               { key: "make", label: "الشركة المصنعة" },
               { key: "model", label: "الموديل" },
@@ -122,7 +174,7 @@ function VehiclesTab() {
               { key: "driverName", label: "السائق" },
               { key: "status", label: "الحالة" },
             ], "المركبات")}
-            resultCount={sortedData?.length}
+            resultCount={filtered?.length}
           />
         </div>
         {canManage && <Link href="/fleet/vehicles/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة مركبة</Button></Link>}
@@ -131,70 +183,30 @@ function VehiclesTab() {
       <Card>
         <CardHeader><CardTitle>المركبات</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="plateNumber" label="اللوحة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="make" label="المركبة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="color" label="اللون" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="currentMileage" label="المسافة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="driverName" label="السائق" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead>الاستمارة</TableHead>
-            <TableHead className="text-start">الإجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={8} emptyMessage="لا توجد مركبات" emptyIcon={<Car className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(v => (
-              <Fragment key={v.id}>
-                <TableRow>
-                  <TableCell className="font-mono">
-                    <Link href={`/fleet/${v.id}`} className="hover:underline text-primary font-medium">{v.plateNumber}</Link>
-                  </TableCell>
-                  <TableCell>{v.make} {v.model} {v.year}</TableCell>
-                  <TableCell>{v.color || "-"}</TableCell>
-                  <TableCell dir="ltr" className="text-right">{formatNumber(v.currentMileage || 0)} كم</TableCell>
-                  <TableCell>{v.driverName || "-"}</TableCell>
-                  <TableCell><StatusBadge status={v.status} /></TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      {v.registrationExpiry ? (() => {
-                        const daysLeft = Math.ceil((new Date(v.registrationExpiry).getTime() - Date.now()) / 86400000);
-                        return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><FileCheck className="h-3 w-3" />استمارة منتهية</Badge>
-                          : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-amber-100 text-amber-700 hover:bg-amber-100"><FileCheck className="h-3 w-3" />استمارة: {daysLeft} يوم</Badge>
-                          : <Badge variant="outline" className="text-xs gap-1 text-green-700"><FileCheck className="h-3 w-3" />استمارة سارية</Badge>;
-                      })() : <span className="text-xs text-muted-foreground">—</span>}
-                      {v.insuranceExpiry ? (() => {
-                        const daysLeft = Math.ceil((new Date(v.insuranceExpiry).getTime() - Date.now()) / 86400000);
-                        return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><ShieldAlert className="h-3 w-3" />تأمين منتهٍ</Badge>
-                          : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-orange-100 text-orange-700 hover:bg-orange-100"><ShieldAlert className="h-3 w-3" />تأمين: {daysLeft} يوم</Badge>
-                          : null;
-                      })() : null}
-                      {v.govLinkCount > 0 && <Badge variant="secondary" className="text-xs gap-1"><Link2 className="h-3 w-3" />مرتبط ({v.govLinkCount})</Badge>}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-start">
-                    <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => setPreviewItem(v)}><Eye className="h-4 w-4" /></Button>
-                    <RowActions
-                      canEdit={canManage}
-                      onEdit={() => startEdit(v.id, { plateNumber: v.plateNumber, make: v.make || "", model: v.model || "", color: v.color || "", status: v.status || "available" })}
-                      onDelete={() => startDelete(v.id)}
-                    />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === v.id && (
-                  <TableRow><TableCell colSpan={7}>
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(v.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === v.id && (
-                  <TableRow><TableCell colSpan={7}>
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(v.id)} onCancel={cancelDelete} isPending={isPending} itemName={v.plateNumber} entityType="vehicle" entityId={v.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد مركبات"
+            emptyIcon={<Car className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={pageSize}
+            total={total}
+            page={page}
+            onPageChange={setPage}
+            renderRowExtras={(v) => {
+              if (editingId === v.id) {
+                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(v.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              }
+              if (deletingId === v.id) {
+                return <InlineDeleteConfirm onConfirm={() => handleDelete(v.id)} onCancel={cancelDelete} isPending={isPending} itemName={v.plateNumber} entityType="vehicle" entityId={v.id} />;
+              }
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة المركبة" data={previewItem} fields={previewFields} />
@@ -213,7 +225,6 @@ function DriversTab() {
     searchFields: ["name", "phone", "licenseNumber"],
     statusField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/fleet/drivers",
@@ -227,6 +238,29 @@ function DriversTab() {
     { key: "licenseNumber", label: "رقم الرخصة" },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
   ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "الاسم", sortable: true, className: "font-medium" },
+    { key: "phone", header: "الهاتف", sortable: true, ltr: true, className: "text-right", render: (d) => d.phone || "-" },
+    { key: "licenseNumber", header: "رقم الرخصة", sortable: true, render: (d) => d.licenseNumber || "-" },
+    { key: "rating", header: "التقييم", sortable: true, render: (d) => <>⭐ {d.rating}</> },
+    { key: "totalTrips", header: "الرحلات", sortable: true },
+    { key: "status", header: "الحالة", sortable: true, render: (d) => <StatusBadge status={d.status} /> },
+    {
+      key: "actions",
+      header: "الإجراءات",
+      render: (d) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
+            onDelete={() => startDelete(d.id)}
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -242,7 +276,7 @@ function DriversTab() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered || [], [
               { key: "name", label: "الاسم" },
               { key: "phone", label: "الهاتف" },
               { key: "licenseNumber", label: "رقم الرخصة" },
@@ -250,53 +284,33 @@ function DriversTab() {
               { key: "totalTrips", label: "الرحلات" },
               { key: "status", label: "الحالة" },
             ], "السائقون")}
-            resultCount={sortedData?.length}
+            resultCount={filtered?.length}
           />
         </div>
         <Link href="/fleet/drivers/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة سائق</Button></Link>
       </div>
       <Card>
         <CardContent className="pt-6">
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="name" label="الاسم" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="phone" label="الهاتف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="licenseNumber" label="رقم الرخصة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="rating" label="التقييم" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="totalTrips" label="الرحلات" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead className="text-start">الإجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={7} emptyMessage="لا يوجد سائقون" emptyIcon={<Users className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(d => (
-              <Fragment key={d.id}>
-                <TableRow>
-                  <TableCell className="font-medium">{d.name}</TableCell>
-                  <TableCell dir="ltr" className="text-right">{d.phone || "-"}</TableCell>
-                  <TableCell>{d.licenseNumber || "-"}</TableCell>
-                  <TableCell>⭐ {d.rating}</TableCell>
-                  <TableCell>{d.totalTrips}</TableCell>
-                  <TableCell><StatusBadge status={d.status} /></TableCell>
-                  <TableCell className="text-start">
-                    <RowActions
-                      canEdit={canManage}
-                      onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
-                      onDelete={() => startDelete(d.id)}
-                    />
-                  </TableCell>
-                </TableRow>
-                {editingId === d.id && (
-                  <TableRow><TableCell colSpan={7}>
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(d.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </TableCell></TableRow>
-                )}
-                {deletingId === d.id && (
-                  <TableRow><TableCell colSpan={7}>
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(d.id)} onCancel={cancelDelete} isPending={isPending} itemName={d.name} entityType="driver" entityId={d.id} />
-                  </TableCell></TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا يوجد سائقون"
+            emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            renderRowExtras={(d) => {
+              if (editingId === d.id) {
+                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(d.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              }
+              if (deletingId === d.id) {
+                return <InlineDeleteConfirm onConfirm={() => handleDelete(d.id)} onCancel={cancelDelete} isPending={isPending} itemName={d.name} entityType="driver" entityId={d.id} />;
+              }
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
     </div>
@@ -318,7 +332,15 @@ function TripsTab() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "plateNumber", header: "المركبة", sortable: true, render: (t) => t.plateNumber || "-" },
+    { key: "driverName", header: "السائق", sortable: true, render: (t) => t.driverName || "-" },
+    { key: "fromLocation", header: "من", sortable: true, className: "max-w-[150px] truncate", render: (t) => t.fromLocation || "-" },
+    { key: "toLocation", header: "إلى", sortable: true, className: "max-w-[150px] truncate", render: (t) => t.toLocation || "-" },
+    { key: "distance", header: "المسافة", sortable: true, ltr: true, className: "text-right", render: (t) => t.distance ? `${t.distance} كم` : "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (t) => <StatusBadge status={t.status} /> },
+  ];
 
   return (
     <div className="space-y-4">
@@ -335,7 +357,7 @@ function TripsTab() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV(sortedData || [], [
+        onExportCSV={() => exportToCSV(filtered || [], [
           { key: "plateNumber", label: "المركبة" },
           { key: "driverName", label: "السائق" },
           { key: "fromLocation", label: "من" },
@@ -343,32 +365,26 @@ function TripsTab() {
           { key: "distance", label: "المسافة" },
           { key: "status", label: "الحالة" },
         ], "الرحلات")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
       <Card>
         <CardHeader><CardTitle>الرحلات</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="plateNumber" label="المركبة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="driverName" label="السائق" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="fromLocation" label="من" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="toLocation" label="إلى" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="distance" label="المسافة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={6} emptyMessage="لا توجد رحلات" emptyIcon={<MapPin className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(t => (
-              <TableRow key={t.id}>
-                <TableCell>{t.plateNumber || "-"}</TableCell>
-                <TableCell>{t.driverName || "-"}</TableCell>
-                <TableCell className="max-w-[150px] truncate">{t.fromLocation || "-"}</TableCell>
-                <TableCell className="max-w-[150px] truncate">{t.toLocation || "-"}</TableCell>
-                <TableCell dir="ltr" className="text-right">{t.distance ? `${t.distance} كم` : "-"}</TableCell>
-                <TableCell><StatusBadge status={t.status} /></TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper></Table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد رحلات"
+            emptyIcon={<MapPin className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={pageSize}
+            total={total}
+            page={page}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>
@@ -385,7 +401,15 @@ function MaintenanceTab() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "plateNumber", header: "المركبة", sortable: true, render: (r) => r.plateNumber || "-" },
+    { key: "type", header: "النوع", sortable: true, render: (r) => r.type || "-" },
+    { key: "description", header: "الوصف", sortable: true, className: "max-w-[200px] truncate", render: (r) => r.description || "-" },
+    { key: "cost", header: "التكلفة", sortable: true, render: (r) => formatCurrency(r.cost || 0) },
+    { key: "serviceDate", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.serviceDate) },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <StatusBadge status={r.status} /> },
+  ];
 
   return (
     <div className="space-y-4">
@@ -401,7 +425,7 @@ function MaintenanceTab() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV(sortedData || [], [
+        onExportCSV={() => exportToCSV(filtered || [], [
           { key: "plateNumber", label: "المركبة" },
           { key: "type", label: "النوع" },
           { key: "description", label: "الوصف" },
@@ -409,31 +433,22 @@ function MaintenanceTab() {
           { key: "serviceDate", label: "التاريخ" },
           { key: "status", label: "الحالة" },
         ], "الصيانة")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
       <Card>
         <CardHeader><CardTitle>سجلات الصيانة</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="plateNumber" label="المركبة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="type" label="النوع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="description" label="الوصف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="cost" label="التكلفة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="serviceDate" label="التاريخ" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={6} emptyMessage="لا توجد سجلات صيانة" emptyIcon={<Wrench className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(r => (
-              <TableRow key={r.id}>
-                <TableCell>{r.plateNumber || "-"}</TableCell>
-                <TableCell>{r.type || "-"}</TableCell>
-                <TableCell className="max-w-[200px] truncate">{r.description || "-"}</TableCell>
-                <TableCell>{formatCurrency(r.cost || 0)}</TableCell>
-                <TableCell>{formatDateAr(r.serviceDate)}</TableCell>
-                <TableCell><StatusBadge status={r.status} /></TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد سجلات صيانة"
+            emptyIcon={<Wrench className="h-6 w-6 text-slate-400" />}
+            noToolbar
+          />
         </CardContent>
       </Card>
     </div>
@@ -449,7 +464,15 @@ function FuelTab() {
     searchFields: ["plateNumber", "stationName"],
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "plateNumber", header: "المركبة", sortable: true, render: (l) => l.plateNumber || "-" },
+    { key: "fuelDate", header: "التاريخ", sortable: true, render: (l) => formatDateAr(l.fuelDate) },
+    { key: "liters", header: "اللترات", sortable: true, ltr: true, className: "text-right", render: (l) => l.liters },
+    { key: "costPerLiter", header: "سعر اللتر", sortable: true, render: (l) => formatCurrency(l.costPerLiter) },
+    { key: "totalCost", header: "الإجمالي", sortable: true, className: "font-bold", render: (l) => formatCurrency(l.totalCost || 0) },
+    { key: "stationName", header: "المحطة", sortable: true, render: (l) => l.stationName || "-" },
+  ];
 
   return (
     <div className="space-y-4">
@@ -460,7 +483,7 @@ function FuelTab() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV(sortedData || [], [
+        onExportCSV={() => exportToCSV(filtered || [], [
           { key: "plateNumber", label: "المركبة" },
           { key: "fuelDate", label: "التاريخ" },
           { key: "liters", label: "اللترات" },
@@ -468,31 +491,22 @@ function FuelTab() {
           { key: "totalCost", label: "الإجمالي" },
           { key: "stationName", label: "المحطة" },
         ], "الوقود")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
       <Card>
         <CardHeader><CardTitle>سجلات الوقود</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="plateNumber" label="المركبة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="fuelDate" label="التاريخ" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="liters" label="اللترات" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="costPerLiter" label="سعر اللتر" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="totalCost" label="الإجمالي" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="stationName" label="المحطة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={6} emptyMessage="لا توجد سجلات وقود" emptyIcon={<Fuel className="h-6 w-6 text-slate-400" />}>
-            {sortedData?.map(l => (
-              <TableRow key={l.id}>
-                <TableCell>{l.plateNumber || "-"}</TableCell>
-                <TableCell>{formatDateAr(l.fuelDate)}</TableCell>
-                <TableCell dir="ltr" className="text-right">{l.liters}</TableCell>
-                <TableCell>{formatCurrency(l.costPerLiter)}</TableCell>
-                <TableCell className="font-bold">{formatCurrency(l.totalCost || 0)}</TableCell>
-                <TableCell>{l.stationName || "-"}</TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد سجلات وقود"
+            emptyIcon={<Fuel className="h-6 w-6 text-slate-400" />}
+            noToolbar
+          />
         </CardContent>
       </Card>
     </div>

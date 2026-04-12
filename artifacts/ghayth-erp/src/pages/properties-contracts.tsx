@@ -1,19 +1,17 @@
-import { useState, Fragment, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, useSearch } from "wouter";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHead, TableHeader, TableRow, TableCell, TableBody } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { TagFilterSelect, useTagFilter, EntityTags } from "@/components/shared/entity-tags";
 import { EntityComments } from "@/components/shared/entity-comments";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import {
   FileText, Plus, ChevronDown, ChevronUp, CalendarDays, Banknote,
   CheckCircle2, Clock, AlertTriangle, RefreshCw, Zap, Droplets, Wifi,
@@ -265,7 +263,29 @@ export default function PropertiesContracts() {
     dateField: "startDate" as any,
   });
   const filtered = tagFilteredIds ? preFiltered.filter((c: any) => tagFilteredIds.has(c.id)) : preFiltered;
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "ejarNumber", header: "رقم إيجار", sortable: true, className: "font-mono text-xs text-blue-700", render: (c) => c.ejarNumber || "—" },
+    { key: "unitNumber", header: "الوحدة", sortable: true, render: (c) => `${c.unitNumber}${c.buildingName ? ` - ${c.buildingName}` : ""}` },
+    { key: "tenantName", header: "المستأجر", sortable: true, className: "font-medium" },
+    { key: "startDate", header: "من", sortable: true, className: "text-xs", render: (c) => formatDateAr(c.startDate) },
+    { key: "endDate", header: "إلى", sortable: true, className: "text-xs", render: (c) => formatDateAr(c.endDate) },
+    { key: "monthlyRent", header: "الإيجار", sortable: true, className: "font-bold", render: (c) => formatCurrency(c.monthlyRent || 0) },
+    { key: "paymentFrequency", header: "الدورة", sortable: true, className: "text-xs", render: (c) => FREQ_LABELS[c.paymentFrequency] || "—" },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    {
+      key: "details",
+      header: "تفاصيل",
+      render: (c) => (
+        <button
+          className="text-gray-400 hover:text-gray-600 p-1"
+          onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === c.id ? null : c.id); }}
+        >
+          {expandedId === c.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -293,7 +313,7 @@ export default function PropertiesContracts() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered || [], [
               { key: "ejarNumber", label: "رقم إيجار" },
               { key: "unitNumber", label: "الوحدة" },
               { key: "tenantName", label: "المستأجر" },
@@ -304,7 +324,7 @@ export default function PropertiesContracts() {
               { key: "paymentFrequency", label: "دورة السداد" },
               { key: "status", label: "الحالة" },
             ], "عقود_الإيجار")}
-            resultCount={sortedData?.length}
+            resultCount={filtered?.length}
           />
           <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
         </div>
@@ -313,69 +333,44 @@ export default function PropertiesContracts() {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-blue-500" /> قائمة العقود</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="ejarNumber" label="رقم إيجار" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="unitNumber" label="الوحدة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="tenantName" label="المستأجر" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="startDate" label="من" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="endDate" label="إلى" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="monthlyRent" label="الإيجار" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="paymentFrequency" label="الدورة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                <TableHead className="text-start">تفاصيل</TableHead>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={9} emptyMessage="لا توجد عقود" emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}>
-              {sortedData?.map((c: any) => (
-                <Fragment key={c.id}>
-                  <TableRow id={`contract-row-${c.id}`} className={`cursor-pointer hover:bg-gray-50/50 ${expandedId === c.id ? "bg-blue-50/40" : ""}`} onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}>
-                    <TableCell className="font-mono text-xs text-blue-700">{c.ejarNumber || "—"}</TableCell>
-                    <TableCell>{c.unitNumber} {c.buildingName ? `- ${c.buildingName}` : ""}</TableCell>
-                    <TableCell className="font-medium">{c.tenantName}</TableCell>
-                    <TableCell className="text-xs">{formatDateAr(c.startDate)}</TableCell>
-                    <TableCell className="text-xs">{formatDateAr(c.endDate)}</TableCell>
-                    <TableCell className="font-bold">{formatCurrency(c.monthlyRent || 0)}</TableCell>
-                    <TableCell className="text-xs">{FREQ_LABELS[c.paymentFrequency] || "—"}</TableCell>
-                    <TableCell><StatusBadge status={c.status} /></TableCell>
-                    <TableCell>
-                      <button className="text-gray-400 hover:text-gray-600 p-1" onClick={e => { e.stopPropagation(); setExpandedId(expandedId === c.id ? null : c.id); }}>
-                        {expandedId === c.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                  {expandedId === c.id && (
-                    <TableRow key={`expand-${c.id}`}>
-                      <TableCell colSpan={9} className="bg-gray-50/50 p-0">
-                        <div className="p-4">
-                          <Tabs defaultValue="details" dir="rtl">
-                            <TabsList className="mb-3">
-                              <TabsTrigger value="details" className="gap-1 text-xs"><CalendarDays className="h-3 w-3" /> تفاصيل العقد</TabsTrigger>
-                              <TabsTrigger value="schedule" className="gap-1 text-xs"><Banknote className="h-3 w-3" /> جدول الدفعات</TabsTrigger>
-                              <TabsTrigger value="tags" className="gap-1 text-xs">الوسوم والتعليقات</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="details">
-                              <ContractDetailPanel contract={c} />
-                            </TabsContent>
-                            <TabsContent value="schedule">
-                              <PaymentSchedulePanel contractId={c.id} />
-                            </TabsContent>
-                            <TabsContent value="tags">
-                              <div className="space-y-3">
-                                <EntityTags entityType="contract" entityId={c.id} />
-                                <EntityComments entityType="contract" entityId={c.id} />
-                              </div>
-                            </TabsContent>
-                          </Tabs>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              ))}
-            </DataTableWrapper>
-          </Table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد عقود"
+            emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            onRowClick={(c) => setExpandedId(expandedId === c.id ? null : c.id)}
+            rowClassName={(c) => expandedId === c.id ? "bg-blue-50/40" : undefined}
+            renderRowExtras={(c) =>
+              expandedId === c.id ? (
+                <div className="p-4 bg-gray-50/50">
+                  <Tabs defaultValue="details" dir="rtl">
+                    <TabsList className="mb-3">
+                      <TabsTrigger value="details" className="gap-1 text-xs"><CalendarDays className="h-3 w-3" /> تفاصيل العقد</TabsTrigger>
+                      <TabsTrigger value="schedule" className="gap-1 text-xs"><Banknote className="h-3 w-3" /> جدول الدفعات</TabsTrigger>
+                      <TabsTrigger value="tags" className="gap-1 text-xs">الوسوم والتعليقات</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="details">
+                      <ContractDetailPanel contract={c} />
+                    </TabsContent>
+                    <TabsContent value="schedule">
+                      <PaymentSchedulePanel contractId={c.id} />
+                    </TabsContent>
+                    <TabsContent value="tags">
+                      <div className="space-y-3">
+                        <EntityTags entityType="contract" entityId={c.id} />
+                        <EntityComments entityType="contract" entityId={c.id} />
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              ) : null
+            }
+          />
         </CardContent>
       </Card>
     </div>

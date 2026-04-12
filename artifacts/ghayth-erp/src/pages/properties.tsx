@@ -1,12 +1,9 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
 import { Building, Plus, Eye } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -18,7 +15,7 @@ export default function Properties() {
   const { roleLevel, permissions, scopeQueryString } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
-  const { data: stats } = useApiQuery(["properties-stats", scopeQueryString], `/properties/stats?${scopeQueryString}`);
+  const { data: stats } = useApiQuery<any>(["properties-stats", scopeQueryString], `/properties/stats?${scopeQueryString}`);
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const { data: unitsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -31,7 +28,6 @@ export default function Properties() {
     searchFields: ["unitNumber", "buildingName"],
     statusField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/properties/units",
@@ -46,6 +42,42 @@ export default function Properties() {
     { key: "area", label: "المساحة (م²)", type: "number" as const },
     { key: "monthlyRent", label: "الإيجار", type: "number" as const },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاحة" }, { value: "rented", label: "مؤجرة" }, { value: "under_maintenance", label: "صيانة" }] },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "unitNumber",
+      header: "رقم الوحدة",
+      sortable: true,
+      className: "font-mono",
+      render: (u) => <Link href={`/properties/${u.id}`} className="hover:underline text-primary font-medium">{u.unitNumber}</Link>,
+    },
+    { key: "buildingName", header: "المبنى", sortable: true, render: (u) => u.buildingName || "—" },
+    {
+      key: "type",
+      header: "النوع",
+      sortable: true,
+      render: (u) => u.type === 'apartment' ? 'شقة' : u.type === 'villa' ? 'فيلا' : u.type === 'office' ? 'مكتب' : u.type === 'shop' ? 'محل' : u.type === 'warehouse' ? 'مستودع' : u.type === 'land' ? 'أرض' : u.type,
+    },
+    { key: "area", header: "المساحة", sortable: true, render: (u) => u.area ? `${u.area} م²` : "—" },
+    { key: "monthlyRent", header: "الإيجار", sortable: true, className: "font-bold", render: (u) => formatCurrency(u.monthlyRent || 0) },
+    { key: "status", header: "الحالة", sortable: true, render: (u) => <StatusBadge status={u.status} /> },
+    {
+      key: "actions",
+      header: "الإجراءات",
+      render: (u) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/properties/${u.id}`}><Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button></Link>
+          {canManage && (
+            <RowActions
+              canEdit={canManage}
+              onEdit={() => startEdit(u.id, { unitNumber: u.unitNumber || "", buildingName: u.buildingName || "", type: u.type || "apartment", area: u.area || 0, monthlyRent: u.monthlyRent || 0, status: u.status || "available" })}
+              onDelete={() => startDelete(u.id)}
+            />
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -83,7 +115,7 @@ export default function Properties() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV(sortedData || [], [
+        onExportCSV={() => exportToCSV(filtered || [], [
           { key: "unitNumber", label: "رقم الوحدة" },
           { key: "buildingName", label: "المبنى" },
           { key: "type", label: "النوع" },
@@ -91,67 +123,38 @@ export default function Properties() {
           { key: "monthlyRent", label: "الإيجار" },
           { key: "status", label: "الحالة" },
         ], "الوحدات")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Building className="h-5 w-5 text-blue-500" /> الوحدات العقارية</CardTitle></CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="unitNumber" label="رقم الوحدة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="buildingName" label="المبنى" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="type" label="النوع" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="area" label="المساحة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="monthlyRent" label="الإيجار" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                <TableHead className="text-start">الإجراءات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={7} emptyMessage="لا توجد وحدات" emptyIcon={<Building className="h-6 w-6 text-slate-400" />}>
-              {sortedData?.map(u => (
-                <Fragment key={u.id}>
-                  <TableRow>
-                    <TableCell className="font-mono">
-                      <Link href={`/properties/${u.id}`} className="hover:underline text-primary font-medium">{u.unitNumber}</Link>
-                    </TableCell>
-                    <TableCell>{u.buildingName || "—"}</TableCell>
-                    <TableCell>{u.type === 'apartment' ? 'شقة' : u.type === 'villa' ? 'فيلا' : u.type === 'office' ? 'مكتب' : u.type === 'shop' ? 'محل' : u.type === 'warehouse' ? 'مستودع' : u.type === 'land' ? 'أرض' : u.type}</TableCell>
-                    <TableCell>{u.area ? `${u.area} م²` : "—"}</TableCell>
-                    <TableCell className="font-bold">{formatCurrency(u.monthlyRent || 0)}</TableCell>
-                    <TableCell><StatusBadge status={u.status} /></TableCell>
-                    <TableCell className="text-start">
-                      <div className="flex items-center gap-1">
-                        <Link href={`/properties/${u.id}`}><Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button></Link>
-                        {canManage && (
-                          <RowActions
-                            canEdit={canManage}
-                            onEdit={() => startEdit(u.id, { unitNumber: u.unitNumber || "", buildingName: u.buildingName || "", type: u.type || "apartment", area: u.area || 0, monthlyRent: u.monthlyRent || 0, status: u.status || "available" })}
-                            onDelete={() => startDelete(u.id)}
-                          />
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {editingId === u.id && (
-                    <TableRow key={`edit-${u.id}`}><TableCell colSpan={7}>
-                      <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(u.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                    </TableCell></TableRow>
-                  )}
-                  {deletingId === u.id && (
-                    <TableRow key={`del-${u.id}`}><TableCell colSpan={7}>
-                      <InlineDeleteConfirm onConfirm={() => handleDelete(u.id)} onCancel={cancelDelete} isPending={isPending} itemName={u.unitNumber} entityType="property_unit" entityId={u.id} />
-                    </TableCell></TableRow>
-                  )}
-                </Fragment>
-              ))}
-            </DataTableWrapper>
-          </Table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد وحدات"
+            emptyIcon={<Building className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            pageSize={pageSize}
+            total={total}
+            page={page}
+            onPageChange={setPage}
+            renderRowExtras={(u) => {
+              if (editingId === u.id) {
+                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(u.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              }
+              if (deletingId === u.id) {
+                return <InlineDeleteConfirm onConfirm={() => handleDelete(u.id)} onCancel={cancelDelete} isPending={isPending} itemName={u.unitNumber} entityType="property_unit" entityId={u.id} />;
+              }
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
     </div>
   );
 }
-

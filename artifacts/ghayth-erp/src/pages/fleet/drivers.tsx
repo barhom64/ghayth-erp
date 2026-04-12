@@ -1,30 +1,20 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Plus, Eye, Users, UserCheck, UserX, Car, Search } from "lucide-react";
+import { Plus, Eye, Users, UserCheck, UserX, Car } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 
 export default function DriversPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
-  const items = data?.data || [];
+  const items: any[] = data?.data || [];
   const [previewDriver, setPreviewDriver] = useState<any>(null);
-  const [search, setSearch] = useState("");
 
-  const filtered = items.filter((d: any) => {
-    if (!search) return true;
-    return d.name?.includes(search) || d.phone?.includes(search) || d.licenseNumber?.includes(search);
-  });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
   const driverFields: PreviewField[] = [
     { label: "الاسم", key: "name" },
     { label: "الهاتف", key: "phone" },
@@ -45,6 +35,36 @@ export default function DriversPage() {
     { key: "phone", label: "الهاتف" },
     { key: "licenseNumber", label: "الرخصة" },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "الاسم", sortable: true, searchable: true, className: "font-medium" },
+    { key: "phone", header: "الهاتف", sortable: true, searchable: true, className: "text-gray-500", render: (d) => d.phone || "-" },
+    { key: "licenseType", header: "الرخصة", sortable: true, searchable: true, sortKey: "licenseNumber", render: (d) => d.licenseNumber || "-" },
+    { key: "licenseExpiry", header: "انتهاء الرخصة", sortable: true, className: "text-gray-500", render: (d) => d.licenseExpiry || "-" },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (d) => (
+        <Badge className={d.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
+          {d.status === "active" ? "نشط" : "غير نشط"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (d) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="sm" onClick={() => setPreviewDriver(d)}><Eye className="h-4 w-4" /></Button>
+          <RowActions
+            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
+            onDelete={() => startDelete(d.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -76,70 +96,30 @@ export default function DriversPage() {
         ))}
       </div>
 
-      <div className="relative">
-        <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input className="ps-9" placeholder="بحث بالاسم أو الهاتف أو الرخصة..." value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
-      <div className="border rounded-lg bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead column="name" label="الاسم" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="phone" label="الهاتف" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="licenseType" label="الرخصة" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="licenseExpiry" label="انتهاء الرخصة" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-              <TableHead className="text-start">إجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <DataTableWrapper
-            isLoading={isLoading}
-            isError={isError}
-            error={error}
-            onRetry={() => refetch()}
-            data={filtered}
-            colCount={6}
-            emptyMessage="لا يوجد سائقين"
-            emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
-          >
-            {(sortedData || []).map((d: any) => (
-              <Fragment key={d.id}>
-                <TableRow>
-                  <TableCell className="font-medium">{d.name}</TableCell>
-                  <TableCell className="text-gray-500">{d.phone || "-"}</TableCell>
-                  <TableCell>{d.licenseNumber || "-"}</TableCell>
-                  <TableCell className="text-gray-500">{d.licenseExpiry || "-"}</TableCell>
-                  <TableCell><Badge className={d.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>{d.status === "active" ? "نشط" : "غير نشط"}</Badge></TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setPreviewDriver(d)}><Eye className="h-4 w-4" /></Button>
-                      <RowActions
-                        onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
-                        onDelete={() => startDelete(d.id)}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === d.id && (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(d.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                    </TableCell>
-                  </TableRow>
-                )}
-                {deletingId === d.id && (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      <InlineDeleteConfirm onConfirm={() => handleDelete(d.id)} onCancel={cancelDelete} isPending={isPending} itemName={d.name} entityType="driver" entityId={d.id} />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper>
-        </Table>
-      </div>
+      <DataTable
+        columns={columns}
+        data={items}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        searchPlaceholder="بحث بالاسم أو الهاتف أو الرخصة..."
+        emptyMessage="لا يوجد سائقين"
+        emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
+        renderRowExtras={(d) => {
+          if (editingId === d.id) {
+            return (
+              <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(d.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+            );
+          }
+          if (deletingId === d.id) {
+            return (
+              <InlineDeleteConfirm onConfirm={() => handleDelete(d.id)} onCancel={cancelDelete} isPending={isPending} itemName={d.name} entityType="driver" entityId={d.id} />
+            );
+          }
+          return null;
+        }}
+      />
       <QuickPreviewDialog open={!!previewDriver} onOpenChange={() => setPreviewDriver(null)} title="تفاصيل السائق" data={previewDriver} fields={driverFields} />
     </div>
   );

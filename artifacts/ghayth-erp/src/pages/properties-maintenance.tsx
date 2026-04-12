@@ -2,15 +2,12 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { ApprovalActions } from "@/components/approval-actions";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { Wrench, Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 
@@ -31,7 +28,34 @@ export default function PropertiesMaintenance() {
     searchFields: ["unitNumber", "buildingName", "description"] as any,
     statusField: "status" as any,
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "unitNumber", header: "الوحدة", sortable: true, render: (r) => r.unitNumber || "-" },
+    { key: "buildingName", header: "المبنى", sortable: true, render: (r) => r.buildingName || "-" },
+    { key: "category", header: "الفئة", sortable: true, render: (r) => r.category || "-" },
+    { key: "description", header: "الوصف", sortable: true, className: "max-w-[200px] truncate" },
+    { key: "priority", header: "الأولوية", sortable: true, render: (r) => <StatusBadge status={r.priority} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <StatusBadge status={r.status} /> },
+    {
+      key: "action",
+      header: "إجراء",
+      hidden: !canApprove,
+      render: (r) => (
+        <ApprovalActions
+          entityType="maintenance_request"
+          entityId={r.id}
+          currentStatus={r.status || "pending"}
+          approveEndpoint={`/properties/maintenance-requests/${r.id}/approve`}
+          rejectEndpoint={`/properties/maintenance-requests/${r.id}/approve`}
+          returnEndpoint={`/properties/maintenance-requests/${r.id}/approve`}
+          approveMethod="PATCH"
+          rejectMethod="PATCH"
+          returnMethod="PATCH"
+          onSuccess={() => refetch()}
+        />
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -61,7 +85,7 @@ export default function PropertiesMaintenance() {
             }}
             values={filters}
             onChange={setFilters}
-            onExportCSV={() => exportToCSV(sortedData || [], [
+            onExportCSV={() => exportToCSV(filtered || [], [
               { key: "unitNumber", label: "الوحدة" },
               { key: "buildingName", label: "المبنى" },
               { key: "category", label: "الفئة" },
@@ -69,7 +93,7 @@ export default function PropertiesMaintenance() {
               { key: "priority", label: "الأولوية" },
               { key: "status", label: "الحالة" },
             ], "طلبات_الصيانة")}
-            resultCount={sortedData?.length}
+            resultCount={filtered?.length}
           />
         </div>
       </div>
@@ -77,47 +101,17 @@ export default function PropertiesMaintenance() {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5 text-orange-500" /> طلبات الصيانة</CardTitle></CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="unitNumber" label="الوحدة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="buildingName" label="المبنى" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="category" label="الفئة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="description" label="الوصف" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="priority" label="الأولوية" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                {canApprove && <TableHead className="text-start">إجراء</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={canApprove ? 7 : 6} emptyMessage="لا توجد طلبات" emptyIcon={<Wrench className="h-6 w-6 text-slate-400" />}>
-              {sortedData?.map(r => (
-                <TableRow key={r.id}>
-                  <TableCell>{r.unitNumber || "-"}</TableCell>
-                  <TableCell>{r.buildingName || "-"}</TableCell>
-                  <TableCell>{r.category || "-"}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">{r.description}</TableCell>
-                  <TableCell><StatusBadge status={r.priority} /></TableCell>
-                  <TableCell><StatusBadge status={r.status} /></TableCell>
-                  {canApprove && (
-                    <TableCell>
-                      <ApprovalActions
-                        entityType="maintenance_request"
-                        entityId={r.id}
-                        currentStatus={r.status || "pending"}
-                        approveEndpoint={`/properties/maintenance-requests/${r.id}/approve`}
-                        rejectEndpoint={`/properties/maintenance-requests/${r.id}/approve`}
-                        returnEndpoint={`/properties/maintenance-requests/${r.id}/approve`}
-                        approveMethod="PATCH"
-                        rejectMethod="PATCH"
-                        returnMethod="PATCH"
-                        onSuccess={() => refetch()}
-                      />
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد طلبات"
+            emptyIcon={<Wrench className="h-6 w-6 text-slate-400" />}
+            noToolbar
+          />
         </CardContent>
       </Card>
     </div>

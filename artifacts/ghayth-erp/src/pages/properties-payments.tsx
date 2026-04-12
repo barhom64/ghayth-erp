@@ -1,14 +1,10 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { Banknote, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
@@ -28,7 +24,33 @@ export default function PropertiesPayments() {
     statusField: "status" as any,
     dateField: "dueDate" as any,
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "tenantName", header: "المستأجر", sortable: true, className: "font-medium" },
+    { key: "unitNumber", header: "الوحدة", sortable: true, render: (p) => p.unitNumber || "—" },
+    { key: "dueDate", header: "تاريخ الاستحقاق", sortable: true, render: (p) => formatDateAr(p.dueDate) },
+    { key: "amount", header: "المبلغ", sortable: true, render: (p) => formatCurrency(p.amount || 0) },
+    { key: "paidAmount", header: "المدفوع", sortable: true, className: "text-emerald-600", render: (p) => formatCurrency(p.paidAmount || 0) },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    {
+      key: "action",
+      header: "إجراء",
+      hidden: !canManage,
+      render: (p) => (
+        p.status !== "paid" ? (
+          <Link href={`/properties/payments/${p.id}/pay`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs h-7 text-emerald-600"
+            >
+              <CheckCircle className="h-3 w-3" /> تسجيل
+            </Button>
+          </Link>
+        ) : null
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -58,7 +80,7 @@ export default function PropertiesPayments() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV(sortedData || [], [
+        onExportCSV={() => exportToCSV(filtered || [], [
           { key: "tenantName", label: "المستأجر" },
           { key: "unitNumber", label: "الوحدة" },
           { key: "dueDate", label: "تاريخ الاستحقاق" },
@@ -66,7 +88,7 @@ export default function PropertiesPayments() {
           { key: "paidAmount", label: "المدفوع" },
           { key: "status", label: "الحالة" },
         ], "المدفوعات")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
       <Card>
@@ -74,49 +96,20 @@ export default function PropertiesPayments() {
           <CardTitle className="flex items-center gap-2"><Banknote className="h-5 w-5 text-indigo-500" /> مدفوعات الإيجار</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="tenantName" label="المستأجر" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="unitNumber" label="الوحدة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="dueDate" label="تاريخ الاستحقاق" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="amount" label="المبلغ" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="paidAmount" label="المدفوع" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                {canManage && <th className="py-3 px-4 text-start text-xs text-gray-500 font-medium">إجراء</th>}
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filtered} colCount={canManage ? 7 : 6} emptyMessage="لا توجد مدفوعات" emptyIcon={<Banknote className="h-6 w-6 text-slate-400" />}>
-              {sortedData?.map((p: any) => (
-                <TableRow key={p.id} className={p.status === 'pending' && new Date(p.dueDate) < new Date() ? "bg-rose-50" : ""}>
-                  <TableCell className="font-medium">{p.tenantName}</TableCell>
-                  <TableCell>{p.unitNumber || "—"}</TableCell>
-                  <TableCell>{formatDateAr(p.dueDate)}</TableCell>
-                  <TableCell>{formatCurrency(p.amount || 0)}</TableCell>
-                  <TableCell className="text-emerald-600">{formatCurrency(p.paidAmount || 0)}</TableCell>
-                  <TableCell><StatusBadge status={p.status} /></TableCell>
-                  {canManage && (
-                    <TableCell>
-                      {p.status !== "paid" && (
-                        <Link href={`/properties/payments/${p.id}/pay`}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1 text-xs h-7 text-emerald-600"
-                          >
-                            <CheckCircle className="h-3 w-3" /> تسجيل
-                          </Button>
-                        </Link>
-                      )}
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد مدفوعات"
+            emptyIcon={<Banknote className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            rowClassName={(p) => p.status === 'pending' && new Date(p.dueDate) < new Date() ? "bg-rose-50" : undefined}
+          />
         </CardContent>
       </Card>
-
     </div>
   );
 }

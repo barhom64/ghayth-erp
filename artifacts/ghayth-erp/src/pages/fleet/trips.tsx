@@ -1,18 +1,14 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Table, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Plus } from "lucide-react";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 export default function TripsPage() {
-  const { data, isLoading } = useApiQuery<any>(["trips"], "/fleet/trips");
-  const items = data?.data || [];
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["trips"], "/fleet/trips");
+  const items: any[] = data?.data || [];
   const [filters, setFilters] = useFilters();
 
   const filtered = applyFilters(items, filters, {
@@ -20,7 +16,14 @@ export default function TripsPage() {
     statusField: "status",
     dateField: "tripDate",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "driverName", header: "السائق", sortable: true, render: (t) => <span className="font-medium">{t.driverName}</span> },
+    { key: "vehiclePlate", header: "المركبة", sortable: true, render: (t) => t.vehiclePlate || "-" },
+    { key: "origin", header: "من / إلى", sortable: true, render: (t) => <span className="text-gray-500">{t.origin} → {t.destination}</span> },
+    { key: "distance", header: "المسافة", sortable: true, render: (t) => `${t.distance} كم` },
+    { key: "status", header: "الحالة", sortable: true, render: (t) => <StatusBadge status={t.status} /> },
+  ];
 
   return (
     <div className="space-y-4">
@@ -47,35 +50,19 @@ export default function TripsPage() {
         }}
         values={filters}
         onChange={setFilters}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead column="driverName" label="السائق" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="vehiclePlate" label="المركبة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="origin" label="من / إلى" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="distance" label="المسافة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-              </TableRow>
-            </TableHeader>
-            <DataTableWrapper isLoading={isLoading} data={sortedData} colCount={5} emptyMessage="لا توجد رحلات">
-              {(sortedData || []).map((t: any) => (
-                <TableRow key={t.id} className="hover:bg-gray-50">
-                  <TableCell className="font-medium">{t.driverName}</TableCell>
-                  <TableCell>{t.vehiclePlate || "-"}</TableCell>
-                  <TableCell className="text-gray-500">{t.origin} → {t.destination}</TableCell>
-                  <TableCell>{t.distance} كم</TableCell>
-                  <TableCell><StatusBadge status={t.status} /></TableCell>
-                </TableRow>
-              ))}
-            </DataTableWrapper>
-          </Table>
-        </div>
-      </div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا توجد رحلات"
+        noToolbar
+      />
     </div>
   );
 }
