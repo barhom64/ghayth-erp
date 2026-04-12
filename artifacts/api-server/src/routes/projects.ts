@@ -10,8 +10,10 @@ import {
   createJournalEntry,
   checkFinancialPeriodOpen,
   getAccountCodeFromMapping,
+  emitEvent,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -111,6 +113,39 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
       entity: "projects",
       entityId: insertId,
       after: { name: b.name, clientId: b.clientId, budget: b.budget, status: b.status || 'planning' },
+    }).catch(console.error);
+
+    // Register delivery obligation for the project's endDate
+    if (b.endDate) {
+      try {
+        const endDate = new Date(b.endDate);
+        if (endDate > new Date()) {
+          await registerObligation({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            entityType: "project",
+            entityId: insertId,
+            obligationType: "delivery",
+            title: `تسليم مشروع — ${b.name}`,
+            dueAt: endDate.toISOString(),
+            metadata: { clientId: b.clientId, budget: b.budget },
+            dedupeKey: `project-${insertId}-delivery`,
+            escalationSteps: [
+              { hoursAfterDue: 0, notifyRole: "projects_manager" },
+              { hoursAfterDue: 48, notifyRole: "general_manager" },
+            ],
+          });
+        }
+      } catch (obErr) { console.error("Project delivery obligation failed:", obErr); }
+    }
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "project.created",
+      entity: "projects",
+      entityId: insertId,
+      details: `إنشاء مشروع ${b.name}`,
     }).catch(console.error);
 
     res.status(201).json(row);
@@ -519,6 +554,29 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
        VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
       [projectId, scope.companyId, b.title, b.description || null, b.targetDate, b.completedDate || null]
     );
+
+    // Register milestone obligation for its targetDate
+    try {
+      const targetDate = new Date(b.targetDate);
+      if (targetDate > new Date()) {
+        await registerObligation({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          entityType: "project_milestone",
+          entityId: insertId,
+          obligationType: "delivery",
+          title: `معلَم — ${b.title} (${project.name})`,
+          dueAt: targetDate.toISOString(),
+          metadata: { projectId, projectName: project.name },
+          dedupeKey: `milestone-${insertId}`,
+          escalationSteps: [
+            { hoursAfterDue: 0, notifyRole: "projects_manager" },
+            { hoursAfterDue: 48, notifyRole: "general_manager" },
+          ],
+        });
+      }
+    } catch (obErr) { console.error("Milestone obligation failed:", obErr); }
+
     const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1`, [insertId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create milestone error:"); }
@@ -543,6 +601,12 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       params
     );
     if (!rows[0]) { res.status(404).json({ error: "المعلم غير موجود" }); return; }
+
+    // If milestone was marked completed, mark its obligation as met
+    if (b.status === 'completed') {
+      await markObligationMet(scope.companyId, "project_milestone", id, "delivery").catch(console.error);
+    }
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update milestone error:"); }
 });
@@ -902,6 +966,21 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
       [projectId, scope.companyId]
     );
 
+    // Cancel all outstanding delivery/milestone obligations for this project
+    try {
+      await cancelObligation(scope.companyId, "project", projectId);
+      // Cancel obligations for all milestones of this project
+      const msRows = await rawQuery<any>(
+        `SELECT id FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2`,
+        [projectId, scope.companyId]
+      );
+      for (const m of msRows) {
+        await cancelObligation(scope.companyId, "project_milestone", m.id).catch(() => {});
+      }
+    } catch (obErr) {
+      console.error(`[projects] cancel obligations on close failed for project ${projectId}:`, obErr);
+    }
+
     createAuditLog({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -910,6 +989,15 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
       entity: "projects",
       entityId: projectId,
       after: { totalWip, journalEntryId },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "project.closed",
+      entity: "projects",
+      entityId: projectId,
+      details: `إقفال مشروع "${project.name}" — WIP ${totalWip.toFixed(2)} ريال${journalEntryId ? ` (قيد #${journalEntryId})` : ""}`,
     }).catch(console.error);
 
     res.json({

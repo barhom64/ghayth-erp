@@ -2769,6 +2769,57 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
         }
       });
 
+      // Register monthly GOSI submission obligation (due 14th of NEXT month)
+      try {
+        const [pyYear, pyMonth] = String(period).split("-").map(Number);
+        if (pyYear && pyMonth) {
+          const gosiDue = new Date(pyYear, pyMonth, 14); // pyMonth is 1-12, Date month is 0-11, so pyMonth is next month
+          if (totalGosiPayable > 0) {
+            await registerObligation({
+              companyId: scope.companyId,
+              branchId: scope.branchId ?? null,
+              entityType: "payroll_run",
+              entityId: Number(req.params.id),
+              obligationType: "declaration",
+              title: `تقديم اشتراكات التأمينات الاجتماعية — ${period} (${totalGosiPayable.toFixed(2)} ريال)`,
+              dueAt: gosiDue.toISOString(),
+              metadata: { period, gosiPayable: totalGosiPayable, employeeShare: totalGosiEmployee, employerShare: totalGosiEmployer },
+              dedupeKey: `payroll-${req.params.id}-gosi-submission`,
+              escalationSteps: [
+                { hoursAfterDue: 0, notifyRole: "finance_manager" },
+                { hoursAfterDue: 24, notifyRole: "general_manager" },
+              ],
+            });
+          }
+          // Salary disbursement obligation — due end of current period
+          const disbursementDue = new Date(pyYear, pyMonth, 0); // last day of period
+          await registerObligation({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            entityType: "payroll_run",
+            entityId: Number(req.params.id),
+            obligationType: "payment",
+            title: `صرف رواتب — ${period} (${totalBankPayout.toFixed(2)} ريال صافي)`,
+            dueAt: disbursementDue.toISOString(),
+            metadata: { period, totalNet: totalBankPayout, employeeCount: lines.length },
+            dedupeKey: `payroll-${req.params.id}-disbursement`,
+            escalationSteps: [
+              { hoursAfterDue: 0, notifyRole: "finance_manager" },
+              { hoursAfterDue: 24, notifyRole: "general_manager" },
+            ],
+          });
+        }
+      } catch (obErr) { console.error("Payroll obligation registration failed:", obErr); }
+
+      await emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "payroll.posted",
+        entity: "payroll_runs",
+        entityId: Number(req.params.id),
+        details: `ترحيل رواتب ${period}: صافي ${totalBankPayout.toFixed(2)} / GOSI ${totalGosiPayable.toFixed(2)}`,
+      }).catch(console.error);
+
       const [row] = await rawQuery<any>(
         `SELECT * FROM payroll_runs WHERE id = $1`,
         [Number(req.params.id)]
