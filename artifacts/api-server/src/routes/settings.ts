@@ -14,6 +14,7 @@ import { auditLog } from "../lib/audit.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
 import { eventBus } from "../lib/eventBus.js";
+import { encryptSecret } from "../lib/secrets.js";
 
 const publicRouter = Router();
 
@@ -586,16 +587,19 @@ router.put("/channels", requirePermission("settings:write"), async (req, res) =>
 
     const SECRET_KEYS_PUT = new Set(["sms_auth_token", "whatsapp_access_token"]);
     const allowedKeys = new Set(CHANNEL_SETTING_KEYS);
-    for (const [key, value] of Object.entries(entries)) {
+    for (const [key, rawValue] of Object.entries(entries)) {
       if (!allowedKeys.has(key)) continue;
-      if (SECRET_KEYS_PUT.has(key) && value === "__configured__") continue;
+      if (SECRET_KEYS_PUT.has(key) && rawValue === "__configured__") continue;
 
-      if (value === null || value === undefined || value === "") {
+      if (rawValue === null || rawValue === undefined || rawValue === "") {
         await rawExecute(
           `DELETE FROM system_settings WHERE key=$1 AND "companyId"=$2`,
           [key, scope.companyId]
         );
       } else {
+        // Secret values are encrypted at rest. Non-secret channel flags
+        // (e.g. sms_enabled, whatsapp_phone_id) are stored as plain text.
+        const value = SECRET_KEYS_PUT.has(key) ? encryptSecret(String(rawValue)) : rawValue;
         const existing = await rawQuery(
           `SELECT id FROM system_settings WHERE key=$1 AND "companyId"=$2`,
           [key, scope.companyId]
