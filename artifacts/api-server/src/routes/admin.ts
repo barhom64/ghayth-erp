@@ -31,6 +31,17 @@ async function requireAdmin(req: any, res: any): Promise<boolean> {
   return false;
 }
 
+async function userBelongsToCompany(userId: number, companyId: number): Promise<boolean> {
+  const [row] = await rawQuery(
+    `SELECT 1 FROM users u
+     INNER JOIN employees e ON e.id = u."employeeId"
+     INNER JOIN employee_assignments ea ON ea."employeeId" = e.id
+     WHERE u.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+    [userId, companyId]
+  );
+  return !!row;
+}
+
 router.get("/users", async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return;
@@ -195,7 +206,12 @@ router.get("/predefined-roles", async (req, res) => {
 router.get("/user-roles/:userId", async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return;
+    const scope = req.scope!;
     const userId = Number(req.params.userId);
+    if (!userId || isNaN(userId)) { res.status(400).json({ error: "معرف غير صالح" }); return; }
+    if (!await userBelongsToCompany(userId, scope.companyId)) {
+      res.status(403).json({ error: "المستخدم لا ينتمي لشركتك" }); return;
+    }
     const rows = await rawQuery(`SELECT * FROM user_roles WHERE "userId"=$1 ORDER BY level DESC`, [userId]);
     res.json({ data: rows });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -204,12 +220,14 @@ router.get("/user-roles/:userId", async (req, res) => {
 router.post("/user-roles", async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return;
+    const scope = req.scope!;
     const { userId, roleKey } = req.body;
     if (!userId || !roleKey || typeof userId !== "number") {
       res.status(400).json({ error: "بيانات غير صالحة: userId و roleKey مطلوبان" }); return;
     }
-    const [userExists] = await rawQuery(`SELECT id FROM users WHERE id=$1`, [userId]);
-    if (!userExists) { res.status(404).json({ error: "المستخدم غير موجود" }); return; }
+    if (!await userBelongsToCompany(userId, scope.companyId)) {
+      res.status(403).json({ error: "المستخدم لا ينتمي لشركتك" }); return;
+    }
     const def = PREDEFINED_ROLES.find(r => r.roleKey === roleKey);
     if (!def) { res.status(400).json({ error: "دور غير معروف" }); return; }
     await rawExecute(
@@ -223,8 +241,17 @@ router.post("/user-roles", async (req, res) => {
 router.delete("/user-roles/:id", async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return;
+    const scope = req.scope!;
     const id = Number(req.params.id);
     if (!id || isNaN(id)) { res.status(400).json({ error: "معرف غير صالح" }); return; }
+    const [existing] = await rawQuery<{ userId: number }>(
+      `SELECT "userId" FROM user_roles WHERE id = $1`,
+      [id]
+    );
+    if (!existing) { res.status(404).json({ error: "الدور غير موجود" }); return; }
+    if (!await userBelongsToCompany(existing.userId, scope.companyId)) {
+      res.status(403).json({ error: "الدور لا ينتمي لمستخدم من شركتك" }); return;
+    }
     const result = await rawExecute(`DELETE FROM user_roles WHERE id=$1`, [id]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "الدور غير موجود" }); return; }
     res.json({ message: "تم حذف الدور بنجاح" });
