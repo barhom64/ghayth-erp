@@ -12,6 +12,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { registerObligation } from "../lib/obligationsEngine.js";
 
 export const purchaseRouter = Router();
 purchaseRouter.use(authMiddleware);
@@ -298,6 +299,15 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
     await rawExecute(`UPDATE purchase_orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: `purchase_order.${newStatus}`,
+      entity: "purchase_orders",
+      entityId: Number(id),
+      details: `${newStatus === "approved" ? "اعتماد" : newStatus === "rejected" ? "رفض" : "إرجاع"} أمر شراء ${po.ref || id}${notes ? ` — ${notes}` : ""}`,
+    }).catch(console.error);
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
@@ -466,6 +476,28 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
       entityId: grnId,
       details: JSON.stringify({ grnRef, poRef: po.ref, subtotal, vatAmount, grnTotal, newStatus }),
     }).catch(console.error);
+
+    // Register obligation to collect + match the vendor invoice (GRNI liability
+    // sits on the books until this is done). Default window: 30 days from receipt.
+    try {
+      const matchDueDate = new Date(receiptDate);
+      matchDueDate.setDate(matchDueDate.getDate() + 30);
+      await registerObligation({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        entityType: "goods_receipt",
+        entityId: grnId,
+        obligationType: "follow_up",
+        title: `مطابقة فاتورة المورد — ${grnRef} / ${po.ref || ""}`,
+        dueAt: matchDueDate.toISOString(),
+        metadata: { grnRef, poRef: po.ref, subtotal, vatAmount, total: grnTotal, vendorId: po.vendorId ?? null },
+        dedupeKey: `grn-${grnId}-invoice-match`,
+        escalationSteps: [
+          { hoursAfterDue: 24, notifyRole: "finance_manager" },
+          { hoursAfterDue: 120, notifyRole: "general_manager" },
+        ],
+      });
+    } catch (obErr) { console.error("GRN invoice-match obligation failed:", obErr); }
 
     res.json({
       message: "تم تسجيل استلام البضاعة",
