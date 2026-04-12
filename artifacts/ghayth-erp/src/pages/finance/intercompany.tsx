@@ -7,28 +7,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
-import { ArrowLeftRight, Building2, TrendingUp, Layers } from "lucide-react";
-import { Link, useLocation } from "wouter";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeftRight, Layers } from "lucide-react";
+import { Link } from "wouter";
 
 export default function IntercompanyPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const [showConsolidation, setShowConsolidation] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ toCompanyId: "", amount: "", description: "", transactionDate: new Date().toISOString().split("T")[0] });
 
   const { data, isLoading } = useApiQuery<any>(
     ["intercompany"],
     `/finance/intercompany${scopeSuffix}`
-  );
-
-  const { data: consolidationData, isLoading: loadingConsolidation } = useApiQuery<any>(
-    ["intercompany-consolidation"],
-    showConsolidation ? `/finance/intercompany/consolidation${scopeSuffix}` : null,
-    { enabled: showConsolidation }
   );
 
   const { data: companiesData } = useApiQuery<any>(
@@ -55,7 +47,6 @@ export default function IntercompanyPage() {
   }
 
   const list = data?.data ?? data ?? [];
-  const consolidation = consolidationData;
 
   return (
     <div className="space-y-6">
@@ -65,10 +56,12 @@ export default function IntercompanyPage() {
           <p className="text-sm text-gray-500 mt-1">تسجيل المعاملات المالية بين الشركات مع إنشاء قيود مزدوجة تلقائياً</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => setShowConsolidation(true)}>
-            <Layers className="h-4 w-4 ml-2" />
-            القوائم الموحدة
-          </Button>
+          <Link href="/finance/intercompany/consolidation/create">
+            <Button variant="outline">
+              <Layers className="h-4 w-4 ml-2" />
+              القوائم الموحدة
+            </Button>
+          </Link>
           <Button onClick={() => setShowCreate(true)}>
             <ArrowLeftRight className="h-4 w-4 ml-2" />
             معاملة جديدة
@@ -167,71 +160,6 @@ export default function IntercompanyPage() {
         </div>
       )}
 
-      {showConsolidation && (
-        <Dialog open={showConsolidation} onOpenChange={() => setShowConsolidation(false)}>
-          <DialogContent className="max-w-3xl" dir="rtl">
-            <DialogHeader>
-              <DialogTitle className="text-start">القوائم المالية الموحدة (Consolidation)</DialogTitle>
-            </DialogHeader>
-          {loadingConsolidation ? (
-            <div className="text-center py-8 text-gray-500">جاري تحميل البيانات...</div>
-          ) : consolidation ? (
-            <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="rounded-xl border bg-blue-50 p-4 text-center">
-                  <div className="text-sm text-gray-500">إجمالي الأصول الموحد</div>
-                  <div className="text-xl font-bold text-blue-700 mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalAssets ?? 0)}</div>
-                </div>
-                <div className="rounded-xl border bg-red-50 p-4 text-center">
-                  <div className="text-sm text-gray-500">إجمالي الالتزامات الموحد</div>
-                  <div className="text-xl font-bold text-red-700 mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalLiabilities ?? 0)}</div>
-                </div>
-                <div className="rounded-xl border bg-green-50 p-4 text-center">
-                  <div className="text-sm text-gray-500">حقوق الملكية الموحدة</div>
-                  <div className="text-xl font-bold text-green-700 mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalEquity ?? 0)}</div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm">
-                <span className="font-semibold">مطلوب حذفه (Elimination): </span>
-                <span className="font-mono font-bold text-yellow-800">{formatCurrency(consolidation.intercompanyElimination ?? 0)}</span>
-                <span className="text-yellow-700 mr-2">— مجموع المعاملات البينية التي تُحذف عند التوحيد</span>
-              </div>
-
-              {consolidation.byCompany?.length > 0 && (
-                <div>
-                  <div className="text-sm font-semibold mb-2 text-gray-700">الأداء حسب الشركة</div>
-                  <div className="rounded-xl border overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-2 text-right">الشركة</th>
-                          <th className="px-3 py-2 text-right">الإيرادات</th>
-                          <th className="px-3 py-2 text-right">المصروفات</th>
-                          <th className="px-3 py-2 text-right">صافي الربح</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {consolidation.byCompany.map((c: any) => (
-                          <tr key={c.companyId} className="border-t">
-                            <td className="px-3 py-2 font-medium">{c.companyName}</td>
-                            <td className="px-3 py-2 text-green-700">{formatCurrency(c.revenue)}</td>
-                            <td className="px-3 py-2 text-red-600">{formatCurrency(c.expenses)}</td>
-                            <td className={`px-3 py-2 font-semibold ${c.revenue - c.expenses >= 0 ? "text-green-700" : "text-red-600"}`}>{formatCurrency(c.revenue - c.expenses)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-400">جاري تحميل بيانات التوحيد...</div>
-          )}
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }

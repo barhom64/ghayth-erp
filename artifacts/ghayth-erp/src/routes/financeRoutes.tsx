@@ -41,9 +41,13 @@ const BatchDepreciate = lazy(() => import("@/pages/create/finance/batch-deprecia
 const InventoryCosting = lazy(() => import("@/pages/finance/inventory-costing"));
 const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
+const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
+const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
+const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
+const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
 
 export const financeRoutes = [
@@ -89,8 +93,12 @@ export const financeRoutes = [
   { path: "/finance/inventory-costing", component: InventoryCosting },
   { path: "/finance/bank-guarantees", component: BankGuarantees },
   { path: "/finance/journal-manual", component: JournalManual },
+  { path: "/finance/journal-manual/create", component: JournalManualCreate },
+  { path: "/finance/journal-manual/:id", component: JournalManualDetail },
   { path: "/finance/intercompany", component: Intercompany },
+  { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
   { path: "/finance/project-costing", component: ProjectCosting },
+  { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
 ];

@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
-import { Plus, FolderOpen, TrendingUp, DollarSign, BarChart3 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { formatCurrency } from "@/lib/formatters";
+import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 
 type Project = {
@@ -33,9 +33,9 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 export default function ProjectCostingPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showAddCost, setShowAddCost] = useState(false);
   const [costForm, setCostForm] = useState({ projectId: "", amount: "", description: "", date: new Date().toISOString().split("T")[0], category: "direct" });
 
@@ -43,7 +43,6 @@ export default function ProjectCostingPage() {
     mutationFn: (payload: any) => apiFetch(`/finance/projects/${payload.projectId}/costs`, { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects-finance"] });
-      if (selectedProject) qc.invalidateQueries({ queryKey: ["project-costs", String(selectedProject.id)] });
       toast({ title: "تم تسجيل التكلفة بنجاح" });
       setShowAddCost(false);
       setCostForm({ projectId: "", amount: "", description: "", date: new Date().toISOString().split("T")[0], category: "direct" });
@@ -61,21 +60,12 @@ export default function ProjectCostingPage() {
     `/finance/projects${scopeSuffix}`
   );
 
-  const { data: costsData, isLoading: loadingCosts } = useApiQuery<any>(
-    ["project-costs", String(selectedProject?.id)],
-    selectedProject ? `/finance/projects/${selectedProject.id}/costs` : null,
-    { enabled: !!selectedProject }
-  );
-
   const list: Project[] = data?.data ?? data ?? [];
 
   const totals = list.reduce((acc, p) => ({
     budget: acc.budget + Number(p.budget ?? 0),
     actualCost: acc.actualCost + Number(p.actualCost ?? 0),
   }), { budget: 0, actualCost: 0 });
-
-  const costDetails = costsData?.costs ?? [];
-  const costSummary = costsData?.summary ?? {};
 
   return (
     <div className="space-y-6">
@@ -130,10 +120,14 @@ export default function ProjectCostingPage() {
                 const cfg = STATUS_MAP[row.status] ?? { label: row.status, color: "gray" };
                 const pct = row.budget > 0 ? Math.min(100, Math.round((row.actualCost / row.budget) * 100)) : 0;
                 return (
-                  <div key={row.id} className="border-b px-4 py-3 grid grid-cols-7 gap-2 items-center hover:bg-gray-50 text-sm">
+                  <div
+                    key={row.id}
+                    className="border-b px-4 py-3 grid grid-cols-7 gap-2 items-center hover:bg-gray-50 text-sm cursor-pointer"
+                    onClick={() => navigate(`/finance/project-costing/${row.id}`)}
+                  >
                     <div><span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{row.ref}</span></div>
                     <div>
-                      <button onClick={() => setSelectedProject(row)} className="text-blue-600 hover:underline font-medium text-right">{row.name}</button>
+                      <span className="text-blue-600 hover:underline font-medium text-right">{row.name}</span>
                     </div>
                     <div><Badge variant="outline" className={`bg-${cfg.color}-100 text-${cfg.color}-700`}>{cfg.label}</Badge></div>
                     <div>{formatCurrency(row.budget)}</div>
@@ -202,65 +196,6 @@ export default function ProjectCostingPage() {
             </form>
           </div>
         </div>
-      )}
-
-      {selectedProject && (
-        <Dialog open={!!selectedProject} onOpenChange={() => setSelectedProject(null)}>
-          <DialogContent className="max-w-3xl" dir="rtl">
-            <DialogHeader>
-              <DialogTitle className="text-start">{`تفاصيل المشروع: ${selectedProject.name}`}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div className="rounded-xl border p-4 text-center">
-                  <div className="text-xs text-gray-500">الميزانية</div>
-                  <div className="text-lg font-bold text-blue-700 mt-1">{formatCurrency(costSummary.budget ?? selectedProject.budget ?? 0)}</div>
-                </div>
-                <div className="rounded-xl border p-4 text-center">
-                  <div className="text-xs text-gray-500">التكلفة الفعلية</div>
-                  <div className="text-lg font-bold text-gray-800 mt-1">{formatCurrency(costSummary.totalCost ?? selectedProject.actualCost ?? 0)}</div>
-                </div>
-                <div className="rounded-xl border p-4 text-center">
-                  <div className="text-xs text-gray-500">المتبقي</div>
-                  <div className={`text-lg font-bold mt-1 ${(costSummary.budgetRemaining ?? selectedProject.budgetRemaining ?? 0) >= 0 ? "text-green-700" : "text-red-600"}`}>{formatCurrency(costSummary.budgetRemaining ?? selectedProject.budgetRemaining ?? 0)}</div>
-                </div>
-                <div className="rounded-xl border p-4 text-center">
-                  <div className="text-xs text-gray-500">نسبة الاستخدام</div>
-                  <div className="text-lg font-bold mt-1">{costSummary.usagePct ?? 0}%</div>
-                </div>
-              </div>
-              {loadingCosts ? (
-                <div className="py-6 text-center text-gray-400">جاري التحميل...</div>
-              ) : (
-                <div className="rounded-xl border overflow-hidden text-sm">
-                  <div className="px-4 py-2 bg-gray-50 font-medium">القيود المحاسبية المرتبطة بالمشروع</div>
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-t">
-                      <tr>
-                        <th className="px-3 py-2 text-right text-xs text-gray-500">المرجع</th>
-                        <th className="px-3 py-2 text-right text-xs text-gray-500">البيان</th>
-                        <th className="px-3 py-2 text-right text-xs text-gray-500">التاريخ</th>
-                        <th className="px-3 py-2 text-right text-xs text-gray-500">المبلغ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {costDetails.length === 0 ? (
-                        <tr><td colSpan={4} className="text-center py-6 text-gray-400">لا توجد تكاليف مسجلة لهذا المشروع بعد</td></tr>
-                      ) : costDetails.map((c: any) => (
-                        <tr key={c.id} className="border-t hover:bg-gray-50">
-                          <td className="px-3 py-2 font-mono text-xs">{c.ref}</td>
-                          <td className="px-3 py-2">{c.description}</td>
-                          <td className="px-3 py-2 text-gray-500">{formatDate(c.date)}</td>
-                          <td className="px-3 py-2 font-semibold">{formatCurrency(c.amount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
       )}
     </div>
   );
