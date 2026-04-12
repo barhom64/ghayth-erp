@@ -81,7 +81,7 @@ export interface StatusFilterOption {
   label: string;
 }
 
-interface DataTableProps<T extends { id: number }> {
+interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   data: T[] | undefined | null;
   isLoading?: boolean;
@@ -89,12 +89,19 @@ interface DataTableProps<T extends { id: number }> {
   error?: Error | null;
   onRetry?: () => void;
 
+  /**
+   * Optional row key accessor. Used as the React key for each row and for
+   * selection identifiers. Defaults to `row.id` when not provided. Use this
+   * when rows don't have an `id` field, or when their `id` is a string.
+   */
+  rowKey?: (row: T, index: number) => string | number;
+
   /** Row click handler. */
   onRowClick?: (row: T) => void;
   /** Optional row-level class name. */
   rowClassName?: (row: T) => string | undefined;
 
-  /** Enable bulk + individual selection. */
+  /** Enable bulk + individual selection. Requires rows to have a numeric `id`. */
   selectable?: boolean;
   /** Notified when the selection changes. */
   onSelectionChange?: (ids: number[]) => void;
@@ -156,13 +163,14 @@ function alignClass(align?: Align): string {
   return "text-start";
 }
 
-export function DataTable<T extends { id: number }>({
+export function DataTable<T>({
   columns,
   data,
   isLoading = false,
   isError = false,
   error,
   onRetry,
+  rowKey,
   onRowClick,
   rowClassName,
   selectable = false,
@@ -237,10 +245,17 @@ export function DataTable<T extends { id: number }>({
 
   const effectiveTotal = isServerPaginated ? total! : (sortedData?.length ?? 0);
 
+  // --- Row key resolution ---
+  const getRowKey = (row: T, index: number): string | number => {
+    if (rowKey) return rowKey(row, index);
+    const id = (row as any)?.id;
+    return id ?? index;
+  };
+
   // --- Selection ---
   const { selectedIds, toggle, toggleAll, clear } = useBulkSelection();
   const pageIds = useMemo(
-    () => (pagedData ?? []).map((r) => r.id),
+    () => (pagedData ?? []).map((r) => (r as any).id as number),
     [pagedData]
   );
   const allPageSelected =
@@ -420,11 +435,13 @@ export function DataTable<T extends { id: number }>({
             emptyAction={emptyAction}
           >
             {(pagedData ?? []).map((row, rowIndex) => {
-              const selected = selectedIds.has(row.id);
+              const rowId = (row as any)?.id as number | undefined;
+              const selected = rowId != null && selectedIds.has(rowId);
               const extraClass = rowClassName?.(row);
               const extras = renderRowExtras?.(row);
+              const key = getRowKey(row, rowIndex);
               return (
-                <Fragment key={row.id}>
+                <Fragment key={key}>
                   <TableRow
                     data-state={selected ? "selected" : undefined}
                     className={cn(
@@ -440,7 +457,7 @@ export function DataTable<T extends { id: number }>({
                       >
                         <BulkCheckbox
                           checked={selected}
-                          onChange={() => handleToggleRow(row.id)}
+                          onChange={() => rowId != null && handleToggleRow(rowId)}
                         />
                       </TableCell>
                     )}

@@ -3,7 +3,6 @@ import { Link, useSearch, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableHead, TableHeader, TableRow, TableCell, TableBody } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -65,61 +64,62 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
         <span className="text-gray-400">{paidCount} / {schedule.length} دفعة</span>
       </div>
 
-      <div className="border rounded-md overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead className="text-start text-xs">#</TableHead>
-              <TableHead className="text-start text-xs">تاريخ الاستحقاق</TableHead>
-              <TableHead className="text-start text-xs">المبلغ</TableHead>
-              <TableHead className="text-start text-xs">المدفوع</TableHead>
-              <TableHead className="text-start text-xs">تاريخ الدفع</TableHead>
-              <TableHead className="text-start text-xs">الطريقة</TableHead>
-              <TableHead className="text-start text-xs">الحالة</TableHead>
-              <TableHead className="text-start text-xs">إجراء</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {schedule.map((inst: any) => {
+      <DataTable<any>
+        noToolbar
+        pageSize={0}
+        data={schedule}
+        rowKey={(inst) => inst.id}
+        rowClassName={(inst) => {
+          const isPaid = inst.status === "paid";
+          const isOverdue = !isPaid && new Date(inst.dueDate) < new Date();
+          return isPaid ? "bg-emerald-50/30" : isOverdue ? "bg-red-50/30" : undefined;
+        }}
+        columns={[
+          { key: "installmentNumber", header: "#", className: "text-xs font-mono", render: (inst) => inst.installmentNumber },
+          { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs", render: (inst) => formatDateAr(inst.dueDate) },
+          { key: "amount", header: "المبلغ", className: "text-xs font-bold", render: (inst) => formatCurrency(inst.amount) },
+          { key: "paidAmount", header: "المدفوع", className: "text-xs", render: (inst) => inst.status === "paid" ? formatCurrency(inst.paidAmount) : "—" },
+          { key: "paidDate", header: "تاريخ الدفع", className: "text-xs", render: (inst) => inst.paidDate ? formatDateAr(inst.paidDate) : "—" },
+          { key: "method", header: "الطريقة", className: "text-xs", render: (inst) => inst.method === "cash" ? "نقدي" : inst.method === "bank_transfer" ? "تحويل" : inst.method === "cheque" ? "شيك" : inst.method || "—" },
+          {
+            key: "status",
+            header: "الحالة",
+            render: (inst) => {
               const isPaid = inst.status === "paid";
               const isOverdue = !isPaid && new Date(inst.dueDate) < new Date();
-              return (
-                <TableRow key={inst.id} className={isPaid ? "bg-emerald-50/30" : isOverdue ? "bg-red-50/30" : ""}>
-                  <TableCell className="text-xs font-mono">{inst.installmentNumber}</TableCell>
-                  <TableCell className="text-xs">{formatDateAr(inst.dueDate)}</TableCell>
-                  <TableCell className="text-xs font-bold">{formatCurrency(inst.amount)}</TableCell>
-                  <TableCell className="text-xs">{isPaid ? formatCurrency(inst.paidAmount) : "—"}</TableCell>
-                  <TableCell className="text-xs">{inst.paidDate ? formatDateAr(inst.paidDate) : "—"}</TableCell>
-                  <TableCell className="text-xs">
-                    {inst.method === "cash" ? "نقدي" : inst.method === "bank_transfer" ? "تحويل" : inst.method === "cheque" ? "شيك" : inst.method || "—"}
-                  </TableCell>
-                  <TableCell>
-                    {isPaid ? (
-                      <Badge className="bg-emerald-100 text-emerald-700 text-[10px] gap-1 px-1"><CheckCircle2 className="h-2.5 w-2.5" /> مدفوعة</Badge>
-                    ) : isOverdue ? (
-                      <Badge className="bg-red-100 text-red-700 text-[10px] gap-1 px-1"><AlertTriangle className="h-2.5 w-2.5" /> متأخرة</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[10px] gap-1 px-1"><Clock className="h-2.5 w-2.5" /> معلقة</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {!isPaid && (
-                      <Link href={`/properties/contracts/${contractId}/pay/${inst.id}`}>
-                        <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1">
-                          <CreditCard className="h-3 w-3" /> تسجيل دفع
-                        </Button>
-                      </Link>
-                    )}
-                    {isPaid && inst.receiptNumber && (
-                      <span className="text-[10px] text-gray-400 flex items-center gap-1"><Receipt className="h-3 w-3" />{inst.receiptNumber}</span>
-                    )}
-                  </TableCell>
-                </TableRow>
+              return isPaid ? (
+                <Badge className="bg-emerald-100 text-emerald-700 text-[10px] gap-1 px-1"><CheckCircle2 className="h-2.5 w-2.5" /> مدفوعة</Badge>
+              ) : isOverdue ? (
+                <Badge className="bg-red-100 text-red-700 text-[10px] gap-1 px-1"><AlertTriangle className="h-2.5 w-2.5" /> متأخرة</Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] gap-1 px-1"><Clock className="h-2.5 w-2.5" /> معلقة</Badge>
               );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+            },
+          },
+          {
+            key: "action",
+            header: "إجراء",
+            render: (inst) => {
+              const isPaid = inst.status === "paid";
+              if (!isPaid) {
+                return (
+                  <Link href={`/properties/contracts/${contractId}/pay/${inst.id}`}>
+                    <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1">
+                      <CreditCard className="h-3 w-3" /> تسجيل دفع
+                    </Button>
+                  </Link>
+                );
+              }
+              if (inst.receiptNumber) {
+                return (
+                  <span className="text-[10px] text-gray-400 flex items-center gap-1"><Receipt className="h-3 w-3" />{inst.receiptNumber}</span>
+                );
+              }
+              return null;
+            },
+          },
+        ]}
+      />
 
     </div>
   );
