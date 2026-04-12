@@ -14,7 +14,7 @@ export default function DashboardsCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("bi_dashboards_create", {
     title: "", description: "", isDefault: false,
   });
-  const createMut = useApiMutation<unknown, Record<string, string | boolean>>("/bi/dashboards", "POST", [["bi-dashboards"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | boolean | undefined>>("/bi/dashboards", "POST", [["bi-dashboards"]]);
 
   const handleSubmit = () => {
     if (!form.title) {

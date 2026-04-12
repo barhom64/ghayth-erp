@@ -133,7 +133,18 @@ async function copyAssets() {
   }
 }
 
-buildAll().then(copyAssets).catch((err) => {
+async function copyMigrations() {
+  const src = path.resolve(artifactDir, "src/migrations");
+  const dst = path.resolve(artifactDir, "dist/migrations");
+  try {
+    await mkdir(dst, { recursive: true });
+    await cp(src, dst, { recursive: true });
+  } catch {
+    // migrations directory may not exist; ignore
+  }
+}
+
+buildAll().then(copyAssets).then(copyMigrations).catch((err) => {
   console.error(err);
   process.exit(1);
 });

@@ -46,7 +46,7 @@ function ScoreSlider({ label, value, onChange }: { label: string; value: number;
 export default function Evaluation360UpwardPage() {
   const [, params] = useRoute("/hr/evaluation-360/:id/upward");
   const [, navigate] = useLocation();
-  const cycleId = params?.id;
+  const cycleId = params?.id ?? "";
 
   const [managerId, setManagerId] = useState("");
   const [scores, setScores] = useState<Record<string, number>>(

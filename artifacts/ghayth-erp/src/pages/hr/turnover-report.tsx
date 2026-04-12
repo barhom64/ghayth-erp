@@ -1,0 +1,189 @@
+import { useState } from "react";
+import { useApiQuery } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TrendingDown, Users, DollarSign, BarChart3, PieChart } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart as RechartsPie, Pie } from "recharts";
+
+const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+
+const REASON_LABELS: Record<string, string> = {
+  resignation: "استقالة",
+  termination: "فصل",
+  end_of_service: "إنهاء خدمة",
+  contract_end: "انتهاء عقد",
+  retirement: "تقاعد",
+  unknown: "غير محدد",
+};
+
+const COLORS = ["#6366f1", "#f59e0b", "#ef4444", "#10b981", "#3b82f6", "#ec4899"];
+
+export default function TurnoverReportPage() {
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+
+  const { data, isLoading } = useApiQuery<any>(["turnover-report", String(year)], `/hr/turnover-report?year=${year}`);
+
+  const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
+
+  if (isLoading) return <div className="p-6 text-center text-gray-400">جاري تحميل التقرير...</div>;
+
+  const monthlyData = (data?.byMonth || []).map((m: any) => ({
+    name: MONTHS_AR[m.month - 1],
+    count: m.count,
+  }));
+
+  const reasonData = (data?.byReason || []).map((r: any, i: number) => ({
+    name: REASON_LABELS[r.reason] || r.reason,
+    value: r.count,
+    color: COLORS[i % COLORS.length],
+  }));
+
+  const deptData = (data?.byDepartment || []).sort((a: any, b: any) => b.count - a.count).slice(0, 6);
+
+  return (
+    <div className="p-6 space-y-5 max-w-6xl mx-auto" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <TrendingDown className="w-6 h-6 text-primary" />
+          <div>
+            <h1 className="text-xl font-bold">تقرير دوران الموظفين</h1>
+            <p className="text-sm text-gray-500">تحليل معدل الدوران الوظيفي والتكاليف المرتبطة</p>
+          </div>
+        </div>
+        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {[currentYear - 2, currentYear - 1, currentYear].map((y) => (
+              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-red-500 mb-1"><Users className="w-4 h-4" /><span className="text-xs text-gray-500">المغادرون</span></div>
+            <div className="text-2xl font-bold">{data?.totalTerminated || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-green-500 mb-1"><Users className="w-4 h-4" /><span className="text-xs text-gray-500">الموظفون الحاليون</span></div>
+            <div className="text-2xl font-bold">{data?.totalActive || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-primary mb-1"><BarChart3 className="w-4 h-4" /><span className="text-xs text-gray-500">معدل الدوران</span></div>
+            <div className="text-2xl font-bold">{data?.turnoverRate || 0}%</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-orange-500 mb-1"><DollarSign className="w-4 h-4" /><span className="text-xs text-gray-500">التكلفة التقديرية</span></div>
+            <div className="text-lg font-bold">{fmt(data?.totalEstimatedCost || 0)}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader><CardTitle className="text-sm">المغادرون شهرياً</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={monthlyData}>
+                <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip formatter={(v) => [v, "مغادرون"]} />
+                <Bar dataKey="count" fill="#6366f1" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-sm">توزيع أسباب المغادرة</CardTitle></CardHeader>
+          <CardContent>
+            {reasonData.length > 0 ? (
+              <div className="flex items-center gap-4">
+                <ResponsiveContainer width={140} height={140}>
+                  <RechartsPie>
+                    <Pie data={reasonData} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={60}>
+                      {reasonData.map((entry: any, i: number) => <Cell key={i} fill={entry.color} />)}
+                    </Pie>
+                  </RechartsPie>
+                </ResponsiveContainer>
+                <div className="space-y-2 flex-1">
+                  {reasonData.map((r: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color }} />
+                        <span>{r.name}</span>
+                      </div>
+                      <span className="font-medium">{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : <div className="text-center py-6 text-gray-400 text-sm">لا توجد بيانات</div>}
+          </CardContent>
+        </Card>
+      </div>
+
+      {deptData.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">المغادرون حسب القسم</CardTitle></CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {deptData.map((d: any, i: number) => {
+                const max = deptData[0]?.count || 1;
+                const pct = Math.round((d.count / max) * 100);
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="w-24 text-xs text-gray-600 truncate text-start">{d.dept}</div>
+                    <div className="flex-1 bg-gray-100 rounded-full h-2">
+                      <div className="bg-primary rounded-full h-2 transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-xs font-medium w-6 text-end">{d.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {data?.recentTerminations?.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">آخر المغادرين</CardTitle></CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-start">الموظف</th>
+                    <th className="px-3 py-2 text-start">القسم</th>
+                    <th className="px-3 py-2 text-start">سبب المغادرة</th>
+                    <th className="px-3 py-2 text-start">تاريخ المغادرة</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {data.recentTerminations.map((t: any, i: number) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-3 py-2">{t.employeeName}</td>
+                      <td className="px-3 py-2 text-gray-500">{t.deptName || "—"}</td>
+                      <td className="px-3 py-2">{REASON_LABELS[t.terminationType] || t.terminationType}</td>
+                      <td className="px-3 py-2 text-gray-500">{t.terminationDate?.split("T")[0]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

@@ -38,6 +38,12 @@ const BankManualMatch = lazy(() => import("@/pages/create/finance/bank-manual-ma
 const FixedAssets = lazy(() => import("@/pages/finance/fixed-assets"));
 const BatchDepreciate = lazy(() => import("@/pages/create/finance/batch-depreciate"));
 const InventoryCosting = lazy(() => import("@/pages/finance/inventory-costing"));
+const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
+const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
+const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
+const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
+const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
+const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
 
 export const financeRoutes = [
   { path: "/finance", component: Accounts },
@@ -79,4 +85,10 @@ export const financeRoutes = [
   { path: "/finance/fixed-assets", component: FixedAssets },
   { path: "/finance/fixed-assets/batch-depreciate", component: BatchDepreciate },
   { path: "/finance/inventory-costing", component: InventoryCosting },
+  { path: "/finance/bank-guarantees", component: BankGuarantees },
+  { path: "/finance/journal-manual", component: JournalManual },
+  { path: "/finance/intercompany", component: Intercompany },
+  { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
+  { path: "/finance/project-costing", component: ProjectCosting },
+  { path: "/finance/cashflow", component: CashflowDashboard },
 ];

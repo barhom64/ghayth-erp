@@ -424,4 +424,158 @@ router.get("/stats", requirePermission("warehouse:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Warehouse stats error:"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// INVENTORY COUNT — جرد المخزن
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/inventory-counts", requirePermission("warehouse:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status } = req.query as any;
+    const conditions = [`ic."companyId"=$1`];
+    const params: any[] = [scope.companyId];
+    if (status) { params.push(status); conditions.push(`ic.status=$${params.length}`); }
+    const rows = await rawQuery<any>(
+      `SELECT ic.*, e.name AS "conductedByName"
+       FROM inventory_counts ic
+       LEFT JOIN employees e ON e.id=ic."conductedBy"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY ic."countDate" DESC`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Inventory counts error:"); }
+});
+
+router.post("/inventory-counts", requirePermission("warehouse:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const { insertId } = await rawExecute(
+      `INSERT INTO inventory_counts ("companyId","countDate","conductedBy",status,notes,"warehouseLocation")
+       VALUES ($1,$2,$3,'draft',$4,$5)`,
+      [scope.companyId,
+       b.countDate || new Date().toISOString().split('T')[0],
+       scope.employeeId || null,
+       b.notes || null, b.warehouseLocation || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create count error:"); }
+});
+
+router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const countId = Number(req.params.id);
+    const items = await rawQuery<any>(
+      `SELECT ici.*, wp.name AS "productName", wp.sku, wp."currentStock" AS "systemStock"
+       FROM inventory_count_items ici
+       JOIN warehouse_products wp ON wp.id=ici."productId"
+       WHERE ici."countId"=$1 AND wp."companyId"=$2
+       ORDER BY wp.name`,
+      [countId, scope.companyId]
+    );
+
+    // Attach batch/lot details for each product to support lot-level counting
+    for (const item of items) {
+      const batches = await rawQuery<any>(
+        `SELECT id, "batchNumber", quantity, "unitCost", "receivedDate"
+         FROM warehouse_stock_batches
+         WHERE "productId"=$1 AND quantity > 0
+         ORDER BY "receivedDate" ASC`,
+        [item.productId]
+      );
+      item.batches = batches;
+    }
+
+    res.json({ data: items, total: items.length });
+  } catch (err) { handleRouteError(err, res, "Count items error:"); }
+});
+
+router.post("/inventory-counts/:id/items", requirePermission("warehouse:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const countId = Number(req.params.id);
+    const b = req.body;
+    // Ensure count exists and is in draft
+    const [count] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [countId, scope.companyId]);
+    if (!count) { res.status(404).json({ error: "الجرد غير موجود" }); return; }
+    if (count.status === 'approved') { res.status(400).json({ error: "لا يمكن تعديل جرد معتمد" }); return; }
+
+    const [product] = await rawQuery<any>(
+      `SELECT id, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2`,
+      [b.productId, scope.companyId]
+    );
+    if (!product) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+
+    const physicalCount = Number(b.physicalCount || 0);
+    const systemStock = Number(product.currentStock || 0);
+    const variance = physicalCount - systemStock;
+
+    // Upsert count item
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM inventory_count_items WHERE "countId"=$1 AND "productId"=$2`,
+      [countId, b.productId]
+    );
+    if (existing) {
+      await rawExecute(
+        `UPDATE inventory_count_items SET "physicalCount"=$1, variance=$2, notes=$3 WHERE id=$4`,
+        [physicalCount, variance, b.notes || null, existing.id]
+      );
+    } else {
+      await rawExecute(
+        `INSERT INTO inventory_count_items ("countId","productId","systemStock","physicalCount",variance,notes)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [countId, b.productId, systemStock, physicalCount, variance, b.notes || null]
+      );
+    }
+    res.json({ productId: b.productId, systemStock, physicalCount, variance });
+  } catch (err) { handleRouteError(err, res, "Count item error:"); }
+});
+
+router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const countId = Number(req.params.id);
+    const [count] = await rawQuery<any>(
+      `SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2 AND status='draft'`,
+      [countId, scope.companyId]
+    );
+    if (!count) { res.status(404).json({ error: "الجرد غير موجود أو تمت معالجته" }); return; }
+
+    const items = await rawQuery<any>(
+      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1`,
+      [countId]
+    );
+
+    // Apply adjustments for items with variance
+    for (const item of items) {
+      const variance = Number(item.variance);
+      if (variance !== 0) {
+        const movType = variance > 0 ? 'in' : 'out';
+        const qty = Math.abs(variance);
+        await rawExecute(
+          `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2`,
+          [variance, item.productId]
+        );
+        await rawExecute(
+          `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy")
+           VALUES ($1,$2,$3,$4,0,'INV-COUNT-' || $5,$6,$7)`,
+          [scope.companyId, item.productId, movType, qty, countId,
+           variance > 0 ? `فائض جرد — ${qty} وحدة` : `عجز جرد — ${qty} وحدة`,
+           scope.userId]
+        );
+      }
+    }
+
+    await rawExecute(
+      `UPDATE inventory_counts SET status='approved', "approvedAt"=NOW(), "approvedBy"=$1 WHERE id=$2`,
+      [scope.employeeId || null, countId]
+    );
+
+    res.json({ message: "تم اعتماد الجرد وتحديث المخزون", itemsAdjusted: items.filter((i: any) => Number(i.variance) !== 0).length });
+  } catch (err) { handleRouteError(err, res, "Approve count error:"); }
+});
+
 export default router;

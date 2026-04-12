@@ -302,8 +302,8 @@ export async function seedDemoData(): Promise<void> {
 
       for (let empIdx = 0; empIdx < Math.min(assignmentIds.length, 15); empIdx++) {
         const status = attStatuses[(empIdx + dayOffset) % attStatuses.length];
-        const checkIn = status === "absent" ? null : status === "late" ? "08:45" : "07:55";
-        const checkOut = status === "absent" ? null : "16:05";
+        const checkIn = status === "absent" ? null : `${dateStr}T${status === "late" ? "08:45" : "07:55"}:00`;
+        const checkOut = status === "absent" ? null : `${dateStr}T16:05:00`;
         const lateMin = status === "late" ? 15 + (empIdx % 30) : 0;
 
         await client.query(
@@ -348,7 +348,7 @@ export async function seedDemoData(): Promise<void> {
       const dueDate = new Date(today);
       dueDate.setDate(dueDate.getDate() + (i * 7) - 20);
       const total = 5000 + i * 3000;
-      const invStatuses = ["paid", "pending", "overdue", "partial", "draft", "paid", "pending", "sent"];
+      const invStatuses = ["paid", "pending_approval", "overdue", "partial", "draft", "paid", "sent", "sent"];
       const subtotal = Math.round(total / 1.15);
       const vatAmount = total - subtotal;
 

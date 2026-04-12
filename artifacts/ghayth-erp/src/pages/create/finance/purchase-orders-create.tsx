@@ -57,7 +57,7 @@ export default function PurchaseOrdersCreate() {
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
   const updateItem = (idx: number, field: string, value: string) => {
     const updated = [...items];
-    (updated[idx])[field] = value;
+    (updated[idx] as any)[field] = value;
     setItems(updated);
   };
 

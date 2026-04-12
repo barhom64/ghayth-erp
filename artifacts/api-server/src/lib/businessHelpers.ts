@@ -278,7 +278,7 @@ export async function reverseAccountBalances(
   }
 }
 
-export type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters";
+export type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement";
 
 export interface ApprovalChainResult {
   requiresApproval: boolean;
@@ -440,7 +440,7 @@ export async function processApprovalStep(params: {
 function chainTypeLabel(t: ApprovalChainType): string {
   const map: Record<string, string> = {
     leaves: "إجازات", purchases: "مشتريات", expenses: "مصروفات",
-    advances: "سلفة/عهدة", letters: "خطاب رسمي",
+    advances: "سلفة/عهدة", letters: "خطاب رسمي", procurement: "مشتريات",
   };
   return map[t] ?? t;
 }
@@ -450,6 +450,7 @@ export function refTypeToChainType(refType: string): ApprovalChainType | null {
     leave_request: "leaves", purchase_order: "purchases",
     expense: "expenses", salary_advance: "advances",
     custody: "advances", official_letter: "letters",
+    purchase_request: "procurement",
   };
   return map[refType] ?? null;
 }

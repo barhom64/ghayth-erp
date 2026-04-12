@@ -124,6 +124,7 @@ interface AppContextType {
   setSelectedRoleKey: (roleKey: string) => void;
   userRoles: UserRole[];
   roleLevel: number;
+  effectiveRoleLevel: number;
   selectedRoleLabel: string;
   selectedRoleColor: string;
   jobTitle: string | null;
@@ -197,7 +198,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const selectedRoleColor = roleKeyColors[selectedRole?.roleKey ?? "employee"] ?? "#95A5A6";
   const jobTitle = user?.jobTitle || null;
 
+  const [apiData, setApiData] = useState<{ permissions: string[]; modules: string[]; highestLevel: number } | null>(null);
+  const [permRefreshKey, setPermRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) { setApiData(null); return; }
+    apiFetch("/permissions/my")
+      .then((data: any) => {
+        setApiData({
+          permissions: Array.isArray(data?.permissions) ? data.permissions : [],
+          modules: Array.isArray(data?.modules) ? data.modules : [],
+          highestLevel: typeof data?.highestLevel === "number" ? data.highestLevel : 10,
+        });
+      })
+      .catch(() => { setApiData(null); });
+  }, [isAuthenticated, user?.id, permRefreshKey]);
+
   const allowedModules: ModuleType[] = useMemo(() => {
+    if (apiData !== null) {
+      const mods = apiData.modules as ModuleType[];
+      if (mods.includes("admin" as ModuleType)) return ALL_MODULES;
+      return mods.length > 0 ? mods : (["home"] as ModuleType[]);
+    }
     if (!selectedRole) return ["home", "requests", "documents", "comms"] as ModuleType[];
     const mods = selectedRole.modules;
     if (!mods) return ["home", "requests", "documents", "comms"] as ModuleType[];
@@ -206,9 +228,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     if (Array.isArray(mods)) return mods as ModuleType[];
     return ["home", "requests", "documents", "comms"] as ModuleType[];
-  }, [selectedRole]);
+  }, [selectedRole, apiData]);
 
-  const permissions = buildPermissions(roleLevel, allowedModules as string[]);
+  const effectiveRoleLevel = apiData?.highestLevel ?? roleLevel;
+
+  const permissions = useMemo(() => {
+    if (apiData !== null) {
+      const has = (module: string, action: string) =>
+        apiData.permissions.includes(`${module}:${action}`) ||
+        apiData.permissions.includes(`${module}:*`) ||
+        apiData.permissions.includes("*");
+      return {
+        canViewAllBranches: has("admin", "read") || has("reports", "read"),
+        canManageViolations: has("hr", "approve") || has("hr", "write"),
+        canManageEmployees: has("hr", "write"),
+        canApproveLeaves: has("hr", "approve"),
+        canViewReports: has("reports", "read"),
+        canManageSettings: has("settings", "write"),
+        canManageUsers: has("admin", "write"),
+        canManageRoles: has("admin", "write"),
+        canViewAuditLogs: has("audit", "read") || has("admin", "read"),
+        canManageFinance: has("finance", "write"),
+        canManageFleet: has("fleet", "write"),
+        canManageProperty: has("property", "write"),
+        canManageGovernance: has("governance", "write"),
+        canManageBI: has("bi", "write"),
+        canManageLegal: has("legal", "write"),
+      };
+    }
+    return buildPermissions(effectiveRoleLevel, allowedModules as string[]);
+  }, [effectiveRoleLevel, allowedModules, apiData]);
 
   const [selectedCompanyIds, setSelectedCompanyIdsState] = useState<number[]>(() => {
     try {
@@ -311,6 +360,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateToken(data.token);
         queryClient.clear();
         setRefreshKey((k) => k + 1);
+        setPermRefreshKey((k) => k + 1);
       }
     } catch {
     }
@@ -339,6 +389,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSelectedRoleKey,
       userRoles: backendRoles,
       roleLevel,
+      effectiveRoleLevel,
       selectedRoleLabel,
       selectedRoleColor,
       jobTitle,

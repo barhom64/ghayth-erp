@@ -16,7 +16,7 @@ export default function KpisCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("bi_kpis_create", {
     name: "", module: "", target: "", currentValue: "", unit: "", frequency: "monthly", formula: "", description: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, string | number>>("/bi/kpis", "POST", [["bi-kpis"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | number | undefined>>("/bi/kpis", "POST", [["bi-kpis"]]);
 
   const handleSubmit = () => {
     if (!form.name) {

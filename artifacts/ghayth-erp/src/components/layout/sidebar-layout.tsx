@@ -14,7 +14,7 @@ import {
   LineChart, Menu, X, LogOut, Headphones, CheckCircle,
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
-  Sparkles, Brain, Search,
+  Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ const allNavSections: NavSection[] = [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
       { label: "مساحتي", path: "/my-space", icon: User },
       { label: "مركز القرارات", path: "/action-center", icon: Briefcase, minRoleLevel: 20 },
+      { label: "لوحة المدير", path: "/manager-board", icon: Users, minRoleLevel: 40 },
       { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
     ],
   },
@@ -124,6 +125,12 @@ const allNavSections: NavSection[] = [
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
         { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
+        { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature },
+        { label: "الضمانات البنكية", path: "/finance/bank-guarantees", icon: Shield },
+        { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
+        { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
+        { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
+        { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
@@ -291,6 +298,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     canAccessModule,
     canAccessSubPage,
     roleLevel,
+    effectiveRoleLevel,
     switchToCompany,
   } = useAppContext();
   const { settings: globalSettings } = useSettings();
@@ -349,7 +357,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   const filterItems = (items: NavItem[]): NavItem[] =>
     items
-      .filter(item => (!item.module || canAccessModule(item.module)) && (!item.minRoleLevel || roleLevel >= item.minRoleLevel))
+      .filter(item => (!item.module || canAccessModule(item.module)) && (!item.minRoleLevel || effectiveRoleLevel >= item.minRoleLevel))
       .map(item => {
         if (!item.children) return item;
         const mod = item.module;
@@ -725,7 +733,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   };
 
   const currentQuickActions = resolveQuickActions(location).filter(
-    (a) => !a.minRoleLevel || roleLevel >= a.minRoleLevel
+    (a) => !a.minRoleLevel || effectiveRoleLevel >= a.minRoleLevel
   );
 
   return (

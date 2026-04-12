@@ -132,7 +132,7 @@ function RadarChart({ data }: { data: { label: string; value: number; color: str
 
 export default function Evaluation360DetailPage() {
   const [, params] = useRoute("/hr/evaluation-360/:id");
-  const cycleId = params?.id;
+  const cycleId = params?.id ?? "";
   const [tab, setTab] = useState<"system" | "peers" | "upward" | "summary">("summary");
 
   const { data, isLoading } = useApiQuery<any>(

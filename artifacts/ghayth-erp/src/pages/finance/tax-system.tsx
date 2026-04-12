@@ -32,7 +32,7 @@ export default function TaxSystemPage() {
   const { data: declarations, isLoading: declLoading } = useApiQuery<any>(["tax-declarations"], "/finance/tax/declarations");
   const { data: zatcaSettings } = useApiQuery<any>(["zatca-settings-status"], "/finance/zatca/settings");
   const { data: submissionsData, isLoading: submissionsLoading, refetch: refetchSubmissions } = useApiQuery<any>(
-    ["zatca-submissions", submissionPage, submissionStatus],
+    ["zatca-submissions", String(submissionPage), submissionStatus],
     `/finance/zatca/submissions?page=${submissionPage}&limit=20${submissionStatus ? `&status=${submissionStatus}` : ""}`
   );
 

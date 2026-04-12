@@ -37,7 +37,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
   const qc = useQueryClient();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: schedResp, isLoading, refetch } = useApiQuery<any>(
-    ["contract-schedule", contractId],
+    ["contract-schedule", String(contractId)],
     `/properties/contracts/${contractId}/schedule?x=1${scopeSuffix}`
   );
   const schedule = asList(schedResp);

@@ -15,7 +15,7 @@ export default function BiReportsCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("bi_reports_create", {
     title: "", type: "analytics", scheduledAt: "", description: "", query: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, string>>("/bi/reports", "POST", [["bi-reports"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/bi/reports", "POST", [["bi-reports"]]);
 
   const handleSubmit = () => {
     if (!form.title) {

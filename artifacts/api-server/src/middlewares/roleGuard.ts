@@ -53,7 +53,10 @@ async function getUserModules(userId: number, fallbackRole?: string): Promise<{ 
   let maxLevel = 0;
   for (const row of rows) {
     roles.push(row.roleKey);
-    const mods = typeof row.modules === "string" ? JSON.parse(row.modules) : row.modules;
+    let mods = typeof row.modules === "string" ? JSON.parse(row.modules) : row.modules;
+    if (mods && typeof mods === "object" && !Array.isArray(mods) && (mods as any).all === true) {
+      mods = ROLE_DEFAULT_MODULES[row.roleKey] || ROLE_DEFAULT_MODULES.owner;
+    }
     if (Array.isArray(mods)) mods.forEach((m: string) => allModules.add(m));
     if (row.level > maxLevel) maxLevel = row.level;
   }

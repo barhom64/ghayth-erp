@@ -20,6 +20,9 @@ const PaymentRegister = lazy(() => import("@/pages/create/properties/payment-reg
 const UnitDetail = lazy(() => import("@/pages/details/unit-detail"));
 const BuildingDetail = lazy(() => import("@/pages/details/building-detail"));
 const TenantDetail = lazy(() => import("@/pages/details/tenant-detail"));
+const PropertyInspections = lazy(() => import("@/pages/properties/inspections"));
+const PropertyDeposits = lazy(() => import("@/pages/properties/deposits"));
+const OccupancyReport = lazy(() => import("@/pages/properties/occupancy-report"));
 
 export const propertyRoutes = [
   { path: "/properties/dashboard", component: PropertiesDashboard },
@@ -39,6 +42,9 @@ export const propertyRoutes = [
   { path: "/properties/maintenance/create", component: PropertyMaintenanceCreate },
   { path: "/properties/maintenance", component: PropertiesMaintenance },
   { path: "/properties/create", component: PropertiesCreate },
+  { path: "/properties/inspections", component: PropertyInspections },
+  { path: "/properties/deposits", component: PropertyDeposits },
+  { path: "/properties/occupancy-report", component: OccupancyReport },
   { path: "/properties/:id/status", component: UnitStatusChange },
   { path: "/properties/:id", component: UnitDetail },
   { path: "/properties", component: Properties },

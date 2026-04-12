@@ -106,7 +106,7 @@ export function MultiExportButton({ exports: exportItems, label = "تصدير" }
           <ChevronDown className="h-3 w-3" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" dir="rtl">
+      <DropdownMenuContent align="end">
         {exportItems.map((item, i) => (
           <DropdownMenuItem key={i} onClick={() => handleExport(item)} className="gap-2">
             {item.type === "excel"

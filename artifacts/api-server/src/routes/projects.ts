@@ -45,6 +45,32 @@ function isFullAccess(scope: any) {
   return scope.isOwner || scope.role === "owner" || scope.role === "general_manager";
 }
 
+/**
+ * Assert that the current user can access the given project.
+ * Returns the project row, or null if access denied (response already sent).
+ */
+async function assertProjectAccess(projectId: number, scope: any, res: any): Promise<any | null> {
+  let where = `id=$1 AND "companyId"=$2`;
+  const params: any[] = [projectId, scope.companyId];
+
+  if (!isFullAccess(scope)) {
+    if (scope.role === "projects_manager" && scope.employeeId) {
+      where += ` AND "managerId" = $3`;
+      params.push(scope.employeeId);
+    } else if (scope.role === "employee" && scope.employeeId) {
+      where += ` AND ("managerId" = $3 OR id IN (SELECT "projectId" FROM project_tasks WHERE "assigneeId" = $3))`;
+      params.push(scope.employeeId);
+    }
+  }
+
+  const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE ${where}`, params);
+  if (!project) {
+    res.status(404).json({ error: "المشروع غير موجود أو غير مصرح بالوصول إليه" });
+    return null;
+  }
+  return project;
+}
+
 router.post("/", requirePermission("projects:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -454,6 +480,302 @@ router.get("/stats/summary", requirePermission("projects:read"), async (req, res
       totalSpent: Number(budget.totalSpent), slippingProjects: Number(slipping.count),
     });
   } catch (err) { handleRouteError(err, res, "Projects stats error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT MILESTONES — معالم المشروع
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/:id/milestones", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+    const rows = await rawQuery<any>(
+      `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
+      [projectId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Milestones error:"); }
+});
+
+router.post("/:id/milestones", requirePermission("projects:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+    if (!b.title || !b.targetDate) { res.status(400).json({ error: "العنوان والتاريخ المستهدف مطلوبان" }); return; }
+    const { insertId } = await rawExecute(
+      `INSERT INTO project_milestones ("projectId","companyId",title,description,"targetDate",status,"completedDate")
+       VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
+      [projectId, scope.companyId, b.title, b.description || null, b.targetDate, b.completedDate || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create milestone error:"); }
+});
+
+router.patch("/milestones/:milestoneId", requirePermission("projects:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.milestoneId);
+    const b = req.body;
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.targetDate !== undefined) { params.push(b.targetDate); sets.push(`"targetDate"=$${params.length}`); }
+    if (b.completedDate !== undefined) { params.push(b.completedDate); sets.push(`"completedDate"=$${params.length}`); }
+    if (b.status === 'completed' && !b.completedDate) sets.push(`"completedDate"=NOW()`);
+    if (sets.length === 0) { res.json({ ok: true }); return; }
+    params.push(id); params.push(scope.companyId);
+    const rows = await rawQuery<any>(
+      `UPDATE project_milestones SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      params
+    );
+    if (!rows[0]) { res.status(404).json({ error: "المعلم غير موجود" }); return; }
+    res.json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Update milestone error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT RISKS — مخاطر المشروع
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/:id/risks", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+    const rows = await rawQuery<any>(
+      `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC`,
+      [projectId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Project risks error:"); }
+});
+
+router.post("/:id/risks", requirePermission("projects:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+    if (!b.title) { res.status(400).json({ error: "عنوان المخاطرة مطلوب" }); return; }
+    const probability = Math.min(5, Math.max(1, Number(b.probability || 3)));
+    const impact = Math.min(5, Math.max(1, Number(b.impact || 3)));
+    const riskScore = probability * impact;
+    const riskLevel = riskScore >= 15 ? 'critical' : riskScore >= 9 ? 'high' : riskScore >= 4 ? 'medium' : 'low';
+    const { insertId } = await rawExecute(
+      `INSERT INTO project_risks ("projectId","companyId",title,description,probability,impact,"riskScore","riskLevel","mitigationPlan","responsibleId",status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'open')`,
+      [projectId, scope.companyId, b.title, b.description || null,
+       probability, impact, riskScore, riskLevel,
+       b.mitigationPlan || null, b.responsibleId || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM project_risks WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create risk error:"); }
+});
+
+router.patch("/risks/:riskId", requirePermission("projects:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.riskId);
+    const b = req.body;
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.mitigationPlan !== undefined) { params.push(b.mitigationPlan); sets.push(`"mitigationPlan"=$${params.length}`); }
+    if (b.probability !== undefined) { params.push(b.probability); sets.push(`probability=$${params.length}`); }
+    if (b.impact !== undefined) { params.push(b.impact); sets.push(`impact=$${params.length}`); }
+    // Recompute riskScore whenever probability OR impact changes (fetch current values for the missing one)
+    if (b.probability !== undefined || b.impact !== undefined) {
+      const [existing] = await rawQuery<any>(
+        `SELECT probability, impact FROM project_risks WHERE id=$1 AND "companyId"=$2`,
+        [id, scope.companyId]
+      );
+      if (existing) {
+        const prob = b.probability !== undefined ? Number(b.probability) : Number(existing.probability ?? 3);
+        const imp = b.impact !== undefined ? Number(b.impact) : Number(existing.impact ?? 3);
+        const score = prob * imp;
+        params.push(score); sets.push(`"riskScore"=$${params.length}`);
+        const lvl = score >= 15 ? 'critical' : score >= 9 ? 'high' : score >= 4 ? 'medium' : 'low';
+        params.push(lvl); sets.push(`"riskLevel"=$${params.length}`);
+      }
+    }
+    if (sets.length === 0) { res.json({ ok: true }); return; }
+    params.push(id); params.push(scope.companyId);
+    const rows = await rawQuery<any>(
+      `UPDATE project_risks SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      params
+    );
+    if (!rows[0]) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
+    res.json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Update risk error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT RESOURCES — تخصيص موارد المشروع
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/:id/resources", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+    const rows = await rawQuery<any>(
+      `SELECT pr.*, e.name AS "employeeName", e."jobTitle" AS "employeeJobTitle"
+       FROM project_resources pr
+       LEFT JOIN employees e ON e.id=pr."employeeId"
+       WHERE pr."projectId"=$1 AND pr."companyId"=$2
+       ORDER BY pr.id`,
+      [projectId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Project resources error:"); }
+});
+
+router.post("/:id/resources", requirePermission("projects:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+    const { insertId } = await rawExecute(
+      `INSERT INTO project_resources ("projectId","companyId","employeeId","taskId",role,"allocatedHours","budgetAllocated","startDate","endDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [projectId, scope.companyId, b.employeeId || null, b.taskId || null,
+       b.role || 'member', b.allocatedHours || 0, b.budgetAllocated || 0,
+       b.startDate || null, b.endDate || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM project_resources WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create resource error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT COST TRACKING — تتبع التكاليف الفعلية
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/:id/costs", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+    const rows = await rawQuery<any>(
+      `SELECT pc.*, e.name AS "enteredByName"
+       FROM project_costs pc
+       LEFT JOIN employees e ON e.id=pc."enteredBy"
+       WHERE pc."projectId"=$1 AND pc."companyId"=$2
+       ORDER BY pc."costDate" DESC`,
+      [projectId, scope.companyId]
+    );
+    const [totals] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(amount),0) AS "totalActual" FROM project_costs WHERE "projectId"=$1 AND "companyId"=$2`,
+      [projectId, scope.companyId]
+    );
+    res.json({
+      data: rows, total: rows.length,
+      totalActual: Number(totals?.totalActual || 0),
+      budget: Number(project?.budget || 0),
+      variance: Number(project?.budget || 0) - Number(totals?.totalActual || 0),
+    });
+  } catch (err) { handleRouteError(err, res, "Project costs error:"); }
+});
+
+router.post("/:id/costs", requirePermission("projects:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+    if (!b.amount || !b.description) { res.status(400).json({ error: "المبلغ والوصف مطلوبان" }); return; }
+    const { insertId } = await rawExecute(
+      `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [projectId, scope.companyId, b.description, b.amount,
+       b.category || 'other', b.costDate || new Date().toISOString().split('T')[0],
+       scope.employeeId || null, b.notes || null]
+    );
+    // Update project spentAmount
+    await rawExecute(
+      `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3`,
+      [b.amount, projectId, scope.companyId]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create project cost error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GANTT DATA — بيانات مخطط غانت
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = Number(req.params.id);
+    const project = await assertProjectAccess(projectId, scope, res);
+    if (!project) return;
+
+    const phases = await rawQuery<any>(
+      `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex"`,
+      [projectId]
+    );
+    const tasks = await rawQuery<any>(
+      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId"`,
+      [projectId]
+    );
+    const milestones = await rawQuery<any>(
+      `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
+      [projectId, scope.companyId]
+    );
+    const dependencies = tasks.length > 0
+      ? await rawQuery<any>(
+          `SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i+1}`).join(',')})`,
+          tasks.map((t: any) => t.id)
+        )
+      : [];
+
+    // Build gantt rows
+    const ganttRows = [
+      ...phases.map((p: any) => ({
+        id: `phase-${p.id}`, type: 'phase', title: p.name,
+        start: p.startDate, end: p.endDate,
+        status: p.status, progress: null,
+      })),
+      ...tasks.map((t: any) => ({
+        id: `task-${t.id}`, type: 'task', title: t.title,
+        start: t.startDate, end: t.dueDate,
+        phaseId: t.phaseId ? `phase-${t.phaseId}` : null,
+        status: t.status, progress: t.progress || 0,
+        assigneeName: t.assigneeName,
+        estimatedHours: t.estimatedHours, actualHours: t.actualHours,
+        dependsOn: dependencies.filter((d: any) => d.taskId === t.id).map((d: any) => `task-${d.dependsOnId}`),
+      })),
+      ...milestones.map((m: any) => ({
+        id: `ms-${m.id}`, type: 'milestone', title: m.title,
+        start: m.targetDate, end: m.targetDate,
+        status: m.status,
+      })),
+    ];
+
+    res.json({
+      project: { id: project.id, name: project.name, startDate: project.startDate, endDate: project.endDate, status: project.status },
+      rows: ganttRows,
+    });
+  } catch (err) { handleRouteError(err, res, "Gantt data error:"); }
 });
 
 export default router;

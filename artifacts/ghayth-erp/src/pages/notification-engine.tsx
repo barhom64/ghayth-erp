@@ -97,7 +97,7 @@ function RoutingRulesTab() {
                         {rule.eventCategory as string}
                         {isGlobal && <Badge variant="secondary" className="text-xs">افتراضي</Badge>}
                       </div>
-                      {rule.description && <p className="text-xs text-muted-foreground">{rule.description as string}</p>}
+                      {!!rule.description && <p className="text-xs text-muted-foreground">{String(rule.description)}</p>}
                     </div>
                   </div>
 
@@ -140,10 +140,10 @@ function RoutingRulesTab() {
                       <div className="flex flex-wrap gap-1">
                         {channels.map((ch) => <ChannelBadge key={ch} channel={ch} />)}
                       </div>
-                      <Badge variant="outline" className="text-xs">{rule.priority as string}</Badge>
-                      {rule.fallbackChainName && (
+                      <Badge variant="outline" className="text-xs">{String(rule.priority)}</Badge>
+                      {!!rule.fallbackChainName && (
                         <Badge variant="outline" className="text-xs bg-orange-50">
-                          <ArrowRight className="h-3 w-3 ml-1" />{rule.fallbackChainName as string}
+                          <ArrowRight className="h-3 w-3 ml-1" />{String(rule.fallbackChainName)}
                         </Badge>
                       )}
                       <Button size="sm" variant="ghost" onClick={() => startEdit(rule)}>تعديل</Button>
@@ -270,16 +270,18 @@ function TemplatesTab() {
         </Card>
       )}
 
-      {Object.entries(grouped).map(([key, items]) => (
+      {Object.entries(grouped).map(([key, items]) => {
+        const itemsList = items as any[];
+        return (
         <Card key={key}>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Shield className="h-4 w-4" /> {key}
-              <Badge variant="outline" className="text-xs">{items.length} قنوات</Badge>
+              <Badge variant="outline" className="text-xs">{itemsList.length} قنوات</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {items.map((t) => {
+            {itemsList.map((t: any) => {
               const tId = t.id as number;
               const isEditing = editId === tId;
               const isDefault = t.isDefault as boolean;
@@ -339,7 +341,8 @@ function TemplatesTab() {
             })}
           </CardContent>
         </Card>
-      ))}
+      );
+      })}
     </div>
   );
 }
@@ -467,7 +470,7 @@ function FallbackChainsTab() {
                     {chain.name as string}
                     {isGlobal && <Badge variant="secondary" className="text-xs">افتراضي</Badge>}
                   </div>
-                  {chain.description && <p className="text-xs text-muted-foreground">{chain.description as string}</p>}
+                  {!!chain.description && <p className="text-xs text-muted-foreground">{String(chain.description)}</p>}
                 </div>
                 {!isGlobal && (
                   <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deleteChain(chain.id as number)}>
@@ -611,12 +614,12 @@ function WebhooksTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {wh.lastError && (
+                  {!!wh.lastError && (
                     <Badge variant="destructive" className="text-xs">
-                      <XCircle className="h-3 w-3 ml-1" />{(wh.failCount as number) ?? 0} فشل
+                      <XCircle className="h-3 w-3 ml-1" />{String((wh.failCount as number) ?? 0)} فشل
                     </Badge>
                   )}
-                  {wh.lastSuccessAt && !wh.lastError && (
+                  {!!wh.lastSuccessAt && !wh.lastError && (
                     <Badge variant="outline" className="text-xs text-green-600">
                       <CheckCircle className="h-3 w-3 ml-1" />يعمل
                     </Badge>

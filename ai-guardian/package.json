@@ -1,0 +1,13 @@
+{
+  "name": "ai-guardian",
+  "version": "1.0.0",
+  "description": "AI Guardian - proactive system audit tool",
+  "type": "module",
+  "scripts": {
+    "scan": "node orchestrator.js",
+    "run": "node runner.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
+  }
+}

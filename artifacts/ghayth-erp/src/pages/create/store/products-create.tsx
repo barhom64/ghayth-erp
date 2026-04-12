@@ -19,7 +19,7 @@ export default function ProductsCreate() {
     name: "", sku: "", category: "", status: "active",
     price: "", costPrice: "", quantity: "", description: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, string | number>>("/store/products", "POST", [["store-products"], ["store-stats"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | number | undefined>>("/store/products", "POST", [["store-products"], ["store-stats"]]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();

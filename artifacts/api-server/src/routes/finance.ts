@@ -2753,6 +2753,14 @@ router.get("/fiscal-periods", async (req, res) => {
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
 
+    const closedPeriods = await rawQuery<any>(
+      `SELECT to_char("startDate", 'YYYY-MM') AS period, status, "closedAt", "closedBy", id
+       FROM financial_periods
+       WHERE "companyId" = $1`,
+      [scope.companyId]
+    );
+    const closedMap = new Map(closedPeriods.map((r: any) => [r.period, r]));
+
     const periods = [];
     for (let m = 1; m <= 12; m++) {
       const period = `${currentYear}-${String(m).padStart(2, "0")}`;
@@ -2765,12 +2773,18 @@ router.get("/fiscal-periods", async (req, res) => {
         [scope.companyId, period]
       );
 
+      const dbRecord = closedMap.get(period) as any;
+      const defaultStatus = m < currentMonth ? "closed" : m === currentMonth ? "active" : "future";
+      const status = dbRecord?.status === "closed" ? "closed" : dbRecord?.status === "open" ? "open" : defaultStatus;
+
       periods.push({
         period,
+        id: dbRecord?.id ?? null,
         name: new Date(currentYear, m - 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric" }),
         entries: Number(stats?.entries ?? 0),
         totalAmount: Number(stats?.totalDebit ?? 0),
-        status: m < currentMonth ? "closed" : m === currentMonth ? "active" : "future",
+        status,
+        closedAt: dbRecord?.closedAt ?? null,
       });
     }
 
@@ -2827,6 +2841,26 @@ router.post("/fiscal-periods/:period/close", async (req, res) => {
         "تأكد من توازن جميع القيود المحاسبية قبل الإقفال"
       );
       return;
+    }
+
+    // Save the closed status to DB (upsert)
+    const startDate = `${period}-01`;
+    const endDate = new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).toISOString().split("T")[0];
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 LIMIT 1`,
+      [scope.companyId, period]
+    );
+    if (existing) {
+      await rawExecute(
+        `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2`,
+        [scope.activeAssignmentId, existing.id]
+      );
+    } else {
+      await rawExecute(
+        `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,"closedAt","closedBy")
+         VALUES ($1,$2,$3,$4,'closed',NOW(),$5)`,
+        [scope.companyId, `فترة ${period}`, startDate, endDate, scope.activeAssignmentId]
+      );
     }
 
     res.json({ message: `تم إقفال الفترة المالية ${period} بنجاح`, period, totalDebit, totalCredit });

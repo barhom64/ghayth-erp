@@ -130,6 +130,7 @@ async function documentExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let alerted = 0;
   for (const company of companies) {
+    // Scan 90-day window to cover all three alert thresholds (90, 30, 14 days)
     const docs = await rawQuery<any>(
       `SELECT ed.id, ed."employeeId", ed."documentType", ed."expiryDate",
               e.name AS "employeeName",
@@ -137,23 +138,80 @@ async function documentExpiryAlerts(): Promise<string> {
        FROM employee_documents ed
        JOIN employees e ON e.id = ed."employeeId"
        WHERE ed."companyId" = $1 AND ed."expiryDate" IS NOT NULL
-         AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
+         AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
     );
-    for (const doc of docs) {
+
+    // Also scan employees' personal documents (iqama, passport, work permit)
+    const empDocs = await rawQuery<any>(
+      `SELECT e.id AS "employeeId", e.name AS "employeeName",
+              UNNEST(ARRAY['iqama','passport','work_permit']) AS "documentType",
+              UNNEST(ARRAY[e."iqamaExpiry", e."passportExpiry", e."workPermitExpiry"]) AS "expiryDate"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
+       WHERE e.status='active'`,
+      [company.id]
+    );
+
+    const allDocs = [
+      ...docs,
+      ...empDocs
+        .filter((d: any) => d.expiryDate != null)
+        .map((d: any) => ({
+          ...d,
+          daysLeft: Math.floor((new Date(d.expiryDate).getTime() - Date.now()) / 86400000),
+          id: null,
+        }))
+        .filter((d: any) => d.daysLeft >= 0 && d.daysLeft <= 90),
+    ];
+
+    // Also scan fixed-term employee contracts (90/30/14 days)
+    const contractDocs = await rawQuery<any>(
+      `SELECT ec.id, ec."employeeId", e.name AS "employeeName", 'employee_contract' AS "documentType",
+              ec."endDate" AS "expiryDate",
+              (ec."endDate"::date - CURRENT_DATE) AS "daysLeft"
+       FROM employee_contracts ec
+       JOIN employees e ON e.id=ec."employeeId"
+       WHERE ec."companyId"=$1 AND ec.status='active'
+         AND ec."endDate" IS NOT NULL
+         AND ec."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
+      [company.id]
+    );
+
+    const allDocsCombined = [...allDocs, ...contractDocs.filter((d: any) => Number(d.daysLeft) >= 0)];
+
+    const [hrAsgn] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
+      [company.id]
+    );
+
+    for (const doc of allDocsCombined) {
       const daysLeft = Number(doc.daysLeft);
-      if ([30, 14, 7, 3, 1].includes(daysLeft)) {
-        const [hrAsgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
-          [company.id]
-        );
+      // Notify at 90, 30, 14, 7, 3, 1 days
+      if ([90, 30, 14, 7, 3, 1].includes(daysLeft)) {
+        // Notify HR manager
         if (hrAsgn) {
           await createNotification({
             companyId: company.id, assignmentId: hrAsgn.id,
             type: "document_expiry", title: `وثيقة تنتهي: ${doc.employeeName}`,
             body: `${doc.documentType} تنتهي خلال ${daysLeft} يوم — ${doc.expiryDate}`,
-            priority: daysLeft <= 7 ? "high" : "normal",
-            refType: "employee_document", refId: doc.id,
+            priority: daysLeft <= 14 ? "high" : "normal",
+            refType: "employee_document", refId: doc.id ?? doc.employeeId,
+          });
+          alerted++;
+        }
+        // Also notify the employee directly
+        const [empAsgn] = await rawQuery<any>(
+          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+          [doc.employeeId, company.id]
+        );
+        if (empAsgn && empAsgn.id !== hrAsgn?.id) {
+          await createNotification({
+            companyId: company.id, assignmentId: empAsgn.id,
+            type: "document_expiry_employee", title: `وثيقتك تنتهي خلال ${daysLeft} يوم`,
+            body: `${doc.documentType} — تاريخ الانتهاء: ${doc.expiryDate}. يرجى تجديدها في أقرب وقت.`,
+            priority: daysLeft <= 14 ? "high" : "normal",
+            refType: "employee_document", refId: doc.id ?? doc.employeeId,
           });
           alerted++;
         }
@@ -397,6 +455,16 @@ async function reconcileAttendance(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let total = 0;
   for (const company of companies) {
+    // Skip absent-marking if today is a public holiday for this company
+    const today = new Date().toISOString().split("T")[0];
+    const [holiday] = await rawQuery<any>(
+      `SELECT id FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
+      [company.id, today]
+    );
+    if (holiday) {
+      continue; // No absent records on public holidays
+    }
+
     const { affectedRows } = await rawExecute(
       `INSERT INTO attendance ("assignmentId", date, status, "createdAt")
        SELECT ea.id, CURRENT_DATE, 'absent', NOW()
@@ -404,6 +472,10 @@ async function reconcileAttendance(): Promise<string> {
        WHERE ea."companyId"=$1 AND ea.status='active'
          AND NOT EXISTS (
            SELECT 1 FROM attendance a WHERE a."assignmentId"=ea.id AND a.date=CURRENT_DATE
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM hr_leave_requests lr WHERE lr."employeeId"=ea."employeeId"
+             AND lr.status='approved' AND lr."startDate"<=CURRENT_DATE AND lr."endDate">=CURRENT_DATE
          )`,
       [company.id]
     );
@@ -1777,6 +1849,145 @@ async function govExpiryAlerts(): Promise<string> {
   return `Gov expiry alerts: ${alerted} notifications sent`;
 }
 
+async function vendorContractExpiryAlerts(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const expiring = await rawQuery<any>(
+      `SELECT v.id AS "vendorId", v.name AS "vendorName",
+              vc."endDate", (vc."endDate"::date - CURRENT_DATE) AS "daysLeft",
+              vc.title AS "contractTitle"
+       FROM vendor_contracts vc
+       JOIN vendors v ON v.id = vc."vendorId"
+       WHERE vc."companyId" = $1 AND vc.status = 'active'
+         AND vc."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'
+         AND NOT EXISTS (
+           SELECT 1 FROM automation_logs al
+           WHERE al."automationType" = 'vendor_contract_expiry'
+             AND al."entityType" = 'vendor_contract' AND al."entityId" = vc.id
+             AND al."createdAt" > NOW() - INTERVAL '7 days'
+         )`,
+      [company.id]
+    ).catch(() => []);
+
+    for (const c of expiring) {
+      const daysLeft = Number(c.daysLeft);
+      if (![90, 60, 30, 14, 7].some((d) => daysLeft <= d + 2 && daysLeft >= d - 2)) continue;
+
+      const [purchaseAsgn] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "companyId" = $1
+         AND role IN ('finance_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
+        [company.id]
+      ).catch(() => [null]);
+
+      if (!purchaseAsgn) continue;
+
+      await createNotification({
+        companyId: company.id,
+        assignmentId: purchaseAsgn.id,
+        type: "vendor_contract_expiry",
+        title: `عقد مورد ينتهي: ${c.vendorName}`,
+        body: `عقد "${c.contractTitle}" مع المورد ${c.vendorName} ينتهي خلال ${daysLeft} يوم (${c.endDate}) — يرجى المراجعة والتجديد`,
+        priority: daysLeft <= 14 ? "high" : "normal",
+        refType: "vendor", refId: c.vendorId,
+      });
+
+      await rawExecute(
+        `INSERT INTO automation_logs ("companyId","automationType","triggerReason","actionTaken","entityType","entityId","createdAt")
+         VALUES ($1,'vendor_contract_expiry',$2,$3,'vendor_contract',$4,NOW())`,
+        [company.id, `عقد المورد ${c.vendorName} ينتهي خلال ${daysLeft} يوم`, "إرسال إشعار تنبيه للمشتريات", c.vendorId]
+      ).catch(() => {});
+      alerted++;
+    }
+  }
+  return `Vendor contract expiry alerts: ${alerted} notifications sent`;
+}
+
+async function dailySystemHealthReport(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let reports = 0;
+
+  const [errorCount] = await rawQuery<any>(
+    `SELECT COUNT(*) AS cnt FROM cron_logs WHERE status = 'failed' AND "createdAt" > NOW() - INTERVAL '24 hours'`
+  ).catch(() => [{ cnt: 0 }]);
+
+  const [failedNotifs] = await rawQuery<any>(
+    `SELECT COUNT(*) AS cnt FROM notification_delivery_log WHERE status = 'failed' AND "queuedAt" > NOW() - INTERVAL '24 hours'`
+  ).catch(() => [{ cnt: 0 }]);
+
+  const [dbSize] = await rawQuery<any>(
+    `SELECT pg_size_pretty(pg_database_size(current_database())) AS size`
+  ).catch(() => [{ size: 'N/A' }]);
+
+  for (const company of companies) {
+    const [activeUsers] = await rawQuery<any>(
+      `SELECT COUNT(DISTINCT "assignmentId") AS cnt FROM activity_logs
+       WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
+      [company.id]
+    ).catch(() => [{ cnt: 0 }]);
+
+    const [techAsgn] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE "companyId" = $1
+       AND role IN ('general_manager','owner') AND status = 'active' LIMIT 1`,
+      [company.id]
+    ).catch(() => [null]);
+
+    if (!techAsgn) continue;
+
+    const errorCnt = Number(errorCount?.cnt ?? 0);
+    const failedNotifCnt = Number(failedNotifs?.cnt ?? 0);
+    const activeUsersCnt = Number(activeUsers?.cnt ?? 0);
+
+    await createNotification({
+      companyId: company.id,
+      assignmentId: techAsgn.id,
+      type: "system_health_report",
+      title: "تقرير صحة النظام اليومي",
+      body: `أخطاء Cron: ${errorCnt} | إشعارات فاشلة: ${failedNotifCnt} | مستخدمون نشطون: ${activeUsersCnt} | حجم قاعدة البيانات: ${dbSize?.size ?? 'N/A'}`,
+      priority: errorCnt > 10 || failedNotifCnt > 20 ? "high" : "normal",
+    });
+    reports++;
+  }
+  return `System health reports sent to ${reports} companies`;
+}
+
+async function weeklyDataCleanup(): Promise<string> {
+  let cleaned = 0;
+
+  const { affectedRows: expiredSessions } = await rawExecute(
+    `DELETE FROM user_sessions WHERE "expiresAt" < NOW() - INTERVAL '7 days'`
+  ).catch(() => ({ affectedRows: 0 }));
+  cleaned += expiredSessions;
+
+  const { affectedRows: oldCronLogs } = await rawExecute(
+    `DELETE FROM cron_logs WHERE "createdAt" < NOW() - INTERVAL '90 days'`
+  ).catch(() => ({ affectedRows: 0 }));
+  cleaned += oldCronLogs;
+
+  const { affectedRows: oldDeliveryLogs } = await rawExecute(
+    `DELETE FROM notification_delivery_log WHERE "queuedAt" < NOW() - INTERVAL '90 days' AND status IN ('delivered','failed')`
+  ).catch(() => ({ affectedRows: 0 }));
+  cleaned += oldDeliveryLogs;
+
+  const { affectedRows: oldNotifLogs } = await rawExecute(
+    `DELETE FROM notification_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
+  ).catch(() => ({ affectedRows: 0 }));
+  cleaned += oldNotifLogs;
+
+  try {
+    await rawExecute(
+      `INSERT INTO audit_archive SELECT * FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'
+       ON CONFLICT DO NOTHING`
+    ).catch(() => {});
+    const { affectedRows: archivedLogs } = await rawExecute(
+      `DELETE FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'`
+    ).catch(() => ({ affectedRows: 0 }));
+    cleaned += archivedLogs;
+  } catch {}
+
+  return `Data cleanup: ${cleaned} records cleaned`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
@@ -1820,6 +2031,9 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },
   { name: "scheduled_reports_runner", description: "إرسال التقارير المجدولة", schedule: "0 * * * *", handler: runScheduledReports },
   { name: "notification_fallback_chains", description: "معالجة سلاسل التصعيد للإشعارات الفاشلة", schedule: "*/2 * * * *", handler: processFallbackChains },
+  { name: "weekly_vendor_contract_expiry", description: "تنبيه انتهاء عقود الموردين (90/30 يوم)", schedule: "0 7 * * 1", handler: vendorContractExpiryAlerts },
+  { name: "daily_system_health_report", description: "تقرير صحة النظام اليومي للمدير التقني", schedule: "0 6 * * *", handler: dailySystemHealthReport },
+  { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
 ];
 
 export async function seedCronJobs(): Promise<void> {

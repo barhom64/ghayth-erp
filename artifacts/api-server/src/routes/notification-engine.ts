@@ -5,7 +5,7 @@ import { requireMinLevel } from "../middlewares/roleGuard.js";
 
 const router = Router();
 
-router.get("/preferences", async (req: Request, res: Response) => {
+router.get("/preferences", async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope;
     if (!scope) return res.status(401).json({ error: "Unauthorized" });
@@ -35,7 +35,7 @@ router.get("/preferences", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/preferences", async (req: Request, res: Response) => {
+router.put("/preferences", async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope;
     if (!scope) return res.status(401).json({ error: "Unauthorized" });
@@ -106,7 +106,7 @@ router.get("/routing-rules", requireMinLevel(70), async (req: Request, res: Resp
   }
 });
 
-router.post("/routing-rules", requireMinLevel(70), async (req: Request, res: Response) => {
+router.post("/routing-rules", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { eventCategory, channels, priority, description, fallbackChainId, isActive } = req.body;
@@ -137,7 +137,7 @@ router.post("/routing-rules", requireMinLevel(70), async (req: Request, res: Res
   }
 });
 
-router.put("/routing-rules/:id", requireMinLevel(70), async (req: Request, res: Response) => {
+router.put("/routing-rules/:id", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { channels, priority, description, fallbackChainId, isActive } = req.body;
@@ -195,7 +195,7 @@ router.get("/templates", requireMinLevel(70), async (req: Request, res: Response
   }
 });
 
-router.post("/templates", requireMinLevel(70), async (req: Request, res: Response) => {
+router.post("/templates", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { templateKey, channel, titleTemplate, bodyTemplate, variables, language, isActive } = req.body;
@@ -282,7 +282,7 @@ router.get("/fallback-chains", requireMinLevel(70), async (req: Request, res: Re
   }
 });
 
-router.post("/fallback-chains", requireMinLevel(70), async (req: Request, res: Response) => {
+router.post("/fallback-chains", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { name, description, steps, isActive } = req.body;
@@ -303,7 +303,7 @@ router.post("/fallback-chains", requireMinLevel(70), async (req: Request, res: R
   }
 });
 
-router.put("/fallback-chains/:id", requireMinLevel(70), async (req: Request, res: Response) => {
+router.put("/fallback-chains/:id", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { name, description, steps, isActive } = req.body;
@@ -361,7 +361,7 @@ router.get("/webhooks", requireMinLevel(70), async (req: Request, res: Response)
   }
 });
 
-router.post("/webhooks", requireMinLevel(70), async (req: Request, res: Response) => {
+router.post("/webhooks", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { name, url, secret, events, headers, isActive } = req.body;
@@ -388,7 +388,7 @@ router.post("/webhooks", requireMinLevel(70), async (req: Request, res: Response
   }
 });
 
-router.put("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Response) => {
+router.put("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { name, url, secret, events, headers, isActive } = req.body;

@@ -7,8 +7,7 @@ import rateLimit from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
 
 const router = Router();
-const SECRET = process.env.JWT_SECRET;
-if (!SECRET) throw new Error("JWT_SECRET is required for careers portal");
+const SECRET: string = process.env.JWT_SECRET ?? (() => { throw new Error("JWT_SECRET is required for careers portal"); })();
 
 const portalLimiter = rateLimit({
   windowMs: 60 * 1000,

@@ -49,6 +49,7 @@ import mySpaceRouter from "./mySpace.js";
 import actionCenterRouter from "./actionCenter.js";
 import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
+import financeHardeningRouter from "./finance-hardening.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import operationsCenterRouter from "./operationsCenter.js";
@@ -68,6 +69,7 @@ import { budgetRouter } from "./finance-budget.js";
 import { accountsRouter } from "./finance-accounts.js";
 import { vendorsRouter } from "./finance-vendors.js";
 import { attendanceRouter } from "./hr-attendance.js";
+import digitalSignatureRouter from "./digital-signature.js";
 
 const router: IRouter = Router();
 
@@ -127,6 +129,7 @@ router.use("/finance", requireModule("finance"), collectionRouter);
 router.use("/finance", requireModule("finance"), budgetRouter);
 router.use("/finance", requireModule("finance"), accountsRouter);
 router.use("/finance", requireModule("finance"), vendorsRouter);
+router.use("/finance", requireModule("finance"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), financeRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
@@ -176,5 +179,6 @@ router.use("/export", requireMinLevel(30), exportRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", notificationEngineRouter);
 router.use("/gov-integrations", govIntegrationsRouter);
+router.use("/digital-signature", digitalSignatureRouter);
 
 export default router;

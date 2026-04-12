@@ -2,6 +2,15 @@
 
 Ghayth ERP (غيث ERP) is a comprehensive, full-stack Arabic enterprise resource planning system for Al Door Group. It centralizes operations, enhances efficiency, and supports strategic decision-making across over 28 business modules (including HR, Finance, Fleet, Warehouse, Properties, Legal, Projects, CRM, Support, Governance, and Business Intelligence). The system provides a unified, user-friendly platform tailored to diverse business requirements, integrating core functions into a single solution. A behavioral intelligence layer offers advanced analytics, personalized recommendations, and proactive alerts across the entire system.
 
+## Phase 3 Changes (Task #113)
+
+- **Standalone Admin Pages**: `/admin/users` → `pages/admin/users.tsx` (user management + role assignment), `/admin/roles` → `pages/admin/roles.tsx` (module access + permissions matrix), `/admin/logs` → `pages/admin/logs.tsx` (audit log explorer with CSV export).
+- **Manager Board**: New page at `/manager-board` (`pages/manager-board.tsx`) with team attendance summary, urgent pending requests with quick approve/reject, team tasks progress, and priority alerts.
+- **Finance Cash Flow Dashboard**: New page at `/finance/cashflow` (`pages/finance/cashflow-dashboard.tsx`) with live spend ratios, budget vs actual progress bars, pending invoices, and financial alerts.
+- **My Space Enhancements**: Visual leave balance progress bars with color-coded status (green/amber/red), monthly attendance progress indicator showing days present, month progress, and total late minutes.
+- **Letters Routing Fix**: `communications/letters-create.tsx` now redirects to `/letters` instead of non-existent `/communications/letters` route.
+- **Sidebar Updates**: Added "لوحة المدير" (minRoleLevel 40) and "لوحة التدفق النقدي" under Finance section.
+
 # User Preferences
 
 -   **Frontend Layout**:
@@ -105,6 +114,12 @@ The project is structured as a pnpm workspace monorepo.
 -   **UX Enhancements**: Advanced filters, entity timelines, document management, copy/duplicate, permission guards, autocomplete, auto-draft, keyboard shortcuts, policy banners, delete confirm with impact, unsaved changes warning, quick preview, file attachments, and data-level scoping.
 -   **Form-DB Alignment**: All create forms aligned with DB schema, converting empty strings to `null`.
 -   **Frontend Structure**: `wouter` for routing, unified list page template, and reusable components.
+-   **Comprehensive Audit Fixes (April 2026)**:
+    -   **5 Finance Pages Fixed**: `project-costing`, `journal-manual`, `intercompany`, `cash-flow-forecast`, `bank-guarantees` — all had broken imports using non-existent `useApi`, `PageHeader`, `DataTable`, `Modal` components. Rewritten to use correct `useApiQuery`/`apiFetch`, `Card`, `Dialog`, `Badge`, `useToast` patterns.
+    -   **email_queue Migration**: Added `updatedAt` column (migration 065).
+    -   **communications.ts Fix**: `scope.assignmentId` → `scope.activeAssignmentId`.
+    -   **ApprovalChainType Fix**: Added `"procurement"` to type union.
+    -   **settings.tsx Fix**: Replaced undefined `ALL_MODULE_KEYS` with `allModules` local variable; added `{all:true}` handling for owner roles.
 
 # External Dependencies
 

@@ -72,7 +72,7 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
 
     // ── Step 4: Check if today is a work day ──
     const [shiftAssignment] = await rawQuery<any>(
-      `SELECT s.id, s."startTime", s."endTime", s.days
+      `SELECT s.id, s."startTime", s."endTime", s.days, s."shiftType", s."remoteAllowed", s."flexStartEarliest", s."flexStartLatest"
        FROM employee_shift_assignments esa
        JOIN shifts s ON s.id = esa."shiftId"
        WHERE esa."assignmentId" = $1
@@ -83,7 +83,7 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
     let shift = shiftAssignment;
     if (!shift) {
       const [defaultShift] = await rawQuery<any>(
-        `SELECT id, "startTime", "endTime", days FROM shifts
+        `SELECT id, "startTime", "endTime", days, "shiftType", "remoteAllowed", "flexStartEarliest", "flexStartLatest" FROM shifts
          WHERE "companyId" = $1 AND status = 'active'
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
@@ -103,6 +103,13 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
     const shiftDays = String(shift.days ?? "0,1,2,3,4").split(",").map(Number);
     const isWorkDay = shiftDays.includes(dayOfWeek);
 
+    // ── Step 4b: Check if today is a public holiday (no late penalty on holidays) ──
+    const [publicHoliday] = await rawQuery<any>(
+      `SELECT id, name FROM public_holidays
+       WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
+      [scope.companyId, today]
+    );
+
     // ── Step 5: Check if employee is on approved leave ──
     const [activeLeave] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests
@@ -116,6 +123,8 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
     }
 
     // ── Step 6: GPS validation (Haversine) ──
+    // Remote and flexible shifts skip GPS enforcement
+    const isRemoteShift = shift?.remoteAllowed === true || shift?.shiftType === 'remote';
     let distanceMeters: number | null = null;
     let isOutOfRange = false;
     const [policy] = await rawQuery<any>(
@@ -128,7 +137,7 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
     const gpsRadius = policy?.gpsRadiusMeters ?? 500;
     const lateThreshold = policy?.lateThresholdMinutes ?? 15;
 
-    if (lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
+    if (!isRemoteShift && lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
       distanceMeters = Math.round(
         haversineDistance(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon))
       );
@@ -144,10 +153,14 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
     }
 
     // ── Step 7: Late detection ──
+    // For flexible shifts, use flexStartLatest as the deadline instead of startTime
     let lateMinutes = 0;
     let isLate = false;
-    if (shift?.startTime) {
-      const parts = String(shift.startTime).split(":");
+    const effectiveStartTime = shift?.shiftType === 'flexible' && shift?.flexStartLatest
+      ? shift.flexStartLatest
+      : shift?.startTime;
+    if (effectiveStartTime) {
+      const parts = String(effectiveStartTime).split(":");
       const h = Number(parts[0]);
       const m = Number(parts[1]);
       const expected = new Date(today + "T00:00:00");
@@ -156,25 +169,36 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
       if (diff > 0) { lateMinutes = Math.floor(diff / 60000); isLate = lateMinutes > 0; }
     }
 
-    // ── Step 8: Check policy threshold ──
-    const exceedsThreshold = isLate && lateMinutes > lateThreshold;
-
-    // ── Step 9: Calculate deduction ──
-    let deductionAmount = 0;
-    if (isLate && assignment?.salary) {
-      const dailySalary = Number(assignment.salary) / 30;
-      const minuteRate = dailySalary / 480;
-      deductionAmount = Math.round(minuteRate * lateMinutes * 100) / 100;
-    }
-
-    // ── Step 10: Insert attendance record ──
+    // ── Step 8: Determine attendance status FIRST (must precede threshold/penalty computation) ──
+    // Holiday, off-day, and remote shifts suppress all late penalties
     let checkInStatus: string;
-    if (!isWorkDay) {
+    if (publicHoliday) {
+      checkInStatus = "present_holiday";
+      // Suppress lateness on public holidays
+      lateMinutes = 0;
+      isLate = false;
+    } else if (!isWorkDay) {
       checkInStatus = "present_off_day";
+      lateMinutes = 0;
+      isLate = false;
+    } else if (isRemoteShift) {
+      checkInStatus = "remote";
+      // Remote workers are not penalized for GPS or lateness (flexible-by-nature)
     } else if (isOutOfRange) {
       checkInStatus = "present_out_of_range";
     } else {
       checkInStatus = "present";
+    }
+
+    // ── Step 9: Check policy threshold — after holiday/status resolution ──
+    const exceedsThreshold = isLate && lateMinutes > lateThreshold && !publicHoliday && isWorkDay;
+
+    // ── Step 10: Calculate deduction ──
+    let deductionAmount = 0;
+    if (exceedsThreshold && assignment?.salary) {
+      const dailySalary = Number(assignment.salary) / 30;
+      const minuteRate = dailySalary / 480;
+      deductionAmount = Math.round(minuteRate * lateMinutes * 100) / 100;
     }
 
     const { insertId: attendanceId } = await rawExecute(
@@ -656,8 +680,19 @@ router.post("/leave-requests", requirePermission("hr:create"), async (req, res) 
 
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1);
+    let rawDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1);
     const year = start.getFullYear();
+
+    // Exclude public holidays that fall within the leave range from the day count
+    const holidayOverlap = await rawQuery<any>(
+      `SELECT SUM(LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1) AS "holidayDays"
+       FROM public_holidays
+       WHERE "companyId"=$3
+         AND "startDate" <= $2::date AND "endDate" >= $1::date`,
+      [startDate, endDate, scope.companyId]
+    );
+    const holidayDays = Math.max(0, Number(holidayOverlap[0]?.holidayDays ?? 0));
+    const days = Math.max(1, rawDays - holidayDays);
 
     // ── Validation 1: Fetch leave type with extended rules ──
     const [leaveType] = await rawQuery<any>(
@@ -1846,14 +1881,25 @@ router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
 router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, startTime, endTime, days, isDefault } = req.body as any;
+    const {
+      name, startTime, endTime, days, isDefault,
+      shiftType, remoteAllowed,
+      splitBreakStart, splitBreakEnd,
+      flexStartEarliest, flexStartLatest,
+    } = req.body as any;
+    // shiftType: 'fixed' (default) | 'flexible' | 'remote' | 'split'
+    const effectiveShiftType = shiftType ?? 'fixed';
+    const effectiveRemote = remoteAllowed ?? (effectiveShiftType === 'remote');
     if (isDefault) {
       await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1`, [scope.companyId]);
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'active')`,
-      [scope.companyId, scope.branchId, name, startTime, endTime, days ?? "0,1,2,3,4", isDefault ?? false]
+      `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13)`,
+      [scope.companyId, scope.branchId, name, startTime, endTime, days ?? "0,1,2,3,4", isDefault ?? false,
+       effectiveShiftType, effectiveRemote,
+       splitBreakStart || null, splitBreakEnd || null,
+       flexStartEarliest || null, flexStartLatest || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1`, [insertId]);
     res.status(201).json(row);
@@ -2355,6 +2401,12 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     if (b.endTime !== undefined) { params.push(b.endTime); sets.push(`"endTime"=$${params.length}`); }
     if (b.days !== undefined) { params.push(b.days); sets.push(`days=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.shiftType !== undefined) { params.push(b.shiftType); sets.push(`"shiftType"=$${params.length}`); }
+    if (b.remoteAllowed !== undefined) { params.push(b.remoteAllowed); sets.push(`"remoteAllowed"=$${params.length}`); }
+    if (b.splitBreakStart !== undefined) { params.push(b.splitBreakStart); sets.push(`"splitBreakStart"=$${params.length}`); }
+    if (b.splitBreakEnd !== undefined) { params.push(b.splitBreakEnd); sets.push(`"splitBreakEnd"=$${params.length}`); }
+    if (b.flexStartEarliest !== undefined) { params.push(b.flexStartEarliest); sets.push(`"flexStartEarliest"=$${params.length}`); }
+    if (b.flexStartLatest !== undefined) { params.push(b.flexStartLatest); sets.push(`"flexStartLatest"=$${params.length}`); }
     if (b.isDefault !== undefined) {
       if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1`, [scope.companyId]);
       params.push(b.isDefault); sets.push(`"isDefault"=$${params.length}`);
@@ -3186,7 +3238,7 @@ router.get("/evaluation-cycles", requirePermission("hr:read"), async (req, res) 
 });
 
 // POST /hr/evaluation-cycles — start a new evaluation cycle (HR only)
-router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, res) => {
+router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     if (!isHR(scope)) return res.status(403).json({ error: "مسموح فقط لـ HR بإنشاء دورات التقييم" });
@@ -3247,7 +3299,7 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
 });
 
 // GET /hr/evaluation-cycles/:id — get cycle details (access-controlled)
-router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3345,7 +3397,7 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
 });
 
 // GET /hr/evaluation-cycles/:id/system-report — get auto-generated report
-router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"), async (req, res) => {
+router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3414,7 +3466,7 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
 
 // POST /hr/evaluation-cycles/:id/peer-evaluation — submit manager/peer review
 // Evaluator identity is derived from the authenticated session (scope.employeeId), NOT the request body
-router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:create"), async (req, res) => {
+router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3487,7 +3539,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
 });
 
 // POST /hr/evaluation-cycles/:id/upward-review — anonymous upward review (employee rates manager)
-router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create"), async (req, res) => {
+router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3565,7 +3617,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
 });
 
 // GET /hr/evaluation-cycles/:id/summary — get 360 summary
-router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async (req, res) => {
+router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3641,7 +3693,7 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
 });
 
 // GET /hr/employees/:id/evaluation-history — performance trend over time
-router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), async (req, res) => {
+router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const employeeId = Number(req.params.id);
@@ -3697,7 +3749,7 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
 });
 
 // GET /hr/upward-reviews/manager/:managerId — aggregated upward reviews for a manager (HR only)
-router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), async (req, res) => {
+router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const managerId = Number(req.params.managerId);
@@ -3742,6 +3794,639 @@ router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), a
       supportAvg: row?.supportAvg ? Number(row.supportAvg) : null,
     });
   } catch (err) { handleRouteError(err, res, "خطأ في جلب التقييمات العكسية"); }
+});
+
+router.get("/delegations", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
+              e1.name AS "delegatorName", e2.name AS "delegateName"
+       FROM delegations d
+       LEFT JOIN employees e1 ON e1.id = d."delegatorId"
+       LEFT JOIN employees e2 ON e2.id = d."delegateId"
+       WHERE d."companyId" = $1
+       ORDER BY d."createdAt" DESC
+       LIMIT 50`,
+      [scope.companyId]
+    ).catch(() => [] as any[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { res.json({ data: [], total: 0 }); }
+});
+
+router.post("/delegations", requirePermission("hr:approve"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { delegateId, scope: delegationScope, reason, startDate, endDate } = req.body;
+    const [emp] = await rawQuery<any>(
+      `SELECT id FROM employees WHERE "userId" = $1 LIMIT 1`,
+      [scope.userId]
+    );
+    if (!emp) { res.status(400).json({ error: "لم يتم العثور على الموظف المرتبط بحسابك" }); return; }
+    const r = await rawExecute(
+      `INSERT INTO delegations ("delegatorId","delegateId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
+      [emp.id, delegateId, scope.companyId, delegationScope || "عام", reason, startDate || new Date(), endDate || null]
+    ).catch(() => ({ insertId: null }));
+    res.status(201).json({ success: true, id: r.insertId });
+  } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC HOLIDAYS — تقويم الإجازات الرسمية
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/public-holidays", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { year } = req.query as any;
+    const conditions = [`"companyId" = $1`];
+    const params: any[] = [scope.companyId];
+    if (year) { params.push(Number(year)); conditions.push(`year = $${params.length}`); }
+    const rows = await rawQuery<any>(
+      `SELECT * FROM public_holidays WHERE ${conditions.join(" AND ")} ORDER BY "startDate"`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Public holidays error:"); }
+});
+
+router.post("/public-holidays", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: إدارة الإجازات الرسمية مقصورة على HR أو المالك" }); return;
+    }
+    const b = req.body;
+    if (!b.name || !b.startDate) {
+      res.status(400).json({ error: "اسم العطلة وتاريخ البداية مطلوبان" }); return;
+    }
+    const startDate = new Date(b.startDate);
+    const year = b.year || startDate.getFullYear();
+    const { insertId } = await rawExecute(
+      `INSERT INTO public_holidays ("companyId",name,"startDate","endDate",year,type,description,"isRecurring")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scope.companyId, b.name, b.startDate, b.endDate || b.startDate, year,
+       b.type || 'national', b.description || null, b.isRecurring || false]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create holiday error:"); }
+});
+
+router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح" }); return;
+    }
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
+    if (b.startDate !== undefined) { params.push(b.startDate); sets.push(`"startDate"=$${params.length}`); }
+    if (b.endDate !== undefined) { params.push(b.endDate); sets.push(`"endDate"=$${params.length}`); }
+    if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
+    if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
+    if (b.isRecurring !== undefined) { params.push(b.isRecurring); sets.push(`"isRecurring"=$${params.length}`); }
+    if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
+    params.push(id); params.push(scope.companyId);
+    const rows = await rawQuery<any>(
+      `UPDATE public_holidays SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
+      params
+    );
+    if (!rows[0]) { res.status(404).json({ error: "العطلة غير موجودة" }); return; }
+    res.json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Update holiday error:"); }
+});
+
+router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح" }); return;
+    }
+    await rawExecute(`DELETE FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    res.json({ message: "تم حذف العطلة" });
+  } catch (err) { handleRouteError(err, res, "Delete holiday error:"); }
+});
+
+// Check if a date is a public holiday
+router.get("/public-holidays/check", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { date } = req.query as any;
+    if (!date) { res.status(400).json({ error: "التاريخ مطلوب" }); return; }
+    const [holiday] = await rawQuery<any>(
+      `SELECT * FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
+      [scope.companyId, date]
+    );
+    res.json({ isHoliday: !!holiday, holiday: holiday || null });
+  } catch (err) { handleRouteError(err, res, "Check holiday error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPLOYEE TRANSFERS — نقل الموظف بين الفروع
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/transfers", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status } = req.query as any;
+    const conditions = [`t."companyId"=$1`];
+    const params: any[] = [scope.companyId];
+    if (status) { params.push(status); conditions.push(`t.status=$${params.length}`); }
+    const rows = await rawQuery<any>(
+      `SELECT t.*, e.name AS "employeeName", e."empNumber",
+              b1.name AS "fromBranchName", b2.name AS "toBranchName",
+              d1.name AS "fromDeptName", d2.name AS "toDeptName"
+       FROM employee_transfers t
+       JOIN employees e ON e.id=t."employeeId"
+       LEFT JOIN branches b1 ON b1.id=t."fromBranchId"
+       LEFT JOIN branches b2 ON b2.id=t."toBranchId"
+       LEFT JOIN departments d1 ON d1.id=t."fromDeptId"
+       LEFT JOIN departments d2 ON d2.id=t."toDeptId"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY t."createdAt" DESC`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Transfers error:"); }
+});
+
+router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.employeeId || !b.toBranchId) {
+      res.status(400).json({ error: "الموظف والفرع المستقبل مطلوبان" }); return;
+    }
+    const [assignment] = await rawQuery<any>(
+      `SELECT ea.id, ea."branchId", ea."departmentId", ea.salary, ea."jobTitle"
+       FROM employee_assignments ea
+       WHERE ea."employeeId"=$1 AND ea."companyId"=$2 AND ea.status='active' LIMIT 1`,
+      [b.employeeId, scope.companyId]
+    );
+    if (!assignment) { res.status(404).json({ error: "الموظف غير نشط" }); return; }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO employee_transfers
+       ("companyId","employeeId","fromBranchId","toBranchId","fromDeptId","toDeptId","fromJobTitle","toJobTitle","fromSalary","toSalary","requestedBy","reason","effectiveDate",status,notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',$14)`,
+      [scope.companyId, b.employeeId, assignment.branchId, b.toBranchId,
+       assignment.departmentId, b.toDeptId || assignment.departmentId,
+       assignment.jobTitle, b.toJobTitle || assignment.jobTitle,
+       assignment.salary, b.toSalary || assignment.salary,
+       scope.employeeId, b.reason || null, b.effectiveDate || null, b.notes || null]
+    );
+
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [insertId]);
+
+    // Notify HR
+    const hrAssign = await rawQuery<any>(
+      `SELECT id FROM employee_assignments WHERE "companyId"=$1 AND role IN ('hr_manager','general_manager','owner') AND status='active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 ELSE 2 END LIMIT 1`,
+      [scope.companyId]
+    );
+    if (hrAssign[0]) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: hrAssign[0].id,
+        type: "transfer_request", title: "طلب نقل موظف جديد",
+        body: `طلب نقل موظف بين الفروع — يحتاج مراجعة HR`,
+        priority: "normal", refType: "employee_transfer", refId: insertId,
+      }).catch(console.error);
+    }
+
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create transfer error:"); }
+});
+
+// ── Step 1: HR Manager approves → notifies receiving branch manager ──
+router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح" }); return;
+    }
+    const id = Number(req.params.id);
+    const { approved, notes } = req.body as any;
+    const [transfer] = await rawQuery<any>(
+      `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2 AND status='pending'`,
+      [id, scope.companyId]
+    );
+    if (!transfer) { res.status(404).json({ error: "طلب النقل غير موجود أو تمت معالجته" }); return; }
+
+    if (approved) {
+      // HR approved — move to pending_receiving_manager for the destination branch manager to confirm
+      await rawExecute(
+        `UPDATE employee_transfers SET status='pending_receiving_manager',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
+        [scope.employeeId, notes || null, id]
+      );
+
+      // Notify the receiving branch manager
+      const [receivingMgr] = await rawQuery<any>(
+        `SELECT ea.id FROM employee_assignments ea
+         WHERE ea."companyId"=$1 AND ea."branchId"=$2
+           AND ea.role IN ('branch_manager','general_manager','owner') AND ea.status='active'
+         ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
+        [scope.companyId, transfer.toBranchId]
+      );
+      if (receivingMgr) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: receivingMgr.id,
+          type: "transfer_receiving_approval", title: "طلب استقبال موظف منقول",
+          body: `يحتاج استلام موظف منقول إلى فرعك — يرجى المراجعة والتأكيد`,
+          priority: "high", refType: "employee_transfer", refId: id,
+        }).catch(console.error);
+      }
+    } else {
+      await rawExecute(
+        `UPDATE employee_transfers SET status='rejected',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
+        [scope.employeeId, notes || null, id]
+      );
+      // Notify employee of rejection
+      const [empAssign] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+        [transfer.employeeId, scope.companyId]
+      );
+      if (empAssign) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: empAssign.id,
+          type: "transfer_decision", title: "تم رفض طلب النقل",
+          body: notes || "تم رفض طلب النقل من قبل مدير الموارد البشرية",
+          priority: "high", refType: "employee_transfer", refId: id,
+        }).catch(console.error);
+      }
+    }
+
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Approve transfer error:"); }
+});
+
+// ── Step 2: Receiving branch manager confirms the transfer ──
+router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["branch_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح" }); return;
+    }
+    const id = Number(req.params.id);
+    const { confirmed, notes } = req.body as any;
+    const [transfer] = await rawQuery<any>(
+      `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2 AND status='pending_receiving_manager'`,
+      [id, scope.companyId]
+    );
+    if (!transfer) { res.status(404).json({ error: "طلب النقل غير موجود أو لم تتم الموافقة عليه بعد" }); return; }
+
+    // Authorization: general_manager/owner can confirm any transfer; branch_manager must be in the destination branch
+    if (scope.role === "branch_manager") {
+      const [myAssignment] = await rawQuery<any>(
+        `SELECT "branchId" FROM employee_assignments WHERE id=$1 AND "companyId"=$2`,
+        [scope.activeAssignmentId, scope.companyId]
+      );
+      if (!myAssignment || myAssignment.branchId !== transfer.toBranchId) {
+        res.status(403).json({ error: "يمكنك فقط تأكيد النقل إلى فرعك" }); return;
+      }
+    }
+
+    if (confirmed) {
+      // Execute the actual transfer — update employee assignment
+      // Parameter order deliberately matches the SET clause: branchId, departmentId, jobTitle, salary
+      const newBranchId = transfer.toBranchId;
+      const newDeptId = transfer.toDeptId;
+      const newJobTitle = transfer.toJobTitle;
+      const newSalary = transfer.toSalary;
+      await rawExecute(
+        `UPDATE employee_assignments SET "branchId"=$1,"departmentId"=$2,"jobTitle"=$3,salary=$4 WHERE "employeeId"=$5 AND "companyId"=$6 AND status='active'`,
+        [newBranchId, newDeptId, newJobTitle, newSalary, transfer.employeeId, scope.companyId]
+      );
+      await rawExecute(
+        `UPDATE employee_transfers SET status='approved',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
+        [scope.employeeId, notes || null, id]
+      );
+
+      // Notify employee of final approval
+      const [empAssign] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+        [transfer.employeeId, scope.companyId]
+      );
+      if (empAssign) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: empAssign.id,
+          type: "transfer_decision", title: "تم اعتماد نقلك وتفعيله",
+          body: notes || "تمت الموافقة على نقلك وتم تحديث بياناتك",
+          priority: "high", refType: "employee_transfer", refId: id,
+        }).catch(console.error);
+      }
+    } else {
+      await rawExecute(
+        `UPDATE employee_transfers SET status='rejected_by_receiver',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
+        [scope.employeeId, notes || null, id]
+      );
+    }
+
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Receive transfer error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INDIVIDUAL DEVELOPMENT PLANS (IDP) — خطة التطوير الفردي
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/idp", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId } = req.query as any;
+    const conditions = [`idp."companyId"=$1`];
+    const params: any[] = [scope.companyId];
+    if (employeeId) { params.push(Number(employeeId)); conditions.push(`idp."employeeId"=$${params.length}`); }
+    else if (scope.role === "employee" && scope.employeeId) {
+      params.push(scope.employeeId); conditions.push(`idp."employeeId"=$${params.length}`);
+    }
+    const rows = await rawQuery<any>(
+      `SELECT idp.*, e.name AS "employeeName", e."empNumber"
+       FROM employee_development_plans idp
+       JOIN employees e ON e.id=idp."employeeId"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY idp."createdAt" DESC`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "IDP list error:"); }
+});
+
+router.post("/idp", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.employeeId) { res.status(400).json({ error: "الموظف مطلوب" }); return; }
+    const goals = Array.isArray(b.goals) ? JSON.stringify(b.goals) : (b.goals || '[]');
+    const skills = Array.isArray(b.skills) ? JSON.stringify(b.skills) : (b.skills || '[]');
+    const trainingIds = Array.isArray(b.trainingIds) ? JSON.stringify(b.trainingIds) : (b.trainingIds || '[]');
+    const { insertId } = await rawExecute(
+      `INSERT INTO employee_development_plans
+       ("companyId","employeeId","createdBy",title,goals,skills,"trainingIds","targetDate",status,notes,"reviewDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'planned',$9,$10)`,
+      [scope.companyId, b.employeeId, scope.employeeId, b.title || 'خطة التطوير الفردي',
+       goals, skills, trainingIds, b.targetDate || null, b.notes || null, b.reviewDate || null]
+    );
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1`, [insertId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create IDP error:"); }
+});
+
+router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = [`"updatedAt"=NOW()`];
+    const params: any[] = [];
+    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
+    if (b.goals !== undefined) { params.push(Array.isArray(b.goals) ? JSON.stringify(b.goals) : b.goals); sets.push(`goals=$${params.length}`); }
+    if (b.skills !== undefined) { params.push(Array.isArray(b.skills) ? JSON.stringify(b.skills) : b.skills); sets.push(`skills=$${params.length}`); }
+    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if (b.targetDate !== undefined) { params.push(b.targetDate || null); sets.push(`"targetDate"=$${params.length}`); }
+    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
+    if (b.progress !== undefined) { params.push(b.progress); sets.push(`progress=$${params.length}`); }
+    if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
+    params.push(id); params.push(scope.companyId);
+    const rows = await rawQuery<any>(
+      `UPDATE employee_development_plans SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
+      params
+    );
+    if (!rows[0]) { res.status(404).json({ error: "خطة التطوير غير موجودة" }); return; }
+    res.json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Update IDP error:"); }
+});
+
+router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await rawExecute(`DELETE FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    res.json({ message: "تم حذف خطة التطوير" });
+  } catch (err) { handleRouteError(err, res, "Delete IDP error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// END OF SERVICE GRATUITY — مكافأة نهاية الخدمة
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employeeId = Number(req.params.employeeId);
+    const { terminationType, terminationDate } = req.query as any;
+
+    const [assignment] = await rawQuery<any>(
+      `SELECT ea.salary, ea."startDate", ea."jobTitle",
+              ec."startDate" AS "contractStart", ec."endDate" AS "contractEnd",
+              e.name AS "employeeName"
+       FROM employee_assignments ea
+       JOIN employees e ON e.id=ea."employeeId"
+       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId" AND ec."companyId"=$1 AND ec.status='active'
+       WHERE ea."employeeId"=$2 AND ea."companyId"=$1 AND ea.status='active' LIMIT 1`,
+      [scope.companyId, employeeId]
+    );
+    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+
+    const startDate = new Date(assignment.contractStart || assignment.startDate);
+    const endDate = terminationDate ? new Date(terminationDate) : new Date();
+    const yearsOfService = (endDate.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
+    const monthlySalary = Number(assignment.salary) || 0;
+
+    // Saudi Labor Law calculation
+    // First 5 years: half month per year
+    // Above 5 years: one month per year
+    let gratuity = 0;
+    if (yearsOfService < 1) {
+      gratuity = 0; // Less than 1 year = no gratuity
+    } else if (yearsOfService <= 5) {
+      gratuity = (monthlySalary / 2) * Math.min(yearsOfService, 5);
+    } else {
+      gratuity = (monthlySalary / 2) * 5 + monthlySalary * (yearsOfService - 5);
+    }
+
+    // Resignation reduction factors
+    let reductionFactor = 1;
+    const type = terminationType || 'end_of_service';
+    if (type === 'resignation') {
+      if (yearsOfService >= 2 && yearsOfService < 5) reductionFactor = 1/3;
+      else if (yearsOfService >= 5 && yearsOfService < 10) reductionFactor = 2/3;
+      else if (yearsOfService >= 10) reductionFactor = 1;
+      else reductionFactor = 0; // Less than 2 years = no gratuity for resignation
+    }
+
+    const finalGratuity = Math.round(gratuity * reductionFactor * 100) / 100;
+
+    res.json({
+      employeeName: assignment.employeeName,
+      jobTitle: assignment.jobTitle,
+      monthlySalary,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      yearsOfService: Math.round(yearsOfService * 100) / 100,
+      terminationType: type,
+      gratuityBeforeReduction: Math.round(gratuity * 100) / 100,
+      reductionFactor,
+      finalGratuity,
+      breakdown: {
+        first5Years: Math.min(yearsOfService, 5) > 0 ? Math.round((monthlySalary / 2) * Math.min(yearsOfService, 5) * 100) / 100 : 0,
+        above5Years: yearsOfService > 5 ? Math.round(monthlySalary * (yearsOfService - 5) * 100) / 100 : 0,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Gratuity calculation error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TURNOVER REPORT — تقرير دوران الموظفين
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/turnover-report", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { year } = req.query as any;
+    const targetYear = year ? Number(year) : new Date().getFullYear();
+
+    const [totalActive] = await rawQuery<any>(
+      `SELECT COUNT(DISTINCT "employeeId") AS count FROM employee_assignments
+       WHERE "companyId"=$1 AND status='active'`,
+      [scope.companyId]
+    );
+
+    const terminated = await rawQuery<any>(
+      `SELECT ec."terminationType", ec."terminationDate",
+              e.name AS "employeeName", ea."departmentId", ea."branchId",
+              d.name AS "deptName", b.name AS "branchName",
+              EXTRACT(MONTH FROM ec."terminationDate") AS month
+       FROM employee_contracts ec
+       JOIN employees e ON e.id=ec."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId"=ec."employeeId" AND ea."companyId"=$1
+       LEFT JOIN departments d ON d.id=ea."departmentId"
+       LEFT JOIN branches b ON b.id=ea."branchId"
+       WHERE ec."companyId"=$1 AND ec."terminationDate" IS NOT NULL
+         AND EXTRACT(YEAR FROM ec."terminationDate")=$2`,
+      [scope.companyId, targetYear]
+    );
+
+    const totalTerminated = terminated.length;
+    const totalActiveCount = Number(totalActive?.count || 0);
+    const avgHeadcount = Math.max(1, totalActiveCount + totalTerminated);
+    const turnoverRate = Math.round((totalTerminated / avgHeadcount) * 100 * 100) / 100;
+
+    // Breakdown by reason
+    const byReason: Record<string, number> = {};
+    terminated.forEach((t: any) => {
+      const type = t.terminationType || 'unknown';
+      byReason[type] = (byReason[type] || 0) + 1;
+    });
+
+    // Breakdown by department
+    const byDept: Record<string, number> = {};
+    terminated.forEach((t: any) => {
+      const dept = t.deptName || 'غير محدد';
+      byDept[dept] = (byDept[dept] || 0) + 1;
+    });
+
+    // Breakdown by branch
+    const byBranch: Record<string, number> = {};
+    terminated.forEach((t: any) => {
+      const branch = t.branchName || 'غير محدد';
+      byBranch[branch] = (byBranch[branch] || 0) + 1;
+    });
+
+    // Monthly breakdown
+    const byMonth: Record<number, number> = {};
+    for (let i = 1; i <= 12; i++) byMonth[i] = 0;
+    terminated.forEach((t: any) => {
+      const m = Number(t.month);
+      if (m >= 1 && m <= 12) byMonth[m]++;
+    });
+
+    // Estimated cost per departure = 3 months average salary (recruitment + onboarding)
+    const [avgSalary] = await rawQuery<any>(
+      `SELECT COALESCE(AVG(salary), 0) AS avg FROM employee_assignments WHERE "companyId"=$1 AND status='active'`,
+      [scope.companyId]
+    );
+    const estimatedCostPerDeparture = Number(avgSalary?.avg || 0) * 3;
+    const totalEstimatedCost = estimatedCostPerDeparture * totalTerminated;
+
+    res.json({
+      year: targetYear,
+      totalTerminated,
+      totalActive: totalActiveCount,
+      turnoverRate,
+      byReason: Object.entries(byReason).map(([reason, count]) => ({ reason, count })),
+      byDepartment: Object.entries(byDept).map(([dept, count]) => ({ dept, count })),
+      byBranch: Object.entries(byBranch).map(([branch, count]) => ({ branch, count })),
+      byMonth: Object.entries(byMonth).map(([month, count]) => ({ month: Number(month), count })),
+      estimatedCostPerDeparture: Math.round(estimatedCostPerDeparture),
+      totalEstimatedCost: Math.round(totalEstimatedCost),
+      recentTerminations: terminated.slice(0, 20),
+    });
+  } catch (err) { handleRouteError(err, res, "Turnover report error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPIRING DOCUMENTS — وثائق على وشك الانتهاء
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/expiring-documents", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const days = Number(req.query.days || 90);
+
+    const workPermits = await rawQuery<any>(
+      `SELECT e.id AS "employeeId", e.name AS "employeeName", e."workPermitExpiry" AS "expiryDate",
+              'work_permit' AS "docType", 'تصريح العمل' AS "docLabel",
+              (e."workPermitExpiry"::date - CURRENT_DATE) AS "daysLeft"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
+       WHERE e."workPermitExpiry" IS NOT NULL
+         AND e."workPermitExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    const iqamas = await rawQuery<any>(
+      `SELECT e.id AS "employeeId", e.name AS "employeeName", e."iqamaExpiry" AS "expiryDate",
+              'iqama' AS "docType", 'الإقامة' AS "docLabel",
+              (e."iqamaExpiry"::date - CURRENT_DATE) AS "daysLeft"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
+       WHERE e."iqamaExpiry" IS NOT NULL
+         AND e."iqamaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    const passports = await rawQuery<any>(
+      `SELECT e.id AS "employeeId", e.name AS "employeeName", e."passportExpiry" AS "expiryDate",
+              'passport' AS "docType", 'جواز السفر' AS "docLabel",
+              (e."passportExpiry"::date - CURRENT_DATE) AS "daysLeft"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
+       WHERE e."passportExpiry" IS NOT NULL
+         AND e."passportExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    const contracts = await rawQuery<any>(
+      `SELECT ec."employeeId", e.name AS "employeeName", ec."endDate" AS "expiryDate",
+              'contract' AS "docType", 'العقد' AS "docLabel",
+              (ec."endDate"::date - CURRENT_DATE) AS "daysLeft"
+       FROM employee_contracts ec
+       JOIN employees e ON e.id=ec."employeeId"
+       WHERE ec."companyId"=$1 AND ec.status='active'
+         AND ec."endDate" IS NOT NULL
+         AND ec."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    const all = [...workPermits, ...iqamas, ...passports, ...contracts]
+      .sort((a: any, b: any) => Number(a.daysLeft) - Number(b.daysLeft));
+
+    res.json({ data: all, total: all.length, criticalCount: all.filter((d: any) => Number(d.daysLeft) <= 14).length });
+  } catch (err) { handleRouteError(err, res, "Expiring documents error:"); }
 });
 
 export default router;

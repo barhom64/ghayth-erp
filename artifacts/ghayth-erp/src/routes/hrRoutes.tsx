@@ -46,6 +46,12 @@ const Evaluation360Detail = lazy(() => import("@/pages/hr/evaluation-360-detail"
 const Evaluation360Peer = lazy(() => import("@/pages/hr/evaluation-360-peer"));
 const Evaluation360Upward = lazy(() => import("@/pages/hr/evaluation-360-upward"));
 const Evaluation360History = lazy(() => import("@/pages/hr/evaluation-360-history"));
+const PublicHolidays = lazy(() => import("@/pages/hr/public-holidays"));
+const Transfers = lazy(() => import("@/pages/hr/transfers"));
+const IDP = lazy(() => import("@/pages/hr/idp"));
+const Gratuity = lazy(() => import("@/pages/hr/gratuity"));
+const TurnoverReport = lazy(() => import("@/pages/hr/turnover-report"));
+const ExpiringDocuments = lazy(() => import("@/pages/hr/expiring-documents"));
 
 export const hrRoutes = [
   { path: "/hr", component: HR },
@@ -93,4 +99,10 @@ export const hrRoutes = [
   { path: "/hr/evaluation-360/:id/peer", component: Evaluation360Peer, subKey: "performance" },
   { path: "/hr/evaluation-360/:id/upward", component: Evaluation360Upward, subKey: "performance" },
   { path: "/hr/evaluation-360/history/:employeeId", component: Evaluation360History, subKey: "performance" },
+  { path: "/hr/public-holidays", component: PublicHolidays, subKey: "leaves" },
+  { path: "/hr/transfers", component: Transfers, subKey: "employees" },
+  { path: "/hr/idp", component: IDP, subKey: "performance" },
+  { path: "/hr/gratuity", component: Gratuity, subKey: "payroll" },
+  { path: "/hr/turnover-report", component: TurnoverReport, subKey: "performance" },
+  { path: "/hr/expiring-documents", component: ExpiringDocuments, subKey: "employees" },
 ];

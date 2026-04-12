@@ -1,10 +1,12 @@
-import { useApiQuery } from "@/lib/api";
+import { useState } from "react";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatCurrency, formatDateAr, formatDateShort } from "@/lib/formatters";
 import { useRoute, Link } from "wouter";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     paid: { label: "مدفوعة", cls: "bg-green-100 text-green-700 border-green-200" },
+    partial: { label: "جزئية", cls: "bg-blue-100 text-blue-700 border-blue-200" },
     pending: { label: "معلقة", cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
     overdue: { label: "متأخرة", cls: "bg-red-100 text-red-700 border-red-200" },
     cancelled: { label: "ملغية", cls: "bg-gray-100 text-gray-600 border-gray-200" },
@@ -14,10 +16,87 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`text-sm font-medium px-3 py-1 rounded-full border ${s.cls}`}>{s.label}</span>;
 }
 
+function PaymentModal({ invoice, onClose, onSuccess }: { invoice: any; onClose: () => void; onSuccess: () => void }) {
+  const remaining = Math.max(0, Number(invoice.total || 0) - Number(invoice.paidAmount || 0));
+  const [amount, setAmount] = useState(String(remaining));
+  const [method, setMethod] = useState("online");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handlePay = async () => {
+    if (!amount || Number(amount) <= 0) { setError("أدخل مبلغاً صحيحاً"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      await apiFetch(`/invoices/${invoice.id}/pay`, {
+        method: "POST",
+        body: JSON.stringify({ amount: Number(amount), method }),
+      });
+      onSuccess();
+    } catch (e: any) {
+      setError(e?.message || "حدث خطأ أثناء الدفع");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">دفع الفاتورة</h2>
+        <p className="text-sm text-gray-500 mb-5">الرقم: {invoice.ref}</p>
+
+        <div className="space-y-4">
+          <div className="bg-gray-50 rounded-lg p-3 flex justify-between text-sm">
+            <span className="text-gray-500">المتبقي</span>
+            <span className="font-bold text-red-700">{formatCurrency(remaining)}</span>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">المبلغ</label>
+            <input
+              type="number"
+              min="0"
+              max={remaining}
+              step="0.01"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">طريقة الدفع</label>
+            <select value={method} onChange={e => setMethod(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="online">دفع إلكتروني</option>
+              <option value="bank_transfer">تحويل بنكي</option>
+              <option value="cash">نقداً</option>
+            </select>
+          </div>
+          {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={handlePay}
+            disabled={loading}
+            className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? "جاري المعالجة..." : "تأكيد الدفع"}
+          </button>
+          <button onClick={onClose} className="px-4 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            إلغاء
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InvoiceDetail() {
   const [, params] = useRoute("/invoices/:id");
   const id = params?.id || "";
-  const { data: invoice, isLoading } = useApiQuery<any>(["portal-invoice", id], `/invoices/${id}`, !!id);
+  const { data: invoice, isLoading, refetch } = useApiQuery<any>(["portal-invoice", id], `/invoices/${id}`, !!id);
+  const [showPayment, setShowPayment] = useState(false);
+  const [paidSuccess, setPaidSuccess] = useState(false);
 
   if (isLoading) {
     return (
@@ -38,6 +117,8 @@ export default function InvoiceDetail() {
   }
 
   const items: any[] = (invoice.items || []).filter((i: any) => i && i.description);
+  const remaining = Math.max(0, Number(invoice.total || 0) - Number(invoice.paidAmount || 0));
+  const canPay = remaining > 0 && !['cancelled', 'draft'].includes(invoice.status);
 
   return (
     <div className="space-y-5">
@@ -53,6 +134,15 @@ export default function InvoiceDetail() {
         <span className="text-gray-400">/</span>
         <span className="text-gray-900 font-mono text-sm font-semibold">{invoice.ref}</span>
       </div>
+
+      {paidSuccess && (
+        <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm font-medium flex items-center gap-2">
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          تم تسجيل الدفعة بنجاح
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div className="flex items-start justify-between flex-wrap gap-3">
@@ -74,7 +164,7 @@ export default function InvoiceDetail() {
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">المتبقي</p>
-            <p className="font-bold text-red-700">{formatCurrency(Math.max(0, Number(invoice.total || 0) - Number(invoice.paidAmount || 0)))}</p>
+            <p className="font-bold text-red-700">{formatCurrency(remaining)}</p>
           </div>
           {invoice.dueDate && (
             <div>
@@ -131,7 +221,18 @@ export default function InvoiceDetail() {
           </div>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex items-center gap-3 justify-end flex-wrap">
+          {canPay && (
+            <button
+              onClick={() => { setShowPayment(true); setPaidSuccess(false); }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              دفع الآن
+            </button>
+          )}
           <button
             onClick={() => window.print()}
             className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
@@ -143,6 +244,18 @@ export default function InvoiceDetail() {
           </button>
         </div>
       </div>
+
+      {showPayment && (
+        <PaymentModal
+          invoice={invoice}
+          onClose={() => setShowPayment(false)}
+          onSuccess={() => {
+            setShowPayment(false);
+            setPaidSuccess(true);
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }

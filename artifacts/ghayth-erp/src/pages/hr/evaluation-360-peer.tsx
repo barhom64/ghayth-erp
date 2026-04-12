@@ -46,7 +46,7 @@ function ScoreSlider({ label, value, onChange }: { label: string; value: number;
 export default function Evaluation360PeerPage() {
   const [, params] = useRoute("/hr/evaluation-360/:id/peer");
   const [, navigate] = useLocation();
-  const cycleId = params?.id;
+  const cycleId = params?.id ?? "";
 
   const [scores, setScores] = useState<Record<string, number>>(
     Object.fromEntries(EVAL_CRITERIA.map((c) => [c.key, 70]))
