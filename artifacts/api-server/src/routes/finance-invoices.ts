@@ -1320,6 +1320,261 @@ invoicesRouter.get("/customer-advances", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DUNNING WORKFLOW — مسار متابعة تحصيل الذمم المتأخرة
+// ─────────────────────────────────────────────────────────────────────────────
+// Stages (configurable thresholds):
+//   1. Friendly reminder     (1-14 days past due)
+//   2. First notice          (15-30 days)
+//   3. Second notice         (31-60 days)
+//   4. Final notice          (61-90 days)
+//   5. Collection / legal    (90+ days)
+// Each invoice tracks last sent stage + last sent date. Bulk-run endpoint
+// computes eligible invoices and produces the letters to send.
+
+async function ensureDunningTables() {
+  await rawExecute(`
+    CREATE TABLE IF NOT EXISTS dunning_letters (
+      id SERIAL PRIMARY KEY,
+      "companyId" INTEGER NOT NULL,
+      "invoiceId" INTEGER NOT NULL,
+      "clientId" INTEGER,
+      stage INTEGER NOT NULL,
+      "daysPastDue" INTEGER NOT NULL,
+      "outstandingAmount" NUMERIC(18,2) NOT NULL,
+      "letterContent" TEXT,
+      "sentAt" TIMESTAMP DEFAULT NOW(),
+      "sentBy" INTEGER,
+      "sentVia" VARCHAR(16) DEFAULT 'manual',
+      status VARCHAR(16) DEFAULT 'sent'
+    )
+  `);
+  await rawExecute(`
+    CREATE INDEX IF NOT EXISTS idx_dunning_letters_invoice
+      ON dunning_letters ("invoiceId")
+  `);
+  await rawExecute(`
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningStage" INTEGER DEFAULT 0
+  `);
+  await rawExecute(`
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningAt" TIMESTAMP
+  `);
+}
+
+function stageFromDaysPastDue(days: number): { stage: number; title: string; tone: string } | null {
+  if (days < 1) return null;
+  if (days <= 14) return { stage: 1, title: "تذكير ودي بالسداد", tone: "friendly" };
+  if (days <= 30) return { stage: 2, title: "إشعار أول بالتأخر في السداد", tone: "formal" };
+  if (days <= 60) return { stage: 3, title: "إشعار ثانٍ — يرجى المبادرة بالسداد", tone: "firm" };
+  if (days <= 90) return { stage: 4, title: "إشعار نهائي قبل إجراءات التحصيل", tone: "final" };
+  return { stage: 5, title: "إحالة للتحصيل / الإجراءات القانونية", tone: "legal" };
+}
+
+function composeDunningLetter(opts: {
+  clientName: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  daysPastDue: number;
+  outstanding: number;
+  stageTitle: string;
+  tone: string;
+}): string {
+  const base = `السيد/ة ${opts.clientName} المحترم/ة،
+
+${opts.stageTitle}
+
+نحيطكم علماً بأن الفاتورة رقم ${opts.invoiceNumber} المؤرخة في ${opts.invoiceDate} قد استحقت بتاريخ ${opts.dueDate}، وقد تجاوزت تاريخ الاستحقاق بعدد ${opts.daysPastDue} يوم.
+
+المبلغ المستحق: ${opts.outstanding.toFixed(2)} ر.س`;
+
+  const footers: Record<string, string> = {
+    friendly: `\n\nربما تكون قد سددت المبلغ بالفعل، وفي هذه الحالة نرجو إهمال هذا التذكير. وإن لم يكن، نرجو المبادرة بالسداد في أقرب وقت ممكن.\n\nشكراً لتعاونكم المستمر.`,
+    formal: `\n\nيرجى العلم أن المبلغ أصبح متأخراً ونطلب منكم المبادرة بالسداد خلال 7 أيام من تاريخ هذا الإشعار.`,
+    firm: `\n\nرغم إشعارنا السابق، لم نستلم السداد حتى الآن. نرجو منكم جدياً تسوية المبلغ خلال 5 أيام، وإلا سنضطر لاتخاذ إجراءات إضافية.`,
+    final: `\n\nهذا إشعار نهائي. إذا لم يتم السداد خلال 3 أيام من تاريخ هذا الإشعار، سنقوم بإحالة الملف لإجراءات التحصيل القانوني، وقد يتم تسجيل المبلغ كذمم معدومة مع تحمل الطرف المدين كافة الرسوم القانونية.`,
+    legal: `\n\nنظراً لعدم استجابتكم للإشعارات السابقة، تم إحالة الملف للإدارة القانونية للمباشرة بإجراءات التحصيل الرسمية. للتواصل العاجل يرجى الرد خلال 24 ساعة.`,
+  };
+  return base + (footers[opts.tone] ?? "");
+}
+
+// Preview eligible invoices for dunning
+invoicesRouter.get("/dunning/preview", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await ensureDunningTables();
+    const minDays = Number(req.query.minDaysPastDue ?? 1);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const rows = await rawQuery<any>(
+      `SELECT i.id, i."invoiceNumber", i."invoiceDate", i."dueDate",
+              i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
+              i."clientId", i."lastDunningStage", i."lastDunningAt",
+              c.name AS "clientName", c.email AS "clientEmail", c.phone AS "clientPhone",
+              GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
+       FROM invoices i
+       LEFT JOIN clients c ON c.id = i."clientId"
+       WHERE i."companyId"=$2
+         AND i.status NOT IN ('paid','cancelled')
+         AND COALESCE(i."deletedAt",NULL) IS NULL
+         AND i."dueDate" IS NOT NULL
+         AND i."dueDate"::date < $1::date
+         AND ($1::date - i."dueDate"::date) >= $3
+         AND (i.total - COALESCE(i."paidAmount",0)) > 0
+       ORDER BY i."dueDate" ASC
+       LIMIT 500`,
+      [today, scope.companyId, minDays]
+    );
+
+    const eligible: any[] = [];
+    for (const r of rows) {
+      const days = Number(r.daysPastDue);
+      const stg = stageFromDaysPastDue(days);
+      if (!stg) continue;
+      // Skip if same stage already sent today
+      const lastStage = Number(r.lastDunningStage ?? 0);
+      if (lastStage >= stg.stage && r.lastDunningAt) {
+        const lastAt = new Date(r.lastDunningAt);
+        const hoursSince = (Date.now() - lastAt.getTime()) / 36e5;
+        if (hoursSince < 24) continue;
+      }
+      const outstanding = Math.round((Number(r.total) - Number(r.paidAmount)) * 100) / 100;
+      eligible.push({
+        invoiceId: r.id,
+        invoiceNumber: r.invoiceNumber,
+        invoiceDate: r.invoiceDate,
+        dueDate: r.dueDate,
+        daysPastDue: days,
+        clientId: r.clientId,
+        clientName: r.clientName,
+        clientEmail: r.clientEmail,
+        clientPhone: r.clientPhone,
+        outstanding,
+        proposedStage: stg.stage,
+        stageTitle: stg.title,
+        tone: stg.tone,
+        lastSentStage: lastStage,
+        lastSentAt: r.lastDunningAt,
+      });
+    }
+
+    res.json({
+      asOf: today,
+      total: eligible.length,
+      byStage: {
+        1: eligible.filter(e => e.proposedStage === 1).length,
+        2: eligible.filter(e => e.proposedStage === 2).length,
+        3: eligible.filter(e => e.proposedStage === 3).length,
+        4: eligible.filter(e => e.proposedStage === 4).length,
+        5: eligible.filter(e => e.proposedStage === 5).length,
+      },
+      totalOutstanding: Math.round(eligible.reduce((s, e) => s + e.outstanding, 0) * 100) / 100,
+      invoices: eligible,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Dunning preview error:");
+  }
+});
+
+// Send dunning letters (record them)
+invoicesRouter.post("/dunning/send", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await ensureDunningTables();
+    const { invoiceIds, sentVia = "manual" } = req.body as any;
+    if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+      res.status(400).json({ error: "invoiceIds مطلوبة (قائمة معرفات الفواتير)" });
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const results: any[] = [];
+
+    for (const invId of invoiceIds) {
+      const [inv] = await rawQuery<any>(
+        `SELECT i.id, i."invoiceNumber", i."invoiceDate", i."dueDate",
+                i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
+                c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id = i."clientId"
+         WHERE i.id=$1 AND i."companyId"=$2
+           AND i.status NOT IN ('paid','cancelled')`,
+        [Number(invId), scope.companyId]
+      );
+      if (!inv) { results.push({ invoiceId: invId, status: "skipped", reason: "not_found_or_paid" }); continue; }
+
+      const days = Math.max(
+        0,
+        Math.floor((new Date(today).getTime() - new Date(inv.dueDate).getTime()) / 86400000)
+      );
+      const stg = stageFromDaysPastDue(days);
+      if (!stg) { results.push({ invoiceId: invId, status: "skipped", reason: "not_past_due" }); continue; }
+
+      const outstanding = Math.round((Number(inv.total) - Number(inv.paidAmount)) * 100) / 100;
+      if (outstanding <= 0) { results.push({ invoiceId: invId, status: "skipped", reason: "fully_paid" }); continue; }
+
+      const letter = composeDunningLetter({
+        clientName: inv.clientName ?? "العميل",
+        invoiceNumber: inv.invoiceNumber,
+        invoiceDate: String(inv.invoiceDate).slice(0, 10),
+        dueDate: String(inv.dueDate).slice(0, 10),
+        daysPastDue: days,
+        outstanding,
+        stageTitle: stg.title,
+        tone: stg.tone,
+      });
+
+      const [row] = await rawQuery<any>(
+        `INSERT INTO dunning_letters
+         ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","letterContent","sentBy","sentVia")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, inv.id, inv.clientId, stg.stage, days, outstanding, letter, scope.activeAssignmentId, sentVia]
+      );
+      await rawExecute(
+        `UPDATE invoices SET "lastDunningStage"=$1, "lastDunningAt"=NOW() WHERE id=$2`,
+        [stg.stage, inv.id]
+      );
+      results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
+    }
+
+    res.status(201).json({
+      total: results.length,
+      sent: results.filter(r => r.status === "sent").length,
+      skipped: results.filter(r => r.status === "skipped").length,
+      results,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Dunning send error:");
+  }
+});
+
+// History of dunning letters
+invoicesRouter.get("/dunning/history", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await ensureDunningTables();
+    const { invoiceId, clientId, stage } = req.query as any;
+    const params: any[] = [scope.companyId];
+    let where = `dl."companyId"=$1`;
+    if (invoiceId) { params.push(Number(invoiceId)); where += ` AND dl."invoiceId"=$${params.length}`; }
+    if (clientId) { params.push(Number(clientId)); where += ` AND dl."clientId"=$${params.length}`; }
+    if (stage) { params.push(Number(stage)); where += ` AND dl.stage=$${params.length}`; }
+
+    const rows = await rawQuery<any>(
+      `SELECT dl.*, i."invoiceNumber", c.name AS "clientName"
+       FROM dunning_letters dl
+       LEFT JOIN invoices i ON i.id = dl."invoiceId"
+       LEFT JOIN clients c ON c.id = dl."clientId"
+       WHERE ${where}
+       ORDER BY dl."sentAt" DESC LIMIT 500`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    handleRouteError(err, res, "Dunning history error:");
+  }
+});
+
 invoicesRouter.get("/tax/declarations", async (req, res) => {
   try {
     const scope = req.scope!;
