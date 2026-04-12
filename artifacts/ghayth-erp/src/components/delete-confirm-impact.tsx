@@ -31,6 +31,9 @@ export function DeleteConfirmImpact({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setImpacts([]);
     apiFetch<{ impacts: ImpactItem[] }>("/impact-preview", {
       method: "POST",
       body: JSON.stringify({
@@ -40,12 +43,18 @@ export function DeleteConfirmImpact({
       }),
     })
       .then((resp) => {
+        if (cancelled) return;
         if (resp.impacts && Array.isArray(resp.impacts)) {
           setImpacts(resp.impacts);
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [entityType, entityId]);
 
   const hasImpact = impacts.length > 0;

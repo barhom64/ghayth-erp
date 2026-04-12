@@ -30,14 +30,18 @@ export function ImpactCard({ entityType, entityId, action }: ImpactCardProps) {
   const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     apiFetch<{ impacts: ImpactItem[] }>("/impact-preview", {
       method: "POST",
       body: JSON.stringify({ entityType, entityId, action }),
     })
-      .then((res) => setImpacts(res.impacts))
-      .catch(() => setImpacts(null))
-      .finally(() => setLoading(false));
+      .then((res) => { if (!cancelled) setImpacts(res.impacts); })
+      .catch(() => { if (!cancelled) setImpacts(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => {
+      cancelled = true;
+    };
   }, [entityType, entityId, action]);
 
   if (loading) {

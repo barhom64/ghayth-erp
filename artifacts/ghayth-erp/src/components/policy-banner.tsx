@@ -73,7 +73,7 @@ export function PolicyBanner({ currentPath }: { currentPath: string }) {
         setPolicies(list);
       })
       .catch(() => setPolicies([]));
-  }, [module, currentPath]);
+  }, [module]);
 
   if (!module || policies.length === 0 || dismissed) return null;
 
