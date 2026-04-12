@@ -591,8 +591,17 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", async (req, res) => {
   }
 });
 
-/** Calculate depreciation for an asset for a given period, capped by remaining depreciable amount */
-function calcDepreciationAmount(asset: any, _period: string): number {
+/**
+ * Calculate monthly depreciation for an asset, capped at remaining
+ * depreciable amount. Supports:
+ *   * straight_line           — (cost - salvage) / lifeMonths
+ *   * declining_balance       — 200% DB on current book value
+ *   * declining_balance_150   — 150% DB
+ *   * sum_of_years_digits     — SYD weighted each year, split by month
+ *   * units_of_production     — pass unitsThisPeriod + totalLifetimeUnits
+ * Falls back to straight-line for unknown methods.
+ */
+function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisPeriod?: number }): number {
   const purchaseCost = Number(asset.purchaseCost);
   const salvageValue = Number(asset.salvageValue);
   const usefulLife = Number(asset.usefulLifeYears);
@@ -602,12 +611,32 @@ function calcDepreciationAmount(asset: any, _period: string): number {
   if (remainingDepreciable <= 0) return 0;
   if (!usefulLife || usefulLife <= 0) return 0;
 
+  const method = asset.depreciationMethod || "straight_line";
+  const depreciable = purchaseCost - salvageValue;
   let monthlyAmount: number;
-  if (asset.depreciationMethod === "declining_balance") {
+
+  if (method === "declining_balance" || method === "declining_balance_200") {
     const annualRate = 2 / usefulLife;
     monthlyAmount = Math.round(currentBookValue * (annualRate / 12) * 100) / 100;
+  } else if (method === "declining_balance_150") {
+    const annualRate = 1.5 / usefulLife;
+    monthlyAmount = Math.round(currentBookValue * (annualRate / 12) * 100) / 100;
+  } else if (method === "sum_of_years_digits") {
+    // SYD: weight of year n = (life - n + 1) / (life*(life+1)/2)
+    // We need to know which year of the asset's life we're in.
+    const monthsElapsed = Math.max(0,
+      Math.round((Number(asset.accumulatedDepreciation) / depreciable) * (usefulLife * 12))
+    );
+    const yearIndex = Math.min(usefulLife - 1, Math.floor(monthsElapsed / 12));
+    const weight = (usefulLife - yearIndex) / ((usefulLife * (usefulLife + 1)) / 2);
+    const yearAmount = depreciable * weight;
+    monthlyAmount = Math.round((yearAmount / 12) * 100) / 100;
+  } else if (method === "units_of_production") {
+    const total = Number(asset.totalLifetimeUnits || 0);
+    const units = Number(opts?.unitsThisPeriod || 0);
+    if (total <= 0 || units <= 0) return 0;
+    monthlyAmount = Math.round(((depreciable * units) / total) * 100) / 100;
   } else {
-    const depreciable = purchaseCost - salvageValue;
     monthlyAmount = Math.round((depreciable / (usefulLife * 12)) * 100) / 100;
   }
 
@@ -636,6 +665,20 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", async (req, res) => {
     let bookValue = purchaseCost;
     let accumulated = 0;
 
+    const method = asset.depreciationMethod || "straight_line";
+    const sydDenom = (usefulLifeYears * (usefulLifeYears + 1)) / 2;
+
+    if (method === "units_of_production") {
+      res.json({
+        assetId: asset.id,
+        assetName: asset.name,
+        schedule: [],
+        totalDepreciable: depreciable,
+        note: "طريقة وحدات الإنتاج لا يمكن جدولتها مسبقاً — يتم تسجيلها شهرياً حسب الوحدات المنتجة فعلياً",
+      });
+      return;
+    }
+
     const purchaseDate = new Date(asset.purchaseDate);
     for (let m = 0; m < usefulLifeMonths; m++) {
       const d = new Date(purchaseDate);
@@ -643,9 +686,17 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", async (req, res) => {
       const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
       let monthlyDep: number;
-      if (asset.depreciationMethod === "declining_balance") {
-        const annualRate = 2 / Number(asset.usefulLifeYears);
+      if (method === "declining_balance" || method === "declining_balance_200") {
+        const annualRate = 2 / usefulLifeYears;
         monthlyDep = Math.max(0, Math.round(bookValue * (annualRate / 12) * 100) / 100);
+      } else if (method === "declining_balance_150") {
+        const annualRate = 1.5 / usefulLifeYears;
+        monthlyDep = Math.max(0, Math.round(bookValue * (annualRate / 12) * 100) / 100);
+      } else if (method === "sum_of_years_digits") {
+        const yearIndex = Math.min(usefulLifeYears - 1, Math.floor(m / 12));
+        const weight = (usefulLifeYears - yearIndex) / sydDenom;
+        const yearAmount = depreciable * weight;
+        monthlyDep = Math.round((yearAmount / 12) * 100) / 100;
       } else {
         monthlyDep = Math.round((depreciable / usefulLifeMonths) * 100) / 100;
       }
@@ -661,7 +712,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", async (req, res) => {
       scheduleRows.push({ period, depreciationAmount: monthlyDep, accumulatedDepreciation: accumulated, bookValue: Math.max(bookValue, salvageValue) });
     }
 
-    res.json({ assetId: asset.id, assetName: asset.name, schedule: scheduleRows, totalDepreciable: depreciable });
+    res.json({ assetId: asset.id, assetName: asset.name, method, schedule: scheduleRows, totalDepreciable: depreciable });
   } catch (err) {
     handleRouteError(err, res, "Depreciation schedule error:");
   }
@@ -672,7 +723,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) =>
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
     const id = Number(req.params.id);
-    const { period } = req.body as any;
+    const { period, unitsThisPeriod } = req.body as any;
     const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
 
     const [asset] = await rawQuery<any>(
@@ -690,7 +741,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) =>
       return;
     }
 
-    const depAmount = calcDepreciationAmount(asset, targetPeriod);
+    const depAmount = calcDepreciationAmount(asset, targetPeriod, { unitsThisPeriod: Number(unitsThisPeriod) || 0 });
     if (depAmount <= 0) {
       res.status(400).json({ error: "لا يوجد إهلاك متبقي لهذا الأصل" });
       return;
