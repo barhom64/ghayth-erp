@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ const OPP_STAGE_OPTIONS = [
 ];
 
 function OpportunitiesTab() {
+  const [, navigate] = useLocation();
   const { roleLevel, scopeQueryString } = useAppContext();
   const canManage = roleLevel >= 50;
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
@@ -173,6 +174,7 @@ function OpportunitiesTab() {
             page={page}
             total={total}
             onPageChange={setPage}
+            onRowClick={(o) => navigate(`/crm/leads/${o.id}`)}
             renderRowExtras={(o) => {
               if (editingId === o.id) {
                 return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(o.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;

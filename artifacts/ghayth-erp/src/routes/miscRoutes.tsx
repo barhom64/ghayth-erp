@@ -7,6 +7,7 @@ const ClientsCreate = lazy(() => import("@/pages/create/clients-create"));
 const CRM = lazy(() => import("@/pages/crm"));
 const CrmCreate = lazy(() => import("@/pages/create/crm-create"));
 const CrmActivities = lazy(() => import("@/pages/crm/activities"));
+const LeadDetail = lazy(() => import("@/pages/crm/lead-detail"));
 const Projects = lazy(() => import("@/pages/projects"));
 const ProjectsCreate = lazy(() => import("@/pages/create/projects-create"));
 const ProjectDetail = lazy(() => import("@/pages/details/project-detail"));
@@ -67,6 +68,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/crm/create", component: CrmCreate, module: "crm" },
   { path: "/crm/pipeline", component: CRM, module: "crm" },
   { path: "/crm/activities", component: CrmActivities, module: "crm" },
+  { path: "/crm/leads/:id", component: LeadDetail, module: "crm" },
   { path: "/crm/:id", component: OpportunityDetail, module: "crm" },
   { path: "/projects", component: Projects, module: "operations" },
   { path: "/projects/create", component: ProjectsCreate, module: "operations" },

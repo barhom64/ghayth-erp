@@ -6,6 +6,7 @@ const Drivers = lazy(() => import("@/pages/fleet/drivers"));
 const DriversCreate = lazy(() => import("@/pages/create/fleet/drivers-create"));
 const Trips = lazy(() => import("@/pages/fleet/trips"));
 const TripsCreate = lazy(() => import("@/pages/create/fleet/trips-create"));
+const TripDetail = lazy(() => import("@/pages/fleet/trip-detail"));
 const FleetMaintenance = lazy(() => import("@/pages/fleet/maintenance"));
 const MaintenanceCreate = lazy(() => import("@/pages/create/fleet/maintenance-create"));
 const Fuel = lazy(() => import("@/pages/fleet/fuel"));
@@ -28,6 +29,7 @@ export const fleetRoutes = [
   { path: "/fleet/drivers/create", component: DriversCreate },
   { path: "/fleet/trips", component: Trips },
   { path: "/fleet/trips/create", component: TripsCreate },
+  { path: "/fleet/trips/:id", component: TripDetail },
   { path: "/fleet/maintenance", component: FleetMaintenance },
   { path: "/fleet/maintenance/create", component: MaintenanceCreate },
   { path: "/fleet/fuel", component: Fuel },

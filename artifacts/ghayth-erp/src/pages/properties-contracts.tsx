@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useSearch } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -231,6 +231,7 @@ function ContractDetailPanel({ contract }: { contract: any }) {
 }
 
 export default function PropertiesContracts() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data: contractsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -343,7 +344,7 @@ export default function PropertiesContracts() {
             emptyMessage="لا توجد عقود"
             emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
             noToolbar
-            onRowClick={(c) => setExpandedId(expandedId === c.id ? null : c.id)}
+            onRowClick={(c) => navigate(`/properties/contracts/${c.id}`)}
             rowClassName={(c) => expandedId === c.id ? "bg-blue-50/40" : undefined}
             renderRowExtras={(c) =>
               expandedId === c.id ? (

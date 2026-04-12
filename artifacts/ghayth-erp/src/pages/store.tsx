@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 
 function ProductsTab() {
+  const [, navigate] = useLocation();
   const { data: productsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["store-products"], "/store/products"
   );
@@ -119,6 +120,7 @@ function ProductsTab() {
             emptyIcon={<Package className="h-6 w-6 text-slate-400" />}
             noToolbar
             pageSize={pageSize}
+            onRowClick={(p) => navigate(`/store/products/${p.id}`)}
             renderRowExtras={(p) => {
               if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="store_product" entityId={p.id} />;

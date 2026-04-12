@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ const stageMap: Record<string, { label: string; color: string }> = {
 };
 
 export default function RecruitmentPage() {
+  const [, navigate] = useLocation();
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
@@ -206,6 +207,7 @@ export default function RecruitmentPage() {
             noToolbar
             emptyMessage="لا توجد وظائف"
             pageSize={20}
+            onRowClick={(j) => navigate(`/hr/recruitment/jobs/${j.id}`)}
             renderRowExtras={(j) => {
               if (jobActions.editingId === j.id) {
                 return (

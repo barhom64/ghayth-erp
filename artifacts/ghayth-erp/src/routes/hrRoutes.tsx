@@ -17,6 +17,7 @@ const TrainingCreate = lazy(() => import("@/pages/create/hr/training-create"));
 const Organization = lazy(() => import("@/pages/hr/organization"));
 const Recruitment = lazy(() => import("@/pages/hr/recruitment"));
 const RecruitmentCreate = lazy(() => import("@/pages/create/hr/recruitment-create"));
+const JobDetail = lazy(() => import("@/pages/hr/job-detail"));
 const ApplicantsCreate = lazy(() => import("@/pages/create/hr/applicants-create"));
 const Violations = lazy(() => import("@/pages/hr/violations"));
 const ViolationsCreate = lazy(() => import("@/pages/create/hr/violations-create"));
@@ -83,6 +84,7 @@ export const hrRoutes = [
   { path: "/hr/recruitment/applicants/create", component: ApplicantsCreate, subKey: "recruitment" },
   { path: "/hr/recruitment/applications", component: ApplicationList, subKey: "recruitment" },
   { path: "/hr/recruitment/advanced", component: RecruitmentAdvanced, subKey: "recruitment" },
+  { path: "/hr/recruitment/jobs/:id", component: JobDetail, subKey: "recruitment" },
   { path: "/hr/violations", component: Violations, subKey: "violations" },
   { path: "/hr/violations/create", component: ViolationsCreate, subKey: "violations" },
   { path: "/hr/violations/management", component: ViolationsManagement, subKey: "violations" },

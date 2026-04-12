@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -7,6 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 export default function TripsPage() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["trips"], "/fleet/trips");
   const items: any[] = data?.data || [];
   const [filters, setFilters] = useFilters();
@@ -62,6 +63,7 @@ export default function TripsPage() {
         onRetry={() => refetch()}
         emptyMessage="لا توجد رحلات"
         noToolbar
+        onRowClick={(t) => navigate(`/fleet/trips/${t.id}`)}
       />
     </div>
   );
