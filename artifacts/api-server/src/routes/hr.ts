@@ -17,6 +17,7 @@ import {
   checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import {
   computeLeaveImpact,
   computeTerminationImpact,
@@ -1286,6 +1287,28 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.approved",
       entity: "hr_leave_requests", entityId: Number(id),
       details: JSON.stringify({ affectedAssignments: allAssignments.length }) }).catch(console.error);
+
+    // Register return-to-work obligation (fires the day after the leave ends)
+    try {
+      const returnDate = new Date(leaveEnd);
+      returnDate.setDate(returnDate.getDate() + 1);
+      await registerObligation({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        entityType: "hr_leave_request",
+        entityId: Number(id),
+        obligationType: "follow_up",
+        title: `عودة للعمل — ${request.employeeName || `موظف #${request.employeeId}`} (${request.leaveTypeName || ""})`,
+        dueAt: returnDate.toISOString(),
+        assignedTo: request.employeeAssignmentId ?? null,
+        metadata: { employeeId: request.employeeId, leaveStart: request.startDate, leaveEnd: request.endDate, days: request.days },
+        dedupeKey: `leave-${id}-return`,
+        escalationSteps: [
+          { hoursAfterDue: 8, notifyRole: "hr_manager" },
+          { hoursAfterDue: 24, notifyRole: "general_manager" },
+        ],
+      });
+    } catch (obErr) { console.error("Return-to-work obligation failed:", obErr); }
 
     res.json({ message: "تمت الموافقة النهائية", status: "approved", affectedAssignments: allAssignments.length });
   } catch (err) {
@@ -2563,6 +2586,85 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     if (!row) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+/**
+ * Cancel an approved leave request — restores balance, cancels obligations.
+ * Use when leave is no longer needed (e.g. employee returned early, emergency).
+ */
+router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body || {};
+    if (!b.reason) {
+      validationError(res, "سبب الإلغاء مطلوب", "reason", "أدخل سبب إلغاء الإجازة");
+      return;
+    }
+    const [request] = await rawQuery<any>(
+      `SELECT lr.*, lt.name AS "leaveTypeName"
+       FROM hr_leave_requests lr
+       LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+       WHERE lr.id = $1 AND lr."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!request) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
+    const isOwn = request.employeeId === scope.employeeId;
+    if (!isOwn && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: إلغاء الإجازة مقصور على صاحب الطلب أو HR أو المالك" });
+      return;
+    }
+    if (!["approved", "pending"].includes(request.status)) {
+      validationError(res, `لا يمكن إلغاء إجازة بحالة ${request.status}`, "status", "الإجازة مُلغاة أو مرفوضة مسبقاً");
+      return;
+    }
+
+    // Restore balance if was approved (used → 0, or reduce used by days)
+    if (request.status === "approved") {
+      const year = new Date(request.startDate).getFullYear();
+      await rawExecute(
+        `UPDATE hr_leave_balances
+           SET used = GREATEST(used - $1, 0)
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+      );
+      // Clear attendance 'on_leave' records for future dates
+      await rawExecute(
+        `DELETE FROM attendance
+         WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
+           AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
+        [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
+      ).catch(() => {});
+    } else if (request.status === "pending") {
+      // Release reserved balance
+      const year = new Date(request.startDate).getFullYear();
+      await rawExecute(
+        `UPDATE hr_leave_balances
+           SET reserved = GREATEST(reserved - $1, 0)
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+      );
+    }
+
+    await rawExecute(
+      `UPDATE hr_leave_requests SET status = 'cancelled', notes = COALESCE(notes,'') || ' | إلغاء: ' || $1 WHERE id = $2`,
+      [b.reason, id]
+    );
+
+    // Cancel return-to-work obligation
+    await cancelObligation(scope.companyId, "hr_leave_request", id);
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "leave.cancelled",
+      entity: "hr_leave_requests",
+      entityId: id,
+      details: `إلغاء إجازة #${id}: ${b.reason}`,
+    }).catch(console.error);
+
+    res.json({ message: "تم إلغاء الإجازة", status: "cancelled", reason: b.reason });
+  } catch (err) { handleRouteError(err, res, "Cancel leave error:"); }
 });
 
 router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req, res) => {
