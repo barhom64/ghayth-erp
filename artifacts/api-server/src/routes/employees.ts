@@ -720,6 +720,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
+    const { reason } = (req.body || {}) as { reason?: string };
     const [employee] = await rawQuery<any>(
       `SELECT e.id, ea.id AS "assignmentId" FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
@@ -731,7 +732,8 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
     await rawExecute(`UPDATE employees SET status = 'terminated' WHERE id = $1`, [Number(id)]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "delete", entity: "employees", entityId: Number(id), after: {},
+      action: "delete", entity: "employees", entityId: Number(id),
+      after: { reason: reason || null },
     }).catch(console.error);
     res.json({ message: "تم إنهاء خدمة الموظف بنجاح" });
   } catch (err) {
