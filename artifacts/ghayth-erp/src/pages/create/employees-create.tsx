@@ -195,6 +195,8 @@ export default function EmployeesCreate() {
               companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
               managerId: "",
               iqamaNumber: "", passportNumber: "", iqamaExpiry: "", passportExpiry: "",
+              borderNumber: "", visaNumber: "", visaType: "", visaExpiry: "",
+              sponsorNumber: "", workPermitNumber: "", workPermitExpiry: "", iqamaStatus: "active",
               bankName: "", bankAccount: "", iban: "",
               emergencyContact: "", emergencyPhone: "",
             });

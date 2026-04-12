@@ -33,7 +33,7 @@ export default function PublicHolidaysPage() {
   const [form, setForm] = useState({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false });
   const qc = useQueryClient();
 
-  const { data, isLoading, refetch } = useApiQuery<any>(["public-holidays", year], `/hr/public-holidays?year=${year}`);
+  const { data, isLoading, refetch } = useApiQuery<any>(["public-holidays", String(year)], `/hr/public-holidays?year=${year}`);
   const holidays = asList(data?.data || data);
 
   const handleSave = async () => {

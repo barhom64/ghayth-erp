@@ -33,8 +33,8 @@ export default function BankReconciliationPage() {
   const batches = batchesList?.data || [];
 
   const { data: batchDetail, refetch: refetchDetail } = useApiQuery<any>(
-    ["bank-batch", activeBatch],
-    activeBatch ? `/finance/bank-reconciliation/${activeBatch}` : null,
+    ["bank-batch", activeBatch ?? ""],
+    activeBatch ? `/finance/bank-reconciliation/${activeBatch}` : "",
     { enabled: !!activeBatch }
   );
 

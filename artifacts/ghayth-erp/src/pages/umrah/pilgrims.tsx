@@ -20,15 +20,15 @@ export default function UmrahPilgrims() {
     ["umrah-pilgrims", filters.search, filters.status, String(page)],
     `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&page=${page}&limit=${pageSize}`
   );
-  const rawItems = resp?.data || [];
-  const total = resp?.total || 0;
+  const rawItems: any[] = resp?.data ?? [];
+  const total = resp?.total ?? 0;
   const { sortedData: items, sortState, handleSort } = useSortedData(rawItems);
 
   const kpiCards = [
     { label: "إجمالي المعتمرين", value: total, icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "داخل المملكة", value: items.filter((p: any) => ["arrived", "active"].includes(p.status)).length, icon: Plane, color: "text-green-600 bg-green-50" },
-    { label: "متأخرين", value: items.filter((p: any) => p.status === "overstayed").length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-    { label: "بدون وكيل", value: items.filter((p: any) => !p.agentId).length, icon: UserPlus, color: "text-orange-600 bg-orange-50" },
+    { label: "داخل المملكة", value: (items ?? []).filter((p: any) => ["arrived", "active"].includes(p.status)).length, icon: Plane, color: "text-green-600 bg-green-50" },
+    { label: "متأخرين", value: (items ?? []).filter((p: any) => p.status === "overstayed").length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "بدون وكيل", value: (items ?? []).filter((p: any) => !p.agentId).length, icon: UserPlus, color: "text-orange-600 bg-orange-50" },
   ];
 
   return (
@@ -74,7 +74,7 @@ export default function UmrahPilgrims() {
         }}
         values={filters}
         onChange={(v) => { setFilters(v); setPage(1); }}
-        onExportCSV={() => exportToCSV(items, [
+        onExportCSV={() => exportToCSV(items ?? [], [
           { key: "fullName", label: "الاسم" },
           { key: "passportNumber", label: "الجواز" },
           { key: "nationality", label: "الجنسية" },
@@ -105,7 +105,7 @@ export default function UmrahPilgrims() {
             emptyMessage="لا يوجد معتمرين"
             emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
           >
-            {items.map((p: any) => (
+            {(items ?? []).map((p: any) => (
               <TableRow key={p.id}>
                 <TableCell className="font-medium">
                   <Link href={`/umrah/pilgrims/${p.id}`} className="text-primary hover:underline">{p.fullName}</Link>

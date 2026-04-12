@@ -3225,7 +3225,7 @@ router.get("/evaluation-cycles", requirePermission("hr:read"), async (req, res) 
 });
 
 // POST /hr/evaluation-cycles — start a new evaluation cycle (HR only)
-router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, res) => {
+router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     if (!isHR(scope)) return res.status(403).json({ error: "مسموح فقط لـ HR بإنشاء دورات التقييم" });
@@ -3286,7 +3286,7 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
 });
 
 // GET /hr/evaluation-cycles/:id — get cycle details (access-controlled)
-router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3384,7 +3384,7 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
 });
 
 // GET /hr/evaluation-cycles/:id/system-report — get auto-generated report
-router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"), async (req, res) => {
+router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3453,7 +3453,7 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
 
 // POST /hr/evaluation-cycles/:id/peer-evaluation — submit manager/peer review
 // Evaluator identity is derived from the authenticated session (scope.employeeId), NOT the request body
-router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:create"), async (req, res) => {
+router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3526,7 +3526,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
 });
 
 // POST /hr/evaluation-cycles/:id/upward-review — anonymous upward review (employee rates manager)
-router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create"), async (req, res) => {
+router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3604,7 +3604,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
 });
 
 // GET /hr/evaluation-cycles/:id/summary — get 360 summary
-router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async (req, res) => {
+router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = Number(req.params.id);
@@ -3680,7 +3680,7 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
 });
 
 // GET /hr/employees/:id/evaluation-history — performance trend over time
-router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), async (req, res) => {
+router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const employeeId = Number(req.params.id);
@@ -3736,7 +3736,7 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
 });
 
 // GET /hr/upward-reviews/manager/:managerId — aggregated upward reviews for a manager (HR only)
-router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), async (req, res) => {
+router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const managerId = Number(req.params.managerId);

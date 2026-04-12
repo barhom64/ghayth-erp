@@ -15,7 +15,7 @@ export default function RequestsItemCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("requests_item_create", {
     title: "", typeId: "", priority: "medium", requester: "", description: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, string>>("/requests", "POST", [["requests"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/requests", "POST", [["requests"]]);
   const { data: typesRes } = useApiQuery<{ data: any[] }>(["request-types"], "/requests/types");
   const types = typesRes?.data || [];
 

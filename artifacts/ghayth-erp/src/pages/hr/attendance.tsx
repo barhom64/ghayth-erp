@@ -97,7 +97,7 @@ export default function AttendancePage() {
   const items = asList(data);
 
   const filtersForApply = filters.status === "late"
-    ? { ...filters, status: undefined }
+    ? { ...filters, status: "" }
     : filters;
   const filtered = applyFilters(items, filtersForApply, {
     searchFields: ["employeeName"],

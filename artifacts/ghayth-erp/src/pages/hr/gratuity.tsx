@@ -17,7 +17,7 @@ const TERMINATION_TYPES: Record<string, string> = {
 
 export default function GratuityPage() {
   const [form, setForm] = useState({ employeeId: "", terminationType: "end_of_service", terminationDate: new Date().toISOString().split("T")[0] });
-  const [calcUrl, setCalcUrl] = useState<string | null>(null);
+  const [calcUrl, setCalcUrl] = useState<string>("");
 
   const { data: employees } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
   const employeeList = asList(employees?.data || employees);
@@ -50,7 +50,7 @@ export default function GratuityPage() {
         <CardContent className="grid grid-cols-2 gap-4">
           <div>
             <Label>الموظف *</Label>
-            <Select value={form.employeeId} onValueChange={(v) => { setForm({ ...form, employeeId: v }); setCalcUrl(null); }}>
+            <Select value={form.employeeId} onValueChange={(v) => { setForm({ ...form, employeeId: v }); setCalcUrl(""); }}>
               <SelectTrigger><SelectValue placeholder="اختر موظفاً" /></SelectTrigger>
               <SelectContent>
                 {employeeList.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}

@@ -1125,7 +1125,7 @@ function WorkflowDefinitionsTab() {
 
   const updateStep = (idx: number, field: string, value: any) => {
     const steps = [...form.steps];
-    (steps[idx])[field] = value;
+    (steps[idx] as any)[field] = value;
     setForm({ ...form, steps });
   };
 

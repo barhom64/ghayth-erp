@@ -110,7 +110,7 @@ export default function PropertiesMaintenance() {
                         approveMethod="PATCH"
                         rejectMethod="PATCH"
                         returnMethod="PATCH"
-                        onSuccess={() => refetch()}
+                        onDone={() => refetch()}
                       />
                     </TableCell>
                   )}

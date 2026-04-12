@@ -22,7 +22,7 @@ export default function TurnoverReportPage() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
 
-  const { data, isLoading } = useApiQuery<any>(["turnover-report", year], `/hr/turnover-report?year=${year}`);
+  const { data, isLoading } = useApiQuery<any>(["turnover-report", String(year)], `/hr/turnover-report?year=${year}`);
 
   const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
 

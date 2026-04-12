@@ -18,7 +18,7 @@ export default function DocumentsCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("documents_create", {
     title: "", category: "", status: "draft", description: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>("/documents", "POST", [["documents"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | Attachment[] | undefined>>("/documents", "POST", [["documents"]]);
 
   const handleSubmit = () => {
     if (!form.title) {

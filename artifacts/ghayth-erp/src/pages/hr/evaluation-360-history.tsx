@@ -18,7 +18,7 @@ function ScoreDot({ score }: { score: number | null | undefined }) {
 
 export default function Evaluation360HistoryPage() {
   const [, params] = useRoute("/hr/evaluation-360/history/:employeeId");
-  const employeeId = params?.employeeId;
+  const employeeId = params?.employeeId ?? "";
 
   const { data, isLoading } = useApiQuery<any>(
     ["evaluation-history", employeeId],

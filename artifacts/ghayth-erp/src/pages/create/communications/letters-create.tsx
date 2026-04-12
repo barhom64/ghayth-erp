@@ -18,7 +18,7 @@ export default function LettersCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("letters_create", {
     subject: "", channel: "email", fromNumber: "", toNumber: "", body: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, string>>("/communications/send", "POST", [["comm-letters"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/communications/send", "POST", [["comm-letters"]]);
   const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const clients = clientsData?.data || [];

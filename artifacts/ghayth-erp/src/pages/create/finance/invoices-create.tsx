@@ -105,7 +105,7 @@ export default function InvoicesCreate() {
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
   const updateLine = (idx: number, field: string, value: string) => {
     const updated = [...lines];
-    (updated[idx])[field] = value;
+    (updated[idx] as any)[field] = value;
     setLines(updated);
   };
 

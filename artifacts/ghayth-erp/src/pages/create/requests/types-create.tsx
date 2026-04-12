@@ -15,7 +15,7 @@ export default function RequestsTypeCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("requests_type_create", {
     name: "", category: "administrative", isActive: true, description: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, string | boolean>>("/requests/types", "POST", [["request-types"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | boolean | undefined>>("/requests/types", "POST", [["request-types"]]);
 
   const handleSubmit = () => {
     if (!form.name) {
