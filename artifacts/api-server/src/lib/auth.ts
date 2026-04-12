@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 
 const _jwtSecret = process.env.JWT_SECRET;
 if (!_jwtSecret) {
@@ -25,6 +25,16 @@ export function signToken(payload: JWTPayload): string {
 
 export function signRefreshToken(): string {
   return randomBytes(64).toString("hex");
+}
+
+/**
+ * Hashes a refresh token for at-rest storage. Refresh tokens are 128 hex
+ * characters of cryptographic randomness, so a fast unkeyed hash (SHA-256)
+ * is sufficient — the goal is to ensure database compromise does not yield
+ * usable session tokens, not to slow down dictionary attacks.
+ */
+export function hashRefreshToken(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
 export function verifyToken(token: string): JWTPayload {
