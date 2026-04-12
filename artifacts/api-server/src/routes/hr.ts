@@ -1695,13 +1695,26 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       );
       const newRunId = runResult.rows[0].id;
 
-      for (const l of lines) {
+      if (lines.length > 0) {
+        // Single bulk INSERT instead of one round-trip per employee.
+        const COLS_PER_ROW = 16;
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        for (const l of lines) {
+          const base = params.length;
+          valuesSql.push(
+            `(${Array.from({ length: COLS_PER_ROW }, (_, i) => `$${base + i + 1}`).join(",")})`
+          );
+          params.push(
+            newRunId, l.assignmentId, l.employeeId, l.basic, l.housingAllowance, l.transportAllowance,
+            l.gross, l.gosiEmployee, l.gosiEmployer, l.lateDeduction, l.absenceDeduction,
+            l.violationDeduction, l.loanDeduction, l.overtime, l.overtimeHours, l.net
+          );
+        }
         await client.query(
           `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"housingAllowance","transportAllowance","grossSalary",gosi,"gosiEmployer","lateDeduction","absenceDeduction","violationDeduction","loanDeduction","overtime","overtimeHours","netSalary")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-          [newRunId, l.assignmentId, l.employeeId, l.basic, l.housingAllowance, l.transportAllowance,
-            l.gross, l.gosiEmployee, l.gosiEmployer, l.lateDeduction, l.absenceDeduction,
-            l.violationDeduction, l.loanDeduction, l.overtime, l.overtimeHours, l.net]
+           VALUES ${valuesSql.join(",")}`,
+          params
         );
       }
 

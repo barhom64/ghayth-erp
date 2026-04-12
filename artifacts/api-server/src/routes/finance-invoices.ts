@@ -180,13 +180,22 @@ invoicesRouter.post("/invoices", async (req, res) => {
       insertId = invResult.rows[0].id;
 
       if (validatedLines.length > 0) {
-        await Promise.all(validatedLines.map((l) =>
-          client.query(
-            `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross")
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [insertId, l.description, l.quantity, l.unitPrice, l.lineTotal, l.vatAmount, l.lineGross]
-          )
-        ));
+        // Single bulk INSERT instead of one round-trip per line.
+        const COLS_PER_ROW = 7;
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        for (const l of validatedLines) {
+          const base = params.length;
+          valuesSql.push(
+            `(${Array.from({ length: COLS_PER_ROW }, (_, i) => `$${base + i + 1}`).join(",")})`
+          );
+          params.push(insertId, l.description, l.quantity, l.unitPrice, l.lineTotal, l.vatAmount, l.lineGross);
+        }
+        await client.query(
+          `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross")
+           VALUES ${valuesSql.join(",")}`,
+          params
+        );
       }
 
       const effectiveBranchId = branchId ?? scope.branchId;
@@ -202,12 +211,17 @@ invoicesRouter.post("/invoices", async (req, res) => {
         { accountCode: invRevenueCode, debit: 0, credit: baseAmount },
         { accountCode: invVatPayableCode, debit: 0, credit: vatAmount },
       ];
-      await Promise.all(journalLines.map((jl) =>
-        client.query(
-          `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ($1,$2,$3,$4)`,
-          [journalId, jl.accountCode, jl.debit, jl.credit]
-        )
-      ));
+      const jlValuesSql: string[] = [];
+      const jlParams: any[] = [];
+      for (const jl of journalLines) {
+        const base = jlParams.length;
+        jlValuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4})`);
+        jlParams.push(journalId, jl.accountCode, jl.debit, jl.credit);
+      }
+      await client.query(
+        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ${jlValuesSql.join(",")}`,
+        jlParams
+      );
 
       if (clientId) {
         await client.query(
