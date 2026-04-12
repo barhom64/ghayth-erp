@@ -334,7 +334,7 @@ export function DataTable<T extends { id: number }>({
             {onExportCSV && (
               <Button variant="outline" size="sm" onClick={onExportCSV} className="gap-1">
                 <Download className="h-3.5 w-3.5" />
-                تصدير CSV
+                تصدير جدولي
               </Button>
             )}
             {toolbarEnd}

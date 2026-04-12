@@ -83,7 +83,7 @@ export default function LedgerPage() {
             <Printer className="h-3.5 w-3.5 me-1" />طباعة
           </Button>
           <Button variant="outline" size="sm" onClick={() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runningBalance"], `ledger-${code}.csv`)}>
-            <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+            <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </Button>
         </div>
       </div>

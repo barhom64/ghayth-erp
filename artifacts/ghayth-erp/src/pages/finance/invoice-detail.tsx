@@ -80,7 +80,7 @@ export default function InvoiceDetailPage() {
       toast({ title: "تم الإرسال", description: result.message });
       qc.invalidateQueries({ queryKey: ["invoice-detail", id] });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "خطأ في إرسال ZATCA", description: e.message || "فشل إرسال الفاتورة للهيئة" });
+      toast({ variant: "destructive", title: "خطأ في الإرسال لهيئة الزكاة", description: e.message || "فشل إرسال الفاتورة للهيئة" });
     } finally {
       setZatcaSubmitting(false);
     }
@@ -107,7 +107,7 @@ export default function InvoiceDetailPage() {
               <Banknote className="h-4 w-4 me-1" />تسجيل دفعة
             </Button>
           )}
-          <ExportButton endpoint={`/export/pdf/invoice/${id}`} filename={`invoice-${id}.pdf`} type="pdf" label="PDF" />
+          <ExportButton endpoint={`/export/pdf/invoice/${id}`} filename={`invoice-${id}.pdf`} type="pdf" label="ملف طباعي" />
           <PrintActions
             onPreview={() => setShowPreview(true)}
             onPrint={() => directPrint(printContainerRef.current, `فاتورة ${invoice.ref}`)}
@@ -171,16 +171,16 @@ export default function InvoiceDetailPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-sm">ربط هيئة الزكاة والضريبة والجمارك (ZATCA)</h3>
+                    <h3 className="font-semibold text-sm">ربط هيئة الزكاة والضريبة والجمارك</h3>
                     <Badge className={`text-xs ${badgeCls}`}>{badgeText}</Badge>
                   </div>
-                  {invoice.zatcaUuid && <p className="text-xs text-gray-500 mt-1 font-mono">UUID: {invoice.zatcaUuid}</p>}
-                  {invoice.zatcaHash && <p className="text-xs text-gray-400 mt-0.5 font-mono">Hash: {invoice.zatcaHash.substring(0, 24)}...</p>}
+                  {invoice.zatcaUuid && <p className="text-xs text-gray-500 mt-1 font-mono">المعرف الفريد: {invoice.zatcaUuid}</p>}
+                  {invoice.zatcaHash && <p className="text-xs text-gray-400 mt-0.5 font-mono">البصمة: {invoice.zatcaHash.substring(0, 24)}...</p>}
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 {invoice.zatcaQrCode && (
-                  <img src={invoice.zatcaQrCode} alt="ZATCA QR" className="w-16 h-16 border rounded" />
+                  <img src={invoice.zatcaQrCode} alt="رمز الاستجابة السريعة لهيئة الزكاة" className="w-16 h-16 border rounded" />
                 )}
                 {canRetry && (
                   <Button size="sm" onClick={handleZatcaSubmit} disabled={zatcaSubmitting} className="gap-1">
@@ -444,16 +444,16 @@ export default function InvoiceDetailPage() {
         {invoice.zatcaQrCode && (
           <div style={{ marginTop: "24px", display: "flex", alignItems: "flex-start", gap: "12px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
             <div>
-              <p style={{ fontSize: "8pt", color: "#555", marginBottom: "4px" }}>رمز QR — هيئة الزكاة والضريبة والجمارك</p>
+              <p style={{ fontSize: "8pt", color: "#555", marginBottom: "4px" }}>رمز الاستجابة السريعة — هيئة الزكاة والضريبة والجمارك</p>
               <img
                 src={invoice.zatcaQrCode}
-                alt="ZATCA QR Code"
+                alt="رمز الاستجابة السريعة لهيئة الزكاة"
                 style={{ width: "80px", height: "80px", border: "1px solid #ccc" }}
               />
             </div>
             <div style={{ fontSize: "7pt", color: "#777", marginTop: "20px" }}>
-              {invoice.zatcaUuid && <p>UUID: {invoice.zatcaUuid}</p>}
-              {invoice.zatcaStatus && <p>حالة ZATCA: {invoice.zatcaStatus}</p>}
+              {invoice.zatcaUuid && <p>المعرف الفريد: {invoice.zatcaUuid}</p>}
+              {invoice.zatcaStatus && <p>حالة الربط مع هيئة الزكاة: {invoice.zatcaStatus}</p>}
             </div>
           </div>
         )}
@@ -501,16 +501,16 @@ export default function InvoiceDetailPage() {
           {invoice.zatcaQrCode && (
             <div style={{ marginTop: "24px", display: "flex", alignItems: "flex-start", gap: "12px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
               <div>
-                <p style={{ fontSize: "8pt", color: "#555", marginBottom: "4px" }}>رمز QR — هيئة الزكاة والضريبة والجمارك</p>
+                <p style={{ fontSize: "8pt", color: "#555", marginBottom: "4px" }}>رمز الاستجابة السريعة — هيئة الزكاة والضريبة والجمارك</p>
                 <img
                   src={invoice.zatcaQrCode}
-                  alt="ZATCA QR Code"
+                  alt="رمز الاستجابة السريعة لهيئة الزكاة"
                   style={{ width: "80px", height: "80px", border: "1px solid #ccc" }}
                 />
               </div>
               <div style={{ fontSize: "7pt", color: "#777", marginTop: "20px" }}>
-                {invoice.zatcaUuid && <p>UUID: {invoice.zatcaUuid}</p>}
-                {invoice.zatcaStatus && <p>حالة ZATCA: {invoice.zatcaStatus}</p>}
+                {invoice.zatcaUuid && <p>المعرّف الفريد: {invoice.zatcaUuid}</p>}
+                {invoice.zatcaStatus && <p>حالة الهيئة: {invoice.zatcaStatus}</p>}
               </div>
             </div>
           )}

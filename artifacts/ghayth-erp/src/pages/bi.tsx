@@ -65,7 +65,7 @@ function CEODashboardTab() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">لوحة المالك / CEO — صحة المنشأة</h1>
+      <h1 className="text-2xl font-bold">لوحة المالك / الرئيس التنفيذي — صحة المنشأة</h1>
 
       <div className="space-y-2">
         <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2"><DollarSign className="h-5 w-5 text-green-600" />الملخص المالي</h2>
@@ -477,7 +477,7 @@ function TrainingROITab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">عائد الاستثمار في التدريب (ROI)</h2>
+      <h2 className="text-xl font-bold">عائد الاستثمار في التدريب</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "موظفون مدربون", value: summary.trainedEmployees || 0 },
@@ -1005,7 +1005,7 @@ export default function BIPage() {
     <div className="space-y-6">
       <Tabs defaultValue="ceo" dir="rtl">
         <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10 gap-1 h-auto flex-wrap">
-          <TabsTrigger value="ceo" className="text-xs">لوحة CEO</TabsTrigger>
+          <TabsTrigger value="ceo" className="text-xs">لوحة الرئيس التنفيذي</TabsTrigger>
           <TabsTrigger value="overview" className="text-xs">نظرة عامة</TabsTrigger>
           <TabsTrigger value="branches" className="text-xs">الفروع</TabsTrigger>
           <TabsTrigger value="vendors" className="text-xs">الموردون</TabsTrigger>

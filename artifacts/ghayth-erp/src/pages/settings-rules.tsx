@@ -68,7 +68,7 @@ const ACTION_OPTIONS = [
   { value: "notification", label: "إشعار" },
   { value: "escalation", label: "تصعيد" },
   { value: "create_task", label: "إنشاء مهمة" },
-  { value: "set_sla", label: "تحديد مهلة SLA" },
+  { value: "set_sla", label: "تحديد مهلة مستوى الخدمة" },
   { value: "status_change", label: "تغيير حالة" },
 ];
 
@@ -185,7 +185,7 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
             {rule.actionConfig.title && <div><span className="font-medium">العنوان:</span> {rule.actionConfig.title}</div>}
             {rule.actionConfig.body && <div><span className="font-medium">النص:</span> {rule.actionConfig.body}</div>}
             {rule.actionConfig.priority && <div><span className="font-medium">الأولوية:</span> {rule.actionConfig.priority}</div>}
-            {rule.actionConfig.slaHours && <div><span className="font-medium">مهلة SLA:</span> {rule.actionConfig.slaHours} ساعات</div>}
+            {rule.actionConfig.slaHours && <div><span className="font-medium">مهلة مستوى الخدمة:</span> {rule.actionConfig.slaHours} ساعات</div>}
           </div>
         )}
       </CardContent>

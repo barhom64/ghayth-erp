@@ -56,7 +56,7 @@ export default function PurchaseOrderDetailPage() {
               <Copy className="h-4 w-4" />نسخ
             </Button>
           </Link>
-          <ExportButton endpoint={`/export/pdf/purchase-order/${id}`} filename={`po-${id}.pdf`} type="pdf" label="PDF" />
+          <ExportButton endpoint={`/export/pdf/purchase-order/${id}`} filename={`po-${id}.pdf`} type="pdf" label="ملف طباعي" />
           <PrintActions
             onPreview={() => setShowPreview(true)}
             onPrint={() => directPrint(printContainerRef.current, `أمر شراء ${po.ref || po.id}`)}

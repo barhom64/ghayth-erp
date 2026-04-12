@@ -84,7 +84,7 @@ function Support() {
       render: (t) => (
         <div className="flex flex-col gap-1">
           <StatusBadge status={t.priority} />
-          {t.slaBreached && <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />SLA خرق</Badge>}
+          {t.slaBreached && <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />خرق مستوى الخدمة</Badge>}
         </div>
       ),
     },
@@ -128,7 +128,7 @@ function Support() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي التذاكر</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.totalTickets || 0}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-amber-600">مفتوحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{stats?.openTickets || 0}</div></CardContent></Card>
         <Card className="bg-emerald-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">محلولة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.resolvedTickets || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-rose-600">تجاوزت SLA</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-rose-600">{stats?.slaBreach || 0}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-rose-600">تجاوزت مستوى الخدمة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-rose-600">{stats?.slaBreach || 0}</div></CardContent></Card>
       </div>
 
       <div className="flex flex-col gap-4">
@@ -338,7 +338,7 @@ function CSATStats() {
           <CardContent className="p-4 text-center">
             <Star className="h-8 w-8 text-amber-500 mx-auto mb-2" />
             <p className="text-3xl font-bold text-amber-600">{avg ? Number(avg).toFixed(1) : "—"}</p>
-            <p className="text-sm text-gray-500 mt-1">متوسط CSAT</p>
+            <p className="text-sm text-gray-500 mt-1">متوسط رضا العملاء</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
@@ -357,13 +357,13 @@ function CSATStats() {
 
       {stats.length > 0 && (
         <Card>
-          <CardHeader><CardTitle>أداء الوكلاء (CSAT)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>أداء الوكلاء (رضا العملاء)</CardTitle></CardHeader>
           <CardContent>
             <Table>
               <TableHeader><TableRow>
                 <TableHead>الوكيل</TableHead>
                 <TableHead>عدد التقييمات</TableHead>
-                <TableHead>متوسط CSAT</TableHead>
+                <TableHead>متوسط رضا العملاء</TableHead>
               </TableRow></TableHeader>
               <tbody>
                 {stats.map((s: any) => (
@@ -392,7 +392,7 @@ export default function SupportWithTabs() {
       <TabsList>
         <TabsTrigger value="tickets"><Headphones className="h-4 w-4 me-1.5" />التذاكر</TabsTrigger>
         <TabsTrigger value="kb"><BookOpen className="h-4 w-4 me-1.5" />قاعدة المعرفة</TabsTrigger>
-        <TabsTrigger value="csat"><Star className="h-4 w-4 me-1.5" />تقييمات CSAT</TabsTrigger>
+        <TabsTrigger value="csat"><Star className="h-4 w-4 me-1.5" />تقييمات رضا العملاء</TabsTrigger>
       </TabsList>
       <TabsContent value="tickets" className="mt-4"><Support /></TabsContent>
       <TabsContent value="kb" className="mt-4"><KBManagement /></TabsContent>

@@ -226,7 +226,7 @@ export default function ActionCenter() {
               <p className="text-sm font-medium text-gray-800 truncate">{item.title}</p>
               <p className="text-xs text-gray-500">
                 {item.submittedByName ?? "موظف"} — خطوة {item.currentStepOrder}
-                {item.slaStatus && item.slaStatus !== "on_track" ? ` ⚠ ${item.slaStatus === "warning" ? "تحذير SLA" : "تجاوز SLA"}` : ""}
+                {item.slaStatus && item.slaStatus !== "on_track" ? ` ⚠ ${item.slaStatus === "warning" ? "تحذير مستوى الخدمة" : "تجاوز مستوى الخدمة"}` : ""}
               </p>
             </div>
           </div>
@@ -337,7 +337,7 @@ export default function ActionCenter() {
           summary.slaBreachedCount > 0 ? "border-red-200 bg-red-50" : "border-gray-100 bg-white"
         )}>
           <p className="text-3xl font-black text-gray-900">{summary.slaBreachedCount || 0}</p>
-          <p className="text-sm text-gray-500 mt-1">تجاوز SLA</p>
+          <p className="text-sm text-gray-500 mt-1">تجاوز مستوى الخدمة</p>
         </div>
         <div className={cn(
           "rounded-xl p-4 border-2 text-center",
@@ -483,7 +483,7 @@ export default function ActionCenter() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <Timer className="w-5 h-5 text-red-500" />
-                معاملات متأخرة عن SLA
+                معاملات متأخرة عن مستوى الخدمة
                 <Badge variant="destructive" className="text-xs">{slaBreached.length}</Badge>
               </CardTitle>
             </CardHeader>

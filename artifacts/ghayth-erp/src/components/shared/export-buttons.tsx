@@ -56,7 +56,7 @@ export function ExportButton({ endpoint, filename, type, label, params, size = "
   return (
     <Button variant={variant} size={size} onClick={handleExport} disabled={loading} className="gap-1">
       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : type === "excel" ? <FileSpreadsheet className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-      {label || (type === "excel" ? "Excel" : "PDF")}
+      {label || (type === "excel" ? "ملف إكسل" : "ملف للطباعة")}
     </Button>
   );
 }

@@ -39,7 +39,7 @@ function FunnelTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5 text-blue-600" />قمع المبيعات (CRM Funnel)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5 text-blue-600" />قمع المبيعات (مسار علاقات العملاء)</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="h-32 bg-gray-100 rounded animate-pulse" />

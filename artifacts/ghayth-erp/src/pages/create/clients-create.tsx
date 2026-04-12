@@ -109,7 +109,7 @@ export default function ClientsCreate() {
             <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ar">العربية</SelectItem>
-              <SelectItem value="en">English</SelectItem>
+              <SelectItem value="en">الإنجليزية</SelectItem>
             </SelectContent>
           </Select>
         </div>

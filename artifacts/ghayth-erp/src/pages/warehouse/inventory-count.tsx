@@ -150,7 +150,7 @@ export default function InventoryCountPage() {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-3 py-2 text-start">المنتج</th>
-                          <th className="px-3 py-2 text-center">SKU</th>
+                          <th className="px-3 py-2 text-center">رمز المنتج</th>
                           <th className="px-3 py-2 text-center">المخزون النظامي</th>
                           <th className="px-3 py-2 text-center">الفعلي</th>
                           <th className="px-3 py-2 text-center">الفرق</th>

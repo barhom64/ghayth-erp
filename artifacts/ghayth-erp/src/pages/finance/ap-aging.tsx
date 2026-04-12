@@ -60,7 +60,7 @@ export default function ApAgingPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <DatePicker value={asOfDate} onChange={setAsOfDate} className="w-44" placeholder="تاريخ التقرير" />
           <Button variant="outline" size="sm" onClick={() => exportCSV(suppliers, `ap-aging-${asOfDate}.csv`)}>
-            <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+            <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </Button>
         </div>
       </div>

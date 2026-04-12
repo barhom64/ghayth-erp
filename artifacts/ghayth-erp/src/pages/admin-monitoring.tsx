@@ -69,7 +69,7 @@ export default function AdminMonitoring() {
           <CardContent className="p-4 flex items-center gap-3">
             <Server className={cn("w-8 h-8", services.api?.status === "healthy" ? "text-green-600" : "text-red-600")} />
             <div>
-              <p className="text-sm font-semibold">خادم API</p>
+              <p className="text-sm font-semibold">خادم الربط البرمجي</p>
               <p className="text-xs text-gray-500">{services.api?.status === "healthy" ? "يعمل" : "متوقف"}</p>
               <p className="text-xs text-gray-400">{formatUptime(services.api?.uptime || 0)}</p>
             </div>

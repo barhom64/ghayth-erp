@@ -506,7 +506,7 @@ export default function BiOperationsPage() {
 
       <Tabs defaultValue="sla" dir="rtl">
         <TabsList className="grid w-full grid-cols-6 print:hidden">
-          <TabsTrigger value="sla">تأخر SLA</TabsTrigger>
+          <TabsTrigger value="sla">تأخر مستوى الخدمة</TabsTrigger>
           <TabsTrigger value="rejection">نسبة الرفض</TabsTrigger>
           <TabsTrigger value="bottleneck">الاختناقات</TabsTrigger>
           <TabsTrigger value="productivity">الإنتاجية</TabsTrigger>

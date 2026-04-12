@@ -45,7 +45,7 @@ export default function UmrahImport() {
     const validExts = [".xlsx", ".xls", ".csv"];
     const ext = latest.name.substring(latest.name.lastIndexOf(".")).toLowerCase();
     if (!validExts.includes(ext)) {
-      setParseError("يُرجى رفع ملف Excel (.xlsx, .xls) أو CSV (.csv)");
+      setParseError("يُرجى رفع ملف إكسل أو ملف جدولي");
       setParsedRows([]);
       setFileName("");
       setResult(null);
@@ -131,7 +131,7 @@ export default function UmrahImport() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">رفع ملف Excel</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">رفع ملف إكسل</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div>
             <Label>الموسم *</Label>
@@ -143,7 +143,7 @@ export default function UmrahImport() {
             </Select>
           </div>
 
-          <FileDropZone files={dropFiles} onFilesChange={handleDropFiles} label="ملف Excel أو CSV" maxSizeMB={10} />
+          <FileDropZone files={dropFiles} onFilesChange={handleDropFiles} label="ملف إكسل أو ملف جدولي" maxSizeMB={10} />
 
           {fileName && parsedRows.length > 0 && (
             <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">

@@ -179,7 +179,7 @@ export default function VouchersPage() {
                       <div className="bg-white p-4 rounded-lg border">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-semibold text-sm">تفاصيل السند</h4>
-                          <ExportButton endpoint={`/export/pdf/voucher/${v.id}`} filename={`voucher-${v.id}.pdf`} type="pdf" label="تصدير PDF" size="sm" />
+                          <ExportButton endpoint={`/export/pdf/voucher/${v.id}`} filename={`voucher-${v.id}.pdf`} type="pdf" label="تصدير ملف طباعي" size="sm" />
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                           {v.operationType && (

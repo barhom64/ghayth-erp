@@ -235,7 +235,7 @@ function MonitorTab() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Mail className="h-4 w-4 text-blue-500" />
-              رسائل SMS
+              الرسائل النصية
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -244,7 +244,7 @@ function MonitorTab() {
             {smsPending > 0 && (
               <div className="flex items-center gap-1.5 text-xs text-amber-600">
                 <Clock className="h-3 w-3" />
-                {smsPending} رسالة في الانتظار — يعالجها الـ worker كل دقيقة
+                {smsPending} رسالة في الانتظار — يعالجها المعالج الآلي كل دقيقة
               </div>
             )}
           </CardContent>
@@ -263,7 +263,7 @@ function MonitorTab() {
             {waPending > 0 && (
               <div className="flex items-center gap-1.5 text-xs text-amber-600">
                 <Clock className="h-3 w-3" />
-                {waPending} رسالة في الانتظار — يعالجها الـ worker كل دقيقة
+                {waPending} رسالة في الانتظار — يعالجها المعالج الآلي كل دقيقة
               </div>
             )}
           </CardContent>
@@ -325,7 +325,7 @@ function MonitorTab() {
           {recentSms.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">آخر رسائل SMS</CardTitle>
+                <CardTitle className="text-sm">آخر الرسائل النصية</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">

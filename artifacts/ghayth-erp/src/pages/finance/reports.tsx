@@ -188,12 +188,12 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
         <div className="flex gap-2">
           <PrintButton />
           <Button variant="outline" size="sm" onClick={() => exportCSV(rows, ["code", "name", "type", "totalDebit", "totalCredit", "balance"], "trial-balance.csv")}>
-            <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+            <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </Button>
           <MultiExportButton
             exports={[
-              { endpoint: "/export/excel/trial-balance", filename: "trial-balance.xlsx", type: "excel", label: "تصدير Excel", params: { startDate, endDate } },
-              { endpoint: "/export/pdf/trial-balance", filename: "trial-balance.pdf", type: "pdf", label: "تصدير PDF", params: { startDate, endDate } },
+              { endpoint: "/export/excel/trial-balance", filename: "trial-balance.xlsx", type: "excel", label: "تصدير إكسل", params: { startDate, endDate } },
+              { endpoint: "/export/pdf/trial-balance", filename: "trial-balance.pdf", type: "pdf", label: "تصدير ملف طباعي", params: { startDate, endDate } },
             ]}
           />
         </div>
@@ -308,11 +308,11 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
       <div className="flex justify-end gap-2">
         <PrintButton />
         <Button variant="outline" size="sm" onClick={() => exportCSV([...revenues.map((r: any) => ({ ...r, section: "إيرادات" })), ...expenses.map((e: any) => ({ ...e, section: "مصروفات" }))], ["section", "code", "name", "amount"], "income-statement.csv")}>
-          <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+          <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </Button>
         <MultiExportButton
           exports={[
-            { endpoint: "/export/excel/income-statement", filename: "income-statement.xlsx", type: "excel", label: "تصدير Excel", params: { startDate, endDate } },
+            { endpoint: "/export/excel/income-statement", filename: "income-statement.xlsx", type: "excel", label: "تصدير إكسل", params: { startDate, endDate } },
           ]}
         />
       </div>
@@ -469,7 +469,7 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
       <div className="flex justify-end gap-2">
         <PrintButton />
         <Button variant="outline" size="sm" onClick={() => exportCSV([...assets, ...liabilities, ...equity], ["code", "name", "type", "balance"], "balance-sheet.csv")}>
-          <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+          <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </Button>
       </div>
 
@@ -526,7 +526,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
       <div className="flex justify-end gap-2">
         <PrintButton />
         <Button variant="outline" size="sm" onClick={() => exportCSV([...inflows.map((f: any) => ({ ...f, type: "وارد" })), ...outflows.map((f: any) => ({ ...f, type: "صادر" }))], ["type", "description", "amount", "date"], "cash-flow.csv")}>
-          <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+          <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </Button>
       </div>
       <div className="grid gap-3 grid-cols-3">
@@ -611,7 +611,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
         </Select>
         <PrintButton />
         <Button variant="outline" size="sm" onClick={() => exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalance", "date"], `cash-${accountCode}.csv`)}>
-          <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+          <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </Button>
       </div>
 
@@ -681,7 +681,7 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
       <div className="flex justify-end gap-2">
         <PrintButton />
         <Button variant="outline" size="sm" onClick={() => exportCSV([...custodies, ...advances], ["ref", "description", "amount", "employeeName", "date", "type"], "custody-advances.csv")}>
-          <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+          <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </Button>
       </div>
 
@@ -769,7 +769,7 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
         </Select>
         <PrintButton />
         <Button variant="outline" size="sm" onClick={() => exportCSV(rows, ["key", "label", "amount", "entryCount"], "expenses-analysis.csv")}>
-          <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+          <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </Button>
       </div>
 
@@ -829,7 +829,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
       <div className="flex justify-end gap-2">
         <PrintButton />
         <Button variant="outline" size="sm" onClick={() => exportCSV(byAccount, ["code", "name", "amount", "entryCount"], "revenue-analysis.csv")}>
-          <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+          <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </Button>
       </div>
 
@@ -910,7 +910,7 @@ function BudgetVariance() {
         <Input type="month" className="w-40" value={period} onChange={(e) => setPeriod(e.target.value)} />
         <PrintButton />
         <Button variant="outline" size="sm" onClick={() => exportCSV(rows, ["accountCode", "accountName", "budget", "actual", "variance", "usagePct"], "budget-variance.csv")}>
-          <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+          <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </Button>
       </div>
 
@@ -1044,7 +1044,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
           <>
             <PrintButton />
             <Button variant="outline" size="sm" onClick={() => exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runningBalance", "date", "type"], `entity-statement-${entityId}.csv`)}>
-              <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+              <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
             </Button>
           </>
         )}

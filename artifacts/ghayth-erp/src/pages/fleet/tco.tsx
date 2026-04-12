@@ -36,8 +36,8 @@ export default function TCOPage() {
       <div className="flex items-center gap-3 mb-4">
         <BarChart3 className="w-6 h-6 text-primary" />
         <div>
-          <h1 className="text-xl font-bold">تحليل التكلفة الكلية للمركبة (TCO)</h1>
-          <p className="text-sm text-gray-500">Total Cost of Ownership — تكلفة التملك الإجمالية</p>
+          <h1 className="text-xl font-bold">تحليل التكلفة الكلية للمركبة</h1>
+          <p className="text-sm text-gray-500">تكلفة التملك الإجمالية</p>
         </div>
       </div>
 

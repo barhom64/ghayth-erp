@@ -71,7 +71,7 @@ export default function TaxSystemPage() {
           onClick={() => setActiveTab("zatca")}
           className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${activeTab === "zatca" ? "bg-primary text-primary-foreground" : "text-gray-600 hover:bg-gray-100"}`}
         >
-          <Zap className="h-4 w-4 inline me-1" />ربط ZATCA
+          <Zap className="h-4 w-4 inline me-1" />ربط هيئة الزكاة والضريبة
           {settings?.enabled && (
             <span className="ms-1.5 inline-flex h-2 w-2 rounded-full bg-green-500" />
           )}
@@ -240,8 +240,8 @@ export default function TaxSystemPage() {
               <CardContent className="p-4 flex items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-yellow-800">لم يتم تهيئة ربط ZATCA بعد</p>
-                  <p className="text-xs text-yellow-700 mt-0.5">انتقل إلى الإعدادات ← ZATCA لإعداد بيانات التسجيل والربط مع الهيئة.</p>
+                  <p className="text-sm font-medium text-yellow-800">لم يتم تهيئة الربط مع هيئة الزكاة والضريبة بعد</p>
+                  <p className="text-xs text-yellow-700 mt-0.5">انتقل إلى الإعدادات ← هيئة الزكاة والضريبة لإعداد بيانات التسجيل والربط مع الهيئة.</p>
                 </div>
               </CardContent>
             </Card>
@@ -291,7 +291,7 @@ export default function TaxSystemPage() {
                     </Badge>
                   ) },
                   { key: "submittedAt", header: "تاريخ الإرسال", render: (s: any) => <span className="text-xs text-gray-500">{s.submittedAt ? formatDateAr(s.submittedAt) : "-"}</span> },
-                  { key: "zatcaUuid", header: "UUID", render: (s: any) => <span className="font-mono text-xs text-gray-400 max-w-[120px] truncate block">{s.zatcaUuid || "-"}</span> },
+                  { key: "zatcaUuid", header: "المعرف الفريد", render: (s: any) => <span className="font-mono text-xs text-gray-400 max-w-[120px] truncate block">{s.zatcaUuid || "-"}</span> },
                 ] as DataTableColumn<any>[]}
                 data={submissions}
                 isLoading={submissionsLoading}

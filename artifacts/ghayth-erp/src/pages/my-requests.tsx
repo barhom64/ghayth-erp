@@ -134,7 +134,7 @@ export default function MyRequests() {
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
                         <StatusBadge status={req.status} />
                         {req.slaStatus && req.slaStatus !== "on_track" && (
-                          <span className="text-xs text-orange-600">{req.slaStatus === "warning" ? "⚠ تحذير SLA" : "⛔ تجاوز SLA"}</span>
+                          <span className="text-xs text-orange-600">{req.slaStatus === "warning" ? "⚠ تحذير مستوى الخدمة" : "⛔ تجاوز مستوى الخدمة"}</span>
                         )}
                       </div>
                     </div>

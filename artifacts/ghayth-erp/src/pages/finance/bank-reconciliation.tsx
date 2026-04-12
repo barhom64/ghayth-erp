@@ -124,7 +124,7 @@ export default function BankReconciliationPage() {
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle className="text-base">استيراد كشف بنكي (CSV)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">استيراد كشف بنكي </CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div>
               <Label>الحساب البنكي</Label>
@@ -143,12 +143,12 @@ export default function BankReconciliationPage() {
               </Select>
             </div>
             <div>
-              <Label>ملف CSV</Label>
+              <Label>ملف جدولي</Label>
               <div className="flex gap-2 mt-1">
                 <input ref={fileRef} type="file" accept=".csv" onChange={handleFileImport} className="hidden" />
                 <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} className="flex-1">
                   <Upload className="h-4 w-4 me-2" />
-                  {importing ? "جارٍ الاستيراد..." : "اختر ملف CSV"}
+                  {importing ? "جارٍ الاستيراد..." : "اختر ملف جدولي"}
                 </Button>
               </div>
               <p className="text-xs text-gray-400 mt-1">الأعمدة المتوقعة: date, description, debit, credit (أو amount)</p>

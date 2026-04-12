@@ -28,7 +28,7 @@ function StatsCards({ stats }: { stats: any }) {
     { label: "التدقيق النشط", value: stats?.activeAudits || 0, icon: ClipboardCheck, color: "text-purple-600 bg-purple-50" },
     { label: "عدم الامتثال", value: stats?.nonCompliant || 0, icon: Shield, color: "text-amber-600 bg-amber-50" },
     { label: "إجراءات الامتثال", value: stats?.complianceActions || 0, icon: Activity, color: "text-indigo-600 bg-indigo-50" },
-    { label: "CAPA مفتوحة", value: stats?.openCapas || 0, icon: CheckCircle2, color: "text-rose-600 bg-rose-50" },
+    { label: "إجراءات تصحيحية مفتوحة", value: stats?.openCapas || 0, icon: CheckCircle2, color: "text-rose-600 bg-rose-50" },
   ];
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -743,7 +743,7 @@ function CAPATab() {
         method: "POST",
         body: JSON.stringify(newForm),
       }));
-      toast({ title: "تم إنشاء CAPA" });
+      toast({ title: "تم إنشاء الإجراء التصحيحي" });
       setShowNew(false);
       setNewForm({ finding: "", rootCause: "", correctiveAction: "", preventiveAction: "", responsiblePerson: "", dueDate: "", status: "open" });
       qc.invalidateQueries({ queryKey: ["gov-capa"] });
@@ -764,9 +764,9 @@ function CAPATab() {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <div className="flex-1">
-          <AdvancedFilters config={{ searchPlaceholder: "بحث بـ CAPA...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
+          <AdvancedFilters config={{ searchPlaceholder: "بحث بالإجراءات التصحيحية...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
         </div>
-        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />CAPA جديد</Button>}
+        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء تصحيحي جديد</Button>}
       </div>
       {showNew && (
         <Card className="border-dashed">
@@ -799,7 +799,7 @@ function CAPATab() {
         </Card>
       )}
       <Card>
-        <CardHeader><CardTitle>إجراءات التصحيح والوقاية (CAPA)</CardTitle></CardHeader>
+        <CardHeader><CardTitle>الإجراءات التصحيحية والوقائية</CardTitle></CardHeader>
         <CardContent>
           <Table><TableHeader><TableRow>
             <SortableTableHead column="finding" label="الملاحظة" sortState={sortState} onSort={handleSort} />
@@ -808,7 +808,7 @@ function CAPATab() {
             <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
             <TableHead>إجراءات</TableHead>
           </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredItems} colCount={5} emptyMessage="لا توجد CAPA" emptyIcon={<CheckCircle2 className="h-6 w-6 text-slate-400" />}>
+          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredItems} colCount={5} emptyMessage="لا توجد إجراءات تصحيحية" emptyIcon={<CheckCircle2 className="h-6 w-6 text-slate-400" />}>
             {(sortedData || []).map((item: any) => (
               <Fragment key={item.id}>
                 <TableRow className={cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}>
@@ -830,7 +830,7 @@ function CAPATab() {
           </DataTableWrapper></Table>
         </CardContent>
       </Card>
-      <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="تفاصيل CAPA" data={previewItem} fields={previewFields} />
+      <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="تفاصيل الإجراء التصحيحي" data={previewItem} fields={previewFields} />
     </div>
   );
 }
@@ -852,7 +852,7 @@ export default function GovernancePage() {
           <TabsTrigger value="audits"><ClipboardCheck className="h-4 w-4 me-1" />التدقيق</TabsTrigger>
           <TabsTrigger value="compliance"><Shield className="h-4 w-4 me-1" />الامتثال</TabsTrigger>
           <TabsTrigger value="actions"><Activity className="h-4 w-4 me-1" />الإجراءات</TabsTrigger>
-          <TabsTrigger value="capa"><CheckCircle2 className="h-4 w-4 me-1" />CAPA</TabsTrigger>
+          <TabsTrigger value="capa"><CheckCircle2 className="h-4 w-4 me-1" />الإجراءات التصحيحية والوقائية</TabsTrigger>
         </TabsList>
         <TabsContent value="policies"><PoliciesTab /></TabsContent>
         <TabsContent value="risks"><RisksTab /></TabsContent>
