@@ -55,7 +55,7 @@ export default function ApAgingPage() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Clock className="h-6 w-6 text-blue-500" />
-          تقرير تقادم الذمم الدائنة (AP Aging)
+          تقرير تقادم الذمم الدائنة
         </h1>
         <div className="flex items-center gap-2 flex-wrap">
           <DatePicker value={asOfDate} onChange={setAsOfDate} className="w-44" placeholder="تاريخ التقرير" />

@@ -1968,7 +1968,7 @@ function CommunicationChannelsTab() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <span className="text-lg">🔔</span>
-              إشعارات المتصفح (Push Notifications)
+              إشعارات المتصفح الفورية
             </CardTitle>
             <div className="flex items-center gap-2">
               <Label className="text-xs text-gray-500">تفعيل</Label>

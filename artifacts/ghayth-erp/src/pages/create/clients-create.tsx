@@ -93,7 +93,7 @@ export default function ClientsCreate() {
             <SelectTrigger className="mt-1"><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">بدون تصنيف</SelectItem>
-              <SelectItem value="vip">VIP</SelectItem>
+              <SelectItem value="vip">كبار العملاء</SelectItem>
               <SelectItem value="regular">عادي</SelectItem>
               <SelectItem value="new">جديد</SelectItem>
               <SelectItem value="inactive">غير نشط</SelectItem>

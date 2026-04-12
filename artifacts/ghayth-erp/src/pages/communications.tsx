@@ -95,7 +95,7 @@ function PushNotificationsCard() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <BellOff className="h-4 w-4 text-gray-400" />
-            إشعارات المتصفح (Push)
+            إشعارات المتصفح الفورية
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -110,7 +110,7 @@ function PushNotificationsCard() {
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
           {isSubscribed ? <BellRing className="h-4 w-4 text-green-600" /> : <Bell className="h-4 w-4 text-gray-500" />}
-          إشعارات المتصفح (Push)
+          إشعارات المتصفح الفورية
           {isSubscribed && <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50 text-xs">مفعّل</Badge>}
         </CardTitle>
       </CardHeader>

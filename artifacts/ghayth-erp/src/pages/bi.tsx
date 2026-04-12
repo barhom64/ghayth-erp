@@ -324,7 +324,7 @@ function FleetTCOTab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">تكلفة الأسطول الإجمالية (TCO)</h2>
+      <h2 className="text-xl font-bold">تكلفة الأسطول الإجمالية</h2>
       <Card>
         <CardContent className="p-0">
           <Table>

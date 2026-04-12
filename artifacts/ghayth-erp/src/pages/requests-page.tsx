@@ -42,7 +42,7 @@ const statusMap: Record<string, { label: string; color: string }> = {
   approved: { label: "موافق", color: "bg-green-100 text-green-700" },
   rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
   in_review: { label: "قيد المراجعة", color: "bg-blue-100 text-blue-700" },
-  returned: { label: "مُرجع", color: "bg-orange-100 text-orange-700" },
+  returned: { label: "مُعاد", color: "bg-orange-100 text-orange-700" },
 };
 
 const priorityMap: Record<string, string> = { low: "منخفض", medium: "متوسط", high: "عالي", critical: "حرج" };

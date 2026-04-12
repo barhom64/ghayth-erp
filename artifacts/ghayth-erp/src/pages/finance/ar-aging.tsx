@@ -55,7 +55,7 @@ export default function ArAgingPage() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Clock className="h-6 w-6 text-orange-500" />
-          تقرير تقادم الذمم المدينة (AR Aging)
+          تقرير تقادم الذمم المدينة
         </h1>
         <div className="flex items-center gap-2 flex-wrap">
           <DatePicker value={asOfDate} onChange={setAsOfDate} className="w-44" placeholder="تاريخ التقرير" />

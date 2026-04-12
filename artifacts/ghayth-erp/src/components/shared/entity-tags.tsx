@@ -9,7 +9,7 @@ const PRESET_TAGS = [
   { tag: "عاجل", color: "red" },
   { tag: "متأخر", color: "orange" },
   { tag: "مهم", color: "yellow" },
-  { tag: "VIP", color: "purple" },
+  { tag: "كبار العملاء", color: "purple" },
   { tag: "معلق", color: "gray" },
 ];
 
