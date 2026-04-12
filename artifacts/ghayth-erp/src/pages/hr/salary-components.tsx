@@ -1,26 +1,22 @@
 import { useState } from "react";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, DollarSign, TrendingUp, Percent, FileText, Search } from "lucide-react";
+import { Plus, DollarSign, TrendingUp, Percent, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 
 export default function SalaryComponentsPage() {
   const { data } = useApiQuery<any>(["salary-components"], "/hr/salary-components");
   const items = data?.data || [];
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
-  const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", type: "fixed", category: "allowance", value: "", taxable: true });
   const createMut = useApiMutation("/hr/salary-components", "POST", [["salary-components"]]);
 
@@ -39,13 +35,41 @@ export default function SalaryComponentsPage() {
   const categoryMap: Record<string, string> = { allowance: "بدل", deduction: "خصم", benefit: "مزايا" };
 
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
   const filtered = applyFilters(items, filters, { searchFields: ["name", "type", "category"], statusField: "status" });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
   const allowances = items.filter((c: any) => c.category === "allowance" || !c.category);
   const deductions = items.filter((c: any) => c.category === "deduction");
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "name", header: "المكون", sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
+    { key: "type", header: "النوع", sortable: true, render: (c) => typeMap[c.type] || c.type },
+    {
+      key: "category",
+      header: "التصنيف",
+      sortable: true,
+      render: (c) => (
+        <Badge className={c.category === "deduction" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+          {categoryMap[c.category] || c.category || "بدل"}
+        </Badge>
+      ),
+    },
+    {
+      key: "value",
+      header: "القيمة",
+      sortable: true,
+      render: (c) => <span className="font-medium">{Number(c.value || 0).toLocaleString("ar-SA")} {c.type === "percentage" ? "%" : getCurrencySymbol()}</span>,
+    },
+    { key: "taxable", header: "خاضع للضريبة", sortable: true, render: (c) => c.taxable ? "نعم" : "لا" },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (c) => (
+        <Badge className={c.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
+          {c.status === "active" ? "نشط" : "غير نشط"}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -89,7 +113,7 @@ export default function SalaryComponentsPage() {
           ],
         }}
         values={filters}
-        onChange={(v) => { setFilters(v); setPage(1); }}
+        onChange={setFilters}
         resultCount={filtered.length}
       />
 
@@ -121,32 +145,13 @@ export default function SalaryComponentsPage() {
         </Card>
       )}
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="name" label="المكون" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="type" label="النوع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="category" label="التصنيف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="value" label="القيمة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="taxable" label="خاضع للضريبة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <TableBody>
-            {(paginatedData || []).map((c: any) => (
-              <tr key={c.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-medium">{c.name}</td>
-                <td className="p-3">{typeMap[c.type] || c.type}</td>
-                <td className="p-3"><Badge className={c.category === "deduction" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>{categoryMap[c.category] || c.category || "بدل"}</Badge></td>
-                <td className="p-3 font-medium">{Number(c.value || 0).toLocaleString("ar-SA")} {c.type === "percentage" ? "%" : getCurrencySymbol()}</td>
-                <td className="p-3">{c.taxable ? "نعم" : "لا"}</td>
-                <td className="p-3"><Badge className={c.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>{c.status === "active" ? "نشط" : "غير نشط"}</Badge></td>
-              </tr>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد مكونات رواتب</td></tr>}
-          </TableBody>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
-      </div></div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا توجد مكونات رواتب"
+        pageSize={20}
+      />
     </div>
   );
 }

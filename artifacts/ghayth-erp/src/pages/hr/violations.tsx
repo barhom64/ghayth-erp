@@ -1,5 +1,4 @@
-import { useState, Fragment } from "react";
-import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,11 +8,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Plus, AlertTriangle, Scale, DollarSign, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 
 const statusMap: Record<string, { label: string; color: string }> = {
   active: { label: "نشط", color: "bg-red-100 text-red-700" },
@@ -33,15 +29,11 @@ const severityMap: Record<string, { label: string; color: string }> = {
 
 export default function ViolationsPage() {
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
   const { data, refetch } = useApiQuery<any>(["violations"], "/hr/violations");
   const { data: stats } = useApiQuery<any>(["violations-stats"], "/hr/violations-stats");
   const items = data?.data || [];
 
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
 
   const kpis = [
     { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
@@ -62,6 +54,50 @@ export default function ViolationsPage() {
     { key: "severity", label: "الشدة", type: "select" as const, options: Object.entries(severityMap).map(([k, v]) => ({ value: k, label: v.label })) },
     { key: "deduction", label: "الخصم", type: "number" as const },
     { key: "status", label: "الحالة", type: "select" as const, options: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })) },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "employeeName",
+      header: "الموظف",
+      sortable: true,
+      render: (v) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold">
+            {(v.employeeName || "؟").charAt(0)}
+          </div>
+          <span className="font-medium">{v.employeeName}</span>
+        </div>
+      ),
+    },
+    { key: "type", header: "نوع المخالفة", sortable: true, render: (v) => v.type || "-" },
+    { key: "description", header: "الوصف", sortable: true, className: "text-gray-500 max-w-48 truncate", render: (v) => v.description || "-" },
+    {
+      key: "severity",
+      header: "الشدة",
+      sortable: true,
+      render: (v) => <Badge className={severityMap[v.severity]?.color || ""}>{severityMap[v.severity]?.label || v.severity || "-"}</Badge>,
+    },
+    {
+      key: "deduction",
+      header: "الخصم",
+      sortable: true,
+      className: "text-red-600 font-medium",
+      render: (v) => formatCurrency(Number(v.deduction || 0)),
+    },
+    { key: "status", header: "الحالة", sortable: true, render: (v) => <StatusBadge status={v.status} /> },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (v) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <RowActions
+            onEdit={() => startEdit(v.id, { type: v.type || "", description: v.description || "", severity: v.severity || "medium", deduction: v.deduction || 0, status: v.status || "active" })}
+            onDelete={() => startDelete(v.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -99,64 +135,44 @@ export default function ViolationsPage() {
           showDateRange: true,
         }}
         values={filters}
-        onChange={(v) => { setFilters(v); setPage(1); }}
+        onChange={setFilters}
         resultCount={filtered.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="type" label="نوع المخالفة" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="description" label="الوصف" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="severity" label="الشدة" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="deduction" label="الخصم" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-              <th className="p-3 text-start font-medium">إجراءات</th>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(paginatedData || []).map((v: any) => (
-              <Fragment key={v.id}>
-                <tr className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold">
-                        {(v.employeeName || "؟").charAt(0)}
-                      </div>
-                      <span className="font-medium">{v.employeeName}</span>
-                    </div>
-                  </td>
-                  <td className="p-3">{v.type || "-"}</td>
-                  <td className="p-3 text-gray-500 max-w-48 truncate">{v.description || "-"}</td>
-                  <td className="p-3"><Badge className={severityMap[v.severity]?.color || ""}>{severityMap[v.severity]?.label || v.severity || "-"}</Badge></td>
-                  <td className="p-3 text-red-600 font-medium">{formatCurrency(Number(v.deduction || 0))}</td>
-                  <td className="p-3"><StatusBadge status={v.status} /></td>
-                  <td className="p-3">
-                    <RowActions
-                      onEdit={() => startEdit(v.id, { type: v.type || "", description: v.description || "", severity: v.severity || "medium", deduction: v.deduction || 0, status: v.status || "active" })}
-                      onDelete={() => startDelete(v.id)}
-                    />
-                  </td>
-                </tr>
-                {editingId === v.id && (
-                  <tr key={`edit-${v.id}`}><td colSpan={7} className="p-2">
-                    <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(v.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                  </td></tr>
-                )}
-                {deletingId === v.id && (
-                  <tr key={`del-${v.id}`}><td colSpan={7} className="p-2">
-                    <InlineDeleteConfirm onConfirm={() => handleDelete(v.id)} onCancel={cancelDelete} isPending={isPending} itemName={v.employeeName} entityType="violation" entityId={v.id} />
-                  </td></tr>
-                )}
-              </Fragment>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-gray-400">لا توجد مخالفات</td></tr>}
-          </TableBody>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
-      </div></div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا توجد مخالفات"
+        pageSize={20}
+        renderRowExtras={(v) => {
+          if (editingId === v.id) {
+            return (
+              <InlineEditForm
+                fields={editFields}
+                form={editForm}
+                setForm={setEditForm}
+                onSave={() => handleSave(v.id, editForm)}
+                onCancel={cancelEdit}
+                isPending={isPending}
+              />
+            );
+          }
+          if (deletingId === v.id) {
+            return (
+              <InlineDeleteConfirm
+                onConfirm={() => handleDelete(v.id)}
+                onCancel={cancelDelete}
+                isPending={isPending}
+                itemName={v.employeeName}
+                entityType="violation"
+                entityId={v.id}
+              />
+            );
+          }
+          return null;
+        }}
+      />
     </div>
   );
 }

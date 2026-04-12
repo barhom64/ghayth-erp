@@ -1,30 +1,18 @@
-import { useState } from "react";
-import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { formatCurrency } from "@/lib/formatters";
+import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { UserCheck, UserX, Users, Search, ToggleLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { UserCheck, UserX, Users, ToggleLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 
 export default function EmployeeActivationPage() {
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
   const { data } = useApiQuery<any>(["employees"], "/employees?limit=200");
   const employees = data?.data || [];
-  const { toast } = useToast();
 
   const filtered = applyFilters(employees, filters, { searchFields: ["name", "empNumber"], statusField: "status" });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
 
   const active = employees.filter((e: any) => e.status === "active").length;
   const inactive = employees.filter((e: any) => e.status !== "active").length;
@@ -34,6 +22,58 @@ export default function EmployeeActivationPage() {
     { label: "نشطين", value: active, icon: UserCheck, color: "text-green-600 bg-green-50" },
     { label: "غير نشطين", value: inactive, icon: UserX, color: "text-red-600 bg-red-50" },
     { label: "معلقين", value: employees.filter((e: any) => e.status === "suspended").length, icon: ToggleLeft, color: "text-yellow-600 bg-yellow-50" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "name",
+      header: "الموظف",
+      sortable: true,
+      render: (e) => (
+        <div className="flex items-center gap-2">
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold", e.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+            {(e.name || "؟").charAt(0)}
+          </div>
+          <span className="font-medium">{e.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: "empNumber",
+      header: "الرقم الوظيفي",
+      sortable: true,
+      className: "text-gray-500 font-mono",
+      render: (e) => e.empNumber || "-",
+    },
+    {
+      key: "jobTitle",
+      header: "المنصب",
+      sortable: true,
+      render: (e) => e.jobTitle || "-",
+    },
+    {
+      key: "branchName",
+      header: "الفرع",
+      sortable: true,
+      className: "text-gray-500",
+      render: (e) => e.branchName || "-",
+    },
+    {
+      key: "salary",
+      header: "الراتب",
+      sortable: true,
+      render: (e) => formatCurrency(Number(e.salary || 0)),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (e) => (
+        <Badge className={e.status === "active" ? "bg-green-100 text-green-700" : e.status === "terminated" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>
+          {e.status === "active" ? "نشط" : e.status === "terminated" ? "منتهي" : e.status || "غير محدد"}
+        </Badge>
+      ),
+    },
   ];
 
   return (
@@ -69,47 +109,17 @@ export default function EmployeeActivationPage() {
           ],
         }}
         values={filters}
-        onChange={(v) => { setFilters(v); setPage(1); }}
+        onChange={setFilters}
         resultCount={filtered.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="name" label="الموظف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="empNumber" label="الرقم الوظيفي" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="jobTitle" label="المنصب" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="branchName" label="الفرع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="salary" label="الراتب" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <TableBody>
-            {(paginatedData || []).map((e: any) => (
-              <tr key={e.id} className="border-b hover:bg-gray-50 transition-colors">
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold", e.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
-                      {(e.name || "؟").charAt(0)}
-                    </div>
-                    <span className="font-medium">{e.name}</span>
-                  </div>
-                </td>
-                <td className="p-3 text-gray-500 font-mono">{e.empNumber || "-"}</td>
-                <td className="p-3">{e.jobTitle || "-"}</td>
-                <td className="p-3 text-gray-500">{e.branchName || "-"}</td>
-                <td className="p-3">{formatCurrency(Number(e.salary || 0))}</td>
-                <td className="p-3">
-                  <Badge className={e.status === "active" ? "bg-green-100 text-green-700" : e.status === "terminated" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>
-                    {e.status === "active" ? "نشط" : e.status === "terminated" ? "منتهي" : e.status || "غير محدد"}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا يوجد موظفين</td></tr>}
-          </TableBody>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
-      </div></div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا يوجد موظفين"
+        pageSize={20}
+      />
     </div>
   );
 }

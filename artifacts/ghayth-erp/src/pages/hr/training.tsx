@@ -1,4 +1,3 @@
-import { useState, Fragment } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,11 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, GraduationCap, Users, BookOpen, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 import { useAppContext } from "@/contexts/app-context";
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -28,15 +24,12 @@ export default function TrainingPage() {
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
   const { data, refetch: refetchPrograms } = useApiQuery<any>(["training-programs"], "/training/programs");
   const { data: statsData } = useApiQuery<any>(["training-stats"], "/training/stats");
   const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
   const items = data?.data || [];
   const enrollments = enrollmentsData?.data || [];
   const filteredEnrollments = applyFilters(enrollments, filters, { searchFields: ["employeeName"], statusField: "status" });
-  const { sortedData: sortedEnrollments, sortState, handleSort } = useSortedData(filteredEnrollments);
   const stats = statsData || {};
 
   const filtered = applyFilters(items, filters, { searchFields: ["title", "trainer"], statusField: "status" });
@@ -71,6 +64,26 @@ export default function TrainingPage() {
   const enrollmentEditFields = [
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "enrolled", label: "مسجل" }, { value: "completed", label: "مكتمل" }, { value: "cancelled", label: "ملغي" }] },
     { key: "score", label: "الدرجة", type: "number" as const },
+  ];
+
+  const enrollmentColumns: DataTableColumn<any>[] = [
+    { key: "employeeName", header: "الموظف", sortable: true, render: (e) => <span className="font-medium">{e.employeeName || "-"}</span> },
+    { key: "programTitle", header: "البرنامج", sortable: true, render: (e) => e.programTitle || "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (e) => <StatusBadge status={e.status} /> },
+    { key: "score", header: "الدرجة", sortable: true, render: (e) => e.score ?? "-" },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (e) => (
+        <div onClick={(ev) => ev.stopPropagation()}>
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => enrollmentActions.startEdit(e.id, { status: e.status || "enrolled", score: e.score || 0 })}
+            onDelete={() => enrollmentActions.startDelete(e.id)}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -108,7 +121,7 @@ export default function TrainingPage() {
           showDateRange: true,
         }}
         values={filters}
-        onChange={(v) => { setFilters(v); setPage(1); }}
+        onChange={setFilters}
         resultCount={filtered.length}
       />
 
@@ -162,50 +175,40 @@ export default function TrainingPage() {
           </div>
         </TabsContent>
         <TabsContent value="enrollments">
-          <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="programTitle" label="البرنامج" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="score" label="الدرجة" sortState={sortState} onSort={handleSort} />
-                  <th className="p-3 text-start font-medium">إجراءات</th>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(sortedEnrollments || []).map((e: any) => (
-                  <Fragment key={e.id}>
-                    <tr className="border-b hover:bg-gray-50">
-                      <td className="p-3 font-medium">{e.employeeName || "-"}</td>
-                      <td className="p-3">{e.programTitle || "-"}</td>
-                      <td className="p-3"><StatusBadge status={e.status} /></td>
-                      <td className="p-3">{e.score ?? "-"}</td>
-                      <td className="p-3">
-                        <RowActions
-                          canEdit={canManage}
-                          onEdit={() => enrollmentActions.startEdit(e.id, { status: e.status || "enrolled", score: e.score || 0 })}
-                          onDelete={() => enrollmentActions.startDelete(e.id)}
-                        />
-                      </td>
-                    </tr>
-                    {enrollmentActions.editingId === e.id && (
-                      <tr><td colSpan={5} className="p-2">
-                        <InlineEditForm fields={enrollmentEditFields} form={enrollmentActions.editForm} setForm={enrollmentActions.setEditForm} onSave={() => enrollmentActions.handleSave(e.id, enrollmentActions.editForm)} onCancel={enrollmentActions.cancelEdit} isPending={enrollmentActions.isPending} />
-                      </td></tr>
-                    )}
-                    {enrollmentActions.deletingId === e.id && (
-                      <tr><td colSpan={5} className="p-2">
-                        <InlineDeleteConfirm onConfirm={() => enrollmentActions.handleDelete(e.id)} onCancel={enrollmentActions.cancelDelete} isPending={enrollmentActions.isPending} itemName={e.employeeName} entityType="training" entityId={e.id} />
-                      </td></tr>
-                    )}
-                  </Fragment>
-                ))}
-                {enrollments.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد تسجيلات</td></tr>}
-              </TableBody>
-            </Table>
-            <PaginationBar page={page} pageSize={pageSize} total={filteredEnrollments.length} onPageChange={setPage} />
-          </div></div>
+          <DataTable
+            columns={enrollmentColumns}
+            data={filteredEnrollments}
+            noToolbar
+            emptyMessage="لا توجد تسجيلات"
+            pageSize={20}
+            renderRowExtras={(e) => {
+              if (enrollmentActions.editingId === e.id) {
+                return (
+                  <InlineEditForm
+                    fields={enrollmentEditFields}
+                    form={enrollmentActions.editForm}
+                    setForm={enrollmentActions.setEditForm}
+                    onSave={() => enrollmentActions.handleSave(e.id, enrollmentActions.editForm)}
+                    onCancel={enrollmentActions.cancelEdit}
+                    isPending={enrollmentActions.isPending}
+                  />
+                );
+              }
+              if (enrollmentActions.deletingId === e.id) {
+                return (
+                  <InlineDeleteConfirm
+                    onConfirm={() => enrollmentActions.handleDelete(e.id)}
+                    onCancel={enrollmentActions.cancelDelete}
+                    isPending={enrollmentActions.isPending}
+                    itemName={e.employeeName}
+                    entityType="training"
+                    entityId={e.id}
+                  />
+                );
+              }
+              return null;
+            }}
+          />
         </TabsContent>
       </Tabs>
     </div>

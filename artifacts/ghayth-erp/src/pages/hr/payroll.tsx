@@ -3,16 +3,13 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, DollarSign, Users, TrendingUp, FileText, Eye } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { cn } from "@/lib/utils";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 
@@ -56,12 +53,8 @@ export default function PayrollPage() {
   const items = data?.data || [];
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
 
   const filtered = applyFilters(items, filters, { searchFields: ["period"], statusField: "status", dateField: "createdAt" });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
 
   const totalNet = items.reduce((s: number, r: any) => s + Number(r.totalAmount || r.totalNet || 0), 0);
   const totalEmps = items.reduce((s: number, r: any) => s + Number(r.employeeCount || 0), 0);
@@ -71,6 +64,49 @@ export default function PayrollPage() {
     { label: "إجمالي المبالغ", value: formatCurrency(totalNet), icon: DollarSign, color: "text-green-600 bg-green-50" },
     { label: "إجمالي الموظفين", value: totalEmps, icon: Users, color: "text-purple-600 bg-purple-50" },
     { label: "متوسط الراتب", value: totalEmps > 0 ? formatCurrency(Math.round(totalNet / totalEmps)) : "0", icon: TrendingUp, color: "text-orange-600 bg-orange-50" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "period",
+      header: "الفترة",
+      sortable: true,
+      render: (p) => <span className="font-medium">{p.period || `${p.month}`}</span>,
+    },
+    {
+      key: "employeeCount",
+      header: "الموظفين",
+      sortable: true,
+      render: (p) => p.employeeCount || 0,
+    },
+    {
+      key: "totalAmount",
+      header: "الصافي الإجمالي",
+      sortable: true,
+      render: (p) => <span className="font-bold text-green-700">{formatCurrency(Number(p.totalAmount || p.totalNet || 0))}</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (p) => <StatusBadge status={p.status} />,
+    },
+    {
+      key: "createdAt",
+      header: "التاريخ",
+      sortable: true,
+      className: "text-gray-500",
+      render: (p) => p.createdAt ? formatDateAr(p.createdAt) : "-",
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (p) => (
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedRun(p.id); }}>
+          <Eye className="h-4 w-4 me-1" />التفاصيل
+        </Button>
+      ),
+    },
   ];
 
   return (
@@ -116,7 +152,7 @@ export default function PayrollPage() {
           showDateRange: true,
         }}
         values={filters}
-        onChange={(v) => { setFilters(v); setPage(1); }}
+        onChange={setFilters}
         resultCount={filtered.length}
       />
 
@@ -126,44 +162,13 @@ export default function PayrollPage() {
           <TabsTrigger value="details">التفاصيل</TabsTrigger>
         </TabsList>
         <TabsContent value="runs">
-          <div className="border rounded-lg bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortableTableHead column="period" label="الفترة" sortState={sortState} onSort={handleSort} />
-                    <SortableTableHead column="employeeCount" label="الموظفين" sortState={sortState} onSort={handleSort} />
-                    <SortableTableHead column="totalAmount" label="الصافي الإجمالي" sortState={sortState} onSort={handleSort} />
-                    <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                    <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
-                    <TableHead>إجراءات</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <DataTableWrapper
-                  isLoading={false}
-                  data={paginatedData}
-                  colCount={6}
-                  emptyMessage="لا توجد مسيرات رواتب"
-                >
-                  {(paginatedData || []).map((p: any) => (
-                    <TableRow key={p.id} className="hover:bg-gray-50 transition-colors">
-                      <TableCell className="font-medium">{p.period || `${p.month}`}</TableCell>
-                      <TableCell>{p.employeeCount || 0}</TableCell>
-                      <TableCell className="font-bold text-green-700">{formatCurrency(Number(p.totalAmount || p.totalNet || 0))}</TableCell>
-                      <TableCell><StatusBadge status={p.status} /></TableCell>
-                      <TableCell className="text-gray-500">{p.createdAt ? formatDateAr(p.createdAt) : "-"}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedRun(p.id)}>
-                          <Eye className="h-4 w-4 me-1" />التفاصيل
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </DataTableWrapper>
-              </Table>
-            </div>
-            <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
-          </div>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            noToolbar
+            emptyMessage="لا توجد مسيرات رواتب"
+            pageSize={20}
+          />
         </TabsContent>
         <TabsContent value="details">
           {selectedRun ? (

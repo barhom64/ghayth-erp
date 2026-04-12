@@ -1,19 +1,14 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarClock, Plus, Clock, Users, Sun, Moon, Search } from "lucide-react";
+import { CalendarClock, Plus, Clock, Users, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 
 export default function ShiftsPage() {
   const { data, refetch } = useApiQuery<any>(["shifts"], "/hr/shifts");
@@ -21,12 +16,16 @@ export default function ShiftsPage() {
   const items = data?.data || [];
   const assignments = assignmentsData?.data || [];
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
 
   const filteredAssignments = applyFilters(assignments, filters, { searchFields: ["employeeName", "shiftName"] });
-  const { sortedData: sortedAssignments, sortState, handleSort } = useSortedData(filteredAssignments);
-  const paginatedAssignments = sortedAssignments?.slice((page - 1) * pageSize, page * pageSize);
+
+  const assignmentColumns: DataTableColumn<any>[] = [
+    { key: "employeeName", header: "الموظف", sortable: true, render: (a) => <span className="font-medium">{a.employeeName || "-"}</span> },
+    { key: "shiftName", header: "الوردية", sortable: true, render: (a) => a.shiftName || "-" },
+    { key: "startDate", header: "من", sortable: true, className: "text-gray-500", render: (a) => a.startDate || "-" },
+    { key: "endDate", header: "إلى", sortable: true, className: "text-gray-500", render: (a) => a.endDate || "مستمر" },
+    { key: "startTime", header: "الوقت", sortable: true, className: "font-mono text-sm", render: (a) => `${a.startTime} - ${a.endTime}` },
+  ];
 
   const kpis = [
     { label: "إجمالي الورديات", value: items.length, icon: CalendarClock, color: "text-blue-600 bg-blue-50" },
@@ -144,41 +143,24 @@ export default function ShiftsPage() {
           </div>
         </TabsContent>
         <TabsContent value="assignments">
-          <AdvancedFilters
-            config={{
-              searchPlaceholder: "بحث بالموظف أو الوردية...",
-              showDateRange: true,
-            }}
-            values={filters}
-            onChange={(v) => { setFilters(v); setPage(1); }}
-            resultCount={filteredAssignments.length}
-          />
-          <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="shiftName" label="الوردية" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="startDate" label="من" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="endDate" label="إلى" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="startTime" label="الوقت" sortState={sortState} onSort={handleSort} />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(paginatedAssignments || []).map((a: any) => (
-                  <tr key={a.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{a.employeeName || "-"}</td>
-                    <td className="p-3">{a.shiftName || "-"}</td>
-                    <td className="p-3 text-gray-500">{a.startDate || "-"}</td>
-                    <td className="p-3 text-gray-500">{a.endDate || "مستمر"}</td>
-                    <td className="p-3 font-mono text-sm">{a.startTime} - {a.endTime}</td>
-                  </tr>
-                ))}
-                {filteredAssignments.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد تعيينات</td></tr>}
-              </TableBody>
-            </Table>
-            <PaginationBar page={page} pageSize={pageSize} total={filteredAssignments.length} onPageChange={setPage} />
-          </div></div>
+          <div className="space-y-4">
+            <AdvancedFilters
+              config={{
+                searchPlaceholder: "بحث بالموظف أو الوردية...",
+                showDateRange: true,
+              }}
+              values={filters}
+              onChange={setFilters}
+              resultCount={filteredAssignments.length}
+            />
+            <DataTable
+              columns={assignmentColumns}
+              data={filteredAssignments}
+              noToolbar
+              emptyMessage="لا توجد تعيينات"
+              pageSize={20}
+            />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

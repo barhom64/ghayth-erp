@@ -1,20 +1,16 @@
 import { useState } from "react";
-import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Scale, DollarSign, Search, Shield, TrendingUp } from "lucide-react";
+import { AlertTriangle, Scale, DollarSign, Shield, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 
 const severityMap: Record<string, { label: string; color: string }> = {
   low: { label: "منخفض", color: "bg-green-100 text-green-700" },
@@ -24,7 +20,6 @@ const severityMap: Record<string, { label: string; color: string }> = {
 };
 
 export default function ViolationsManagementPage() {
-  const [search, setSearch] = useState("");
   const { data } = useApiQuery<any>(["violations"], "/hr/violations");
   const { data: stats } = useApiQuery<any>(["violations-stats"], "/hr/violations-stats");
   const items = data?.data || [];
@@ -50,17 +45,59 @@ export default function ViolationsManagementPage() {
   };
 
   const [filters, setFilters] = useFilters();
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
 
   const byType = items.reduce((acc: Record<string, number>, v: any) => {
     const t = v.type || "أخرى";
     acc[t] = (acc[t] || 0) + 1;
     return acc;
   }, {});
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
+    { key: "type", header: "النوع", sortable: true, render: (v) => v.type },
+    { key: "description", header: "الوصف", sortable: true, className: "text-gray-500 max-w-48 truncate", render: (v) => v.description },
+    {
+      key: "severity",
+      header: "الشدة",
+      sortable: true,
+      render: (v) => <Badge className={severityMap[v.severity]?.color || ""}>{severityMap[v.severity]?.label || v.severity}</Badge>,
+    },
+    {
+      key: "deduction",
+      header: "الخصم",
+      sortable: true,
+      className: "text-red-600 font-medium",
+      render: (v) => formatCurrency(Number(v.deduction || 0)),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (v) => (
+        <Badge className={v.status === "active" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+          {v.status === "active" ? "نشط" : v.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "إجراء",
+      render: (v) => (
+        v.status === "active" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs"
+            onClick={(e) => { e.stopPropagation(); updateViolation(v.id, { status: "resolved" }); }}
+            disabled={resolvingId === v.id}
+          >
+            <Shield className="h-3 w-3 me-1" />{resolvingId === v.id ? "..." : "حل"}
+          </Button>
+        ) : null
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -93,7 +130,7 @@ export default function ViolationsManagementPage() {
           <TabsTrigger value="analysis">التحليل</TabsTrigger>
         </TabsList>
         <TabsContent value="list">
-          <div className="mb-4">
+          <div className="space-y-4">
             <AdvancedFilters
               config={{
                 searchPlaceholder: "بحث بالاسم...",
@@ -101,44 +138,17 @@ export default function ViolationsManagementPage() {
                 showDateRange: true,
               }}
               values={filters}
-              onChange={(v) => { setFilters(v); setPage(1); }}
+              onChange={setFilters}
               resultCount={filtered.length}
             />
+            <DataTable
+              columns={columns}
+              data={filtered}
+              noToolbar
+              emptyMessage="لا توجد مخالفات"
+              pageSize={20}
+            />
           </div>
-          <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-            <Table>
-              <TableHeader><TableRow>
-                <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="type" label="النوع" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="description" label="الوصف" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="severity" label="الشدة" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="deduction" label="الخصم" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                <th className="p-3 text-start">إجراء</th>
-              </TableRow></TableHeader>
-              <TableBody>
-                {(paginatedData || []).map((v: any) => (
-                  <tr key={v.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{v.employeeName}</td>
-                    <td className="p-3">{v.type}</td>
-                    <td className="p-3 text-gray-500 max-w-48 truncate">{v.description}</td>
-                    <td className="p-3"><Badge className={severityMap[v.severity]?.color || ""}>{severityMap[v.severity]?.label || v.severity}</Badge></td>
-                    <td className="p-3 text-red-600 font-medium">{formatCurrency(Number(v.deduction || 0))}</td>
-                    <td className="p-3"><Badge className={v.status === "active" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>{v.status === "active" ? "نشط" : v.status}</Badge></td>
-                    <td className="p-3">
-                      {v.status === "active" && (
-                        <Button size="sm" variant="outline" className="text-xs" onClick={() => updateViolation(v.id, { status: "resolved" })} disabled={resolvingId === v.id}>
-                          <Shield className="h-3 w-3 me-1" />{resolvingId === v.id ? "..." : "حل"}
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-gray-400">لا توجد مخالفات</td></tr>}
-              </TableBody>
-            </Table>
-            <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
-          </div></div>
         </TabsContent>
         <TabsContent value="analysis">
           <Card>

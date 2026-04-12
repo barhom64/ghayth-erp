@@ -1,19 +1,16 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Clock, Plus, CheckCircle, XCircle, AlertCircle, Users, ChevronDown, ChevronUp, AlertTriangle, DollarSign } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { cn } from "@/lib/utils";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 
@@ -97,7 +94,7 @@ export default function AttendancePage() {
   const items = asList(data);
 
   const filtersForApply = filters.status === "late"
-    ? { ...filters, status: undefined }
+    ? ({ ...filters, status: "" } as typeof filters)
     : filters;
   const filtered = applyFilters(items, filtersForApply, {
     searchFields: ["employeeName"],
@@ -109,13 +106,90 @@ export default function AttendancePage() {
     }
     return true;
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const kpis = [
     { label: "الحضور", value: stats?.present ?? items.filter((i: any) => i.status === "present").length, icon: CheckCircle, color: "text-green-600 bg-green-50", trend: "+٥٪" },
     { label: "الغياب", value: stats?.absent ?? items.filter((i: any) => i.status === "absent").length, icon: XCircle, color: "text-red-600 bg-red-50", trend: "-٢٪" },
     { label: "المتأخرين", value: stats?.late ?? items.filter((i: any) => i.status === "late" || (i.lateMinutes && i.lateMinutes > 0)).length, icon: AlertCircle, color: "text-yellow-600 bg-yellow-50", trend: "" },
     { label: "إجمالي الموظفين", value: stats?.totalEmployees ?? items.length, icon: Users, color: "text-blue-600 bg-blue-50", trend: "" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "employeeName",
+      header: "الموظف",
+      sortable: true,
+      render: (a) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">
+            {(a.employeeName || "؟").charAt(0)}
+          </div>
+          <span className="font-medium">{a.employeeName}</span>
+        </div>
+      ),
+    },
+    {
+      key: "date",
+      header: "التاريخ",
+      sortable: true,
+      render: (a) => <span className="text-gray-500">{a.date}</span>,
+    },
+    {
+      key: "checkIn",
+      header: "الحضور",
+      sortable: true,
+      render: (a) => (
+        <span className="text-green-600 font-mono">
+          {a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}
+        </span>
+      ),
+    },
+    {
+      key: "checkOut",
+      header: "الانصراف",
+      sortable: true,
+      render: (a) => (
+        <span className="text-red-600 font-mono">
+          {a.checkOut ? new Date(a.checkOut).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}
+        </span>
+      ),
+    },
+    {
+      key: "workHours",
+      header: "ساعات العمل",
+      sortable: true,
+      className: "font-mono",
+      render: (a) => a.workHours != null ? <span className="text-blue-600 font-medium">{Number(a.workHours).toFixed(1)} ساعة</span> : <span className="text-gray-400">-</span>,
+    },
+    {
+      key: "lateMinutes",
+      header: "التأخير (دقيقة)",
+      sortable: true,
+      render: (a) => a.lateMinutes > 0 ? <span className="text-red-500 font-medium">{a.lateMinutes} دقيقة</span> : <span className="text-gray-400">-</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (a) => <StatusBadge status={a.status} />,
+    },
+    {
+      key: "expand",
+      header: "",
+      width: "40px",
+      render: (a) => {
+        const hasPenalty = (a.lateMinutes > 0) || (a.penaltyLevel > 0) || (a.deductionAmount > 0) || (a.overtimeMinutes > 0);
+        if (!hasPenalty) return null;
+        return (
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === a.id ? null : a.id); }}
+            className="text-gray-400 hover:text-gray-600 p-1"
+          >
+            {expandedId === a.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        );
+      },
+    },
   ];
 
   return (
@@ -171,7 +245,7 @@ export default function AttendancePage() {
         }}
         values={filters}
         onChange={setFilters}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
       <Tabs defaultValue="list" dir="rtl">
@@ -180,72 +254,29 @@ export default function AttendancePage() {
           <TabsTrigger value="summary">الملخص</TabsTrigger>
         </TabsList>
         <TabsContent value="list">
-          <div className="border rounded-lg bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="date" label="التاريخ" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="checkIn" label="الحضور" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="checkOut" label="الانصراف" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="workHours" label="ساعات العمل" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="lateMinutes" label="التأخير (دقيقة)" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <DataTableWrapper
-                isLoading={isLoading}
-                isError={isError}
-                error={error}
-                onRetry={() => refetch()}
-                data={sortedData}
-                colCount={8}
-                emptyMessage="لا توجد سجلات حضور لهذا الشهر"
-                emptyIcon={<Clock className="h-6 w-6 text-slate-400" />}
-              >
-                {(sortedData || []).map((a: any) => {
-                  const checkInTime = a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-";
-                  const checkOutTime = a.checkOut ? new Date(a.checkOut).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-";
-                  const hasPenalty = (a.lateMinutes > 0) || (a.penaltyLevel > 0) || (a.deductionAmount > 0) || (a.overtimeMinutes > 0);
-                  return (
-                    <Fragment key={a.id}>
-                      <TableRow className={cn(expandedId === a.id && "bg-gray-50")}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">
-                              {(a.employeeName || "؟").charAt(0)}
-                            </div>
-                            <span className="font-medium">{a.employeeName}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-gray-500">{a.date}</TableCell>
-                        <TableCell className="text-green-600 font-mono">{checkInTime}</TableCell>
-                        <TableCell className="text-red-600 font-mono">{checkOutTime}</TableCell>
-                        <TableCell className="font-mono">{a.workHours != null ? <span className="text-blue-600 font-medium">{Number(a.workHours).toFixed(1)} ساعة</span> : <span className="text-gray-400">-</span>}</TableCell>
-                        <TableCell>{a.lateMinutes > 0 ? <span className="text-red-500 font-medium">{a.lateMinutes} دقيقة</span> : <span className="text-gray-400">-</span>}</TableCell>
-                        <TableCell><StatusBadge status={a.status} /></TableCell>
-                        <TableCell>
-                          {hasPenalty && (
-                            <button onClick={() => setExpandedId(expandedId === a.id ? null : a.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                              {expandedId === a.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                            </button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                      {expandedId === a.id && hasPenalty && (
-                        <TableRow>
-                          <TableCell colSpan={8} className="p-3">
-                            <PenaltyChain record={a} />
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </DataTableWrapper>
-            </Table>
-          </div>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد سجلات حضور لهذا الشهر"
+            emptyIcon={<Clock className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            rowClassName={(a) => expandedId === a.id ? "bg-gray-50" : undefined}
+            renderRowExtras={(a) => {
+              const hasPenalty = (a.lateMinutes > 0) || (a.penaltyLevel > 0) || (a.deductionAmount > 0) || (a.overtimeMinutes > 0);
+              if (expandedId === a.id && hasPenalty) {
+                return (
+                  <div className="p-3">
+                    <PenaltyChain record={a} />
+                  </div>
+                );
+              }
+              return null;
+            }}
+          />
         </TabsContent>
         <TabsContent value="summary">
           <Card>
