@@ -7,11 +7,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Upload, CheckCircle, XCircle, RefreshCw, Landmark, Link2 } from "lucide-react";
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { apiFetch } from "@/lib/api";
 
 export default function BankReconciliationPage() {
   const [activeBatch, setActiveBatch] = useState<string | null>(null);
@@ -227,42 +226,30 @@ export default function BankReconciliationPage() {
                   <p className="text-green-600 font-semibold">جميع البنود متطابقة!</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>التاريخ</TableHead>
-                        <TableHead>الوصف</TableHead>
-                        <TableHead>المرجع</TableHead>
-                        <TableHead>النوع</TableHead>
-                        <TableHead>المبلغ</TableHead>
-                        <TableHead>مطابقة يدوية</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {unmatchedRows.map((r: any) => (
-                        <TableRow key={r.id} className="bg-red-50/30">
-                          <TableCell className="text-xs text-gray-500">{r.statementDate ? formatDateAr(r.statementDate) : "-"}</TableCell>
-                          <TableCell className="text-sm">{r.description || "-"}</TableCell>
-                          <TableCell className="font-mono text-xs text-gray-500">{r.reference || "-"}</TableCell>
-                          <TableCell>
-                            <Badge variant={r.type === "debit" ? "default" : "secondary"}>
-                              {r.type === "debit" ? "مدين" : "دائن"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-semibold">{formatCurrency(Number(r.amount))}</TableCell>
-                          <TableCell>
-                            <Link href={`/finance/bank-reconciliation/manual-match/${activeBatch}/${r.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Link2 className="h-4 w-4 text-blue-500" />
-                            </Button>
-                          </Link>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <DataTable
+                  columns={[
+                    { key: "statementDate", header: "التاريخ", render: (r: any) => <span className="text-xs text-gray-500">{r.statementDate ? formatDateAr(r.statementDate) : "-"}</span> },
+                    { key: "description", header: "الوصف", render: (r: any) => <span className="text-sm">{r.description || "-"}</span> },
+                    { key: "reference", header: "المرجع", render: (r: any) => <span className="font-mono text-xs text-gray-500">{r.reference || "-"}</span> },
+                    { key: "type", header: "النوع", render: (r: any) => (
+                      <Badge variant={r.type === "debit" ? "default" : "secondary"}>
+                        {r.type === "debit" ? "مدين" : "دائن"}
+                      </Badge>
+                    ) },
+                    { key: "amount", header: "المبلغ", render: (r: any) => <span className="font-semibold">{formatCurrency(Number(r.amount))}</span> },
+                    { key: "actions", header: "مطابقة يدوية", render: (r: any) => (
+                      <Link href={`/finance/bank-reconciliation/manual-match/${activeBatch}/${r.id}`}>
+                        <Button variant="ghost" size="sm">
+                          <Link2 className="h-4 w-4 text-blue-500" />
+                        </Button>
+                      </Link>
+                    ) },
+                  ] as DataTableColumn<any>[]}
+                  data={unmatchedRows}
+                  rowClassName={() => "bg-red-50/30"}
+                  searchPlaceholder={null}
+                  emptyMessage="لا توجد بنود غير متطابقة"
+                />
               )}
             </CardContent>
           </Card>
@@ -275,33 +262,19 @@ export default function BankReconciliationPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>التاريخ</TableHead>
-                      <TableHead>وصف الكشف</TableHead>
-                      <TableHead>المبلغ</TableHead>
-                      <TableHead>قيد يومية</TableHead>
-                      <TableHead>تاريخ القيد</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {matchedRows.map((r: any) => (
-                      <TableRow key={r.id} className="bg-green-50/20">
-                        <TableCell className="text-xs text-gray-500">{r.statementDate ? formatDateAr(r.statementDate) : "-"}</TableCell>
-                        <TableCell className="text-sm">{r.description || "-"}</TableCell>
-                        <TableCell className="font-semibold text-green-600">{formatCurrency(Number(r.amount))}</TableCell>
-                        <TableCell className="font-mono text-xs text-blue-600">{r.jeRef || "-"}</TableCell>
-                        <TableCell className="text-xs text-gray-500">{r.jeDate ? formatDateAr(r.jeDate) : "-"}</TableCell>
-                      </TableRow>
-                    ))}
-                    {matchedRows.length === 0 && (
-                      <TableRow><TableCell colSpan={5} className="text-center text-gray-400 p-4">لا توجد بنود متطابقة بعد</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable
+                columns={[
+                  { key: "statementDate", header: "التاريخ", render: (r: any) => <span className="text-xs text-gray-500">{r.statementDate ? formatDateAr(r.statementDate) : "-"}</span> },
+                  { key: "description", header: "وصف الكشف", render: (r: any) => <span className="text-sm">{r.description || "-"}</span> },
+                  { key: "amount", header: "المبلغ", render: (r: any) => <span className="font-semibold text-green-600">{formatCurrency(Number(r.amount))}</span> },
+                  { key: "jeRef", header: "قيد يومية", render: (r: any) => <span className="font-mono text-xs text-blue-600">{r.jeRef || "-"}</span> },
+                  { key: "jeDate", header: "تاريخ القيد", render: (r: any) => <span className="text-xs text-gray-500">{r.jeDate ? formatDateAr(r.jeDate) : "-"}</span> },
+                ] as DataTableColumn<any>[]}
+                data={matchedRows}
+                rowClassName={() => "bg-green-50/20"}
+                searchPlaceholder={null}
+                emptyMessage="لا توجد بنود متطابقة بعد"
+              />
             </CardContent>
           </Card>
         </div>

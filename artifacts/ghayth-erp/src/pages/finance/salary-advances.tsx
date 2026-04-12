@@ -1,18 +1,15 @@
 import { useState } from "react";
-import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Banknote, DollarSign, Plus, X } from "lucide-react";
-import { getCurrencySymbol, formatCurrency , formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV, useAdvancedFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@/components/approval-actions";
@@ -20,45 +17,80 @@ import { ApprovalActions } from "@/components/approval-actions";
 export default function SalaryAdvancesPage() {
   const { roleLevel, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading } = useApiQuery<any>(["salary-advances", scopeQueryString], `/finance/salary-advances${scopeSuffix}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["salary-advances", scopeQueryString], `/finance/salary-advances${scopeSuffix}`);
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
   const [showForm, setShowForm] = useState(false);
   const canApprove = roleLevel >= 70;
-  const qc = useQueryClient();
-  const { toast } = useToast();
   const advFilters = useAdvancedFilters();
-
-  const handleApprove = async (id: number, approved: boolean | null) => {
-    let notes: string | undefined;
-    if (approved === false) {
-      const reason = window.prompt("سبب الرفض:");
-      if (!reason) return;
-      notes = reason;
-    } else if (approved === null) {
-      const reason = window.prompt("سبب الإرجاع:");
-      if (!reason) return;
-      notes = reason;
-    }
-    try {
-      await apiFetch(`/finance/salary-advances/${id}/approve`, {
-        method: "PATCH",
-        body: JSON.stringify({ approved, notes }),
-      });
-      const msg = approved === true ? "تمت الموافقة على السلفة" : approved === false ? "تم رفض السلفة" : "تمت إعادة السلفة";
-      toast({ title: msg });
-      qc.invalidateQueries({ queryKey: ["salary-advances"] });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
-    }
-  };
 
   const filtered = applyFilters(items as Record<string, any>[], filters, {
     searchFields: ["description", "ref"],
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "المرجع",
+      sortable: true,
+      render: (s) => <span className="font-mono text-blue-600 text-sm">{s.ref}</span>,
+    },
+    {
+      key: "employeeName",
+      header: "الموظف",
+      sortable: true,
+      render: (s) => <span className="font-medium">{s.employeeName || "-"}</span>,
+    },
+    {
+      key: "description",
+      header: "الوصف",
+      sortable: true,
+      render: (s) => s.description || "-",
+    },
+    {
+      key: "amount",
+      header: "المبلغ",
+      sortable: true,
+      render: (s) => <span className="font-semibold">{formatCurrency(Number(s.amount))}</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (s) => <StatusBadge status={s.status || "pending"} />,
+    },
+    {
+      key: "date",
+      header: "التاريخ",
+      sortable: true,
+      render: (s) => <span className="text-gray-500 text-sm">{s.date ? formatDateAr(s.date) : "-"}</span>,
+    },
+    {
+      key: "actions",
+      header: "إجراء",
+      hidden: !canApprove,
+      render: (s) => (
+        <ApprovalActions
+          entityType="salary_advance"
+          entityId={s.id}
+          currentStatus={s.status || "pending"}
+          approveEndpoint={`/finance/salary-advances/${s.id}/approve`}
+          rejectEndpoint={`/finance/salary-advances/${s.id}/approve`}
+          returnEndpoint={`/finance/salary-advances/${s.id}/approve`}
+          approveMethod="PATCH"
+          rejectMethod="PATCH"
+          returnMethod="PATCH"
+          approveBody={() => ({ approved: true })}
+          rejectBody={(notes) => ({ approved: false, notes })}
+          returnBody={(notes) => ({ approved: null, notes })}
+          pendingStatuses={["pending"]}
+          invalidateKeys={[["salary-advances"]]}
+        />
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -89,13 +121,13 @@ export default function SalaryAdvancesPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((sortedData || []) as any[], [
+        onExportCSV={() => exportToCSV((filtered || []) as any[], [
           { key: "ref", label: "المرجع" },
           { key: "description", label: "الوصف" },
           { key: "amount", label: "المبلغ" },
           { key: "date", label: "التاريخ" },
         ], "سلف_الرواتب")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
       <AdvancedFilters
@@ -106,58 +138,17 @@ export default function SalaryAdvancesPage() {
         onReset={advFilters.reset}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="ref" label="المرجع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="description" label="الوصف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="amount" label="المبلغ" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="date" label="التاريخ" sortState={sortState} onSort={handleSort} />
-            {canApprove && <th className="p-3 text-start font-medium text-xs">إجراء</th>}
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(3)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={canApprove ? 7 : 6} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-            )) : filtered.length === 0 ? (
-              <tr><td colSpan={canApprove ? 7 : 6} className="p-12 text-center text-gray-400">
-                <Banknote className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>لا توجد سلف</p>
-              </td></tr>
-            ) : (sortedData || []).map((s: any) => (
-              <tr key={s.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-mono text-blue-600 text-sm">{s.ref}</td>
-                <td className="p-3 font-medium">{s.employeeName || "-"}</td>
-                <td className="p-3">{s.description || "-"}</td>
-                <td className="p-3 font-semibold">{formatCurrency(Number(s.amount))}</td>
-                <td className="p-3"><StatusBadge status={s.status || "pending"} /></td>
-                <td className="p-3 text-gray-500 text-sm">{s.date ? formatDateAr(s.date) : "-"}</td>
-                {canApprove && (
-                  <td className="p-3">
-                    <ApprovalActions
-                      entityType="salary_advance"
-                      entityId={s.id}
-                      currentStatus={s.status || "pending"}
-                      approveEndpoint={`/finance/salary-advances/${s.id}/approve`}
-                      rejectEndpoint={`/finance/salary-advances/${s.id}/approve`}
-                      returnEndpoint={`/finance/salary-advances/${s.id}/approve`}
-                      approveMethod="PATCH"
-                      rejectMethod="PATCH"
-                      returnMethod="PATCH"
-                      approveBody={() => ({ approved: true })}
-                      rejectBody={(notes) => ({ approved: false, notes })}
-                      returnBody={(notes) => ({ approved: null, notes })}
-                      pendingStatuses={["pending"]}
-                      invalidateKeys={[["salary-advances"]]}
-                    />
-                  </td>
-                )}
-              </tr>
-            ))}
-          </TableBody>
-        </Table>
-      </div></div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا توجد سلف"
+        emptyIcon={<Banknote className="h-6 w-6 text-slate-400" />}
+        noToolbar
+      />
     </div>
   );
 }

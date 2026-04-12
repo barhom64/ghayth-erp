@@ -1,23 +1,20 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, ShoppingCart, Package, Clock, CheckCircle, Eye, ChevronDown, ChevronUp, Copy } from "lucide-react";
+import { Plus, ShoppingCart, Package, Clock, CheckCircle, Eye, ChevronDown, ChevronUp, Copy } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ActionHistory, NotesDisplay, ApprovalActions } from "@/components/approval-actions";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV, useAdvancedFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function PurchaseOrdersPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading } = useApiQuery<any>(["purchase-orders", scopeQueryString], `/finance/purchase-orders${scopeSuffix}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["purchase-orders", scopeQueryString], `/finance/purchase-orders${scopeSuffix}`);
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -28,11 +25,67 @@ export default function PurchaseOrdersPage() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const totalAmount = items.reduce((s: number, po: any) => s + Number(po.totalAmount || 0), 0);
   const pendingCount = items.filter((po: any) => ["draft", "pending"].includes(po.status)).length;
   const receivedCount = items.filter((po: any) => po.status === "received").length;
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "الرقم",
+      sortable: true,
+      render: (po) => <span className="font-mono text-blue-600">{po.ref || `#${formatNumber(po.id)}`}</span>,
+    },
+    {
+      key: "supplierName",
+      header: "المورد",
+      sortable: true,
+      render: (po) => <span className="font-medium">{po.supplierName || "-"}</span>,
+    },
+    {
+      key: "totalAmount",
+      header: "المبلغ",
+      sortable: true,
+      render: (po) => <span className="font-semibold">{formatCurrency(po.totalAmount)}</span>,
+    },
+    {
+      key: "expectedDelivery",
+      header: "التسليم المتوقع",
+      sortable: true,
+      render: (po) => <span className="text-gray-500">{po.expectedDelivery ? formatDateAr(po.expectedDelivery) : "-"}</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (po) => <StatusBadge status={po.status} />,
+    },
+    {
+      key: "notes",
+      header: "ملاحظات",
+      render: (po) => <NotesDisplay status={po.status} notes={po.notes} rejectionReason={po.notes} />,
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (po) => (
+        <div className="flex items-center gap-1">
+          <Link href={`/finance/purchase-orders/${po.id}`}>
+            <Button variant="ghost" size="sm"><Eye className="h-4 w-4 me-1" />عرض</Button>
+          </Link>
+          <Link href={`/finance/purchase-orders/create?copyFrom=${po.id}`}>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500" title="نسخ طلب الشراء">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+          <button onClick={() => setExpandedId(expandedId === po.id ? null : po.id)} className="text-gray-400 hover:text-gray-600 p-1">
+            {expandedId === po.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -77,14 +130,14 @@ export default function PurchaseOrdersPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((sortedData || []) as any[], [
+        onExportCSV={() => exportToCSV((filtered || []) as any[], [
           { key: "ref", label: "الرقم" },
           { key: "supplierName", label: "المورد" },
           { key: "totalAmount", label: "المبلغ" },
           { key: "expectedDelivery", label: "التسليم المتوقع" },
           { key: "status", label: "الحالة" },
         ], "طلبات_الشراء")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
       <AdvancedFilters
@@ -95,77 +148,36 @@ export default function PurchaseOrdersPage() {
         onReset={advFilters.reset}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead column="ref" label="الرقم" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="supplierName" label="المورد" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="totalAmount" label="المبلغ" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="expectedDelivery" label="التسليم المتوقع" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-              <TableHead>ملاحظات</TableHead>
-              <TableHead>إجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={7} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-            )) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className="p-12 text-center text-gray-400">
-                <ShoppingCart className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>لا توجد طلبات شراء</p>
-              </td></tr>
-            ) : (sortedData || []).map((po: any) => (
-              <Fragment key={po.id}>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-mono text-blue-600">{po.ref || `#${formatNumber(po.id)}`}</td>
-                  <td className="p-3 font-medium">{po.supplierName || "-"}</td>
-                  <td className="p-3 font-semibold">{formatCurrency(po.totalAmount)}</td>
-                  <td className="p-3 text-gray-500">{po.expectedDelivery ? formatDateAr(po.expectedDelivery) : "-"}</td>
-                  <td className="p-3"><StatusBadge status={po.status} /></td>
-                  <td className="p-3">
-                    <NotesDisplay status={po.status} notes={po.notes} rejectionReason={po.notes} />
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-1">
-                      <Link href={`/finance/purchase-orders/${po.id}`}>
-                        <Button variant="ghost" size="sm"><Eye className="h-4 w-4 me-1" />عرض</Button>
-                      </Link>
-                      <Link href={`/finance/purchase-orders/create?copyFrom=${po.id}`}>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500" title="نسخ طلب الشراء">
-                          <Copy className="h-3.5 w-3.5" />
-                        </Button>
-                      </Link>
-                      <button onClick={() => setExpandedId(expandedId === po.id ? null : po.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                        {expandedId === po.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                {expandedId === po.id && (
-                  <tr><td colSpan={7} className="p-3 bg-gray-50/50 space-y-4">
-                    {po.status === "pending" && (
-                      <div className="bg-white p-4 rounded-lg border border-yellow-200">
-                        <h4 className="font-semibold mb-3">اتخاذ إجراء</h4>
-                        <ApprovalActions
-                          entityType="purchase_order"
-                          entityId={po.id}
-                          currentStatus={po.status}
-                          invalidateKeys={[["purchase-orders"]]}
-                        />
-                      </div>
-                    )}
-                    <ActionHistory entityType="purchase_order" entityId={po.id} defaultOpen />
-                  </td></tr>
-                )}
-              </Fragment>
-            ))}
-          </TableBody>
-        </Table>
-        </div>
-      </div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا توجد طلبات شراء"
+        emptyIcon={<ShoppingCart className="h-6 w-6 text-slate-400" />}
+        noToolbar
+        renderRowExtras={(po) => {
+          if (expandedId !== po.id) return null;
+          return (
+            <div className="p-3 bg-gray-50/50 space-y-4">
+              {po.status === "pending" && (
+                <div className="bg-white p-4 rounded-lg border border-yellow-200">
+                  <h4 className="font-semibold mb-3">اتخاذ إجراء</h4>
+                  <ApprovalActions
+                    entityType="purchase_order"
+                    entityId={po.id}
+                    currentStatus={po.status}
+                    invalidateKeys={[["purchase-orders"]]}
+                  />
+                </div>
+              )}
+              <ActionHistory entityType="purchase_order" entityId={po.id} defaultOpen />
+            </div>
+          );
+        }}
+      />
     </div>
   );
 }

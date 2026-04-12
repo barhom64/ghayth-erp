@@ -1,22 +1,18 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ArrowDownCircle, AlertTriangle, Clock, DollarSign, Eye } from "lucide-react";
-import { formatCurrency , formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function ReceivablesPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading } = useApiQuery<any>(["receivables", scopeQueryString], `/finance/receivables${scopeSuffix}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["receivables", scopeQueryString], `/finance/receivables${scopeSuffix}`);
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
@@ -26,7 +22,60 @@ export default function ReceivablesPage() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "رقم الفاتورة",
+      sortable: true,
+      render: (r) => <span className="font-mono text-blue-600">{r.ref}</span>,
+    },
+    {
+      key: "clientName",
+      header: "العميل",
+      sortable: true,
+      render: (r) => <span className="font-medium">{r.clientName || "-"}</span>,
+    },
+    {
+      key: "total",
+      header: "الإجمالي",
+      sortable: true,
+      render: (r) => formatCurrency(Number(r.total)),
+    },
+    {
+      key: "paidAmount",
+      header: "المدفوع",
+      sortable: true,
+      render: (r) => <span className="text-green-600">{formatCurrency(Number(r.paidAmount || 0))}</span>,
+    },
+    {
+      key: "remainingAmount",
+      header: "المتبقي",
+      sortable: true,
+      render: (r) => <span className="font-bold text-red-600">{formatCurrency(Number(r.remainingAmount || 0))}</span>,
+    },
+    {
+      key: "dueDate",
+      header: "الاستحقاق",
+      sortable: true,
+      render: (r) => <span className="text-gray-500">{r.dueDate ? formatDateAr(r.dueDate) : "-"}</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (r) => <StatusBadge status={r.status} />,
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (r) => (
+        <Link href={`/finance/invoices/${r.id}`}>
+          <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
+        </Link>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -64,7 +113,7 @@ export default function ReceivablesPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((sortedData || []) as any[], [
+        onExportCSV={() => exportToCSV((filtered || []) as any[], [
           { key: "ref", label: "رقم الفاتورة" },
           { key: "clientName", label: "العميل" },
           { key: "total", label: "الإجمالي" },
@@ -73,48 +122,20 @@ export default function ReceivablesPage() {
           { key: "dueDate", label: "الاستحقاق" },
           { key: "status", label: "الحالة" },
         ], "المقبوضات")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="ref" label="رقم الفاتورة" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="clientName" label="العميل" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="total" label="الإجمالي" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="paidAmount" label="المدفوع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="remainingAmount" label="المتبقي" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="dueDate" label="الاستحقاق" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <th className="p-3 text-start">إجراءات</th>
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={8} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-            )) : filtered.length === 0 ? (
-              <tr><td colSpan={8} className="p-12 text-center text-gray-400">
-                <ArrowDownCircle className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>لا توجد مستحقات</p>
-              </td></tr>
-            ) : (sortedData || []).map((r: any) => (
-              <tr key={r.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-mono text-blue-600">{r.ref}</td>
-                <td className="p-3 font-medium">{r.clientName || "-"}</td>
-                <td className="p-3">{formatCurrency(Number(r.total))}</td>
-                <td className="p-3 text-green-600">{formatCurrency(Number(r.paidAmount || 0))}</td>
-                <td className="p-3 font-bold text-red-600">{formatCurrency(Number(r.remainingAmount || 0))}</td>
-                <td className="p-3 text-gray-500">{r.dueDate ? formatDateAr(r.dueDate) : "-"}</td>
-                <td className="p-3"><StatusBadge status={r.status} /></td>
-                <td className="p-3">
-                  <Link href={`/finance/invoices/${r.id}`}>
-                    <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </TableBody>
-        </Table>
-      </div></div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا توجد مستحقات"
+        emptyIcon={<ArrowDownCircle className="h-6 w-6 text-slate-400" />}
+        noToolbar
+      />
     </div>
   );
 }

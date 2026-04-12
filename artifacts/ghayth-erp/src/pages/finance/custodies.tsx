@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,15 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { KeyRound, DollarSign, Plus, X, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Clock, AlertTriangle, Eye, BarChart3 } from "lucide-react";
+import { KeyRound, DollarSign, Plus, X, CheckCircle, AlertCircle, ChevronDown, ChevronUp, AlertTriangle, Eye, BarChart3 } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { formatCurrency , formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 
@@ -32,7 +29,7 @@ const statusMap: Record<string, { label: string; color: string }> = {
 export default function CustodiesPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading } = useApiQuery<any>(["custodies", scopeQueryString], `/finance/custodies${scopeSuffix}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["custodies", scopeQueryString], `/finance/custodies${scopeSuffix}`);
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
@@ -45,7 +42,91 @@ export default function CustodiesPage() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "المرجع",
+      sortable: true,
+      render: (c) => <span className="font-mono text-blue-600 text-sm">{c.ref}</span>,
+    },
+    {
+      key: "employeeName",
+      header: "الموظف",
+      sortable: true,
+      render: (c) => <span className="font-medium">{c.employeeName || "-"}</span>,
+    },
+    {
+      key: "description",
+      header: "الوصف",
+      sortable: true,
+      render: (c) => (
+        <div className="text-gray-600">
+          {c.description || "-"}
+          {c.purpose && <div className="text-xs text-gray-400 mt-0.5">{c.purpose}</div>}
+        </div>
+      ),
+    },
+    {
+      key: "amount",
+      header: "المبلغ",
+      sortable: true,
+      render: (c) => <span className="font-semibold">{formatCurrency(c.amount)}</span>,
+    },
+    {
+      key: "remainingAmount",
+      header: "المتبقي",
+      sortable: true,
+      render: (c) => <span className="font-semibold text-orange-600">{formatCurrency(c.remainingAmount || 0)}</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (c) => {
+        const st = statusMap[c.status] || statusMap.active!;
+        return (
+          <>
+            <Badge className={st.color}>{st.label}</Badge>
+            {c.daysOverdue > 0 && (
+              <div className="text-xs text-red-500 mt-0.5">{c.daysOverdue} يوم تأخير</div>
+            )}
+          </>
+        );
+      },
+    },
+    {
+      key: "expectedReturnDate",
+      header: "تاريخ الإرجاع",
+      sortable: true,
+      render: (c) => <span className="text-gray-500 text-sm">{c.expectedReturnDate ? formatDateAr(c.expectedReturnDate) : "-"}</span>,
+    },
+    {
+      key: "date",
+      header: "التاريخ",
+      sortable: true,
+      render: (c) => <span className="text-gray-500 text-sm">{c.date ? formatDateAr(c.date) : "-"}</span>,
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (c) => (
+        <div className="flex items-center gap-1">
+          <Link href={`/finance/custodies/${c.id}`}>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+              <Eye className="h-4 w-4" />
+            </Button>
+          </Link>
+          {c.status !== "settled" && c.status !== "pending" && c.status !== "rejected" && (
+            <Button variant="outline" size="sm" onClick={() => setSettleTarget(c)}>تسوية</Button>
+          )}
+          <button onClick={() => setExpandedId(expandedId === c.id ? null : c.id)} className="text-gray-400 hover:text-gray-600 p-1">
+            {expandedId === c.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -105,7 +186,7 @@ export default function CustodiesPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((sortedData || []) as any[], [
+        onExportCSV={() => exportToCSV((filtered || []) as any[], [
           { key: "ref", label: "المرجع" },
           { key: "employeeName", label: "الموظف" },
           { key: "description", label: "الوصف" },
@@ -118,96 +199,41 @@ export default function CustodiesPage() {
           { key: "expectedReturnDate", label: "تاريخ الإرجاع المتوقع" },
           { key: "daysOverdue", label: "أيام التأخير" },
         ], "العهد")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead column="ref" label="المرجع" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="description" label="الوصف" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="amount" label="المبلغ" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="remainingAmount" label="المتبقي" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="expectedReturnDate" label="تاريخ الإرجاع" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="date" label="التاريخ" sortState={sortState} onSort={handleSort} />
-              <TableHead>إجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(3)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={9} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-            )) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className="p-12 text-center text-gray-400">
-                <KeyRound className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>لا توجد عهد</p>
-              </td></tr>
-            ) : (sortedData || []).map((c: any) => {
-              const st = statusMap[c.status] || statusMap.active;
-              return (
-                <Fragment key={c.id}>
-                <tr className={`border-b hover:bg-gray-50 ${c.status === "overdue" ? "bg-red-50/30" : ""}`}>
-                  <td className="p-3 font-mono text-blue-600 text-sm">{c.ref}</td>
-                  <td className="p-3 font-medium">{c.employeeName || "-"}</td>
-                  <td className="p-3 text-gray-600">
-                    {c.description || "-"}
-                    {c.purpose && <div className="text-xs text-gray-400 mt-0.5">{c.purpose}</div>}
-                  </td>
-                  <td className="p-3 font-semibold">{formatCurrency(c.amount)}</td>
-                  <td className="p-3 font-semibold text-orange-600">{formatCurrency(c.remainingAmount || 0)}</td>
-                  <td className="p-3">
-                    <Badge className={st.color}>{st.label}</Badge>
-                    {c.daysOverdue > 0 && (
-                      <div className="text-xs text-red-500 mt-0.5">{c.daysOverdue} يوم تأخير</div>
-                    )}
-                  </td>
-                  <td className="p-3 text-gray-500 text-sm">
-                    {c.expectedReturnDate ? formatDateAr(c.expectedReturnDate) : "-"}
-                  </td>
-                  <td className="p-3 text-gray-500 text-sm">{c.date ? formatDateAr(c.date) : "-"}</td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-1">
-                      <Link href={`/finance/custodies/${c.id}`}>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      {c.status !== "settled" && c.status !== "pending" && c.status !== "rejected" && (
-                        <Button variant="outline" size="sm" onClick={() => setSettleTarget(c)}>تسوية</Button>
-                      )}
-                      <button onClick={() => setExpandedId(expandedId === c.id ? null : c.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                        {expandedId === c.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                {expandedId === c.id && (
-                  <tr><td colSpan={9} className="p-3 bg-gray-50/50">
-                    {(c.approvalStatus === "draft" || c.approvalStatus === "returned" || c.approvalStatus === "pending_approval") && (
-                      <div className="mb-4 bg-white p-4 rounded-lg border">
-                        <h4 className="font-semibold mb-3">إجراءات الاعتماد</h4>
-                        <ApprovalActions
-                          entityType="custody"
-                          entityId={c.id}
-                          currentStatus={c.approvalStatus}
-                          onDone={() => setExpandedId(null)}
-                          invalidateKeys={[["custodies"]]}
-                        />
-                      </div>
-                    )}
-                    <ActionHistory entityType="custody" entityId={c.id} defaultOpen />
-                  </td></tr>
-                )}
-              </Fragment>
-              );
-            })}
-          </TableBody>
-        </Table>
-        </div>
-      </div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا توجد عهد"
+        emptyIcon={<KeyRound className="h-6 w-6 text-slate-400" />}
+        rowClassName={(c) => c.status === "overdue" ? "bg-red-50/30" : undefined}
+        noToolbar
+        renderRowExtras={(c) => {
+          if (expandedId !== c.id) return null;
+          return (
+            <div className="p-3 bg-gray-50/50">
+              {(c.approvalStatus === "draft" || c.approvalStatus === "returned" || c.approvalStatus === "pending_approval") && (
+                <div className="mb-4 bg-white p-4 rounded-lg border">
+                  <h4 className="font-semibold mb-3">إجراءات الاعتماد</h4>
+                  <ApprovalActions
+                    entityType="custody"
+                    entityId={c.id}
+                    currentStatus={c.approvalStatus}
+                    onDone={() => setExpandedId(null)}
+                    invalidateKeys={[["custodies"]]}
+                  />
+                </div>
+              )}
+              <ActionHistory entityType="custody" entityId={c.id} defaultOpen />
+            </div>
+          );
+        }}
+      />
     </div>
   );
 }

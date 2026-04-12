@@ -1,17 +1,13 @@
-import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FileSignature, DollarSign, AlertTriangle } from "lucide-react";
-import { formatCurrency , formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 
 export default function CommitmentsPage() {
-  const { data, isLoading } = useApiQuery<any>(["commitments"], "/finance/commitments");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["commitments"], "/finance/commitments");
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
@@ -21,13 +17,45 @@ export default function CommitmentsPage() {
     statusField: "",
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const upcomingCount = items.filter((c: any) => {
     if (!c.dueDate) return false;
     const diff = (new Date(c.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
     return diff >= 0 && diff <= 30;
   }).length;
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "المرجع",
+      sortable: true,
+      render: (c) => <span className="font-mono text-blue-600 text-sm">{c.ref || `#${c.id}`}</span>,
+    },
+    {
+      key: "vendorName",
+      header: "المورد",
+      sortable: true,
+      render: (c) => <span className="font-medium">{c.vendorName || "-"}</span>,
+    },
+    {
+      key: "amount",
+      header: "المبلغ",
+      sortable: true,
+      render: (c) => <span className="font-semibold">{formatCurrency(Number(c.amount))}</span>,
+    },
+    {
+      key: "dueDate",
+      header: "تاريخ الاستحقاق",
+      sortable: true,
+      render: (c) => <span className="text-gray-500">{c.dueDate ? formatDateAr(c.dueDate) : "-"}</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (c) => <StatusBadge status={c.status} />,
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -60,45 +88,27 @@ export default function CommitmentsPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((sortedData || []) as any[], [
+        onExportCSV={() => exportToCSV((filtered || []) as any[], [
           { key: "ref", label: "المرجع" },
           { key: "vendorName", label: "المورد" },
           { key: "amount", label: "المبلغ" },
           { key: "dueDate", label: "تاريخ الاستحقاق" },
           { key: "status", label: "الحالة" },
         ], "الالتزامات")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="ref" label="المرجع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="vendorName" label="المورد" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="amount" label="المبلغ" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="dueDate" label="تاريخ الاستحقاق" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={5} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-            )) : filtered.length === 0 ? (
-              <tr><td colSpan={5} className="p-12 text-center text-gray-400">
-                <FileSignature className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>لا توجد التزامات</p>
-              </td></tr>
-            ) : (sortedData || []).map((c: any) => (
-              <tr key={c.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-mono text-blue-600 text-sm">{c.ref || `#${c.id}`}</td>
-                <td className="p-3 font-medium">{c.vendorName || "-"}</td>
-                <td className="p-3 font-semibold">{formatCurrency(Number(c.amount))}</td>
-                <td className="p-3 text-gray-500">{c.dueDate ? formatDateAr(c.dueDate) : "-"}</td>
-                <td className="p-3"><StatusBadge status={c.status} /></td>
-              </tr>
-            ))}
-          </TableBody>
-        </Table>
-      </div></div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا توجد التزامات"
+        emptyIcon={<FileSignature className="h-6 w-6 text-slate-400" />}
+        noToolbar
+      />
     </div>
   );
 }

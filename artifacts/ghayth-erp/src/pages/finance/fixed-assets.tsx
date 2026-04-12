@@ -3,11 +3,10 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Building2, Plus, TrendingDown, Calculator, CheckCircle } from "lucide-react";
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -20,7 +19,7 @@ export default function FixedAssetsPage() {
   const [depResult, setDepResult] = useState<any>(null);
   const [batchResult, setBatchResult] = useState<any>(null);
 
-  const { data, isLoading, refetch } = useApiQuery<any>(["fixed-assets"], "/finance/fixed-assets");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fixed-assets"], "/finance/fixed-assets");
   const assets = data?.data || [];
 
   const createMutation = useApiMutation("/finance/fixed-assets", "POST");
@@ -111,73 +110,45 @@ export default function FixedAssetsPage() {
         </CardContent></Card>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : assets.length === 0 ? (
-            <div className="p-12 text-center text-gray-400">
-              <Building2 className="h-10 w-10 mx-auto mb-2 opacity-30" />
-              <p>لا توجد أصول ثابتة مسجلة</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>الكود</TableHead>
-                    <TableHead>الأصل</TableHead>
-                    <TableHead>الفئة</TableHead>
-                    <TableHead>تاريخ الشراء</TableHead>
-                    <TableHead>التكلفة</TableHead>
-                    <TableHead>مجمع الإهلاك</TableHead>
-                    <TableHead>القيمة الدفترية</TableHead>
-                    <TableHead>العمر (سنة)</TableHead>
-                    <TableHead>طريقة الإهلاك</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {assets.map((a: any) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-mono text-xs text-gray-500">{a.code || "-"}</TableCell>
-                      <TableCell className="font-semibold">{a.name}</TableCell>
-                      <TableCell className="text-gray-500 text-sm">{a.category || "-"}</TableCell>
-                      <TableCell className="text-xs text-gray-500">{a.purchaseDate ? formatDateAr(a.purchaseDate) : "-"}</TableCell>
-                      <TableCell>{formatCurrency(Number(a.purchaseCost))}</TableCell>
-                      <TableCell className="text-red-600">{formatCurrency(Number(a.accumulatedDepreciation ?? 0))}</TableCell>
-                      <TableCell className="font-bold text-green-600">{formatCurrency(Number(a.currentBookValue ?? a.purchaseCost))}</TableCell>
-                      <TableCell className={!a.usefulLifeYears ? "text-red-500 font-bold" : "text-gray-600"}>
-                        {a.usefulLifeYears ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {a.depreciationMethod === "declining_balance" ? "القسط المتناقص" : "القسط الثابت"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={a.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>
-                          {a.status === "active" ? "نشط" : "متقاعد"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => { setSelectedAsset(a); setDepResult(null); setShowDepreciate(true); }}
-                        >
-                          <Calculator className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={[
+          { key: "code", header: "الكود", render: (a: any) => <span className="font-mono text-xs text-gray-500">{a.code || "-"}</span> },
+          { key: "name", header: "الأصل", render: (a: any) => <span className="font-semibold">{a.name}</span> },
+          { key: "category", header: "الفئة", render: (a: any) => <span className="text-gray-500 text-sm">{a.category || "-"}</span> },
+          { key: "purchaseDate", header: "تاريخ الشراء", render: (a: any) => <span className="text-xs text-gray-500">{a.purchaseDate ? formatDateAr(a.purchaseDate) : "-"}</span> },
+          { key: "purchaseCost", header: "التكلفة", render: (a: any) => formatCurrency(Number(a.purchaseCost)) },
+          { key: "accumulatedDepreciation", header: "مجمع الإهلاك", render: (a: any) => <span className="text-red-600">{formatCurrency(Number(a.accumulatedDepreciation ?? 0))}</span> },
+          { key: "currentBookValue", header: "القيمة الدفترية", render: (a: any) => <span className="font-bold text-green-600">{formatCurrency(Number(a.currentBookValue ?? a.purchaseCost))}</span> },
+          { key: "usefulLifeYears", header: "العمر (سنة)", render: (a: any) => <span className={!a.usefulLifeYears ? "text-red-500 font-bold" : "text-gray-600"}>{a.usefulLifeYears ?? "—"}</span> },
+          { key: "depreciationMethod", header: "طريقة الإهلاك", render: (a: any) => (
+            <Badge variant="outline" className="text-xs">
+              {a.depreciationMethod === "declining_balance" ? "القسط المتناقص" : "القسط الثابت"}
+            </Badge>
+          ) },
+          { key: "status", header: "الحالة", render: (a: any) => (
+            <Badge className={a.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>
+              {a.status === "active" ? "نشط" : "متقاعد"}
+            </Badge>
+          ) },
+          { key: "actions", header: "", render: (a: any) => (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSelectedAsset(a); setDepResult(null); setShowDepreciate(true); }}
+            >
+              <Calculator className="h-4 w-4" />
+            </Button>
+          ) },
+        ] as DataTableColumn<any>[]}
+        data={assets}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا توجد أصول ثابتة مسجلة"
+        emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}
+        searchPlaceholder={null}
+      />
 
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

@@ -1,16 +1,12 @@
-import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowUpCircle, DollarSign, Calendar, Wallet } from "lucide-react";
-import { formatCurrency , formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 
 export default function PaymentsPage() {
-  const { data, isLoading } = useApiQuery<any>(["payments"], "/finance/payments");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["payments"], "/finance/payments");
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
@@ -19,7 +15,33 @@ export default function PaymentsPage() {
     searchFields: ["description", "ref"],
     dateField: "",
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "المرجع",
+      sortable: true,
+      render: (p) => <span className="font-mono text-blue-600 text-sm">{p.ref}</span>,
+    },
+    {
+      key: "description",
+      header: "الوصف",
+      sortable: true,
+      render: (p) => <span className="font-medium">{p.description || "-"}</span>,
+    },
+    {
+      key: "amount",
+      header: "المبلغ",
+      sortable: true,
+      render: (p) => <span className="font-semibold text-red-600">{formatCurrency(Number(p.amount))}</span>,
+    },
+    {
+      key: "date",
+      header: "التاريخ",
+      sortable: true,
+      render: (p) => <span className="text-gray-500 text-sm">{p.date ? formatDateAr(p.date) : "-"}</span>,
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -52,42 +74,26 @@ export default function PaymentsPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((sortedData || []) as any[], [
+        onExportCSV={() => exportToCSV((filtered || []) as any[], [
           { key: "ref", label: "المرجع" },
           { key: "description", label: "الوصف" },
           { key: "amount", label: "المبلغ" },
           { key: "date", label: "التاريخ" },
         ], "المدفوعات")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="ref" label="المرجع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="description" label="الوصف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="amount" label="المبلغ" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="date" label="التاريخ" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={4} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-            )) : filtered.length === 0 ? (
-              <tr><td colSpan={4} className="p-12 text-center text-gray-400">
-                <ArrowUpCircle className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>لا توجد مدفوعات</p>
-              </td></tr>
-            ) : (sortedData || []).map((p: any) => (
-              <tr key={p.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-mono text-blue-600 text-sm">{p.ref}</td>
-                <td className="p-3 font-medium">{p.description || "-"}</td>
-                <td className="p-3 font-semibold text-red-600">{formatCurrency(Number(p.amount))}</td>
-                <td className="p-3 text-gray-500 text-sm">{p.date ? formatDateAr(p.date) : "-"}</td>
-              </tr>
-            ))}
-          </TableBody>
-        </Table>
-      </div></div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        emptyMessage="لا توجد مدفوعات"
+        emptyIcon={<ArrowUpCircle className="h-6 w-6 text-slate-400" />}
+        noToolbar
+      />
     </div>
   );
 }

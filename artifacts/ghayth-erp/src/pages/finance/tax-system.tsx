@@ -1,18 +1,17 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCircle, XCircle, Clock, AlertTriangle, FileText } from "lucide-react";
-import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useSortedData } from "@/hooks/use-sorted-data";
 import { SortableTableHead } from "@/components/sortable-table-head";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { PaginationBar } from "@/components/data-table-wrapper";
-import { useToast } from "@/hooks/use-toast";
-import { formatDateAr } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   accepted: { label: "مقبولة", color: "text-green-700", bg: "bg-green-100", icon: <CheckCircle className="h-3.5 w-3.5" /> },
@@ -28,7 +27,6 @@ export default function TaxSystemPage() {
   const [activeTab, setActiveTab] = useState<"vat" | "zatca">("vat");
   const [submissionPage, setSubmissionPage] = useState(1);
   const [submissionStatus, setSubmissionStatus] = useState("");
-  const { toast } = useToast();
 
   const { data: summary, isLoading: summaryLoading } = useApiQuery<any>(["tax-summary", period], `/finance/tax/summary?period=${period}`);
   const { data: declarations, isLoading: declLoading } = useApiQuery<any>(["tax-declarations"], "/finance/tax/declarations");
@@ -271,58 +269,38 @@ export default function TaxSystemPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>المرجع</TableHead>
-                    <TableHead>النوع</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead>البيئة</TableHead>
-                    <TableHead>تاريخ الإرسال</TableHead>
-                    <TableHead>UUID</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {submissionsLoading ? [...Array(5)].map((_, i) => (
-                    <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                  )) : submissions.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="p-8 text-center text-gray-400">
-                        لا توجد سجلات إرسال — قم بإرسال فاتورة مربوطة بالهيئة لتظهر هنا
-                      </TableCell>
-                    </TableRow>
-                  ) : submissions.map((s: any) => {
-                    const cfg = STATUS_CONFIG[s.status] || STATUS_CONFIG.pending;
+              <DataTable
+                columns={[
+                  { key: "invoiceRef", header: "المرجع", render: (s: any) => <span className="font-medium">{s.invoiceRef || `#${s.entityId}`}</span> },
+                  { key: "entityType", header: "النوع", render: (s: any) => (
+                    <Badge className="text-xs bg-gray-100 text-gray-700">
+                      {s.entityType === "invoice" ? "فاتورة" : "مصروف"}
+                    </Badge>
+                  ) },
+                  { key: "status", header: "الحالة", render: (s: any) => {
+                    const cfg = STATUS_CONFIG[s.status] || STATUS_CONFIG.pending!;
                     return (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-medium">{s.invoiceRef || `#${s.entityId}`}</TableCell>
-                        <TableCell>
-                          <Badge className="text-xs bg-gray-100 text-gray-700">
-                            {s.entityType === "invoice" ? "فاتورة" : "مصروف"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={`text-xs flex items-center gap-1 w-fit ${cfg.bg} ${cfg.color}`}>
-                            {cfg.icon}{cfg.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={`text-xs ${s.environment === "production" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
-                            {s.environment === "production" ? "إنتاج" : "اختبار"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-gray-500">{s.submittedAt ? formatDateAr(s.submittedAt) : "-"}</TableCell>
-                        <TableCell className="font-mono text-xs text-gray-400 max-w-[120px] truncate">{s.zatcaUuid || "-"}</TableCell>
-                      </TableRow>
+                      <Badge className={`text-xs flex items-center gap-1 w-fit ${cfg.bg} ${cfg.color}`}>
+                        {cfg.icon}{cfg.label}
+                      </Badge>
                     );
-                  })}
-                </TableBody>
-              </Table>
-              <PaginationBar
-                page={submissionPage}
+                  } },
+                  { key: "environment", header: "البيئة", render: (s: any) => (
+                    <Badge className={`text-xs ${s.environment === "production" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                      {s.environment === "production" ? "إنتاج" : "اختبار"}
+                    </Badge>
+                  ) },
+                  { key: "submittedAt", header: "تاريخ الإرسال", render: (s: any) => <span className="text-xs text-gray-500">{s.submittedAt ? formatDateAr(s.submittedAt) : "-"}</span> },
+                  { key: "zatcaUuid", header: "UUID", render: (s: any) => <span className="font-mono text-xs text-gray-400 max-w-[120px] truncate block">{s.zatcaUuid || "-"}</span> },
+                ] as DataTableColumn<any>[]}
+                data={submissions}
+                isLoading={submissionsLoading}
                 pageSize={20}
                 total={submissionsData?.total ?? 0}
+                page={submissionPage}
                 onPageChange={setSubmissionPage}
+                emptyMessage="لا توجد سجلات إرسال — قم بإرسال فاتورة مربوطة بالهيئة لتظهر هنا"
+                searchPlaceholder={null}
               />
             </CardContent>
           </Card>
