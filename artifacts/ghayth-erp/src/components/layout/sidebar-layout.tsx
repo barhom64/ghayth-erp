@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useAppContext, roleKeyColors, ModuleType } from "@/contexts/app-context";
@@ -15,6 +15,7 @@ import {
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search,
+  Plus, Printer, CheckSquare, Download, Send, Star, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,8 +32,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { NotificationDropdown } from "@/components/notification-dropdown";
 import { PolicyBanner } from "@/components/policy-banner";
 import { useKeyboardShortcuts, usePropertyKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { CommandPalette } from "@/components/command-palette";
-import { Plus, Printer, CheckSquare, Download, Send, Star, Settings } from "lucide-react";
+// CommandPalette is only mounted when the user opens it (Cmd+K or the
+// header button). Lazy-load it so its ~345 lines + icons don't ship in
+// the initial bundle.
+const CommandPalette = lazy(() =>
+  import("@/components/command-palette").then((m) => ({ default: m.CommandPalette }))
+);
 
 interface NavItem {
   label: string;
@@ -1041,7 +1046,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} initialFilter={commandPaletteFilter} />
+      {commandPaletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} initialFilter={commandPaletteFilter} />
+        </Suspense>
+      )}
     </div>
   );
 }
