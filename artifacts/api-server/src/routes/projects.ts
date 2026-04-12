@@ -367,31 +367,48 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
         [taskId]
       );
 
-      for (const dep of candidateTasks) {
-        await rawExecute(`UPDATE project_tasks SET status='todo' WHERE id=$1 AND status='blocked'`, [dep.taskId]);
-        const [unlockedTask] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1`, [dep.taskId]);
-        if (unlockedTask && unlockedTask.status === 'todo') {
-          unlockedTasks.push(unlockedTask);
-          if (unlockedTask.assigneeId) {
-            try {
-              const [asgn] = await rawQuery<any>(
-                `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-                [unlockedTask.assigneeId]
-              );
-              if (asgn) {
-                createNotification({
-                  companyId: scope.companyId,
-                  assignmentId: asgn.id,
-                  type: "task_unblocked",
-                  title: "مهمة أصبحت متاحة للعمل",
-                  body: `المهمة "${unlockedTask.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
-                  priority: "normal",
-                  refType: "project_tasks",
-                  refId: unlockedTask.id,
-                }).catch(console.error);
-              }
-            } catch (e) { console.error("Unlock notification error:", e); }
-          }
+      const candidateIds = candidateTasks.map((d: any) => Number(d.taskId));
+      if (candidateIds.length > 0) {
+        // 1) Single UPDATE that returns the rows that actually moved from
+        //    blocked -> todo, so we don't need a follow-up SELECT per row.
+        unlockedTasks = await rawQuery<any>(
+          `UPDATE project_tasks SET status='todo'
+           WHERE id = ANY($1) AND status='blocked'
+           RETURNING *`,
+          [candidateIds]
+        );
+
+        // 2) Resolve all assignment ids in one query, then notify.
+        const assigneeIds = Array.from(
+          new Set(unlockedTasks.map((t: any) => t.assigneeId).filter((x: any) => x != null))
+        );
+        if (assigneeIds.length > 0) {
+          try {
+            const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
+              `SELECT DISTINCT ON ("employeeId") id, "employeeId"
+               FROM employee_assignments
+               WHERE "employeeId" = ANY($1) AND status='active'
+               ORDER BY "employeeId", id`,
+              [assigneeIds]
+            );
+            const empToAssignment = new Map<number, number>();
+            for (const r of asgnRows) empToAssignment.set(Number(r.employeeId), Number(r.id));
+
+            for (const t of unlockedTasks) {
+              const aid = empToAssignment.get(Number(t.assigneeId));
+              if (!aid) continue;
+              createNotification({
+                companyId: scope.companyId,
+                assignmentId: aid,
+                type: "task_unblocked",
+                title: "مهمة أصبحت متاحة للعمل",
+                body: `المهمة "${t.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
+                priority: "normal",
+                refType: "project_tasks",
+                refId: t.id,
+              }).catch(console.error);
+            }
+          } catch (e) { console.error("Unlock notification error:", e); }
         }
       }
     }

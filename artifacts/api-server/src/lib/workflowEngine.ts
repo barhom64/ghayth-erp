@@ -27,27 +27,37 @@ async function handleLeaveApproval(refId: number, approvedBy?: number | null): P
   );
 
   const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
-  for (const cId of allCompanyIds) {
+  if (allCompanyIds.length > 0) {
+    // Single UPDATE across all matching company rows.
     await rawExecute(
       `UPDATE hr_leave_balances
        SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
-       WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-      [request.days, cId, request.employeeId, request.leaveTypeId, year]
+       WHERE "companyId" = ANY($2) AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+      [request.days, allCompanyIds, request.employeeId, request.leaveTypeId, year]
     );
   }
 
   const leaveStart = new Date(request.startDate);
   const leaveEnd = new Date(request.endDate);
+  // Build all (assignment × date) attendance rows up front, then bulk INSERT.
+  const noteText = `إجازة معتمدة - طلب رقم ${refId}`;
+  const valuesSql: string[] = [];
+  const insertParams: any[] = [];
   for (const asn of allAssignments) {
     for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split("T")[0];
-      await rawExecute(
-        `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
-         VALUES ($1,$2,$3,$4,'on_leave',$5)
-         ON CONFLICT DO NOTHING`,
-        [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${refId}`]
-      ).catch(() => {});
+      const base = insertParams.length;
+      valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},'on_leave',$${base + 5})`);
+      insertParams.push(asn.id, asn.companyId, asn.branchId, dateStr, noteText);
     }
+  }
+  if (valuesSql.length > 0) {
+    await rawExecute(
+      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
+       VALUES ${valuesSql.join(",")}
+       ON CONFLICT DO NOTHING`,
+      insertParams
+    ).catch(() => {});
   }
 
   await rawExecute(

@@ -186,31 +186,51 @@ export async function createJournalEntry(params: {
     ]
   );
 
-  const accountCodesToUpdate: string[] = [];
-  for (const line of params.lines) {
-    let accountId = line.accountId ?? null;
-    if (!accountId && line.accountCode) {
-      const [acc] = await rawQuery<any>(
-        `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 LIMIT 1`,
-        [params.companyId, line.accountCode]
-      );
-      accountId = acc?.id ?? null;
-    }
+  // Resolve any missing accountIds in a single batch lookup by code,
+  // then bulk-insert all journal lines in one round-trip.
+  const codesNeedingLookup = Array.from(
+    new Set(
+      params.lines
+        .filter((l) => !l.accountId && l.accountCode)
+        .map((l) => l.accountCode as string)
+    )
+  );
+  const codeToIdMap = new Map<string, number>();
+  if (codesNeedingLookup.length > 0) {
+    const accRows = await rawQuery<{ id: number; code: string }>(
+      `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = ANY($2)`,
+      [params.companyId, codesNeedingLookup]
+    );
+    for (const r of accRows) codeToIdMap.set(r.code, Number(r.id));
+  }
 
-    await rawExecute(
-      `INSERT INTO journal_lines (
-        "journalId","accountCode","accountId",debit,credit,description,"costCenter",
-        "departmentId","projectId","employeeId","vehicleId","propertyId","contractId","activityType","templateId"
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [
+  const accountCodesToUpdate: string[] = [];
+  if (params.lines.length > 0) {
+    const COLS_PER_ROW = 15;
+    const valuesSql: string[] = [];
+    const insertParams: any[] = [];
+    for (const line of params.lines) {
+      const accountId = line.accountId ?? (line.accountCode ? codeToIdMap.get(line.accountCode) ?? null : null);
+      const base = insertParams.length;
+      valuesSql.push(
+        `(${Array.from({ length: COLS_PER_ROW }, (_, i) => `$${base + i + 1}`).join(",")})`
+      );
+      insertParams.push(
         journalId, line.accountCode, accountId, line.debit, line.credit,
         line.description ?? null, line.costCenter ?? null,
         line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
         line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
-        line.activityType ?? null, line.templateId ?? null,
-      ]
+        line.activityType ?? null, line.templateId ?? null
+      );
+      if (line.accountCode) accountCodesToUpdate.push(line.accountCode);
+    }
+    await rawExecute(
+      `INSERT INTO journal_lines (
+        "journalId","accountCode","accountId",debit,credit,description,"costCenter",
+        "departmentId","projectId","employeeId","vehicleId","propertyId","contractId","activityType","templateId"
+       ) VALUES ${valuesSql.join(",")}`,
+      insertParams
     );
-    if (line.accountCode) accountCodesToUpdate.push(line.accountCode);
   }
 
   await updateAccountBalances(params.companyId, params.lines);
