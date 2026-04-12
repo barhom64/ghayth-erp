@@ -131,6 +131,232 @@ budgetRouter.delete("/budget/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Delete budget error:"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BUDGET APPROVAL WORKFLOW — سير عمل اعتماد تجاوز الميزانية
+// ─────────────────────────────────────────────────────────────────────────────
+// When utilization exceeds 80%, /budget/validate says "requiresApproval".
+// Callers (PO/invoice creation) should create a budget_approval_request,
+// which is then routed to CFO or GM by approval_level.
+
+async function ensureBudgetApprovalTable() {
+  await rawExecute(`
+    CREATE TABLE IF NOT EXISTS budget_approval_requests (
+      id SERIAL PRIMARY KEY,
+      "companyId" INTEGER NOT NULL,
+      "branchId" INTEGER,
+      "accountCode" VARCHAR(20) NOT NULL,
+      period VARCHAR(7) NOT NULL,
+      "requestedAmount" NUMERIC(18,2) NOT NULL,
+      "budgetAmount" NUMERIC(18,2) NOT NULL,
+      "utilizationBefore" NUMERIC(6,2) NOT NULL,
+      "utilizationAfter" NUMERIC(6,2) NOT NULL,
+      "approvalLevel" VARCHAR(16) NOT NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'pending',
+      "sourceType" VARCHAR(32),
+      "sourceId" INTEGER,
+      reason TEXT,
+      "requestedBy" INTEGER NOT NULL,
+      "requestedAt" TIMESTAMP DEFAULT NOW(),
+      "decidedBy" INTEGER,
+      "decidedAt" TIMESTAMP,
+      "decisionNotes" TEXT
+    )
+  `);
+}
+
+budgetRouter.post("/budget/approval-requests", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = req.body as any;
+    if (!accountCode || !period || !requestedAmount || Number(requestedAmount) <= 0) {
+      validationError(res, "الحساب والفترة والمبلغ مطلوبة", "requestedAmount", "أدخل قيمة موجبة والفترة بصيغة YYYY-MM");
+      return;
+    }
+    await ensureBudgetApprovalTable();
+
+    const [budget] = await rawQuery<any>(
+      `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3`,
+      [scope.companyId, accountCode, period]
+    );
+    if (!budget) {
+      res.status(404).json({ error: "لا توجد ميزانية محددة لهذا الحساب" });
+      return;
+    }
+
+    const budgetAmount = Number(budget.amount);
+    const used = Number(budget.used);
+    const utilBefore = budgetAmount > 0 ? (used / budgetAmount) * 100 : 0;
+    const utilAfter = budgetAmount > 0 ? ((used + Number(requestedAmount)) / budgetAmount) * 100 : 0;
+
+    let level: string;
+    if (utilAfter <= 80) level = "auto";
+    else if (utilAfter <= 99) level = "cfo";
+    else if (utilAfter <= 110) level = "gm";
+    else { res.status(400).json({ error: "تجاوز 110% — مرفوض نهائياً ولا يمكن اعتماده" }); return; }
+
+    if (level === "auto") {
+      res.json({ status: "auto_approved", message: "الميزانية متاحة، لا حاجة لاعتماد" });
+      return;
+    }
+
+    const [row] = await rawQuery<any>(
+      `INSERT INTO budget_approval_requests
+       ("companyId","branchId","accountCode",period,"requestedAmount","budgetAmount",
+        "utilizationBefore","utilizationAfter","approvalLevel","sourceType","sourceId",reason,"requestedBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       RETURNING *`,
+      [scope.companyId, scope.branchId ?? null, accountCode, period, Number(requestedAmount),
+       budgetAmount, Math.round(utilBefore * 100) / 100, Math.round(utilAfter * 100) / 100,
+       level, sourceType ?? null, sourceId ?? null, reason ?? null, scope.activeAssignmentId]
+    );
+    res.status(201).json({ data: row });
+  } catch (err) {
+    handleRouteError(err, res, "Create budget approval request error:");
+  }
+});
+
+budgetRouter.get("/budget/approval-requests", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await ensureBudgetApprovalTable();
+    const status = (req.query.status as string) ?? "pending";
+    const rows = await rawQuery<any>(
+      `SELECT ar.*, coa.name AS "accountName"
+       FROM budget_approval_requests ar
+       LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId"
+       WHERE ar."companyId"=$1 AND ar.status=$2
+       ORDER BY ar."requestedAt" DESC LIMIT 200`,
+      [scope.companyId, status]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    handleRouteError(err, res, "List budget approvals error:");
+  }
+});
+
+budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { decision, notes } = req.body as any; // decision: 'approved' | 'rejected'
+    if (!["approved", "rejected"].includes(decision)) {
+      validationError(res, "القرار يجب أن يكون approved أو rejected", "decision", "استخدم approved أو rejected");
+      return;
+    }
+    await ensureBudgetApprovalTable();
+
+    const [request] = await rawQuery<any>(
+      `SELECT * FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!request) { res.status(404).json({ error: "طلب الاعتماد غير موجود" }); return; }
+    if (request.status !== "pending") {
+      res.status(400).json({ error: `الطلب تم البت فيه مسبقاً (${request.status})` });
+      return;
+    }
+
+    // Approval level authorization
+    const needed = request.approvalLevel === "cfo"
+      ? ["finance", "director", "owner"]
+      : ["director", "owner"];
+    if (!needed.includes(scope.role)) {
+      res.status(403).json({
+        error: `هذا الطلب يتطلب اعتماد ${request.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`,
+        requiredRoles: needed,
+      });
+      return;
+    }
+
+    const [updated] = await rawQuery<any>(
+      `UPDATE budget_approval_requests
+         SET status=$1, "decisionNotes"=$2, "decidedBy"=$3, "decidedAt"=NOW()
+       WHERE id=$4 RETURNING *`,
+      [decision, notes ?? null, scope.activeAssignmentId, id]
+    );
+    res.json({ data: updated, message: decision === "approved" ? "تم اعتماد الطلب" : "تم رفض الطلب" });
+  } catch (err) {
+    handleRouteError(err, res, "Decide budget approval error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUDGET VARIANCE REPORT — تقرير الفروقات بين الميزانية والفعلي
+// ─────────────────────────────────────────────────────────────────────────────
+
+budgetRouter.get("/budget/variance", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      validationError(res, "period يجب أن يكون بصيغة YYYY-MM", "period", "مثال: 2026-04");
+      return;
+    }
+    const [y, m] = period.split("-").map(Number);
+    const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
+    const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+
+    const rows = await rawQuery<any>(
+      `SELECT b."accountCode", coa.name AS "accountName", coa.type AS "accountType",
+              b.amount AS "budgetAmount",
+              COALESCE((
+                SELECT SUM(jl.debit - jl.credit)
+                FROM journal_lines jl
+                JOIN journal_entries je ON je.id = jl."journalId"
+                WHERE je."companyId" = b."companyId"
+                  AND je."deletedAt" IS NULL
+                  AND jl."accountCode" = b."accountCode"
+                  AND je."createdAt"::date BETWEEN $2::date AND $3::date
+              ), 0) AS "actualAmount"
+       FROM budgets b
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
+       WHERE b."companyId" = $1 AND b.period = $4
+       ORDER BY b."accountCode"`,
+      [scope.companyId, periodStart, periodEnd, period]
+    );
+
+    let totalBudget = 0;
+    let totalActual = 0;
+    const lines = rows.map((r: any) => {
+      const budgetAmount = Number(r.budgetAmount);
+      // For expense accounts actual = DR - CR (positive = spent). For revenue, invert sign.
+      let actualAmount = Number(r.actualAmount);
+      if (r.accountType === "revenue" || r.accountType === "liability" || r.accountType === "equity") {
+        actualAmount = -actualAmount;
+      }
+      const variance = Math.round((budgetAmount - actualAmount) * 100) / 100;
+      const variancePct = budgetAmount > 0 ? Math.round((variance / budgetAmount) * 10000) / 100 : 0;
+      totalBudget += budgetAmount;
+      totalActual += actualAmount;
+      let status: string;
+      if (budgetAmount === 0) status = "no_budget";
+      else if (actualAmount > budgetAmount) status = "over_budget";
+      else if (actualAmount > budgetAmount * 0.9) status = "near_limit";
+      else status = "within_budget";
+      return {
+        accountCode: r.accountCode,
+        accountName: r.accountName,
+        accountType: r.accountType,
+        budgetAmount,
+        actualAmount: Math.round(actualAmount * 100) / 100,
+        variance,
+        variancePct,
+        utilizationPct: budgetAmount > 0 ? Math.round((actualAmount / budgetAmount) * 10000) / 100 : 0,
+        status,
+      };
+    });
+
+    res.json({
+      period,
+      totalBudget: Math.round(totalBudget * 100) / 100,
+      totalActual: Math.round(totalActual * 100) / 100,
+      totalVariance: Math.round((totalBudget - totalActual) * 100) / 100,
+      lines,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Budget variance report error:");
+  }
+});
+
 budgetRouter.get("/fiscal-periods", async (req, res) => {
   try {
     const scope = req.scope!;
