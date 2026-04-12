@@ -3,8 +3,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Package, Calculator, TrendingUp, CheckCircle, Info } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -39,6 +38,72 @@ export default function InventoryCostingPage() {
     transfer_out: "تحويل صادر", return: "إرجاع",
   };
 
+  const productColumns: DataTableColumn<any>[] = [
+    {
+      key: "name",
+      header: "المنتج",
+      searchable: true,
+      render: (p: any) => (
+        <div>
+          <p className="font-medium text-sm">{p.name}</p>
+          <p className="text-xs text-gray-400">{p.sku}</p>
+        </div>
+      ),
+    },
+    {
+      key: "currentStock",
+      header: "المخزون",
+      render: (p: any) => Number(p.currentStock || 0).toFixed(2),
+    },
+    {
+      key: "costPrice",
+      header: "تكلفة الوحدة",
+      className: "font-semibold",
+      render: (p: any) => formatCurrency(Number(p.costPrice || 0)),
+    },
+    {
+      key: "stockValue",
+      header: "القيمة الإجمالية",
+      className: "text-teal-600",
+      render: (p: any) => formatCurrency(Number(p.stockValue || 0)),
+    },
+  ];
+
+  const movementColumns: DataTableColumn<any>[] = [
+    {
+      key: "type",
+      header: "الحركة",
+      className: "text-xs",
+      render: (m: any) => (
+        <Badge variant="outline" className="text-xs">
+          {typeLabel[m.type] || m.type}
+        </Badge>
+      ),
+    },
+    {
+      key: "quantity",
+      header: "الكمية",
+      className: "text-xs",
+      render: (m: any) => (
+        <span className={m.quantity > 0 ? "text-green-600" : "text-red-600"}>
+          {m.quantity > 0 ? "+" : ""}{Number(m.quantity).toFixed(2)}
+        </span>
+      ),
+    },
+    {
+      key: "unitCost",
+      header: "تكلفة الوحدة",
+      className: "text-xs",
+      render: (m: any) => formatCurrency(Number(m.unitCost || 0)),
+    },
+    {
+      key: "waCost",
+      header: "المتوسط المرجح",
+      className: "font-semibold text-xs text-teal-700",
+      render: (m: any) => formatCurrency(Number(m.waCost || 0)),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -72,44 +137,18 @@ export default function InventoryCostingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {isLoading ? (
-              <div className="p-4 space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
-            ) : (
-              <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>المنتج</TableHead>
-                      <TableHead>المخزون</TableHead>
-                      <TableHead>تكلفة الوحدة</TableHead>
-                      <TableHead>القيمة الإجمالية</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {products.map((p: any) => (
-                      <TableRow
-                        key={p.id}
-                        className={`cursor-pointer hover:bg-teal-50 ${selectedProduct?.id === p.id ? "bg-teal-50" : ""}`}
-                        onClick={() => setSelectedProduct(p)}
-                      >
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-sm">{p.name}</p>
-                            <p className="text-xs text-gray-400">{p.sku}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>{Number(p.currentStock || 0).toFixed(2)}</TableCell>
-                        <TableCell className="font-semibold">{formatCurrency(Number(p.costPrice || 0))}</TableCell>
-                        <TableCell className="text-teal-600">{formatCurrency(Number(p.stockValue || 0))}</TableCell>
-                      </TableRow>
-                    ))}
-                    {products.length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center text-gray-400 p-6">لا توجد منتجات</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+            <DataTable
+              columns={productColumns}
+              data={products}
+              isLoading={isLoading}
+              rowKey={(p: any) => p.id}
+              onRowClick={(p: any) => setSelectedProduct(p)}
+              rowClassName={(p: any) =>
+                `cursor-pointer hover:bg-teal-50 ${selectedProduct?.id === p.id ? "bg-teal-50" : ""}`
+              }
+              emptyMessage="لا توجد منتجات"
+              searchPlaceholder="بحث في المنتجات..."
+            />
           </CardContent>
         </Card>
 
@@ -123,55 +162,26 @@ export default function InventoryCostingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {loadingDetail ? (
-                  <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div className="bg-teal-50 p-3 rounded">
-                        <p className="text-xs text-gray-500">متوسط التكلفة الحالي</p>
-                        <p className="text-lg font-bold text-teal-600">{formatCurrency(Number(productDetail?.currentWaCost || 0))}</p>
-                      </div>
-                      <div className="bg-blue-50 p-3 rounded">
-                        <p className="text-xs text-gray-500">قيمة المخزون الحالية</p>
-                        <p className="text-lg font-bold text-blue-600">{formatCurrency(Number(productDetail?.currentStockValue || 0))}</p>
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">الحركة</TableHead>
-                            <TableHead className="text-xs">الكمية</TableHead>
-                            <TableHead className="text-xs">تكلفة الوحدة</TableHead>
-                            <TableHead className="text-xs">المتوسط المرجح</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {(productDetail?.movements || []).map((m: any, i: number) => (
-                            <TableRow key={i} className={m.quantity > 0 ? "bg-green-50/20" : "bg-red-50/20"}>
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">
-                                  {typeLabel[m.type] || m.type}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className={m.quantity > 0 ? "text-green-600" : "text-red-600"}>
-                                {m.quantity > 0 ? "+" : ""}{Number(m.quantity).toFixed(2)}
-                              </TableCell>
-                              <TableCell className="text-xs">{formatCurrency(Number(m.unitCost || 0))}</TableCell>
-                              <TableCell className="font-semibold text-xs text-teal-700">
-                                {formatCurrency(Number(m.waCost || 0))}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {!productDetail?.movements?.length && (
-                            <TableRow><TableCell colSpan={4} className="text-center text-gray-400 p-4">لا توجد حركات</TableCell></TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </>
-                )}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="bg-teal-50 p-3 rounded">
+                    <p className="text-xs text-gray-500">متوسط التكلفة الحالي</p>
+                    <p className="text-lg font-bold text-teal-600">{formatCurrency(Number(productDetail?.currentWaCost || 0))}</p>
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded">
+                    <p className="text-xs text-gray-500">قيمة المخزون الحالية</p>
+                    <p className="text-lg font-bold text-blue-600">{formatCurrency(Number(productDetail?.currentStockValue || 0))}</p>
+                  </div>
+                </div>
+                <DataTable
+                  columns={movementColumns}
+                  data={productDetail?.movements || []}
+                  isLoading={loadingDetail}
+                  rowKey={(_m: any, i: number) => i}
+                  rowClassName={(m: any) => (m.quantity > 0 ? "bg-green-50/20" : "bg-red-50/20")}
+                  noToolbar
+                  pageSize={0}
+                  emptyMessage="لا توجد حركات"
+                />
               </CardContent>
             </Card>
           ) : (

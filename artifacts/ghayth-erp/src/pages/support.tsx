@@ -1,14 +1,10 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -225,7 +221,6 @@ function KBManagement() {
   const [newForm, setNewForm] = useState({ title: "", content: "", category: "", status: "published" });
 
   const filteredItems = applyFilters(items, filters, { searchFields: ["title", "category"], statusField: "status", dateField: "createdAt" });
-  const { sortedData, sortState, handleSort } = useSortedData(filteredItems);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/support/kb",
@@ -237,6 +232,29 @@ function KBManagement() {
     { key: "title", label: "العنوان" },
     { key: "category", label: "التصنيف" },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "published", label: "منشور" }, { value: "draft", label: "مسودة" }, { value: "archived", label: "مؤرشف" }] },
+  ];
+
+  const kbColumns: DataTableColumn<any>[] = [
+    { key: "title", header: "العنوان", sortable: true, searchable: true, render: (item) => <span className="font-medium">{item.title}</span> },
+    { key: "category", header: "التصنيف", sortable: true, searchable: true, render: (item) => <span className="text-muted-foreground">{item.category || "-"}</span> },
+    { key: "views", header: "المشاهدات", sortable: true, render: (item) => <span className="flex items-center gap-1 text-sm"><Eye className="h-3 w-3 text-gray-400" />{item.views || 0}</span> },
+    {
+      key: "helpful", header: "مفيدة / غير مفيدة",
+      render: (item) => (
+        <span className="flex items-center gap-2 text-xs">
+          <span className="text-green-600 flex items-center gap-0.5"><ThumbsUp className="h-3 w-3" />{item.helpful || 0}</span>
+          <span className="text-red-500">/</span>
+          <span className="text-red-600">{item.notHelpful || 0}</span>
+        </span>
+      ),
+    },
+    { key: "status", header: "الحالة", sortable: true, render: (item) => <StatusBadge status={item.status} /> },
+    {
+      key: "actions", header: "إجراءات",
+      render: (item) => (
+        <RowActions onEdit={() => startEdit(item.id, { title: item.title, category: item.category || "", status: item.status || "published" })} onDelete={() => startDelete(item.id)} />
+      ),
+    },
   ];
 
   const handleCreate = async () => {
@@ -289,38 +307,23 @@ function KBManagement() {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-blue-600" />مقالات قاعدة المعرفة</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow>
-            <SortableTableHead column="title" label="العنوان" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="category" label="التصنيف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="views" label="المشاهدات" sortState={sortState} onSort={handleSort} />
-            <TableHead>مفيدة / غير مفيدة</TableHead>
-            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-            <TableHead>إجراءات</TableHead>
-          </TableRow></TableHeader>
-          <DataTableWrapper isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} data={filteredItems} colCount={6} emptyMessage="لا توجد مقالات" emptyIcon={<BookOpen className="h-6 w-6 text-slate-400" />}>
-            {(sortedData || []).map((item: any) => (
-              <Fragment key={item.id}>
-                <TableRow className={editingId === item.id ? "bg-muted/50" : deletingId === item.id ? "bg-destructive/5" : ""}>
-                  <TableCell className="font-medium">{item.title}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.category || "-"}</TableCell>
-                  <TableCell><span className="flex items-center gap-1 text-sm"><Eye className="h-3 w-3 text-gray-400" />{item.views || 0}</span></TableCell>
-                  <TableCell>
-                    <span className="flex items-center gap-2 text-xs">
-                      <span className="text-green-600 flex items-center gap-0.5"><ThumbsUp className="h-3 w-3" />{item.helpful || 0}</span>
-                      <span className="text-red-500">/</span>
-                      <span className="text-red-600">{item.notHelpful || 0}</span>
-                    </span>
-                  </TableCell>
-                  <TableCell><StatusBadge status={item.status} /></TableCell>
-                  <TableCell>
-                    <RowActions onEdit={() => startEdit(item.id, { title: item.title, category: item.category || "", status: item.status || "published" })} onDelete={() => startDelete(item.id)} />
-                  </TableCell>
-                </TableRow>
-                {editingId === item.id && <TableRow><TableCell colSpan={6} className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></TableCell></TableRow>}
-                {deletingId === item.id && <TableRow><TableCell colSpan={6} className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="kb_article" entityId={item.id} /></TableCell></TableRow>}
-              </Fragment>
-            ))}
-          </DataTableWrapper></Table>
+          <DataTable<any>
+            columns={kbColumns}
+            data={filteredItems}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد مقالات"
+            emptyIcon={<BookOpen className="h-6 w-6 text-slate-400" />}
+            noToolbar
+            rowClassName={(item) => editingId === item.id ? "bg-muted/50" : deletingId === item.id ? "bg-destructive/5" : ""}
+            renderRowExtras={(item) => {
+              if (editingId === item.id) return <div className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></div>;
+              if (deletingId === item.id) return <div className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="kb_article" entityId={item.id} /></div>;
+              return null;
+            }}
+          />
         </CardContent>
       </Card>
     </div>
@@ -331,6 +334,20 @@ function CSATStats() {
   const { data: csatResp, isLoading } = useApiQuery<any>(["support-csat-stats"], "/support/csat");
   const stats = csatResp?.agentStats || [];
   const avg = csatResp?.avgScore;
+
+  const csatColumns: DataTableColumn<any>[] = [
+    { key: "agentName", header: "الوكيل", render: (s) => <span className="font-medium">{s.agentName || `وكيل #${s.agentId}`}</span> },
+    { key: "count", header: "عدد التقييمات", render: (s) => s.count },
+    {
+      key: "avg", header: "متوسط رضا العملاء",
+      render: (s) => (
+        <span className={`font-bold ${Number(s.avg) >= 4 ? "text-green-600" : Number(s.avg) >= 3 ? "text-amber-600" : "text-red-600"}`}>
+          {Number(s.avg).toFixed(1)} ★
+        </span>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -359,26 +376,15 @@ function CSATStats() {
         <Card>
           <CardHeader><CardTitle>أداء الوكلاء (رضا العملاء)</CardTitle></CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader><TableRow>
-                <TableHead>الوكيل</TableHead>
-                <TableHead>عدد التقييمات</TableHead>
-                <TableHead>متوسط رضا العملاء</TableHead>
-              </TableRow></TableHeader>
-              <tbody>
-                {stats.map((s: any) => (
-                  <TableRow key={s.agentId}>
-                    <TableCell className="font-medium">{s.agentName || `وكيل #${s.agentId}`}</TableCell>
-                    <TableCell>{s.count}</TableCell>
-                    <TableCell>
-                      <span className={`font-bold ${Number(s.avg) >= 4 ? "text-green-600" : Number(s.avg) >= 3 ? "text-amber-600" : "text-red-600"}`}>
-                        {Number(s.avg).toFixed(1)} ★
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </tbody>
-            </Table>
+            <DataTable<any>
+              columns={csatColumns}
+              data={stats}
+              isLoading={isLoading}
+              rowKey={(s) => s.agentId}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد تقييمات"
+            />
           </CardContent>
         </Card>
       )}

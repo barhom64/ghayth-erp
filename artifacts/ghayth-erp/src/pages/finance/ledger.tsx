@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
@@ -8,10 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, BookOpen, Download, Printer } from "lucide-react";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableBody } from "@/components/ui/table";
-import { PaginationBar } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { useState } from "react";
 
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 
@@ -45,10 +42,6 @@ export default function LedgerPage() {
   const account = data?.account;
   const entries = data?.entries || [];
   const summary = data?.summary || {};
-  const { sortedData, sortState, handleSort } = useSortedData(entries);
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
   const balance = summary?.balance || 0;
 
   if (isLoading) return (
@@ -109,48 +102,76 @@ export default function LedgerPage() {
         </CardContent></Card>
       </div>
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableTableHead column="date" label="التاريخ" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="ref" label="المرجع" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="description" label="الوصف" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="debit" label="مدين" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="credit" label="دائن" sortState={sortState} onSort={handleSort} />
-            <SortableTableHead column="runningBalance" label="الرصيد التراكمي" sortState={sortState} onSort={handleSort} />
-          </TableRow></TableHeader>
-          <TableBody>
-            {entries.length === 0 ? (
-              <tr><td colSpan={6} className="p-12 text-center text-gray-400">
-                <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p>لا توجد حركات</p>
-              </td></tr>
-            ) : (paginatedData || []).map((e: any, i: number) => (
-              <tr key={e.id || i} className="border-b hover:bg-gray-50">
-                <td className="p-3 text-gray-500 text-sm">{e.date ? formatDateAr(e.date) : "-"}</td>
-                <td className="p-3 font-mono text-blue-600 text-sm">{e.ref || "-"}</td>
-                <td className="p-3 font-medium">{e.description || "-"}</td>
-                <td className="p-3 text-green-600">{Number(e.debit || 0) > 0 ? formatCurrency(Number(e.debit)) : "-"}</td>
-                <td className="p-3 text-red-600">{Number(e.credit || 0) > 0 ? formatCurrency(Number(e.credit)) : "-"}</td>
-                <td className="p-3 font-bold" style={{ color: Number(e.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
-                  {formatCurrency(Number(e.runningBalance))}
-                </td>
-              </tr>
-            ))}
-            {entries.length > 0 && (
-              <tr className="bg-gray-100 font-bold">
-                <td colSpan={3} className="p-3">المجموع</td>
-                <td className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</td>
-                <td className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</td>
-                <td className="p-3" style={{ color: Number(balance) >= 0 ? "#16a34a" : "#dc2626" }}>
-                  {formatCurrency(Number(balance))}
-                </td>
-              </tr>
-            )}
-          </TableBody>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={entries.length} onPageChange={setPage} />
-      </div></div>
+      <DataTable<any>
+        columns={[
+          {
+            key: "date",
+            header: "التاريخ",
+            sortable: true,
+            className: "text-gray-500 text-sm",
+            render: (e) => (e.date ? formatDateAr(e.date) : "-"),
+          },
+          {
+            key: "ref",
+            header: "المرجع",
+            sortable: true,
+            searchable: true,
+            className: "font-mono text-blue-600 text-sm",
+            render: (e) => e.ref || "-",
+          },
+          {
+            key: "description",
+            header: "الوصف",
+            sortable: true,
+            searchable: true,
+            className: "font-medium",
+            render: (e) => e.description || "-",
+          },
+          {
+            key: "debit",
+            header: "مدين",
+            sortable: true,
+            className: "text-green-600",
+            render: (e) => (Number(e.debit || 0) > 0 ? formatCurrency(Number(e.debit)) : "-"),
+          },
+          {
+            key: "credit",
+            header: "دائن",
+            sortable: true,
+            className: "text-red-600",
+            render: (e) => (Number(e.credit || 0) > 0 ? formatCurrency(Number(e.credit)) : "-"),
+          },
+          {
+            key: "runningBalance",
+            header: "الرصيد التراكمي",
+            sortable: true,
+            className: "font-bold",
+            render: (e) => (
+              <span style={{ color: Number(e.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+                {formatCurrency(Number(e.runningBalance))}
+              </span>
+            ),
+          },
+        ] as DataTableColumn<any>[]}
+        data={entries}
+        rowKey={(e, i) => e.id || i}
+        rowClassName={() => "hover:bg-gray-50"}
+        pageSize={20}
+        emptyMessage="لا توجد حركات"
+        emptyIcon={<BookOpen className="h-10 w-10 mx-auto mb-2 opacity-30" />}
+        searchPlaceholder="بحث في القيود..."
+      />
+
+      {entries.length > 0 && (
+        <div className="rounded-lg border bg-gray-100 font-bold p-3 grid grid-cols-6 gap-2">
+          <div className="col-span-3">المجموع</div>
+          <div className="text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</div>
+          <div className="text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</div>
+          <div style={{ color: Number(balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+            {formatCurrency(Number(balance))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

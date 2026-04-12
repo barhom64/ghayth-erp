@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -169,39 +168,49 @@ export default function UmrahImport() {
                 )}
               </div>
               <div className="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead className="text-start w-10">#</TableHead>
-                      {Object.keys(parsedRows[0] || {}).slice(0, 6).map(k => (
-                        <TableHead key={k} className="text-start text-xs">{FIELD_LABELS[k] || k}</TableHead>
-                      ))}
-                      <TableHead className="text-start text-xs">الحالة</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {parsedRows.slice(0, 20).map((row: any, i: number) => {
-                      const missing = getRowValidation(row);
-                      return (
-                        <TableRow key={i} className={missing.length > 0 ? "bg-amber-50/50" : ""}>
-                          <TableCell className="text-xs text-gray-400">{i + 1}</TableCell>
-                          {Object.keys(parsedRows[0] || {}).slice(0, 6).map(k => (
-                            <TableCell key={k} className={`text-xs ${missing.includes(k) ? "text-red-600 font-medium" : ""}`}>
-                              {row[k] || <span className="text-red-400">—</span>}
-                            </TableCell>
-                          ))}
-                          <TableCell>
-                            {missing.length === 0 ? (
-                              <Badge className="bg-green-100 text-green-700 text-[10px]">صالح</Badge>
-                            ) : (
-                              <Badge className="bg-amber-100 text-amber-700 text-[10px]">ناقص: {missing.map(m => FIELD_LABELS[m] || m).join(", ")}</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                <DataTable<any>
+                  columns={[
+                    {
+                      key: "__index",
+                      header: "#",
+                      width: "40px",
+                      className: "text-xs text-gray-400",
+                      render: (_row, i) => i + 1,
+                    },
+                    ...Object.keys(parsedRows[0] || {}).slice(0, 6).map((k) => ({
+                      key: k,
+                      header: FIELD_LABELS[k] || k,
+                      className: "text-xs",
+                      render: (row: any) => {
+                        const missing = getRowValidation(row);
+                        return (
+                          <span className={missing.includes(k) ? "text-red-600 font-medium" : ""}>
+                            {row[k] || <span className="text-red-400">—</span>}
+                          </span>
+                        );
+                      },
+                    })),
+                    {
+                      key: "__status",
+                      header: "الحالة",
+                      className: "text-xs",
+                      render: (row) => {
+                        const missing = getRowValidation(row);
+                        return missing.length === 0 ? (
+                          <Badge className="bg-green-100 text-green-700 text-[10px]">صالح</Badge>
+                        ) : (
+                          <Badge className="bg-amber-100 text-amber-700 text-[10px]">ناقص: {missing.map((m) => FIELD_LABELS[m] || m).join(", ")}</Badge>
+                        );
+                      },
+                    },
+                  ] as DataTableColumn<any>[]}
+                  data={parsedRows.slice(0, 20)}
+                  rowKey={(_row, i) => i}
+                  rowClassName={(row) => (getRowValidation(row).length > 0 ? "bg-amber-50/50" : undefined)}
+                  noToolbar
+                  pageSize={0}
+                  emptyMessage="لا توجد بيانات"
+                />
                 {parsedRows.length > 20 && (
                   <p className="text-center text-xs text-gray-400 py-2">و {parsedRows.length - 20} صفوف أخرى...</p>
                 )}

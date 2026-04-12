@@ -14,9 +14,7 @@ import {
   Users, BarChart2, PieChart, FileText, Printer, ChevronDown, ChevronRight
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { MultiExportButton } from "@/components/shared/export-buttons";
 
 function exportCSV(rows: any[], headers: string[], filename: string) {
@@ -176,7 +174,21 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
     return roots;
   }, [rows]);
 
-  const { sortedData, sortState, handleSort } = useSortedData(rows);
+  const flatColumns: DataTableColumn<any>[] = [
+    { key: "code", header: "الرمز", sortable: true, searchable: true, render: (r) => <span className="font-mono text-blue-600">{r.code}</span> },
+    { key: "name", header: "الحساب", sortable: true, searchable: true, render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: "type", header: "النوع", sortable: true, render: (r) => <Badge variant="outline">{typeMap[r.type] || r.type}</Badge> },
+    { key: "totalDebit", header: "مدين", sortable: true, render: (r) => <span className="text-green-600">{formatCurrency(Number(r.totalDebit || 0))}</span> },
+    { key: "totalCredit", header: "دائن", sortable: true, render: (r) => <span className="text-red-600">{formatCurrency(Number(r.totalCredit || 0))}</span> },
+    {
+      key: "balance", header: "الرصيد", sortable: true,
+      render: (r) => (
+        <span className="font-bold" style={{ color: Number(r.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+          {formatCurrency(Number(r.balance || 0))}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4 mt-4">
@@ -231,61 +243,61 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
         </div>
       )}
 
-      <div className="border rounded-lg bg-card overflow-hidden print-area"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            {viewMode === "flat" ? (
-              <>
-                <SortableTableHead column="code" label="الرمز" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="name" label="الحساب" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="type" label="النوع" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="totalDebit" label="مدين" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="totalCredit" label="دائن" sortState={sortState} onSort={handleSort} />
-                <SortableTableHead column="balance" label="الرصيد" sortState={sortState} onSort={handleSort} />
-              </>
-            ) : (
-              <>
-                <th className="p-3 text-start">الرمز</th>
-                <th className="p-3 text-start">الحساب</th>
-                <th className="p-3 text-start">النوع</th>
-                <th className="p-3 text-start">مدين</th>
-                <th className="p-3 text-start">دائن</th>
-                <th className="p-3 text-start">الرصيد</th>
-              </>
-            )}
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(6)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={6} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-            )) : rows.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد بيانات</td></tr>
-            ) : viewMode === "tree" ? (
-              tree.map((node: any) => <TrialBalanceNode key={node.code} node={node} level={0} />)
-            ) : (
-              (sortedData || []).map((r: any) => (
-                <tr key={r.code} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-mono text-blue-600">{r.code}</td>
-                  <td className="p-3 font-medium">{r.name}</td>
-                  <td className="p-3"><Badge variant="outline">{typeMap[r.type] || r.type}</Badge></td>
-                  <td className="p-3 text-green-600">{formatCurrency(Number(r.totalDebit || 0))}</td>
-                  <td className="p-3 text-red-600">{formatCurrency(Number(r.totalCredit || 0))}</td>
-                  <td className="p-3 font-bold" style={{ color: Number(r.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
-                    {formatCurrency(Number(r.balance || 0))}
-                  </td>
+      <div className="print-area">
+        {viewMode === "tree" ? (
+          <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  <th className="p-3 text-start">الرمز</th>
+                  <th className="p-3 text-start">الحساب</th>
+                  <th className="p-3 text-start">النوع</th>
+                  <th className="p-3 text-start">مدين</th>
+                  <th className="p-3 text-start">دائن</th>
+                  <th className="p-3 text-start">الرصيد</th>
                 </tr>
-              ))
-            )}
+              </thead>
+              <tbody>
+                {isLoading ? [...Array(6)].map((_, i) => (
+                  <tr key={i} className="border-b"><td colSpan={6} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
+                )) : rows.length === 0 ? (
+                  <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد بيانات</td></tr>
+                ) : (
+                  tree.map((node: any) => <TrialBalanceNode key={node.code} node={node} level={0} />)
+                )}
+                {rows.length > 0 && (
+                  <tr className="bg-gray-100 font-bold">
+                    <td colSpan={3} className="p-3">المجموع الكلي</td>
+                    <td className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</td>
+                    <td className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</td>
+                    <td className="p-3">{formatCurrency(Number(summary.totalDebit || 0) - Number(summary.totalCredit || 0))}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div></div>
+        ) : (
+          <>
+            <DataTable<any>
+              columns={flatColumns}
+              data={rows}
+              isLoading={isLoading}
+              rowKey={(r) => r.code}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد بيانات"
+            />
             {rows.length > 0 && (
-              <tr className="bg-gray-100 font-bold">
-                <td colSpan={3} className="p-3">المجموع الكلي</td>
-                <td className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</td>
-                <td className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</td>
-                <td className="p-3">{formatCurrency(Number(summary.totalDebit || 0) - Number(summary.totalCredit || 0))}</td>
-              </tr>
+              <div className="mt-2 grid grid-cols-6 gap-0 bg-gray-100 font-bold rounded-lg overflow-hidden border">
+                <div className="col-span-3 p-3">المجموع الكلي</div>
+                <div className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</div>
+                <div className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</div>
+                <div className="p-3">{formatCurrency(Number(summary.totalDebit || 0) - Number(summary.totalCredit || 0))}</div>
+              </div>
             )}
-          </TableBody>
-        </Table>
-      </div></div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -302,6 +314,46 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   const totalExpenses = Number(summary.totalExpenses || 0);
   const netIncome = Number(summary.netIncome || 0);
   const marginPct = totalRevenue > 0 ? ((netIncome / totalRevenue) * 100).toFixed(1) : "0.0";
+
+  const revenueColumns: DataTableColumn<any>[] = [
+    { key: "code", header: "الرمز", width: "4rem", render: (r) => <span className="font-mono text-sm text-gray-500">{r.code}</span> },
+    { key: "name", header: "البيان", render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: "amount", header: "المبلغ", render: (r) => <span className="text-green-600 font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
+    {
+      key: "pct", header: "النسبة", width: "5rem",
+      render: (r) => {
+        const pct = totalRevenue > 0 ? ((Number(r.amount) / totalRevenue) * 100).toFixed(1) : "0.0";
+        return (
+          <div className="flex items-center gap-1 text-xs text-gray-400">
+            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+              <div className="bg-green-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, Number(pct))}%` }} />
+            </div>
+            <span>{pct}%</span>
+          </div>
+        );
+      },
+    },
+  ];
+
+  const expenseColumns: DataTableColumn<any>[] = [
+    { key: "code", header: "الرمز", width: "4rem", render: (e) => <span className="font-mono text-sm text-gray-500">{e.code}</span> },
+    { key: "name", header: "البيان", render: (e) => <span className="font-medium">{e.name}</span> },
+    { key: "amount", header: "المبلغ", render: (e) => <span className="text-red-600 font-bold">{formatCurrency(Number(e.amount || 0))}</span> },
+    {
+      key: "pct", header: "النسبة", width: "5rem",
+      render: (e) => {
+        const pct = totalExpenses > 0 ? ((Number(e.amount) / totalExpenses) * 100).toFixed(1) : "0.0";
+        return (
+          <div className="flex items-center gap-1 text-xs text-gray-400">
+            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+              <div className="bg-red-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, Number(pct))}%` }} />
+            </div>
+            <span>{pct}%</span>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="space-y-4 mt-4">
@@ -347,29 +399,14 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
           <span className="text-lg">{formatCurrency(totalRevenue)}</span>
         </CardTitle></CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableBody>
-              {revenues.map((r: any) => {
-                const pct = totalRevenue > 0 ? ((Number(r.amount) / totalRevenue) * 100).toFixed(1) : "0.0";
-                return (
-                  <tr key={r.code} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-sm text-gray-500 w-16">{r.code}</td>
-                    <td className="p-3 font-medium flex-1">{r.name}</td>
-                    <td className="p-3 text-green-600 font-bold text-start">{formatCurrency(Number(r.amount || 0))}</td>
-                    <td className="p-3 text-xs text-gray-400 w-20 text-center">
-                      <div className="flex items-center gap-1">
-                        <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                          <div className="bg-green-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, Number(pct))}%` }} />
-                        </div>
-                        <span>{pct}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {revenues.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-400">لا توجد إيرادات</td></tr>}
-            </TableBody>
-          </Table>
+          <DataTable<any>
+            columns={revenueColumns}
+            data={revenues}
+            rowKey={(r) => r.code}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا توجد إيرادات"
+          />
         </CardContent>
       </Card>
 
@@ -379,29 +416,14 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
           <span className="text-lg">{formatCurrency(totalExpenses)}</span>
         </CardTitle></CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableBody>
-              {expenses.map((e: any) => {
-                const pct = totalExpenses > 0 ? ((Number(e.amount) / totalExpenses) * 100).toFixed(1) : "0.0";
-                return (
-                  <tr key={e.code} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-sm text-gray-500 w-16">{e.code}</td>
-                    <td className="p-3 font-medium flex-1">{e.name}</td>
-                    <td className="p-3 text-red-600 font-bold text-start">{formatCurrency(Number(e.amount || 0))}</td>
-                    <td className="p-3 text-xs text-gray-400 w-20 text-center">
-                      <div className="flex items-center gap-1">
-                        <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                          <div className="bg-red-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, Number(pct))}%` }} />
-                        </div>
-                        <span>{pct}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {expenses.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-400">لا توجد مصروفات</td></tr>}
-            </TableBody>
-          </Table>
+          <DataTable<any>
+            columns={expenseColumns}
+            data={expenses}
+            rowKey={(e) => e.code}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا توجد مصروفات"
+          />
         </CardContent>
       </Card>
 
@@ -435,34 +457,40 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
   const totalLiabilities = Number(summary.totalLiabilities || 0);
   const totalEquity = Number(summary.totalEquity || 0);
 
-  const Section = ({ title, items, color, total }: { title: string; items: any[]; color: string; total: number }) => (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between" style={{ color }}>
-          <span>{title}</span>
-          <span className="text-lg">{formatCurrency(total)}</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <Table>
-          <TableBody>
-            {items.map((r: any) => {
-              const pct = total > 0 ? ((Number(r.balance) / total) * 100).toFixed(1) : "0.0";
-              return (
-                <tr key={r.code} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-mono text-sm text-gray-500 w-16">{r.code}</td>
-                  <td className="p-3 font-medium">{r.name}</td>
-                  <td className="p-3 font-bold text-start" style={{ color }}>{formatCurrency(Number(r.balance || 0))}</td>
-                  <td className="p-3 text-xs text-gray-400 w-16 text-center">{pct}%</td>
-                </tr>
-              );
-            })}
-            {items.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
+  const Section = ({ title, items, color, total }: { title: string; items: any[]; color: string; total: number }) => {
+    const sectionColumns: DataTableColumn<any>[] = [
+      { key: "code", header: "الرمز", width: "4rem", render: (r) => <span className="font-mono text-sm text-gray-500">{r.code}</span> },
+      { key: "name", header: "البيان", render: (r) => <span className="font-medium">{r.name}</span> },
+      { key: "balance", header: "الرصيد", render: (r) => <span className="font-bold" style={{ color }}>{formatCurrency(Number(r.balance || 0))}</span> },
+      {
+        key: "pct", header: "النسبة", width: "4rem",
+        render: (r) => {
+          const pct = total > 0 ? ((Number(r.balance) / total) * 100).toFixed(1) : "0.0";
+          return <span className="text-xs text-gray-400">{pct}%</span>;
+        },
+      },
+    ];
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-between" style={{ color }}>
+            <span>{title}</span>
+            <span className="text-lg">{formatCurrency(total)}</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={sectionColumns}
+            data={items}
+            rowKey={(r) => r.code}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا توجد بيانات"
+          />
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="space-y-4 mt-4">
@@ -521,6 +549,18 @@ function CashFlow({ dateParams }: { dateParams: string }) {
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
 
+  const inflowColumns: DataTableColumn<any>[] = [
+    { key: "description", header: "البيان", render: (f) => <span className="font-medium">{f.description || "-"}</span> },
+    { key: "amount", header: "المبلغ", render: (f) => <span className="text-green-600 font-bold">{formatCurrency(Number(f.amount))}</span> },
+    { key: "date", header: "التاريخ", render: (f) => <span className="text-gray-400 text-xs">{f.date ? formatDateAr(f.date) : ""}</span> },
+  ];
+
+  const outflowColumns: DataTableColumn<any>[] = [
+    { key: "description", header: "البيان", render: (f) => <span className="font-medium">{f.description || "-"}</span> },
+    { key: "amount", header: "المبلغ", render: (f) => <span className="text-red-600 font-bold">{formatCurrency(Number(f.amount))}</span> },
+    { key: "date", header: "التاريخ", render: (f) => <span className="text-gray-400 text-xs">{f.date ? formatDateAr(f.date) : ""}</span> },
+  ];
+
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
@@ -553,36 +593,28 @@ function CashFlow({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-green-700">التدفقات الداخلة</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableBody>
-                {inflows.map((f: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium flex-1">{f.description || "-"}</td>
-                    <td className="p-3 text-green-600 font-bold">{formatCurrency(Number(f.amount))}</td>
-                    <td className="p-3 text-gray-400 text-xs">{f.date ? formatDateAr(f.date) : ""}</td>
-                  </tr>
-                ))}
-                {inflows.length === 0 && <tr><td colSpan={3} className="p-4 text-center text-gray-400">لا توجد تدفقات</td></tr>}
-              </TableBody>
-            </Table>
+            <DataTable<any>
+              columns={inflowColumns}
+              data={inflows}
+              rowKey={(_, i) => i}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد تدفقات"
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-red-700">التدفقات الخارجة</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableBody>
-                {outflows.map((f: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium flex-1">{f.description || "-"}</td>
-                    <td className="p-3 text-red-600 font-bold">{formatCurrency(Number(f.amount))}</td>
-                    <td className="p-3 text-gray-400 text-xs">{f.date ? formatDateAr(f.date) : ""}</td>
-                  </tr>
-                ))}
-                {outflows.length === 0 && <tr><td colSpan={3} className="p-4 text-center text-gray-400">لا توجد تدفقات</td></tr>}
-              </TableBody>
-            </Table>
+            <DataTable<any>
+              columns={outflowColumns}
+              data={outflows}
+              rowKey={(_, i) => i}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد تدفقات"
+            />
           </CardContent>
         </Card>
       </div>
@@ -596,6 +628,22 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
   const { data, isLoading } = useApiQuery<any>(["cash-bank-statement", params], `/finance/reports/cash-bank-statement?${params}`);
   const entries = data?.entries || [];
   const summary = data?.summary || {};
+
+  const cashBankColumns: DataTableColumn<any>[] = [
+    { key: "date", header: "التاريخ", render: (e) => <span className="text-xs text-gray-500">{e.date ? formatDateAr(e.date) : "-"}</span> },
+    { key: "ref", header: "المرجع", render: (e) => <span className="font-mono text-xs text-blue-600">{e.ref || "-"}</span> },
+    { key: "description", header: "الوصف", searchable: true, render: (e) => <span className="text-sm">{e.description || "-"}</span> },
+    { key: "debit", header: "وارد", render: (e) => <span className="text-green-600">{Number(e.debit || 0) > 0 ? formatCurrency(Number(e.debit)) : "-"}</span> },
+    { key: "credit", header: "صادر", render: (e) => <span className="text-red-600">{Number(e.credit || 0) > 0 ? formatCurrency(Number(e.credit)) : "-"}</span> },
+    {
+      key: "runningBalance", header: "الرصيد",
+      render: (e) => (
+        <span className="font-bold text-xs" style={{ color: Number(e.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+          {formatCurrency(Number(e.runningBalance || 0))}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4 mt-4">
@@ -634,36 +682,15 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
         </Card>
       </div>
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <th className="p-3 text-start">التاريخ</th>
-            <th className="p-3 text-start">المرجع</th>
-            <th className="p-3 text-start">الوصف</th>
-            <th className="p-3 text-start">وارد</th>
-            <th className="p-3 text-start">صادر</th>
-            <th className="p-3 text-start">الرصيد</th>
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={6} className="p-3"><Skeleton className="h-5 w-full" /></td></tr>
-            )) : entries.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد حركات</td></tr>
-            ) : entries.map((e: any, i: number) => (
-              <tr key={e.id || i} className="border-b hover:bg-gray-50">
-                <td className="p-3 text-xs text-gray-500">{e.date ? formatDateAr(e.date) : "-"}</td>
-                <td className="p-3 font-mono text-xs text-blue-600">{e.ref || "-"}</td>
-                <td className="p-3 text-sm">{e.description || "-"}</td>
-                <td className="p-3 text-green-600">{Number(e.debit || 0) > 0 ? formatCurrency(Number(e.debit)) : "-"}</td>
-                <td className="p-3 text-red-600">{Number(e.credit || 0) > 0 ? formatCurrency(Number(e.credit)) : "-"}</td>
-                <td className="p-3 font-bold text-xs" style={{ color: Number(e.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
-                  {formatCurrency(Number(e.runningBalance || 0))}
-                </td>
-              </tr>
-            ))}
-          </TableBody>
-        </Table>
-      </div></div>
+      <DataTable<any>
+        columns={cashBankColumns}
+        data={entries}
+        isLoading={isLoading}
+        rowKey={(e, i) => e.id ?? i}
+        noToolbar
+        pageSize={0}
+        emptyMessage="لا توجد حركات"
+      />
     </div>
   );
 }
@@ -675,6 +702,14 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+
+  const custodyColumns: DataTableColumn<any>[] = [
+    { key: "ref", header: "المرجع", render: (c) => <span className="font-mono text-xs text-blue-600">{c.ref}</span> },
+    { key: "description", header: "الوصف", searchable: true, render: (c) => <span className="text-sm">{c.description || "-"}</span> },
+    { key: "employeeName", header: "الموظف", render: (c) => <span className="text-xs text-gray-500">{c.employeeName || "-"}</span> },
+    { key: "amount", header: "المبلغ", render: (c) => <span className="font-bold">{formatCurrency(Number(c.amount || 0))}</span> },
+    { key: "date", header: "التاريخ", render: (c) => <span className="text-xs text-gray-500">{c.date ? formatDateAr(c.date) : "-"}</span> },
+  ];
 
   return (
     <div className="space-y-4 mt-4">
@@ -706,40 +741,26 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-blue-700 text-base">العهد ({custodies.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableBody>
-                {custodies.map((c: any) => (
-                  <tr key={c.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-xs text-blue-600">{c.ref}</td>
-                    <td className="p-3 text-sm">{c.description || "-"}</td>
-                    <td className="p-3 text-xs text-gray-500">{c.employeeName || "-"}</td>
-                    <td className="p-3 font-bold">{formatCurrency(Number(c.amount || 0))}</td>
-                    <td className="p-3 text-xs text-gray-500">{c.date ? formatDateAr(c.date) : "-"}</td>
-                  </tr>
-                ))}
-                {custodies.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-400">لا توجد عهد</td></tr>}
-              </TableBody>
-            </Table>
+            <DataTable<any>
+              columns={custodyColumns}
+              data={custodies}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد عهد"
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-orange-700 text-base">السلف ({advances.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableBody>
-                {advances.map((a: any) => (
-                  <tr key={a.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-xs text-blue-600">{a.ref}</td>
-                    <td className="p-3 text-sm">{a.description || "-"}</td>
-                    <td className="p-3 text-xs text-gray-500">{a.employeeName || "-"}</td>
-                    <td className="p-3 font-bold">{formatCurrency(Number(a.amount || 0))}</td>
-                    <td className="p-3 text-xs text-gray-500">{a.date ? formatDateAr(a.date) : "-"}</td>
-                  </tr>
-                ))}
-                {advances.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-400">لا توجد سلف</td></tr>}
-              </TableBody>
-            </Table>
+            <DataTable<any>
+              columns={custodyColumns}
+              data={advances}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد سلف"
+            />
           </CardContent>
         </Card>
       </div>
@@ -753,6 +774,26 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
   const { data, isLoading } = useApiQuery<any>(["expenses-analysis", params], `/finance/reports/expenses-analysis?${params}`);
   const rows = data?.data || [];
   const summary = data?.summary || {};
+
+  const expensesColumns: DataTableColumn<any>[] = [
+    { key: "label", header: groupBy === "account" ? "الحساب" : groupBy === "branch" ? "الفرع" : "الموظف", searchable: true, render: (r) => <span className="font-medium">{r.label || "-"}</span> },
+    { key: "amount", header: "المبلغ", render: (r) => <span className="text-red-600 font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
+    { key: "entryCount", header: "عدد القيود", render: (r) => <span className="text-gray-500">{r.entryCount}</span> },
+    {
+      key: "pct", header: "النسبة",
+      render: (r) => {
+        const pct = summary.total > 0 ? Math.round(Number(r.amount) / summary.total * 100) : 0;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+              <div className="bg-red-400 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-xs text-gray-500 w-8">{pct}%</span>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="space-y-4 mt-4">
@@ -778,40 +819,15 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
         <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(summary.total || 0))}</p>
       </CardContent></Card>
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <th className="p-3 text-start">{groupBy === "account" ? "الحساب" : groupBy === "branch" ? "الفرع" : "الموظف"}</th>
-            <th className="p-3 text-start">المبلغ</th>
-            <th className="p-3 text-start">عدد القيود</th>
-            <th className="p-3 text-start">النسبة</th>
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={4} className="p-3"><Skeleton className="h-5 w-full" /></td></tr>
-            )) : rows.length === 0 ? (
-              <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد بيانات</td></tr>
-            ) : rows.map((r: any, i: number) => {
-              const pct = summary.total > 0 ? Math.round(Number(r.amount) / summary.total * 100) : 0;
-              return (
-                <tr key={r.key || i} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium">{r.label || "-"}</td>
-                  <td className="p-3 text-red-600 font-bold">{formatCurrency(Number(r.amount || 0))}</td>
-                  <td className="p-3 text-gray-500">{r.entryCount}</td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                        <div className="bg-red-400 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="text-xs text-gray-500 w-8">{pct}%</span>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div></div>
+      <DataTable<any>
+        columns={expensesColumns}
+        data={rows}
+        isLoading={isLoading}
+        rowKey={(r, i) => r.key ?? i}
+        noToolbar
+        pageSize={0}
+        emptyMessage="لا توجد بيانات"
+      />
     </div>
   );
 }
@@ -823,6 +839,32 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+
+  const byAccountColumns: DataTableColumn<any>[] = [
+    {
+      key: "name", header: "الحساب",
+      render: (r) => (
+        <div>
+          <p className="font-medium">{r.name}</p>
+          <p className="font-mono text-xs text-gray-400">{r.code}</p>
+        </div>
+      ),
+    },
+    { key: "amount", header: "المبلغ", render: (r) => <span className="text-green-600 font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
+    {
+      key: "pct", header: "النسبة",
+      render: (r) => {
+        const pct = Number(summary.totalRevenue) > 0 ? ((Number(r.amount) / Number(summary.totalRevenue)) * 100).toFixed(1) : "0.0";
+        return <span className="text-xs text-gray-400">{pct}%</span>;
+      },
+    },
+  ];
+
+  const byMonthColumns: DataTableColumn<any>[] = [
+    { key: "period", header: "الشهر", render: (r) => <span className="font-mono">{r.period}</span> },
+    { key: "invoiced", header: "الفواتير", render: (r) => formatCurrency(Number(r.invoiced || 0)) },
+    { key: "collected", header: "المحصّل", render: (r) => <span className="text-green-600 font-bold">{formatCurrency(Number(r.collected || 0))}</span> },
+  ];
 
   return (
     <div className="space-y-4 mt-4">
@@ -842,52 +884,28 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-base">الإيرادات حسب الحساب</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader><TableRow>
-                <th className="p-3 text-start">الحساب</th>
-                <th className="p-3 text-start">المبلغ</th>
-                <th className="p-3 text-start">النسبة</th>
-              </TableRow></TableHeader>
-              <TableBody>
-                {byAccount.map((r: any) => {
-                  const pct = Number(summary.totalRevenue) > 0 ? ((Number(r.amount) / Number(summary.totalRevenue)) * 100).toFixed(1) : "0.0";
-                  return (
-                    <tr key={r.code} className="border-b hover:bg-gray-50">
-                      <td className="p-3">
-                        <p className="font-medium">{r.name}</p>
-                        <p className="font-mono text-xs text-gray-400">{r.code}</p>
-                      </td>
-                      <td className="p-3 text-green-600 font-bold">{formatCurrency(Number(r.amount || 0))}</td>
-                      <td className="p-3 text-xs text-gray-400">{pct}%</td>
-                    </tr>
-                  );
-                })}
-                {byAccount.length === 0 && <tr><td colSpan={3} className="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>}
-              </TableBody>
-            </Table>
+            <DataTable<any>
+              columns={byAccountColumns}
+              data={byAccount}
+              rowKey={(r) => r.code}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد بيانات"
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-base">الإيرادات الشهرية</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader><TableRow>
-                <th className="p-3 text-start">الشهر</th>
-                <th className="p-3 text-start">الفواتير</th>
-                <th className="p-3 text-start">المحصّل</th>
-              </TableRow></TableHeader>
-              <TableBody>
-                {byMonth.map((r: any) => (
-                  <tr key={r.period} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono">{r.period}</td>
-                    <td className="p-3">{formatCurrency(Number(r.invoiced || 0))}</td>
-                    <td className="p-3 text-green-600 font-bold">{formatCurrency(Number(r.collected || 0))}</td>
-                  </tr>
-                ))}
-                {byMonth.length === 0 && <tr><td colSpan={3} className="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>}
-              </TableBody>
-            </Table>
+            <DataTable<any>
+              columns={byMonthColumns}
+              data={byMonth}
+              rowKey={(r) => r.period}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد بيانات"
+            />
           </CardContent>
         </Card>
       </div>
@@ -903,6 +921,42 @@ function BudgetVariance() {
   const summary = data?.summary || {};
 
   const varianceColor = (v: number) => v >= 0 ? "#16a34a" : "#dc2626";
+
+  const budgetColumns: DataTableColumn<any>[] = [
+    {
+      key: "accountName", header: "الحساب", searchable: true,
+      render: (r) => (
+        <div>
+          <p className="font-medium">{r.accountName || r.accountCode}</p>
+          <p className="font-mono text-xs text-gray-400">{r.accountCode}</p>
+        </div>
+      ),
+    },
+    { key: "budget", header: "الميزانية", render: (r) => formatCurrency(Number(r.budget || 0)) },
+    { key: "actual", header: "الفعلي", render: (r) => formatCurrency(Number(r.actual || 0)) },
+    {
+      key: "variance", header: "الانحراف",
+      render: (r) => (
+        <span className="font-bold" style={{ color: varianceColor(Number(r.variance)) }}>
+          {formatCurrency(Number(r.variance || 0))}
+        </span>
+      ),
+    },
+    {
+      key: "usagePct", header: "نسبة الاستخدام",
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          <div className="flex-1 bg-gray-100 rounded-full h-2">
+            <div
+              className={`h-2 rounded-full ${Number(r.usagePct) > 100 ? "bg-red-500" : Number(r.usagePct) > 80 ? "bg-orange-400" : "bg-green-400"}`}
+              style={{ width: `${Math.min(100, Number(r.usagePct || 0))}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-500 w-10">{r.usagePct}%</span>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4 mt-4">
@@ -933,47 +987,15 @@ function BudgetVariance() {
         </Card>
       </div>
 
-      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-        <Table>
-          <TableHeader><TableRow>
-            <th className="p-3 text-start">الحساب</th>
-            <th className="p-3 text-start">الميزانية</th>
-            <th className="p-3 text-start">الفعلي</th>
-            <th className="p-3 text-start">الانحراف</th>
-            <th className="p-3 text-start">نسبة الاستخدام</th>
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? [...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b"><td colSpan={5} className="p-3"><Skeleton className="h-5 w-full" /></td></tr>
-            )) : rows.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد بيانات ميزانية للفترة المختارة</td></tr>
-            ) : rows.map((r: any) => (
-              <tr key={r.accountCode} className="border-b hover:bg-gray-50">
-                <td className="p-3">
-                  <p className="font-medium">{r.accountName || r.accountCode}</p>
-                  <p className="font-mono text-xs text-gray-400">{r.accountCode}</p>
-                </td>
-                <td className="p-3">{formatCurrency(Number(r.budget || 0))}</td>
-                <td className="p-3">{formatCurrency(Number(r.actual || 0))}</td>
-                <td className="p-3 font-bold" style={{ color: varianceColor(Number(r.variance)) }}>
-                  {formatCurrency(Number(r.variance || 0))}
-                </td>
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-gray-100 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full ${Number(r.usagePct) > 100 ? "bg-red-500" : Number(r.usagePct) > 80 ? "bg-orange-400" : "bg-green-400"}`}
-                        style={{ width: `${Math.min(100, Number(r.usagePct || 0))}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-500 w-10">{r.usagePct}%</span>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </TableBody>
-        </Table>
-      </div></div>
+      <DataTable<any>
+        columns={budgetColumns}
+        data={rows}
+        isLoading={isLoading}
+        rowKey={(r) => r.accountCode}
+        noToolbar
+        pageSize={0}
+        emptyMessage="لا توجد بيانات ميزانية للفترة المختارة"
+      />
     </div>
   );
 }
@@ -1010,6 +1032,23 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
     runningBalance += Number(r.debit || 0) - Number(r.credit || 0);
     return { ...r, runningBalance };
   });
+
+  const entityColumns: DataTableColumn<any>[] = [
+    { key: "date", header: "التاريخ", render: (r) => <span className="text-xs text-gray-500">{r.date ? formatDateAr(r.date) : "-"}</span> },
+    { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs text-blue-600">{r.ref || "-"}</span> },
+    { key: "description", header: "البيان", searchable: true, render: (r) => r.description || "-" },
+    { key: "debit", header: "مدين", render: (r) => <span className="text-green-600">{Number(r.debit || 0) > 0 ? formatCurrency(Number(r.debit)) : "-"}</span> },
+    { key: "credit", header: "دائن", render: (r) => <span className="text-red-600">{Number(r.credit || 0) > 0 ? formatCurrency(Number(r.credit)) : "-"}</span> },
+    {
+      key: "runningBalance", header: "الرصيد التراكمي",
+      render: (r) => (
+        <span className="font-bold text-xs" style={{ color: Number(r.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+          {formatCurrency(Number(r.runningBalance || 0))}
+        </span>
+      ),
+    },
+    { key: "type", header: "الحالة", render: (r) => <Badge variant="outline" className="text-xs">{r.type || "-"}</Badge> },
+  ];
 
   return (
     <div className="space-y-4 mt-4">
@@ -1087,49 +1126,26 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
             </Card>
           </div>
 
-          <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
-            <Table>
-              <TableHeader><TableRow>
-                <th className="p-3 text-start">التاريخ</th>
-                <th className="p-3 text-start">المرجع</th>
-                <th className="p-3 text-start">البيان</th>
-                <th className="p-3 text-start">مدين</th>
-                <th className="p-3 text-start">دائن</th>
-                <th className="p-3 text-start">الرصيد التراكمي</th>
-                <th className="p-3 text-start">الحالة</th>
-              </TableRow></TableHeader>
-              <TableBody>
-                {isLoading ? [...Array(5)].map((_, i) => (
-                  <tr key={i} className="border-b"><td colSpan={7} className="p-3"><Skeleton className="h-5 w-full" /></td></tr>
-                )) : rowsWithBalance.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">لا توجد حركات للجهة المحددة</td></tr>
-                ) : rowsWithBalance.map((r: any, i: number) => (
-                  <tr key={r.ref || i} className="border-b hover:bg-gray-50">
-                    <td className="p-3 text-xs text-gray-500">{r.date ? formatDateAr(r.date) : "-"}</td>
-                    <td className="p-3 font-mono text-xs text-blue-600">{r.ref || "-"}</td>
-                    <td className="p-3">{r.description || "-"}</td>
-                    <td className="p-3 text-green-600">{Number(r.debit || 0) > 0 ? formatCurrency(Number(r.debit)) : "-"}</td>
-                    <td className="p-3 text-red-600">{Number(r.credit || 0) > 0 ? formatCurrency(Number(r.credit)) : "-"}</td>
-                    <td className="p-3 font-bold text-xs" style={{ color: Number(r.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
-                      {formatCurrency(Number(r.runningBalance || 0))}
-                    </td>
-                    <td className="p-3"><Badge variant="outline" className="text-xs">{r.type || "-"}</Badge></td>
-                  </tr>
-                ))}
-                {rowsWithBalance.length > 0 && (
-                  <tr className="bg-gray-100 font-bold">
-                    <td colSpan={3} className="p-3">المجموع</td>
-                    <td className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</td>
-                    <td className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</td>
-                    <td className="p-3 font-bold" style={{ color: Number(summary.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
-                      {formatCurrency(Number(summary.balance || 0))}
-                    </td>
-                    <td className="p-3">{summary.count || 0} حركة</td>
-                  </tr>
-                )}
-              </TableBody>
-            </Table>
-          </div></div>
+          <DataTable<any>
+            columns={entityColumns}
+            data={rowsWithBalance}
+            isLoading={isLoading}
+            rowKey={(r, i) => r.ref || i}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا توجد حركات للجهة المحددة"
+          />
+          {rowsWithBalance.length > 0 && (
+            <div className="grid grid-cols-7 gap-0 bg-gray-100 font-bold rounded-lg overflow-hidden border">
+              <div className="col-span-3 p-3">المجموع</div>
+              <div className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</div>
+              <div className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</div>
+              <div className="p-3 font-bold" style={{ color: Number(summary.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+                {formatCurrency(Number(summary.balance || 0))}
+              </div>
+              <div className="p-3">{summary.count || 0} حركة</div>
+            </div>
+          )}
         </>
       )}
     </div>

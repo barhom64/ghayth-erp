@@ -7,10 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCircle, XCircle, Clock, AlertTriangle, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { useSortedData } from "@/hooks/use-sorted-data";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { PaginationBar } from "@/components/data-table-wrapper";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -37,14 +33,57 @@ export default function TaxSystemPage() {
   );
 
   const declItems = declarations?.data || [];
-  const { sortedData: sortedDecl, sortState, handleSort } = useSortedData(declItems);
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
-  const paginatedDecl = sortedDecl?.slice((page - 1) * pageSize, page * pageSize);
 
   const submissions = submissionsData?.data || [];
   const submissionStats = submissionsData?.stats || {};
   const settings = zatcaSettings?.data;
+
+  const declarationColumns: DataTableColumn<any>[] = [
+    {
+      key: "period",
+      header: "الفترة",
+      sortable: true,
+      searchable: true,
+      render: (d: any) => <span className="font-medium">{d.period}</span>,
+    },
+    {
+      key: "outputVat",
+      header: "ضريبة المخرجات",
+      sortable: true,
+      className: "text-red-600",
+      render: (d: any) => formatCurrency(Number(d.outputVat)),
+    },
+    {
+      key: "inputVat",
+      header: "ضريبة المدخلات",
+      sortable: true,
+      className: "text-green-600",
+      render: (d: any) => formatCurrency(Number(d.inputVat)),
+    },
+    {
+      key: "netVat",
+      header: "الصافي",
+      sortable: true,
+      className: "font-bold",
+      render: (d: any) => formatCurrency(Number(d.netVat)),
+    },
+    {
+      key: "invoiceCount",
+      header: "عدد الفواتير",
+      sortable: true,
+      render: (d: any) => d.invoiceCount,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (d: any) => (
+        <Badge className={d.status === "submitted" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+          {d.status === "submitted" ? "مقدم" : "معلق"}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -127,37 +166,16 @@ export default function TaxSystemPage() {
               <CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5" />الإقرارات الضريبية</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader><TableRow>
-                  <SortableTableHead column="period" label="الفترة" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="outputVat" label="ضريبة المخرجات" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="inputVat" label="ضريبة المدخلات" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="netVat" label="الصافي" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="invoiceCount" label="عدد الفواتير" sortState={sortState} onSort={handleSort} />
-                  <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
-                </TableRow></TableHeader>
-                <TableBody>
-                  {declLoading ? [...Array(4)].map((_, i) => (
-                    <tr key={i} className="border-b"><td colSpan={6} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
-                  )) : declItems.length === 0 ? (
-                    <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد إقرارات</td></tr>
-                  ) : (paginatedDecl || []).map((d: any) => (
-                    <tr key={d.period} className="border-b hover:bg-gray-50">
-                      <td className="p-3 font-medium">{d.period}</td>
-                      <td className="p-3 text-red-600">{formatCurrency(Number(d.outputVat))}</td>
-                      <td className="p-3 text-green-600">{formatCurrency(Number(d.inputVat))}</td>
-                      <td className="p-3 font-bold">{formatCurrency(Number(d.netVat))}</td>
-                      <td className="p-3">{d.invoiceCount}</td>
-                      <td className="p-3">
-                        <Badge className={d.status === "submitted" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
-                          {d.status === "submitted" ? "مقدم" : "معلق"}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </TableBody>
-              </Table>
-              <PaginationBar page={page} pageSize={pageSize} total={declItems.length} onPageChange={setPage} />
+              <DataTable
+                columns={declarationColumns}
+                data={declItems}
+                isLoading={declLoading}
+                rowKey={(d: any) => d.period}
+                rowClassName={() => "hover:bg-gray-50"}
+                emptyMessage="لا توجد إقرارات"
+                pageSize={20}
+                searchPlaceholder="بحث بالفترة..."
+              />
             </CardContent>
           </Card>
         </>
