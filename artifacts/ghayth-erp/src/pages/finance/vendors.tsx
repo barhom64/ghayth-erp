@@ -2,15 +2,11 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DataTableWrapper } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Plus, Users, Phone, Mail, Star, Building2 } from "lucide-react";
-import { useSortedData } from "@/hooks/use-sorted-data";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { PaginationBar } from "@/components/data-table-wrapper";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function VendorsPage() {
@@ -28,10 +24,51 @@ export default function VendorsPage() {
   const filtered = applyFilters(items, filters, {
     searchFields: ["name", "contactPerson", "category"],
   });
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
-  const paginatedData = sortedData?.slice((page - 1) * pageSize, page * pageSize);
 
   const categories = [...new Set((items || []).map((v: any) => v.category).filter(Boolean))];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "name",
+      header: "الاسم",
+      sortable: true,
+      render: (v) => <span className="font-medium">{v.name}</span>,
+    },
+    {
+      key: "contactPerson",
+      header: "جهة الاتصال",
+      sortable: true,
+      render: (v) => <span className="text-gray-500">{v.contactPerson || "-"}</span>,
+    },
+    {
+      key: "phone",
+      header: "الهاتف",
+      sortable: true,
+      render: (v) => v.phone
+        ? <span className="flex items-center gap-1 text-gray-600"><Phone className="h-3 w-3" />{v.phone}</span>
+        : "-",
+    },
+    {
+      key: "email",
+      header: "البريد",
+      sortable: true,
+      render: (v) => v.email
+        ? <span className="flex items-center gap-1 text-gray-600"><Mail className="h-3 w-3" />{v.email}</span>
+        : "-",
+    },
+    {
+      key: "taxNumber",
+      header: "الرقم الضريبي",
+      sortable: true,
+      render: (v) => <span className="font-mono text-sm text-gray-500">{v.taxNumber || "-"}</span>,
+    },
+    {
+      key: "category",
+      header: "التصنيف",
+      sortable: true,
+      render: (v) => v.category ? <Badge variant="outline">{v.category}</Badge> : "-",
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -63,8 +100,8 @@ export default function VendorsPage() {
           showDateRange: false,
         }}
         values={filters}
-        onChange={setFilters}
-        onExportCSV={() => exportToCSV((sortedData || []) as any[], [
+        onChange={(v) => { setFilters(v); setPage(1); }}
+        onExportCSV={() => exportToCSV((filtered || []) as any[], [
           { key: "name", label: "الاسم" },
           { key: "contactPerson", label: "جهة الاتصال" },
           { key: "phone", label: "الهاتف" },
@@ -72,49 +109,21 @@ export default function VendorsPage() {
           { key: "taxNumber", label: "الرقم الضريبي" },
           { key: "category", label: "التصنيف" },
         ], "الموردين")}
-        resultCount={sortedData?.length}
+        resultCount={filtered?.length}
       />
 
-      <div className="border rounded-lg bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead column="name" label="الاسم" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="contactPerson" label="جهة الاتصال" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="phone" label="الهاتف" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="email" label="البريد" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="taxNumber" label="الرقم الضريبي" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="category" label="التصنيف" sortState={sortState} onSort={handleSort} />
-            </TableRow>
-          </TableHeader>
-          <DataTableWrapper
-            isLoading={isLoading}
-            isError={isError}
-            error={error}
-            onRetry={() => refetch()}
-            data={sortedData}
-            colCount={6}
-            emptyMessage="لا يوجد موردين"
-            emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
-          >
-            {(paginatedData || []).map((v: any) => (
-              <TableRow key={v.id}>
-                <TableCell className="font-medium">{v.name}</TableCell>
-                <TableCell className="text-gray-500">{v.contactPerson || "-"}</TableCell>
-                <TableCell>
-                  {v.phone ? <span className="flex items-center gap-1 text-gray-600"><Phone className="h-3 w-3" />{v.phone}</span> : "-"}
-                </TableCell>
-                <TableCell>
-                  {v.email ? <span className="flex items-center gap-1 text-gray-600"><Mail className="h-3 w-3" />{v.email}</span> : "-"}
-                </TableCell>
-                <TableCell className="font-mono text-sm text-gray-500">{v.taxNumber || "-"}</TableCell>
-                <TableCell>{v.category ? <Badge variant="outline">{v.category}</Badge> : "-"}</TableCell>
-              </TableRow>
-            ))}
-          </DataTableWrapper>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
-      </div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        pageSize={pageSize}
+        emptyMessage="لا يوجد موردين"
+        emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
+        noToolbar
+      />
     </div>
   );
 }

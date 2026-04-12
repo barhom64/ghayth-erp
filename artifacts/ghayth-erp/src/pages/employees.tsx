@@ -1,21 +1,17 @@
-import { useState, Fragment, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Link, useLocation } from "wouter";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Plus, Eye, ExternalLink, Users, UserCheck, UserX, Briefcase, ChevronDown, ChevronUp, Shield, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROLES } from "@/lib/constants";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV, type FilterValues } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
 import { EntityComments } from "@/components/shared/entity-comments";
@@ -71,7 +67,6 @@ export default function Employees() {
     dateField: "",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((e: any) => tagFilteredIds.has(e.id)) : preFiltered;
-  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const [operationalStatuses, setOperationalStatuses] = useState<Record<number, OperationalStatus>>({});
 
@@ -98,6 +93,89 @@ export default function Employees() {
     { key: "phone", label: "رقم الجوال" },
     { key: "role", label: "الصلاحية", type: "select" as const, options: Object.entries(ROLES).map(([k, v]) => ({ value: k, label: v })) },
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "empNumber",
+      header: "الرقم الوظيفي",
+      sortable: true,
+      render: (e) => <span className="font-mono text-sm">{e.empNumber || "-"}</span>,
+    },
+    {
+      key: "name",
+      header: "الاسم",
+      sortable: true,
+      render: (e) => <span className="font-medium">{e.name}</span>,
+    },
+    { key: "jobTitle", header: "المسمى الوظيفي", sortable: true, render: (e) => e.jobTitle },
+    {
+      key: "phone",
+      header: "رقم الجوال",
+      sortable: true,
+      ltr: true,
+      className: "text-end",
+      render: (e) => e.phone || "-",
+    },
+    {
+      key: "role",
+      header: "الصلاحية",
+      sortable: true,
+      render: (e) => ROLES[e.role] || e.role,
+    },
+    {
+      key: "operationalStatus",
+      header: "الحالة التشغيلية",
+      render: (e) => <OperationalStatusBadge status={operationalStatuses[e.id]} />,
+    },
+    {
+      key: "status",
+      header: "حالة الحساب",
+      sortable: true,
+      render: (e) => <StatusBadge status={e.status} />,
+    },
+    {
+      key: "iqama",
+      header: "الإقامة",
+      render: (e) => (
+        <div className="flex flex-col gap-1">
+          {e.iqamaExpiry ? (() => {
+            const daysLeft = Math.ceil((new Date(e.iqamaExpiry).getTime() - Date.now()) / 86400000);
+            return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><Shield className="h-3 w-3" />منتهية</Badge>
+              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-amber-100 text-amber-700 hover:bg-amber-100"><Shield className="h-3 w-3" />{daysLeft} يوم</Badge>
+              : <Badge variant="outline" className="text-xs gap-1 text-green-700"><Shield className="h-3 w-3" />سارية</Badge>;
+          })() : <span className="text-xs text-muted-foreground">—</span>}
+          {e.govLinkCount > 0 && <Badge variant="secondary" className="text-xs gap-1"><Link2 className="h-3 w-3" />مرتبط ({e.govLinkCount})</Badge>}
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      header: "الإجراءات",
+      render: (employee) => (
+        <div className="flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
+          <Button variant="ghost" size="icon" onClick={() => setPreviewItem(employee)}>
+            <Eye className="h-4 w-4 text-muted-foreground" />
+          </Button>
+          <Link href={`/employees/${employee.id}`}>
+            <Button variant="ghost" size="icon" title="عرض التفاصيل">
+              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </Link>
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(employee.id, { name: employee.name, jobTitle: employee.jobTitle, phone: employee.phone || "", role: employee.role, status: employee.status })}
+            onDelete={() => startDelete(employee.id)}
+          />
+          <button
+            onClick={() => setExpandedId(expandedId === employee.id ? null : employee.id)}
+            className="text-gray-400 hover:text-gray-600 p-1"
+          >
+            {expandedId === employee.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      ),
+    },
   ];
 
   const previewFields: PreviewField[] = [
@@ -157,7 +235,7 @@ export default function Employees() {
           }}
           values={filters}
           onChange={setFilters}
-          onExportCSV={() => exportToCSV(sortedData || [], [
+          onExportCSV={() => exportToCSV(filtered || [], [
             { key: "empNumber", label: "الرقم الوظيفي" },
             { key: "name", label: "الاسم" },
             { key: "jobTitle", label: "المسمى" },
@@ -166,107 +244,48 @@ export default function Employees() {
             { key: "phone", label: "الجوال" },
             { key: "status", label: "الحالة" },
           ], "الموظفين")}
-          resultCount={sortedData?.length}
+          resultCount={filtered?.length}
         />
         <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
       </div>
 
-      <div className="border rounded-lg bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead column="empNumber" label="الرقم الوظيفي" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="name" label="الاسم" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="jobTitle" label="المسمى الوظيفي" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="phone" label="رقم الجوال" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="role" label="الصلاحية" sortState={sortState} onSort={handleSort} />
-              <TableHead>الحالة التشغيلية</TableHead>
-              <SortableTableHead column="status" label="حالة الحساب" sortState={sortState} onSort={handleSort} />
-              <TableHead>الإقامة</TableHead>
-              <TableHead>الإجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <DataTableWrapper
-            isLoading={isLoading}
-            isError={isError}
-            error={error}
-            onRetry={() => refetch()}
-            data={sortedData}
-            colCount={9}
-            emptyMessage="لا يوجد موظفين — أضف أول موظف للبدء"
-            emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
-            emptyAction={{ label: "إضافة موظف جديد", onClick: () => setLocation("/employees/create") }}
-          >
-            {sortedData?.map((employee) => (
-              <Fragment key={employee.id}>
-                <TableRow>
-                  <TableCell className="font-mono text-sm">{employee.empNumber || "-"}</TableCell>
-                  <TableCell className="font-medium">{employee.name}</TableCell>
-                  <TableCell>{employee.jobTitle}</TableCell>
-                  <TableCell dir="ltr" className="text-right">{employee.phone || "-"}</TableCell>
-                  <TableCell>{ROLES[employee.role] || employee.role}</TableCell>
-                  <TableCell>
-                    <OperationalStatusBadge status={operationalStatuses[employee.id]} />
-                  </TableCell>
-                  <TableCell><StatusBadge status={employee.status} /></TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      {employee.iqamaExpiry ? (() => {
-                        const daysLeft = Math.ceil((new Date(employee.iqamaExpiry).getTime() - Date.now()) / 86400000);
-                        return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><Shield className="h-3 w-3" />منتهية</Badge>
-                          : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-amber-100 text-amber-700 hover:bg-amber-100"><Shield className="h-3 w-3" />{daysLeft} يوم</Badge>
-                          : <Badge variant="outline" className="text-xs gap-1 text-green-700"><Shield className="h-3 w-3" />سارية</Badge>;
-                      })() : <span className="text-xs text-muted-foreground">—</span>}
-                      {employee.govLinkCount > 0 && <Badge variant="secondary" className="text-xs gap-1"><Link2 className="h-3 w-3" />مرتبط ({employee.govLinkCount})</Badge>}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-start">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => setPreviewItem(employee)}><Eye className="h-4 w-4 text-muted-foreground" /></Button>
-                      <Link href={`/employees/${employee.id}`}>
-                        <Button variant="ghost" size="icon" title="عرض التفاصيل"><ExternalLink className="h-4 w-4 text-muted-foreground" /></Button>
-                      </Link>
-                      <RowActions
-                        canEdit={canManage}
-                        onEdit={() => startEdit(employee.id, { name: employee.name, jobTitle: employee.jobTitle, phone: employee.phone || "", role: employee.role, status: employee.status })}
-                        onDelete={() => startDelete(employee.id)}
-                      />
-                      <button onClick={() => setExpandedId(expandedId === employee.id ? null : employee.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                        {expandedId === employee.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {expandedId === employee.id && (
-                  <TableRow key={`expand-${employee.id}`}>
-                    <TableCell colSpan={8} className="bg-gray-50/50">
-                      <div className="space-y-3 p-2">
-                        <EntityTags entityType="employee" entityId={employee.id} />
-                        <EntityComments entityType="employee" entityId={employee.id} />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {editingId === employee.id && (
-                  <TableRow key={`edit-${employee.id}`}>
-                    <TableCell colSpan={8}>
-                      <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(employee.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                    </TableCell>
-                  </TableRow>
-                )}
-                {deletingId === employee.id && (
-                  <TableRow key={`del-${employee.id}`}>
-                    <TableCell colSpan={8}>
-                      <InlineDeleteConfirm onConfirm={() => handleDelete(employee.id)} onCancel={cancelDelete} isPending={isPending} itemName={employee.name} entityType="employee" entityId={employee.id} />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
-      </div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        pageSize={pageSize}
+        page={page}
+        total={total}
+        onPageChange={setPage}
+        noToolbar
+        emptyMessage="لا يوجد موظفين — أضف أول موظف للبدء"
+        emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
+        emptyAction={{ label: "إضافة موظف جديد", onClick: () => setLocation("/employees/create") }}
+        renderRowExtras={(employee) => {
+          if (expandedId === employee.id) {
+            return (
+              <div className="space-y-3 p-2 bg-gray-50/50">
+                <EntityTags entityType="employee" entityId={employee.id} />
+                <EntityComments entityType="employee" entityId={employee.id} />
+              </div>
+            );
+          }
+          if (editingId === employee.id) {
+            return (
+              <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(employee.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+            );
+          }
+          if (deletingId === employee.id) {
+            return (
+              <InlineDeleteConfirm onConfirm={() => handleDelete(employee.id)} onCancel={cancelDelete} isPending={isPending} itemName={employee.name} entityType="employee" entityId={employee.id} />
+            );
+          }
+          return null;
+        }}
+      />
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة الموظف" data={previewItem} fields={previewFields} />
     </div>
   );

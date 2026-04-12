@@ -2,14 +2,9 @@ import { useState, Fragment } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Link, useLocation } from "wouter";
 
-import { Table, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
-import { SortableTableHead } from "@/components/sortable-table-head";
-import { useSortedData } from "@/hooks/use-sorted-data";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Plus, Building2, Eye } from "lucide-react";
 import { CLASSIFICATIONS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/formatters";
@@ -48,7 +43,6 @@ export default function Clients() {
   const clients = clientsResponse?.data;
   const total = clientsResponse?.total || 0;
   const filteredClients = applyFilters(clients || [], filters, { dateField: "createdAt" });
-  const { sortedData, sortState, handleSort } = useSortedData(filteredClients);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/clients",
@@ -74,6 +68,66 @@ export default function Clients() {
     }
   };
 
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "name",
+      header: "اسم العميل",
+      sortable: true,
+      render: (client) => (
+        <span className="font-medium flex items-center gap-2">
+          {client.name || "-"}
+          {client.isBlacklisted && <Badge variant="destructive" className="text-[10px]">قائمة سوداء</Badge>}
+        </span>
+      ),
+    },
+    {
+      key: "phone",
+      header: "رقم الجوال",
+      sortable: true,
+      ltr: true,
+      className: "text-end",
+      render: (client) => client.phone || "-",
+    },
+    {
+      key: "classification",
+      header: "التصنيف",
+      sortable: true,
+      render: (client) => getClassificationBadge(client.classification),
+    },
+    {
+      key: "totalRevenue",
+      header: "إجمالي الإيرادات",
+      sortable: true,
+      render: (client) => (
+        <span className="font-bold">
+          {client.totalRevenue ? formatCurrency(client.totalRevenue) : "-"}
+        </span>
+      ),
+    },
+    {
+      key: "assignedToName",
+      header: "المسؤول",
+      sortable: true,
+      render: (client) => client.assignedToName || "-",
+    },
+    {
+      key: "actions",
+      header: "الإجراءات",
+      render: (client) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(client)}>
+            <Eye className="h-4 w-4" />
+          </Button>
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(client.id, { name: client.name || "", phone: client.phone || "", classification: client.classification || "regular" })}
+            onDelete={() => startDelete(client.id)}
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -96,80 +150,61 @@ export default function Clients() {
         }}
         values={filters}
         onChange={(v) => { setFilters(v); setPage(1); }}
-        onExportCSV={() => exportToCSV(sortedData || [], [
+        onExportCSV={() => exportToCSV(filteredClients || [], [
           { key: "name", label: "اسم العميل" },
           { key: "phone", label: "الجوال" },
           { key: "email", label: "البريد" },
           { key: "classification", label: "التصنيف" },
           { key: "totalRevenue", label: "الإيرادات" },
         ], "العملاء")}
-        resultCount={sortedData?.length}
+        resultCount={filteredClients?.length}
       />
 
-      <div className="border rounded-lg bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead column="name" label="اسم العميل" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="phone" label="رقم الجوال" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="classification" label="التصنيف" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="totalRevenue" label="إجمالي الإيرادات" sortState={sortState} onSort={handleSort} />
-              <SortableTableHead column="assignedToName" label="المسؤول" sortState={sortState} onSort={handleSort} />
-              <TableHead className="text-start">الإجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <DataTableWrapper
-            isLoading={isLoading}
-            isError={isError}
-            error={error}
-            onRetry={() => refetch()}
-            data={sortedData}
-            colCount={6}
-            emptyMessage="لا يوجد عملاء"
-            emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}
-          >
-            {sortedData?.map((client) => (
-              <Fragment key={client.id}>
-                <TableRow className={`cursor-pointer hover:bg-muted/50 ${client.isBlacklisted ? "opacity-50" : ""}`} onClick={() => navigate(`/clients/${client.id}`)}>
-                  <TableCell className="font-medium flex items-center gap-2">
-                    {client.name || "-"}
-                    {client.isBlacklisted && <Badge variant="destructive" className="text-[10px]">قائمة سوداء</Badge>}
-                  </TableCell>
-                  <TableCell dir="ltr" className="text-right">{client.phone || "-"}</TableCell>
-                  <TableCell>{getClassificationBadge(client.classification)}</TableCell>
-                  <TableCell className="font-bold">{client.totalRevenue ? formatCurrency(client.totalRevenue) : "-"}</TableCell>
-                  <TableCell>{client.assignedToName || "-"}</TableCell>
-                  <TableCell className="text-start" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => setPreviewItem(client)}><Eye className="h-4 w-4" /></Button>
-                    <RowActions
-                      canEdit={canManage}
-                      onEdit={() => startEdit(client.id, { name: client.name || "", phone: client.phone || "", classification: client.classification || "regular" })}
-                      onDelete={() => startDelete(client.id)}
-                    />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {editingId === client.id && (
-                  <TableRow key={`edit-${client.id}`}>
-                    <TableCell colSpan={6}>
-                      <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(client.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                    </TableCell>
-                  </TableRow>
-                )}
-                {deletingId === client.id && (
-                  <TableRow key={`del-${client.id}`}>
-                    <TableCell colSpan={6}>
-                      <InlineDeleteConfirm onConfirm={() => handleDelete(client.id)} onCancel={cancelDelete} isPending={isPending} itemName={client.name} entityType="client" entityId={client.id} />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            ))}
-          </DataTableWrapper>
-        </Table>
-        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
-      </div>
+      <DataTable
+        columns={columns}
+        data={filteredClients}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => refetch()}
+        onRowClick={(client) => navigate(`/clients/${client.id}`)}
+        rowClassName={(client) => client.isBlacklisted ? "opacity-50" : undefined}
+        emptyMessage="لا يوجد عملاء"
+        emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}
+        pageSize={pageSize}
+        page={page}
+        total={total}
+        onPageChange={setPage}
+        noToolbar
+        renderRowExtras={(client) => {
+          if (editingId === client.id) {
+            return (
+              <InlineEditForm
+                fields={editFields}
+                form={editForm}
+                setForm={setEditForm}
+                onSave={() => handleSave(client.id, editForm)}
+                onCancel={cancelEdit}
+                isPending={isPending}
+              />
+            );
+          }
+          if (deletingId === client.id) {
+            return (
+              <InlineDeleteConfirm
+                onConfirm={() => handleDelete(client.id)}
+                onCancel={cancelDelete}
+                isPending={isPending}
+                itemName={client.name}
+                entityType="client"
+                entityId={client.id}
+              />
+            );
+          }
+          return null;
+        }}
+      />
+
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة العميل" data={previewItem} fields={previewFields} />
     </div>
   );
