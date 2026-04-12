@@ -593,6 +593,733 @@ invoicesRouter.get("/tax/summary", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CREDIT & DEBIT MEMOS
+// A credit memo (إشعار دائن) reduces a customer's outstanding invoice — we
+// recognize a sales return/allowance and reduce AR:
+//   DR 4100 sales_returns   (contra-revenue)
+//   DR 2300 VAT payable     (reverse output VAT)
+//   CR 1200 accounts rec.   (reduces the customer's AR)
+//
+// A debit memo (إشعار مدين) charges the customer extra — a mirror of an
+// invoice:
+//   DR 1200 AR
+//   CR 4000 revenue  (additional charge)
+//   CR 2300 VAT payable
+// ─────────────────────────────────────────────────────────────────────────────
+
+invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    const id = Number(req.params.id);
+    const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
+
+    if (!amount || Number(amount) <= 0) {
+      res.status(400).json({ error: "المبلغ مطلوب ويجب أن يكون أكبر من صفر" });
+      return;
+    }
+    if (!reason) {
+      res.status(400).json({ error: "سبب الإشعار الدائن مطلوب" });
+      return;
+    }
+
+    const [invoice] = await rawQuery<any>(
+      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
+              "paidAmount", "vatRate", "deletedAt"
+         FROM invoices WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!invoice || invoice.deletedAt) {
+      res.status(404).json({ error: "الفاتورة غير موجودة" });
+      return;
+    }
+    const creditAmount = Math.round(Number(amount) * 100) / 100;
+    const openBalance = Math.round((Number(invoice.total) - Number(invoice.paidAmount)) * 100) / 100;
+    if (creditAmount > openBalance + 0.01) {
+      res.status(400).json({ error: `المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})` });
+      return;
+    }
+
+    const memoDateStr = memoDate
+      ? new Date(memoDate).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
+    if (!periodCheck.open) {
+      res.status(422).json({ error: `لا يمكن إصدار إشعار دائن في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
+      return;
+    }
+
+    // If vatIncluded, split the amount into net + VAT based on invoice vatRate
+    const vatRate = Number(invoice.vatRate ?? 15);
+    const net = vatIncluded
+      ? Math.round((creditAmount / (1 + vatRate / 100)) * 100) / 100
+      : creditAmount;
+    const vat = Math.round((creditAmount - net) * 100) / 100;
+
+    const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "invoice_sales_returns", "debit", "4100"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "debit", "2300"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "credit", "1200"),
+    ]);
+
+    // Persist credit memo + reduce invoice.total (soft reduce via notes + new line)
+    // We store the memo as a negative invoice-adjacent row in a dedicated table
+    // if present, else as a journal + notes update.
+    let memoId: number | null = null;
+    await withTransaction(async (client) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+          [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+        );
+        memoId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          // Table does not exist — create it lazily
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS credit_memos (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "invoiceId" INTEGER NOT NULL,
+               "clientId" INTEGER,
+               amount NUMERIC(18,2) NOT NULL,
+               "netAmount" NUMERIC(18,2) NOT NULL,
+               "vatAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               reason TEXT NOT NULL,
+               "memoDate" DATE NOT NULL,
+               "journalId" INTEGER,
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW()
+             )`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+            [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+          );
+          memoId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+
+      // Reduce invoice effective total via paidAmount adjustment (treat memo as
+      // virtual payment so aging / collection logic treats it as settled).
+      await client.query(
+        `UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1,
+                             status = CASE
+                               WHEN COALESCE("paidAmount",0) + $1 >= total THEN 'paid'
+                               WHEN COALESCE("paidAmount",0) + $1 > 0 THEN 'partial'
+                               ELSE status END
+         WHERE id = $2`,
+        [creditAmount, id]
+      );
+    });
+
+    // Post JE
+    let journalId: number | null = null;
+    try {
+      journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: invoice.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `CM-${invoice.ref}-${memoId}`,
+        description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
+        lines: [
+          { accountCode: salesReturnsCode, debit: net, credit: 0 },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0 }] : []),
+          { accountCode: arCode, debit: 0, credit: creditAmount },
+        ],
+      });
+      if (journalId && memoId) {
+        await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
+      }
+    } catch (je) {
+      console.error("Credit memo JE error:", je);
+    }
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "invoice.credit_memo",
+      entity: "invoices",
+      entityId: id,
+      details: JSON.stringify({ memoId, amount: creditAmount, net, vat, reason }),
+    }).catch(console.error);
+
+    res.status(201).json({
+      memoId,
+      journalId,
+      invoiceId: id,
+      amount: creditAmount,
+      netAmount: net,
+      vatAmount: vat,
+      reason,
+      memoDate: memoDateStr,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Credit memo error:");
+  }
+});
+
+invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    const id = Number(req.params.id);
+    const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
+
+    if (!amount || Number(amount) <= 0) {
+      res.status(400).json({ error: "المبلغ مطلوب ويجب أن يكون أكبر من صفر" });
+      return;
+    }
+    if (!reason) {
+      res.status(400).json({ error: "سبب الإشعار المدين مطلوب" });
+      return;
+    }
+
+    const [invoice] = await rawQuery<any>(
+      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate", "deletedAt"
+         FROM invoices WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!invoice || invoice.deletedAt) {
+      res.status(404).json({ error: "الفاتورة غير موجودة" });
+      return;
+    }
+
+    const chargeAmount = Math.round(Number(amount) * 100) / 100;
+    const memoDateStr = memoDate
+      ? new Date(memoDate).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
+    if (!periodCheck.open) {
+      res.status(422).json({ error: `لا يمكن إصدار إشعار مدين في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
+      return;
+    }
+
+    const vatRate = Number(invoice.vatRate ?? 15);
+    const net = vatIncluded
+      ? Math.round((chargeAmount / (1 + vatRate / 100)) * 100) / 100
+      : chargeAmount;
+    const vat = Math.round((chargeAmount - net) * 100) / 100;
+
+    const [arCode, revenueCode, vatPayableCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+    ]);
+
+    let memoId: number | null = null;
+    await withTransaction(async (client) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+          [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+        );
+        memoId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS debit_memos (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "invoiceId" INTEGER NOT NULL,
+               "clientId" INTEGER,
+               amount NUMERIC(18,2) NOT NULL,
+               "netAmount" NUMERIC(18,2) NOT NULL,
+               "vatAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               reason TEXT NOT NULL,
+               "memoDate" DATE NOT NULL,
+               "journalId" INTEGER,
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW()
+             )`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+            [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+          );
+          memoId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+
+      // Increase invoice total to reflect additional charge
+      await client.query(
+        `UPDATE invoices SET total = total + $1, "vatAmount" = "vatAmount" + $2 WHERE id = $3`,
+        [chargeAmount, vat, id]
+      );
+    });
+
+    let journalId: number | null = null;
+    try {
+      journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: invoice.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `DM-${invoice.ref}-${memoId}`,
+        description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
+        lines: [
+          { accountCode: arCode, debit: chargeAmount, credit: 0 },
+          { accountCode: revenueCode, debit: 0, credit: net },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat }] : []),
+        ],
+      });
+      if (journalId && memoId) {
+        await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
+      }
+    } catch (je) {
+      console.error("Debit memo JE error:", je);
+    }
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "invoice.debit_memo",
+      entity: "invoices",
+      entityId: id,
+      details: JSON.stringify({ memoId, amount: chargeAmount, net, vat, reason }),
+    }).catch(console.error);
+
+    res.status(201).json({
+      memoId,
+      journalId,
+      invoiceId: id,
+      amount: chargeAmount,
+      netAmount: net,
+      vatAmount: vat,
+      reason,
+      memoDate: memoDateStr,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Debit memo error:");
+  }
+});
+
+invoicesRouter.get("/invoices/:id/memos", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    let creditMemos: any[] = [];
+    let debitMemos: any[] = [];
+    try {
+      creditMemos = await rawQuery<any>(
+        `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalId", "createdAt"
+           FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
+        [id, scope.companyId]
+      );
+    } catch { /* table may not exist yet */ }
+    try {
+      debitMemos = await rawQuery<any>(
+        `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalId", "createdAt"
+           FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
+        [id, scope.companyId]
+      );
+    } catch { /* table may not exist yet */ }
+    res.json({ creditMemos, debitMemos });
+  } catch (err) {
+    handleRouteError(err, res, "List memos error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BAD DEBT PROVISIONING
+// Posts an allowance-for-doubtful-accounts entry based on aging buckets:
+//   DR 6200 Bad debt expense
+//   CR 1210 Allowance for doubtful accounts (contra-AR)
+// Rates default to: 0-30=0%, 31-60=5%, 61-90=25%, 90+=50% and are overridable
+// per request. Idempotent per period via ref `BAD-DEBT-{period}`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+invoicesRouter.get("/bad-debt/preview", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const asOf = (req.query.asOf as string) || new Date().toISOString().slice(0, 10);
+    const rates = {
+      current: Number(req.query.rateCurrent ?? 0),
+      d30: Number(req.query.rate30 ?? 0.05),
+      d60: Number(req.query.rate60 ?? 0.25),
+      d90: Number(req.query.rate90 ?? 0.5),
+      d90plus: Number(req.query.rate90plus ?? 0.75),
+    };
+
+    const invoices = await rawQuery<any>(
+      `SELECT id, ref, "clientId", "createdAt", "dueDate", total, "paidAmount",
+              (total - COALESCE("paidAmount",0)) AS outstanding
+         FROM invoices
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL
+          AND "createdAt" <= $2
+          AND (total - COALESCE("paidAmount",0)) > 0.01`,
+      [scope.companyId, asOf]
+    );
+
+    const asOfMs = new Date(asOf).getTime();
+    const buckets: any = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
+    for (const inv of invoices) {
+      const due = inv.dueDate ? new Date(inv.dueDate).getTime()
+        : new Date(inv.createdAt).getTime() + 30 * 86400000;
+      const daysOverdue = Math.floor((asOfMs - due) / 86400000);
+      const amt = Number(inv.outstanding);
+      if (daysOverdue <= 0) buckets.current += amt;
+      else if (daysOverdue <= 30) buckets.d30 += amt;
+      else if (daysOverdue <= 60) buckets.d60 += amt;
+      else if (daysOverdue <= 90) buckets.d90 += amt;
+      else buckets.d90plus += amt;
+    }
+
+    const provision = {
+      current: Math.round(buckets.current * rates.current * 100) / 100,
+      d30: Math.round(buckets.d30 * rates.d30 * 100) / 100,
+      d60: Math.round(buckets.d60 * rates.d60 * 100) / 100,
+      d90: Math.round(buckets.d90 * rates.d90 * 100) / 100,
+      d90plus: Math.round(buckets.d90plus * rates.d90plus * 100) / 100,
+    };
+    const totalProvision = Math.round(
+      (provision.current + provision.d30 + provision.d60 + provision.d90 + provision.d90plus) * 100
+    ) / 100;
+
+    res.json({ asOf, rates, buckets, provision, totalProvision, invoiceCount: invoices.length });
+  } catch (err) {
+    handleRouteError(err, res, "Bad debt preview error:");
+  }
+});
+
+invoicesRouter.post("/bad-debt/post", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    const { period, asOf, rates, notes } = req.body as any;
+
+    const targetPeriod = period || new Date().toISOString().slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
+      res.status(400).json({ error: "صيغة الفترة غير صحيحة (YYYY-MM)" });
+      return;
+    }
+    const targetDate = asOf || `${targetPeriod}-28`;
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, targetDate);
+    if (!periodCheck.open) {
+      res.status(422).json({ error: `لا يمكن تسجيل مخصص ديون في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
+      return;
+    }
+
+    const ref = `BAD-DEBT-${targetPeriod}`;
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [scope.companyId, ref]
+    );
+    if (existing) {
+      res.status(409).json({ error: "تم تسجيل مخصص ديون مشكوك فيها لهذه الفترة مسبقاً", journalId: existing.id });
+      return;
+    }
+
+    const r = {
+      current: Number(rates?.current ?? 0),
+      d30: Number(rates?.d30 ?? 0.05),
+      d60: Number(rates?.d60 ?? 0.25),
+      d90: Number(rates?.d90 ?? 0.5),
+      d90plus: Number(rates?.d90plus ?? 0.75),
+    };
+
+    const invoices = await rawQuery<any>(
+      `SELECT "createdAt", "dueDate", (total - COALESCE("paidAmount",0)) AS outstanding
+         FROM invoices
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
+          AND (total - COALESCE("paidAmount",0)) > 0.01`,
+      [scope.companyId, targetDate]
+    );
+    const asOfMs = new Date(targetDate).getTime();
+    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
+    for (const inv of invoices) {
+      const due = inv.dueDate ? new Date(inv.dueDate).getTime()
+        : new Date(inv.createdAt).getTime() + 30 * 86400000;
+      const d = Math.floor((asOfMs - due) / 86400000);
+      const amt = Number(inv.outstanding);
+      if (d <= 0) buckets.current += amt;
+      else if (d <= 30) buckets.d30 += amt;
+      else if (d <= 60) buckets.d60 += amt;
+      else if (d <= 90) buckets.d90 += amt;
+      else buckets.d90plus += amt;
+    }
+    const total = Math.round(
+      (buckets.current * r.current + buckets.d30 * r.d30 + buckets.d60 * r.d60 + buckets.d90 * r.d90 + buckets.d90plus * r.d90plus) * 100
+    ) / 100;
+
+    if (total <= 0) {
+      res.status(400).json({ error: "لا يوجد مبلغ لمخصص الديون المشكوك فيها" });
+      return;
+    }
+
+    const [expenseCode, allowanceCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "bad_debt_expense", "debit", "5170"),
+      getAccountCodeFromMapping(scope.companyId, "bad_debt_allowance", "credit", "1210"),
+    ]);
+
+    let journalId: number | null = null;
+    try {
+      journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: `مخصص ديون مشكوك فيها ${targetPeriod}${notes ? ` — ${notes}` : ""}`,
+        lines: [
+          { accountCode: expenseCode, debit: total, credit: 0 },
+          { accountCode: allowanceCode, debit: 0, credit: total },
+        ],
+      });
+    } catch (je) {
+      console.error("Bad debt JE error:", je);
+      res.status(500).json({ error: "فشل تسجيل قيد مخصص الديون المشكوك فيها" });
+      return;
+    }
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "bad_debt.posted",
+      entity: "journal_entries",
+      entityId: journalId ?? 0,
+      details: JSON.stringify({ period: targetPeriod, total, buckets, rates: r }),
+    }).catch(console.error);
+
+    res.status(201).json({ journalId, ref, period: targetPeriod, total, buckets, rates: r });
+  } catch (err) {
+    handleRouteError(err, res, "Bad debt post error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMER ADVANCE PAYMENTS
+// Accepts a prepayment from a customer before any invoice is issued. Booked
+// as a liability (unearned revenue) until an invoice consumes it:
+//   DR 1100 Cash
+//   CR 2400 Customer advances (liability)
+// Applying an advance to an invoice clears the liability and reduces AR:
+//   DR 2400 Customer advances
+//   CR 1200 AR
+// ─────────────────────────────────────────────────────────────────────────────
+
+invoicesRouter.post("/customer-advances", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = req.body as any;
+
+    if (!clientId) { res.status(400).json({ error: "العميل مطلوب" }); return; }
+    if (!amount || Number(amount) <= 0) { res.status(400).json({ error: "المبلغ مطلوب ويجب أن يكون أكبر من صفر" }); return; }
+
+    const recvDate = receivedDate || new Date().toISOString().slice(0, 10);
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);
+    if (!periodCheck.open) {
+      res.status(422).json({ error: `لا يمكن تسجيل دفعة مقدمة في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
+      return;
+    }
+
+    const amt = Math.round(Number(amount) * 100) / 100;
+
+    let advanceId: number | null = null;
+    const advRef = reference || `ADV-${Date.now()}`;
+    await withTransaction(async (client: any) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO customer_advances ("companyId","branchId","clientId",ref,amount,"appliedAmount",method,"receivedDate",notes,"createdBy",status)
+           VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open') RETURNING id`,
+          [scope.companyId, scope.branchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
+        );
+        advanceId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS customer_advances (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "clientId" INTEGER NOT NULL,
+               ref TEXT NOT NULL,
+               amount NUMERIC(18,2) NOT NULL,
+               "appliedAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               method TEXT,
+               "receivedDate" DATE NOT NULL,
+               notes TEXT,
+               status TEXT NOT NULL DEFAULT 'open',
+               "journalId" INTEGER,
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW()
+             )`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO customer_advances ("companyId","branchId","clientId",ref,amount,"appliedAmount",method,"receivedDate",notes,"createdBy",status)
+             VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open') RETURNING id`,
+            [scope.companyId, scope.branchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
+          );
+          advanceId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+    });
+
+    const [cashCode, advLiabCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "debit", "1100"),
+      getAccountCodeFromMapping(scope.companyId, "customer_advance_liability", "credit", "2400"),
+    ]);
+
+    let journalId: number | null = null;
+    try {
+      journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: advRef,
+        description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,
+        lines: [
+          { accountCode: cashCode, debit: amt, credit: 0 },
+          { accountCode: advLiabCode, debit: 0, credit: amt },
+        ],
+      });
+      if (journalId && advanceId) {
+        await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2`, [journalId, advanceId]);
+      }
+    } catch (je) {
+      console.error("Customer advance JE error:", je);
+    }
+
+    res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
+  } catch (err) {
+    handleRouteError(err, res, "Customer advance create error:");
+  }
+});
+
+invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    const advanceId = Number(req.params.id);
+    const { invoiceId, amount } = req.body as any;
+
+    if (!invoiceId || !amount || Number(amount) <= 0) {
+      res.status(400).json({ error: "الفاتورة والمبلغ مطلوبان" });
+      return;
+    }
+    const applyAmt = Math.round(Number(amount) * 100) / 100;
+
+    let advance: any;
+    try {
+      [advance] = await rawQuery<any>(
+        `SELECT id, "clientId", amount, "appliedAmount", "branchId", status
+           FROM customer_advances WHERE id = $1 AND "companyId" = $2`,
+        [advanceId, scope.companyId]
+      );
+    } catch {
+      res.status(404).json({ error: "الدفعة المقدمة غير موجودة" });
+      return;
+    }
+    if (!advance) { res.status(404).json({ error: "الدفعة المقدمة غير موجودة" }); return; }
+
+    const remaining = Number(advance.amount) - Number(advance.appliedAmount);
+    if (applyAmt > remaining + 0.01) {
+      res.status(400).json({ error: `المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})` });
+      return;
+    }
+
+    const [invoice] = await rawQuery<any>(
+      `SELECT id, ref, "clientId", total, "paidAmount" FROM invoices
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [Number(invoiceId), scope.companyId]
+    );
+    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (invoice.clientId !== advance.clientId) {
+      res.status(400).json({ error: "العميل في الفاتورة لا يطابق العميل في الدفعة المقدمة" });
+      return;
+    }
+    const invoiceOpen = Number(invoice.total) - Number(invoice.paidAmount);
+    if (applyAmt > invoiceOpen + 0.01) {
+      res.status(400).json({ error: `المبلغ يتجاوز الرصيد المفتوح للفاتورة (${invoiceOpen})` });
+      return;
+    }
+
+    const [advLiabCode, arCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "customer_advance_liability", "debit", "2400"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "credit", "1200"),
+    ]);
+
+    await withTransaction(async (client: any) => {
+      await client.query(
+        `UPDATE customer_advances SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,
+           status = CASE WHEN COALESCE("appliedAmount",0) + $1 >= amount THEN 'applied' ELSE status END
+         WHERE id = $2`,
+        [applyAmt, advanceId]
+      );
+      await client.query(
+        `UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1,
+           status = CASE
+             WHEN COALESCE("paidAmount",0) + $1 >= total THEN 'paid'
+             WHEN COALESCE("paidAmount",0) + $1 > 0 THEN 'partial'
+             ELSE status END
+         WHERE id = $2`,
+        [applyAmt, Number(invoiceId)]
+      );
+    });
+
+    let journalId: number | null = null;
+    try {
+      journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: advance.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
+        description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
+        lines: [
+          { accountCode: advLiabCode, debit: applyAmt, credit: 0 },
+          { accountCode: arCode, debit: 0, credit: applyAmt },
+        ],
+      });
+    } catch (je) {
+      console.error("Apply advance JE error:", je);
+    }
+
+    res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
+  } catch (err) {
+    handleRouteError(err, res, "Apply customer advance error:");
+  }
+});
+
+invoicesRouter.get("/customer-advances", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { clientId, status } = req.query as any;
+    const params: any[] = [scope.companyId];
+    let where = `"companyId" = $1`;
+    if (clientId) { params.push(Number(clientId)); where += ` AND "clientId" = $${params.length}`; }
+    if (status) { params.push(status); where += ` AND status = $${params.length}`; }
+    let rows: any[] = [];
+    try {
+      rows = await rawQuery<any>(
+        `SELECT ca.id, ca.ref, ca.amount, ca."appliedAmount",
+                (ca.amount - ca."appliedAmount") AS remaining,
+                ca.method, ca."receivedDate", ca.status, ca."journalId", ca."createdAt",
+                c.name AS "clientName"
+           FROM customer_advances ca
+           LEFT JOIN clients c ON c.id = ca."clientId"
+          WHERE ${where}
+          ORDER BY ca."receivedDate" DESC, ca.id DESC`,
+        params
+      );
+    } catch { /* table not yet created */ }
+    res.json({ data: rows });
+  } catch (err) {
+    handleRouteError(err, res, "List customer advances error:");
+  }
+});
+
 invoicesRouter.get("/tax/declarations", async (req, res) => {
   try {
     const scope = req.scope!;
