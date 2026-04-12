@@ -2,6 +2,7 @@ import { handleRouteError, validationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   createNotification,
   emitEvent,
@@ -15,7 +16,7 @@ import { hashPassword } from "../lib/auth.js";
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search = "", page = "1", limit: lim = "20" } = req.query as any;
@@ -77,7 +78,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const {
@@ -408,7 +409,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.get("/onboarding-tasks", async (req, res) => {
+router.get("/onboarding-tasks", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId, status } = req.query as any;
@@ -428,7 +429,7 @@ router.get("/onboarding-tasks", async (req, res) => {
   } catch (err) { console.error("Onboarding tasks error:", err); res.json({ data: [], total: 0 }); }
 });
 
-router.patch("/onboarding-tasks/:id", async (req, res) => {
+router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.body as any;
@@ -443,7 +444,7 @@ router.patch("/onboarding-tasks/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/job-titles", async (req, res) => {
+router.get("/job-titles", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -454,7 +455,7 @@ router.get("/job-titles", async (req, res) => {
   } catch (err) { res.json({ data: [], total: 0 }); }
 });
 
-router.get("/contracts", async (req, res) => {
+router.get("/contracts", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -469,7 +470,7 @@ router.get("/contracts", async (req, res) => {
   } catch (err) { res.json({ data: [], total: 0 }); }
 });
 
-router.get("/documents", async (req, res) => {
+router.get("/documents", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -487,7 +488,7 @@ router.get("/documents", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -586,7 +587,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -701,7 +702,7 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
