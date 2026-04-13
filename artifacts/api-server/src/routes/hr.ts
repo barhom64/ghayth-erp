@@ -870,6 +870,25 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     if (!managerAssignmentId) {
       managerAssignmentId = await getManagerAssignmentId(scope.companyId, scope.branchId);
     }
+    // Company-level fallback: if no branch-level approver, pick any HR/GM/owner
+    // in the company so the leave request is never stranded with a NULL assignee.
+    if (!managerAssignmentId) {
+      const [companyFallback] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments
+         WHERE "companyId" = $1 AND status = 'active'
+           AND role IN ('hr_manager','general_manager','owner')
+         ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 WHEN 'owner' THEN 3 ELSE 4 END
+         LIMIT 1`,
+        [scope.companyId]
+      );
+      managerAssignmentId = companyFallback?.id ?? null;
+    }
+    if (!managerAssignmentId) {
+      res.status(409).json({
+        error: "لا يوجد مدير معتمد لاستلام طلبات الإجازة. الرجاء تعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات.",
+      });
+      return;
+    }
 
     // Read approval chain from DB (fall back to default manager→HR if none configured)
     let chainSteps: any[] = [];
@@ -920,8 +939,8 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       );
       insertId = result.rows[0].id;
 
-      // Find the appropriate assignee for the first step
-      let firstAssignee = managerAssignmentId;
+      // Find the appropriate assignee for the first step — never store NULL.
+      let firstAssignee: number = managerAssignmentId!;
       if (!["branch_manager", "general_manager"].includes(firstStep.requiredRole)) {
         const [roleMatch] = await rawQuery<any>(
           `SELECT id FROM employee_assignments
@@ -935,7 +954,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       await client.query(
         `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
          VALUES ($1,1,$2,$3,$4)`,
-        [insertId, firstStep.requiredRole, firstAssignee ?? null, stage1ExpiresAt.toISOString()]
+        [insertId, firstStep.requiredRole, firstAssignee, stage1ExpiresAt.toISOString()]
       );
     });
 

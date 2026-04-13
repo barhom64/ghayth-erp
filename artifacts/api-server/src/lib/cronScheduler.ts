@@ -9,6 +9,7 @@ import {
   getDirectorAssignmentId,
   getCfoAssignmentId,
   haversineDistance,
+  emitEvent,
 } from "./businessHelpers.js";
 import { broadcastAlert } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
@@ -406,6 +407,25 @@ async function leaveEscalationCheck(): Promise<string> {
           }).catch(console.error);
         }
       }
+      // Emit the canonical leave.approved event so downstream listeners
+      // (audit trail, calendar, reporting) see auto-approvals the same way
+      // they see manual approvals. Without this, cron-approved leaves were
+      // invisible to every listener that keyed on leave.approved.
+      emitEvent({
+        companyId: stage.companyId,
+        userId: null,
+        action: "leave.approved",
+        entity: "hr_leave_requests",
+        entityId: stage.leaveRequestId,
+        details: JSON.stringify({
+          autoApproved: true,
+          reason: "timeout",
+          days: stage.days,
+          startDate: stage.startDate,
+          endDate: stage.endDate,
+          leaveTypeId: stage.leaveTypeId,
+        }),
+      }).catch(console.error);
       autoApprovals++;
     } else if (hoursSinceCreation >= 24 && !stage.escalatedAt) {
       const [hrAssignment] = await rawQuery<any>(
@@ -448,6 +468,162 @@ async function leaveEscalationCheck(): Promise<string> {
   }
 
   return `Leave escalation: ${reminders} reminders, ${warnings} warnings, ${escalations} escalations, ${autoApprovals} auto-approvals`;
+}
+
+/**
+ * Return-to-work closure: approved leaves whose endDate has passed but whose
+ * status has not been transitioned to `completed` leave stale `on_leave`
+ * attendance rows behind and keep the employee in a pseudo-on-leave state
+ * forever. This job closes those requests, emits a single `leave.completed`
+ * event per request and notifies both the employee and their manager.
+ *
+ * Runs daily at 00:05 local time (after midnight rollover).
+ */
+async function leaveReturnToWorkClosure(): Promise<string> {
+  let closed = 0;
+  const ended = await rawQuery<any>(
+    `SELECT lr.id, lr."companyId", lr."employeeId", lr."startDate", lr."endDate",
+            lr."leaveTypeId", lt.name AS "leaveTypeName"
+       FROM hr_leave_requests lr
+       JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+      WHERE lr.status = 'approved'
+        AND lr."endDate" < CURRENT_DATE
+      ORDER BY lr."endDate" ASC
+      LIMIT 500`
+  );
+
+  for (const lv of ended) {
+    try {
+      await rawExecute(
+        `UPDATE hr_leave_requests SET status = 'completed', "updatedAt" = NOW() WHERE id = $1`,
+        [lv.id]
+      );
+
+      // Ensure approval_requests is closed — avoid orphan pending rows.
+      await rawExecute(
+        `UPDATE approval_requests SET status = 'completed', "decidedAt" = NOW()
+         WHERE "refType" = 'leave_request' AND "refId" = $1 AND status NOT IN ('completed','rejected')`,
+        [lv.id]
+      ).catch(() => {});
+
+      // Find active employee assignment so we can notify the employee.
+      const [asn] = await rawQuery<any>(
+        `SELECT id, "branchId" FROM employee_assignments
+          WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [lv.employeeId, lv.companyId]
+      );
+
+      if (asn) {
+        createNotification({
+          companyId: lv.companyId,
+          assignmentId: asn.id,
+          type: "leave_completed",
+          title: "انتهاء فترة الإجازة — مرحباً بعودتك",
+          body: `انتهت إجازة ${lv.leaveTypeName} (${lv.startDate} → ${lv.endDate}). يمكنك الآن تسجيل الحضور.`,
+          priority: "normal",
+          refType: "leave_request",
+          refId: lv.id,
+        }).catch(console.error);
+
+        // Also nudge the direct manager so staffing dashboards update.
+        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch(() => null);
+        if (managerAssignmentId) {
+          createNotification({
+            companyId: lv.companyId,
+            assignmentId: managerAssignmentId,
+            type: "leave_completed",
+            title: "موظف عاد من إجازته",
+            body: `عاد الموظف من إجازة ${lv.leaveTypeName} المنتهية ${lv.endDate}.`,
+            priority: "low",
+            refType: "leave_request",
+            refId: lv.id,
+          }).catch(console.error);
+        }
+      }
+
+      emitEvent({
+        companyId: lv.companyId,
+        userId: null,
+        action: "leave.completed",
+        entity: "hr_leave_requests",
+        entityId: lv.id,
+        details: JSON.stringify({ leaveTypeId: lv.leaveTypeId, endDate: lv.endDate }),
+      }).catch(console.error);
+
+      closed++;
+    } catch (err) {
+      console.error(`[leaveReturnToWorkClosure] failed to close leave ${lv.id}:`, err);
+    }
+  }
+
+  return `Return-to-work closure: ${closed} leaves closed`;
+}
+
+/**
+ * Inquiry-memo auto-escalation: memos that sit in `pending_employee` for more
+ * than 72 hours without a justification are auto-advanced to `pending_manager`
+ * with a recorded "employee declined to respond" note, so the memo chain is
+ * never stranded waiting on an unresponsive employee.
+ */
+async function inquiryMemoEscalation(): Promise<string> {
+  let advanced = 0;
+  const stuck = await rawQuery<any>(
+    `SELECT m.id, m."companyId", m."assignmentId", m."branchId", m."memoNumber"
+       FROM hr_inquiry_memos m
+      WHERE m.status = 'pending_employee'
+        AND m."createdAt" < NOW() - INTERVAL '72 hours'
+      ORDER BY m."createdAt" ASC
+      LIMIT 200`
+  );
+
+  for (const memo of stuck) {
+    try {
+      await rawExecute(
+        `UPDATE hr_inquiry_memos
+            SET status = 'pending_manager',
+                "employeeDeclined" = TRUE,
+                "employeeSignedAt" = NOW(),
+                "updatedAt" = NOW()
+          WHERE id = $1`,
+        [memo.id]
+      );
+
+      await rawExecute(
+        `INSERT INTO hr_inquiry_memo_events ("memoId","companyId","actorRole",action,note,"createdAt")
+         VALUES ($1,$2,'system','auto_declined','تجاوز مهلة 72 ساعة للرد — اعتُبر رفضاً ضمنياً',NOW())`,
+        [memo.id, memo.companyId]
+      ).catch(() => {});
+
+      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch(() => null);
+      if (managerAssignmentId) {
+        createNotification({
+          companyId: memo.companyId,
+          assignmentId: managerAssignmentId,
+          type: "inquiry_memo",
+          title: "محضر استفسار بانتظار توصيتك (تلقائي)",
+          body: `المحضر ${memo.memoNumber} تم تمريره تلقائياً لأن الموظف لم يرد خلال 72 ساعة.`,
+          priority: "high",
+          refType: "hr_inquiry_memo",
+          refId: memo.id,
+        }).catch(console.error);
+      }
+
+      emitEvent({
+        companyId: memo.companyId,
+        userId: null,
+        action: "hr.memo.auto_escalated",
+        entity: "hr_inquiry_memos",
+        entityId: memo.id,
+        details: JSON.stringify({ reason: "employee_no_response_72h" }),
+      }).catch(console.error);
+
+      advanced++;
+    } catch (err) {
+      console.error(`[inquiryMemoEscalation] failed memo ${memo.id}:`, err);
+    }
+  }
+
+  return `Inquiry memo escalation: ${advanced} memos advanced to pending_manager`;
 }
 
 async function reconcileAttendance(): Promise<string> {
@@ -2035,6 +2211,8 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
   { name: "leave_escalation_check", description: "تصعيد طلبات الإجازة", schedule: "0 7 * * *", handler: leaveEscalationCheck },
+  { name: "leave_return_to_work_closure", description: "إغلاق الإجازات المنتهية وتنبيه العودة للعمل", schedule: "5 0 * * *", handler: leaveReturnToWorkClosure },
+  { name: "inquiry_memo_escalation", description: "تصعيد محاضر الاستفسار المعلقة 72 ساعة", schedule: "0 */6 * * *", handler: inquiryMemoEscalation },
   { name: "daily_attendance_reconciliation", description: "مطابقة الحضور والغياب", schedule: "0 11 * * *", handler: reconcileAttendance },
   { name: "hourly_sla_escalation", description: "تصعيد SLA كل ساعة", schedule: "0 * * * *", handler: hourlySlaEscalation },
   { name: "hourly_approval_escalation", description: "تصعيد الموافقات كل ساعة", schedule: "0 * * * *", handler: hourlyApprovalEscalation },
