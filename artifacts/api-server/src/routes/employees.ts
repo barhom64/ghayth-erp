@@ -735,6 +735,20 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
 });
 
 router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
+  // Step 2 of the HR operational audit — PATCH /employees/:id.
+  //
+  // Fixes over the old handler:
+  //   1. 404 is now NotFoundError (was res.status(404)) so the frontend's
+  //      PageErrorBoundary gets { code: "NOT_FOUND" }.
+  //   2. salary <= 0 is now ValidationError with field+fix so the
+  //      useApiMutation.onFieldError helper highlights the input.
+  //   3. Pre-checks on email / nationalId / managerId when they're being
+  //      *changed* — same reasoning as Step 1 create: deep pg 23505/23503
+  //      errors are opaque; early rejection is clean and field-tagged.
+  //   4. Loads the `before` row BEFORE the updates so the audit log can
+  //      carry a real diff (was: after=req.body with no before at all).
+  //   5. Explicitly emits `employee.updated` — the listener already exists
+  //      in eventListeners.ts but nobody was firing the event.
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -744,23 +758,106 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       workPermitNumber, workPermitExpiry, iqamaStatus,
       nationalId, iqamaNumber, iqamaExpiry, passportNumber, passportExpiry,
     } = req.body as any;
+    const { jobTitleId: bodyJobTitleId, managerId: bodyManagerId } = req.body as any;
 
-    const [employee] = await rawQuery<any>(
-      `SELECT e.id, ea.id AS "assignmentId" FROM employees e
-       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-       WHERE e.id = $1 AND ea."companyId" = $2`,
+    // Load the full employee + assignment row BEFORE we mutate anything. We
+    // need:
+    //   - assignmentId (for the assignment UPDATE below)
+    //   - the "before" snapshot for audit diff
+    //   - the current email / nationalId so pre-checks can skip no-op cases
+    //     (user "changes" to the same value they already had)
+    const [before] = await rawQuery<any>(
+      `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+              e."nationalId", e."iqamaNumber", e."iqamaExpiry",
+              e."passportNumber", e."passportExpiry",
+              e."borderNumber", e."visaNumber", e."visaType", e."visaExpiry",
+              e."sponsorNumber", e."workPermitNumber", e."workPermitExpiry", e."iqamaStatus",
+              ea.id AS "assignmentId",
+              ea."jobTitle", ea."jobTitleId", ea.role, ea.salary,
+              ea."branchId", ea."departmentId", ea."managerId"
+         FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+        WHERE e.id = $1 AND ea."companyId" = $2`,
       [Number(id), scope.companyId]
     );
 
-    if (!employee) {
-      res.status(404).json({ error: "الموظف غير موجود" });
-      return;
+    if (!before) {
+      throw new NotFoundError("الموظف غير موجود", {
+        fix: "تحقّق من الرقم الوظيفي أو ارجع لقائمة الموظفين.",
+      });
     }
 
     if (salary !== undefined && salary !== null && Number(salary) <= 0) {
-      res.status(400).json({ error: "الراتب يجب أن يكون أكبر من صفر", field: "salary" });
-      return;
+      throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
+        field: "salary",
+        fix: "أدخل راتباً موجباً.",
+      });
     }
+
+    // Pre-check: changing email to one that belongs to a different employee.
+    // We only fire the query when email is actually being changed to a
+    // non-empty value different from the current one — avoids a wasted
+    // round-trip on every PATCH that only touches unrelated fields.
+    if (email !== undefined && email && email !== before.email) {
+      const [clash] = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE email = $1 AND id <> $2 LIMIT 1`,
+        [email, Number(id)]
+      );
+      if (clash) {
+        throw new ConflictError("البريد الإلكتروني مستخدم لموظف آخر", {
+          field: "email",
+          fix: "تحقّق من البريد أو استخدم بريداً آخر.",
+          meta: { existingEmployeeId: clash.id },
+        });
+      }
+    }
+
+    // Pre-check: changing nationalId to one already registered.
+    if (nationalId !== undefined && nationalId && nationalId !== before.nationalId) {
+      const [clash] = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE "nationalId" = $1 AND id <> $2 LIMIT 1`,
+        [nationalId, Number(id)]
+      );
+      if (clash) {
+        throw new ConflictError("رقم الهوية مستخدم لموظف آخر", {
+          field: "nationalId",
+          fix: "الرقم مرتبط بموظف آخر — تحقّق من بياناته أولاً.",
+          meta: { existingEmployeeId: clash.id },
+        });
+      }
+    }
+
+    // Pre-check: changing managerId to a non-existent employee id. We used
+    // to let this fail as a deep 23503 FK error whose detail string didn't
+    // always carry "managerId".
+    if (bodyManagerId !== undefined && bodyManagerId) {
+      const [mgr] = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE id = $1 LIMIT 1`,
+        [Number(bodyManagerId)]
+      );
+      if (!mgr) {
+        throw new ValidationError(`المدير رقم ${bodyManagerId} غير موجود`, {
+          field: "managerId",
+          fix: "اختر مديراً من قائمة الموظفين الحاليين.",
+        });
+      }
+    }
+
+    // Pre-check: changing departmentId to a non-existent one.
+    if (departmentId !== undefined && departmentId) {
+      const [dept] = await rawQuery<{ id: number }>(
+        `SELECT id FROM departments WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [Number(departmentId), scope.companyId]
+      );
+      if (!dept) {
+        throw new ValidationError("القسم المحدد غير موجود", {
+          field: "departmentId",
+          fix: "اختر قسماً موجوداً في الشركة.",
+        });
+      }
+    }
+
+    const employee = { id: before.id, assignmentId: before.assignmentId };
 
     const empFields: string[] = [];
     const empVals: any[] = [];
@@ -807,7 +904,6 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       }
     }
 
-    const { jobTitleId: bodyJobTitleId, managerId: bodyManagerId } = req.body as any;
     if (jobTitle || role || salary !== undefined || branchId || departmentId || bodyJobTitleId !== undefined || bodyManagerId !== undefined) {
       const fields: string[] = [];
       const vals: any[] = [];
@@ -843,6 +939,42 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       }
     }
 
+    // Re-read the full row so the audit log + event get a reliable "after"
+    // snapshot rather than the raw body (which may contain partial updates,
+    // sensitive fields, or stale shape).
+    const [after] = await rawQuery<any>(
+      `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+              e."nationalId", e."iqamaNumber", e."iqamaExpiry",
+              e."passportNumber", e."passportExpiry",
+              e."borderNumber", e."visaNumber", e."visaType", e."visaExpiry",
+              e."sponsorNumber", e."workPermitNumber", e."workPermitExpiry", e."iqamaStatus",
+              COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
+              ea.role, ea.salary, ea."branchId", ea."departmentId", ea."managerId"
+         FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+         LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+        WHERE e.id = $1`,
+      [Number(id)]
+    );
+
+    // Build a field-level diff for the audit log so operators can see what
+    // actually changed instead of the raw request body.
+    const changedFields: Record<string, { from: unknown; to: unknown }> = {};
+    const trackedKeys = [
+      "name", "phone", "email", "status", "nationalId", "iqamaNumber",
+      "iqamaExpiry", "passportNumber", "passportExpiry", "borderNumber",
+      "visaNumber", "visaType", "visaExpiry", "sponsorNumber",
+      "workPermitNumber", "workPermitExpiry", "iqamaStatus",
+      "jobTitle", "role", "salary", "branchId", "departmentId", "managerId",
+    ] as const;
+    for (const key of trackedKeys) {
+      const oldVal = (before as any)[key];
+      const newVal = (after as any)[key];
+      if (String(oldVal ?? "") !== String(newVal ?? "")) {
+        changedFields[key] = { from: oldVal ?? null, to: newVal ?? null };
+      }
+    }
+
     createAuditLog({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -850,21 +982,32 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       action: "update",
       entity: "employees",
       entityId: Number(id),
-      after: req.body,
+      // Snapshot both sides — logAudit / computeDiff would otherwise have
+      // nothing to compute. Sensitive fields (passwordHash, tempPassword)
+      // are never on the employees table so the raw snapshot is safe.
+      before,
+      after,
+      reason: `حقول معدّلة: ${Object.keys(changedFields).join(", ") || "بلا تغيير"}`,
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(
-      `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
-              COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
-              ea.role, ea.salary
-       FROM employees e
-       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-       LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
-       WHERE e.id = $1`,
-      [Number(id)]
-    );
+    // Emit the canonical employee.updated event — the listener in
+    // eventListeners.ts:82 already writes to event_logs + audit_logs but
+    // was never being triggered because nobody emitted the event from the
+    // PATCH handler. With this in place the audit trail finally sees
+    // employee updates the same way it sees creates.
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "employee.updated",
+      entity: "employees",
+      entityId: Number(id),
+      before,
+      after,
+      details: JSON.stringify({ changedFields }),
+    }).catch(console.error);
 
-    res.json(updated);
+    res.json(after);
   } catch (err) {
     handleRouteError(err, res, "Update employee error:");
   }

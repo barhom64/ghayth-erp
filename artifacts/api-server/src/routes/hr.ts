@@ -4392,11 +4392,26 @@ router.get("/transfers", requirePermission("hr:read"), async (req, res) => {
 });
 
 router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
+  // Step 3 of the HR operational audit — transfer request creation.
+  // Converts the 2 raw res.status(...) error sites to typed throws and
+  // adds a pre-check that the destination branch actually exists in the
+  // same company. Also emits `hr.transfer.requested` so the HR inbox
+  // audit log sees new transfer requests (was relying only on the
+  // side-effect notification).
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.employeeId || !b.toBranchId) {
-      res.status(400).json({ error: "الموظف والفرع المستقبل مطلوبان" }); return;
+    if (!b.employeeId) {
+      throw new ValidationError("الموظف مطلوب", {
+        field: "employeeId",
+        fix: "اختر الموظف المراد نقله من قائمة الموظفين.",
+      });
+    }
+    if (!b.toBranchId) {
+      throw new ValidationError("الفرع المستقبل مطلوب", {
+        field: "toBranchId",
+        fix: "اختر الفرع المستقبل من قائمة فروع الشركة.",
+      });
     }
     const [assignment] = await rawQuery<any>(
       `SELECT ea.id, ea."branchId", ea."departmentId", ea.salary, ea."jobTitle"
@@ -4404,7 +4419,31 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
        WHERE ea."employeeId"=$1 AND ea."companyId"=$2 AND ea.status='active' LIMIT 1`,
       [b.employeeId, scope.companyId]
     );
-    if (!assignment) { res.status(404).json({ error: "الموظف غير نشط" }); return; }
+    if (!assignment) {
+      throw new NotFoundError("الموظف غير نشط أو غير موجود في هذه الشركة", {
+        fix: "تحقّق من أن الموظف لديه تعيين نشط قبل طلب النقل.",
+      });
+    }
+
+    // Pre-check: destination branch must exist in the same company and be
+    // different from the current branch.
+    const [destBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+      [Number(b.toBranchId), scope.companyId]
+    );
+    if (!destBranch) {
+      throw new ValidationError("الفرع المستقبل غير موجود في هذه الشركة", {
+        field: "toBranchId",
+        fix: "اختر فرعاً من قائمة فروع الشركة.",
+      });
+    }
+    if (Number(b.toBranchId) === assignment.branchId) {
+      throw new ConflictError("لا يمكن نقل الموظف إلى نفس فرعه الحالي", {
+        field: "toBranchId",
+        fix: "اختر فرعاً مختلفاً عن الفرع الحالي للموظف.",
+        meta: { currentBranchId: assignment.branchId },
+      });
+    }
 
     const { insertId } = await rawExecute(
       `INSERT INTO employee_transfers
@@ -4433,24 +4472,56 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
       }).catch(console.error);
     }
 
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.transfer.requested",
+      entity: "employee_transfers",
+      entityId: insertId,
+      details: JSON.stringify({
+        employeeId: b.employeeId,
+        fromBranchId: assignment.branchId,
+        toBranchId: b.toBranchId,
+      }),
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create transfer error:"); }
 });
 
 // ── Step 1: HR Manager approves → notifies receiving branch manager ──
 router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (req, res) => {
+  // Step 3 of the HR operational audit — HR approval step of a transfer.
+  // Converts 2 raw res.status error sites to typed throws and emits a
+  // canonical `hr.transfer.hr_approved` / `hr.transfer.rejected` event
+  // so the audit trail sees every HR decision on a transfer.
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح" }); return;
+      throw new ForbiddenError("هذه الخطوة محصورة بمدير الموارد البشرية أو المدير العام", {
+        fix: "اطلب من مدير الموارد البشرية اتخاذ القرار.",
+      });
     }
     const id = Number(req.params.id);
     const { approved, notes } = req.body as any;
     const [transfer] = await rawQuery<any>(
-      `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2 AND status='pending'`,
+      `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
-    if (!transfer) { res.status(404).json({ error: "طلب النقل غير موجود أو تمت معالجته" }); return; }
+    if (!transfer) {
+      throw new NotFoundError("طلب النقل غير موجود");
+    }
+    if (transfer.status !== "pending") {
+      throw new ConflictError(
+        `لا يمكن اعتماد طلب نقل في الحالة "${transfer.status}"`,
+        {
+          field: "status",
+          fix: "الطلب تمت معالجته مسبقاً أو انتقل لمرحلة لاحقة.",
+          meta: { currentStatus: transfer.status },
+        }
+      );
+    }
 
     if (approved) {
       // HR approved — move to pending_receiving_manager for the destination branch manager to confirm
@@ -4475,6 +4546,18 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
           priority: "high", refType: "employee_transfer", refId: id,
         }).catch(console.error);
       }
+
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "hr.transfer.hr_approved",
+        entity: "employee_transfers",
+        entityId: id,
+        before: { status: "pending" },
+        after: { status: "pending_receiving_manager", approvedBy: scope.employeeId },
+        reason: notes ?? undefined,
+      }).catch(console.error);
     } else {
       await rawExecute(
         `UPDATE employee_transfers SET status='rejected',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
@@ -4493,6 +4576,18 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
           priority: "high", refType: "employee_transfer", refId: id,
         }).catch(console.error);
       }
+
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "hr.transfer.rejected",
+        entity: "employee_transfers",
+        entityId: id,
+        before: { status: "pending" },
+        after: { status: "rejected", approvedBy: scope.employeeId },
+        reason: notes ?? undefined,
+      }).catch(console.error);
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
@@ -4502,18 +4597,38 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
 
 // ── Step 2: Receiving branch manager confirms the transfer ──
 router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (req, res) => {
+  // Step 3 of the HR operational audit — receiving branch manager confirms
+  // (or rejects) a transfer the HR manager has already approved.
+  // Converts 3 raw res.status error sites to typed throws and emits the
+  // canonical `hr.transfer.completed` / `hr.transfer.rejected_by_receiver`
+  // event so the audit trail sees the final disposition.
   try {
     const scope = req.scope!;
     if (!["branch_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح" }); return;
+      throw new ForbiddenError(
+        "استقبال الموظف المنقول محصور بمدير الفرع أو المدير العام",
+        { fix: "اطلب من مدير الفرع تنفيذ الاستقبال." }
+      );
     }
     const id = Number(req.params.id);
     const { confirmed, notes } = req.body as any;
     const [transfer] = await rawQuery<any>(
-      `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2 AND status='pending_receiving_manager'`,
+      `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
-    if (!transfer) { res.status(404).json({ error: "طلب النقل غير موجود أو لم تتم الموافقة عليه بعد" }); return; }
+    if (!transfer) {
+      throw new NotFoundError("طلب النقل غير موجود");
+    }
+    if (transfer.status !== "pending_receiving_manager") {
+      throw new ConflictError(
+        `لا يمكن استقبال طلب نقل في الحالة "${transfer.status}"`,
+        {
+          field: "status",
+          fix: "الطلب إما ألغي أو اعتُمد مسبقاً أو لم يعتمده HR بعد.",
+          meta: { currentStatus: transfer.status },
+        }
+      );
+    }
 
     // Authorization: general_manager/owner can confirm any transfer; branch_manager must be in the destination branch
     if (scope.role === "branch_manager") {
@@ -4522,7 +4637,13 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
         [scope.activeAssignmentId, scope.companyId]
       );
       if (!myAssignment || myAssignment.branchId !== transfer.toBranchId) {
-        res.status(403).json({ error: "يمكنك فقط تأكيد النقل إلى فرعك" }); return;
+        throw new ForbiddenError("يمكنك فقط تأكيد النقل إلى فرعك", {
+          fix: "هذا النقل مخصص لفرع آخر — اطلب من مديره تأكيده.",
+          meta: {
+            yourBranchId: myAssignment?.branchId ?? null,
+            targetBranchId: transfer.toBranchId,
+          },
+        });
       }
     }
 
@@ -4555,11 +4676,63 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
           priority: "high", refType: "employee_transfer", refId: id,
         }).catch(console.error);
       }
+
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "hr.transfer.completed",
+        entity: "employee_transfers",
+        entityId: id,
+        before: {
+          status: "pending_receiving_manager",
+          branchId: transfer.fromBranchId,
+          departmentId: transfer.fromDeptId,
+          jobTitle: transfer.fromJobTitle,
+          salary: transfer.fromSalary,
+        },
+        after: {
+          status: "approved",
+          branchId: newBranchId,
+          departmentId: newDeptId,
+          jobTitle: newJobTitle,
+          salary: newSalary,
+        },
+        reason: notes ?? undefined,
+      }).catch(console.error);
     } else {
       await rawExecute(
         `UPDATE employee_transfers SET status='rejected_by_receiver',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
         [scope.employeeId, notes || null, id]
       );
+
+      // Notify employee — previously silent if receiver declined, which
+      // left the employee without feedback. Also notify the original HR
+      // manager so they know the receiving branch declined.
+      const [empAssign] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+        [transfer.employeeId, scope.companyId]
+      );
+      if (empAssign) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: empAssign.id,
+          type: "transfer_decision", title: "رفض الفرع المستقبل طلب نقلك",
+          body: notes || "رفض مدير الفرع المستقبل استقبالك. راجع الموارد البشرية.",
+          priority: "high", refType: "employee_transfer", refId: id,
+        }).catch(console.error);
+      }
+
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "hr.transfer.rejected_by_receiver",
+        entity: "employee_transfers",
+        entityId: id,
+        before: { status: "pending_receiving_manager" },
+        after: { status: "rejected_by_receiver", receivedBy: scope.employeeId },
+        reason: notes ?? undefined,
+      }).catch(console.error);
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);

@@ -399,6 +399,32 @@ export function registerEventListeners() {
     await logAudit("hr.memo.cancelled", { ...payload, action: "cancel", entity: "hr_inquiry_memo" });
   });
 
+  // HR transfers — Step 3 of the HR operational audit. Every transfer
+  // lifecycle event is mirrored into audit_logs + event_logs so the
+  // transfer inbox can reconstruct who decided what and when, and so the
+  // rules engine can react (e.g. email the employee, update payroll
+  // proration) without the routes having to call audit helpers directly.
+  eventBus.on("hr.transfer.requested", async (payload) => {
+    await logEvent("hr.transfer.requested", payload);
+    await logAudit("hr.transfer.requested", { ...payload, action: "request", entity: "employee_transfers" });
+  });
+  eventBus.on("hr.transfer.hr_approved", async (payload) => {
+    await logEvent("hr.transfer.hr_approved", payload);
+    await logAudit("hr.transfer.hr_approved", { ...payload, action: "hr_approve", entity: "employee_transfers" });
+  });
+  eventBus.on("hr.transfer.rejected", async (payload) => {
+    await logEvent("hr.transfer.rejected", payload);
+    await logAudit("hr.transfer.rejected", { ...payload, action: "reject", entity: "employee_transfers" });
+  });
+  eventBus.on("hr.transfer.completed", async (payload) => {
+    await logEvent("hr.transfer.completed", payload);
+    await logAudit("hr.transfer.completed", { ...payload, action: "complete", entity: "employee_transfers" });
+  });
+  eventBus.on("hr.transfer.rejected_by_receiver", async (payload) => {
+    await logEvent("hr.transfer.rejected_by_receiver", payload);
+    await logAudit("hr.transfer.rejected_by_receiver", { ...payload, action: "reject_by_receiver", entity: "employee_transfers" });
+  });
+
   // Official letters — when a letter is approved, queue it for delivery
   // and mark it as sent. Without this subscriber the approval route stops
   // at status='approved' and the letter never reaches the recipient.
