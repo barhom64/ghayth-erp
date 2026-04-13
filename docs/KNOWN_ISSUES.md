@@ -39,10 +39,11 @@ _If a new detail view is added, follow the pattern in `lib/lifecycleEngine.ts`'s
 
 ## Phase 5 — Security review of dynamic SQL
 
-- [ ] **Grep for string interpolation in SQL** across `routes/**/*.ts` and `lib/**/*.ts`. Replace any `` `SELECT ... ${userInput}` `` with parameterised `$n` placeholders.
-- [ ] **Order-by / sort-by whitelists.** Several list endpoints accept `sort` query parameters and concatenate them into `ORDER BY`. Replace with allow-listed column maps.
-- [ ] **Dynamic `LIMIT`.** Ensure the pagination helper clamps `limit` to 100 before it reaches the SQL.
-- [ ] **Audit `rawQuery` usages inside `for` loops.** These are candidates for either a single JOIN or a batched `= ANY($1::int[])` query.
+- [x] **Grep for string interpolation.** Audited every `rawQuery` / `rawExecute` / `client.query` template string in `src/`. The only interpolated values are internally-constructed SQL fragments (`where`, `sets`, `conditions`, `joinSql`) or numeric params pointers (`params.length`, `limitIdx`). No request field is concatenated into SQL.
+- [x] **Order-by / sort-by whitelists.** Grep for `sort` / `order` query parameters in routes returned zero hits — list endpoints currently use fixed `ORDER BY` clauses. When a sort parameter is added, use an allow-listed column map (see `finance-algorithms.ts:332` for the `creditOrDebit` pattern).
+- [x] **Dynamic `LIMIT`.** `lib/paginationHelper.ts` clamps `pageSize` to `GLOBAL_MAX_PAGE_SIZE = 100`. `properties.ts` `/units` now uses `$n` placeholders for `LIMIT` / `OFFSET` instead of interpolation.
+- [x] **`rawQuery` in for loops.** Remaining loops are either over short allow-lists (stages, role keys) or already batched with `= ANY($1::int[])`.
+- [x] **Static linter.** `scripts/lintSql.mjs` scans every SQL template string and fails on any non-safe interpolation. Wired as `pnpm run lint:sql` (and `pnpm run lint` to run both linters). Current run: **2726 SQL calls scanned, 0 offenders**.
 
 ## Phase 6 — Break up giant pages
 

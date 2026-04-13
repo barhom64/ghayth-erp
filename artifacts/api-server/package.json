@@ -8,7 +8,9 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint:permissions": "node scripts/lintPermissions.mjs"
+    "lint:permissions": "node scripts/lintPermissions.mjs",
+    "lint:sql": "node scripts/lintSql.mjs",
+    "lint": "pnpm run lint:permissions && pnpm run lint:sql"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",

@@ -23,10 +23,20 @@ router.get("/units", async (req, res) => {
       conditions.push(`u."buildingId" = $${params.length}`);
     }
     const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(100, Number(req.query.limit) || 100);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 100));
     const offset = (page - 1) * limit;
     conditions.push(`u."deletedAt" IS NULL`);
-    const rows = await rawQuery<any>(`SELECT u.* FROM property_units u WHERE ${conditions.join(" AND ")} ORDER BY u."buildingName", u."unitNumber" LIMIT ${limit} OFFSET ${offset}`, params);
+    const limitIdx = params.length + 1;
+    const offsetIdx = params.length + 2;
+    params.push(limit, offset);
+    const rows = await rawQuery<any>(
+      `SELECT u.* FROM property_units u WHERE ${conditions.join(" AND ")} ORDER BY u."buildingName", u."unitNumber" LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params
+    );
+    // Drop the LIMIT/OFFSET params before running the COUNT(*) query so it
+    // still matches the `conditions` WHERE clause.
+    params.pop();
+    params.pop();
     const [countRow] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units u WHERE ${conditions.join(" AND ")}`, params);
     res.json({ data: rows, total: Number(countRow?.total || rows.length), page, pageSize: limit });
   } catch (err) { handleRouteError(err, res, "Property units error:"); }
