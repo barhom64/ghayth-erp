@@ -7,6 +7,8 @@ import {
   createAuditLog,
   createJournalEntry,
   initiateApprovalChain,
+  createNotification,
+  updateBudgetUsed,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -194,6 +196,23 @@ purchaseRouter.patch("/purchase-requests/:id/approve", async (req, res) => {
       });
     }
 
+    // Notify the requester about rejection/return so they see the reason
+    // instead of having to poll the PR status page.
+    if ((newStatus === "rejected" || newStatus === "returned") && pr.requestedBy) {
+      await createNotification({
+        companyId: scope.companyId,
+        assignmentId: Number(pr.requestedBy),
+        type: newStatus === "rejected" ? "purchase_request_rejected" : "purchase_request_returned",
+        title: newStatus === "rejected" ? "تم رفض طلب الشراء" : "تم إرجاع طلب الشراء",
+        body: `طلب الشراء ${pr.ref ?? "#" + id} — ${
+          newStatus === "rejected" ? "مرفوض" : "مُرجع للتعديل"
+        }. السبب: ${notes}`,
+        priority: "high",
+        refType: "purchase_request",
+        refId: Number(id),
+      }).catch((e) => console.error("notify PR requester failed:", e));
+    }
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
@@ -242,6 +261,31 @@ purchaseRouter.post("/purchase-requests/:id/convert", async (req, res) => {
     }
 
     await rawExecute(`UPDATE purchase_requests SET status = 'converted' WHERE id = $1`, [Number(id)]);
+
+    // Record the PR→PO conversion explicitly so the chain audit/events
+    // can follow "who turned which PR into which PO" without having to
+    // cross-reference timestamps by ref prefix.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "purchase_request",
+      entityId: Number(id),
+      action: "purchase_request.converted",
+      before: { status: pr.status },
+      after: { status: "converted", purchaseOrderId: poId, poRef },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "purchase_request.converted",
+      entity: "purchase_request",
+      entityId: Number(id),
+      before: { status: pr.status },
+      after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
+    }).catch(console.error);
+
     res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", purchaseOrderId: poId, poRef, totalAmount });
   } catch (err) {
     handleRouteError(err, res, "Convert purchase request error:");
@@ -377,6 +421,18 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
     await rawExecute(`UPDATE purchase_orders SET status = 'received', "receivedAt" = $1, notes = COALESCE($2, notes) WHERE id = $3`, [receivedDate ?? new Date().toISOString(), qualityNotes ?? null, Number(id)]);
 
     createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref: `GRN-${po.ref}`, description: `استلام ${po.ref}`, lines: [{ accountCode: "1600", debit: Number(po.totalAmount) - Number(po.vatAmount ?? 0), credit: 0 }, { accountCode: "1400", debit: Number(po.vatAmount ?? 0), credit: 0 }, { accountCode: "2100", debit: 0, credit: Number(po.totalAmount) }] }).catch(console.error);
+
+    // Consume budget on receipt so reports reflect committed spend. Inventory
+    // is booked to 1600 (inventory) above; we consume against that account so
+    // the budgeted line matches the GL line.
+    const netAmount = Number(po.totalAmount) - Number(po.vatAmount ?? 0);
+    if (netAmount > 0) {
+      updateBudgetUsed({
+        companyId: scope.companyId,
+        accountCode: "1600",
+        amount: netAmount,
+      }).catch(console.error);
+    }
 
     emitEvent({
       companyId: scope.companyId,

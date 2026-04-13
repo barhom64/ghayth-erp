@@ -585,6 +585,38 @@ export async function getCfoAssignmentId(companyId: number, branchId: number): P
   return getDirectorAssignmentId(companyId, branchId);
 }
 
+/**
+ * Resolve the person responsible for legal matters in this company, falling
+ * back from legal_manager → general_manager → owner. Returns both the
+ * assignmentId (for notifications/inbox) and the employee name (for
+ * legal_cases.lawyerName which is a free-text column with no FK).
+ *
+ * Branch is intentionally ignored: legal cases are company-scoped, and a
+ * rental or fleet branch may not have a legal officer on staff.
+ */
+export async function getLegalResponsible(
+  companyId: number
+): Promise<{ assignmentId: number; employeeName: string } | null> {
+  const [row] = await rawQuery<any>(
+    `SELECT ea.id, e.name
+       FROM employee_assignments ea
+       JOIN employees e ON e.id = ea."employeeId"
+      WHERE ea."companyId" = $1
+        AND ea.status = 'active'
+        AND ea.role IN ('legal_manager','general_manager','owner')
+      ORDER BY CASE ea.role
+                 WHEN 'legal_manager' THEN 1
+                 WHEN 'general_manager' THEN 2
+                 WHEN 'owner' THEN 3
+                 ELSE 4
+               END
+      LIMIT 1`,
+    [companyId]
+  );
+  if (!row?.id) return null;
+  return { assignmentId: Number(row.id), employeeName: String(row.name || "غير محدد") };
+}
+
 export async function getManagerAssignmentId(companyId: number, branchId: number): Promise<number | null> {
   const [manager] = await rawQuery<any>(
     `SELECT ea.id FROM employee_assignments ea

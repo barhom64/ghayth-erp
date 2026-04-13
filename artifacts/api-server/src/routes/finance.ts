@@ -7,6 +7,7 @@ import {
   emitEvent,
   createAuditLog,
   createJournalEntry,
+  reverseAccountBalances,
   initiateApprovalChain,
   processApprovalStep,
   haversineDistance,
@@ -2994,12 +2995,47 @@ router.patch("/salary-advances/:id/approve", async (req, res) => {
       [newStatus, Number(id)]
     );
 
+    // Salary advance journal was posted at creation. On rejection we must
+    // reverse GL + notify the requester — otherwise the employee's advance
+    // account (1410) stays inflated and the employee never learns.
+    if (newStatus === "rejected") {
+      try {
+        await reverseAccountBalances(scope.companyId, Number(id));
+      } catch (e) { console.error("Failed to reverse salary-advance GL on reject:", e); }
+
+      if (entry.createdBy) {
+        createNotification({
+          companyId: scope.companyId,
+          assignmentId: Number(entry.createdBy),
+          type: "salary_advance_rejected",
+          title: "تم رفض طلب سلفة الراتب",
+          body: `تم رفض طلب سلفة الراتب ${entry.ref || id}${notes ? ` — ${notes}` : ''}`,
+          priority: "high",
+          refType: "salary_advance",
+          refId: Number(id),
+          actionUrl: `/finance/salary-advances/${id}`,
+        }).catch(console.error);
+      }
+    }
+
     try {
       await rawExecute(
         `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('salary_advance',$1,$2,$3,$4,$5)`,
         [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
       );
     } catch (e) { console.error("Failed to log approval action:", e); }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: newStatus, entity: "salary_advances", entityId: Number(id),
+      before: { status: entry.status }, after: { status: newStatus, notes: notes ?? null },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: `salary_advance.${newStatus}`, entity: "journal_entries", entityId: Number(id),
+      details: `سلفة راتب ${entry.ref || id} — ${newStatus}`,
+    }).catch(console.error);
 
     res.json({ id: Number(id), status: newStatus });
   } catch (err) {
@@ -3030,12 +3066,47 @@ router.patch("/custodies/:id/approve", async (req, res) => {
       [newStatus, Number(id)]
     );
 
+    // Custody journal was posted at creation (1400 Custody Dr / 1100 Cash Cr).
+    // On rejection we must reverse GL + notify the assigning officer so the
+    // custody account doesn't stay overstated.
+    if (newStatus === "rejected") {
+      try {
+        await reverseAccountBalances(scope.companyId, Number(id));
+      } catch (e) { console.error("Failed to reverse custody GL on reject:", e); }
+
+      if (entry.createdBy) {
+        createNotification({
+          companyId: scope.companyId,
+          assignmentId: Number(entry.createdBy),
+          type: "custody_rejected",
+          title: "تم رفض طلب العهدة",
+          body: `تم رفض طلب العهدة ${entry.ref || id}${notes ? ` — ${notes}` : ''}`,
+          priority: "high",
+          refType: "custody",
+          refId: Number(id),
+          actionUrl: `/finance/custodies/${id}`,
+        }).catch(console.error);
+      }
+    }
+
     try {
       await rawExecute(
         `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('custody',$1,$2,$3,$4,$5)`,
         [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
       );
     } catch (e) { console.error("Failed to log approval action:", e); }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: newStatus, entity: "custodies", entityId: Number(id),
+      before: { status: entry.status }, after: { status: newStatus, notes: notes ?? null },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: `custody.${newStatus}`, entity: "journal_entries", entityId: Number(id),
+      details: `عهدة ${entry.ref || id} — ${newStatus}`,
+    }).catch(console.error);
 
     res.json({ id: Number(id), status: newStatus });
   } catch (err) {
@@ -3111,11 +3182,20 @@ router.delete("/expenses/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
+    // Reverse GL before soft-delete so chart_of_accounts.currentBalance stays
+    // consistent — otherwise the expense debits/credits linger in account
+    // balances even though the journal_entries row is hidden.
+    await reverseAccountBalances(scope.companyId, id);
     const [row] = await rawQuery<any>(
-      `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
+      `UPDATE journal_entries SET "deletedAt" = NOW(), status='cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id, ref`,
       [id, scope.companyId]
     );
     if (!row) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "expense.deleted", entity: "journal_entries", entityId: id,
+      details: `تم حذف المصروف ${row.ref} وعكس رصيد GL`,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
@@ -3154,11 +3234,19 @@ router.delete("/vouchers/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
+    // Reverse GL before soft-delete so chart_of_accounts.currentBalance stays
+    // consistent — cash + counter-party accounts must drop back.
+    await reverseAccountBalances(scope.companyId, id);
     const [row] = await rawQuery<any>(
-      `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
+      `UPDATE journal_entries SET "deletedAt" = NOW(), status='cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id, ref`,
       [id, scope.companyId]
     );
     if (!row) { res.status(404).json({ error: "السند غير موجود" }); return; }
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "voucher.deleted", entity: "journal_entries", entityId: id,
+      details: `تم حذف السند ${row.ref} وعكس رصيد GL`,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
@@ -3375,6 +3463,50 @@ router.patch("/expenses/:id/approve", async (req, res) => {
       [newStatus, Number(id)]
     );
 
+    // On rejection: the expense was posted to GL at creation and its budget
+    // was already incremented. We must reverse both so the books and the
+    // period budget match reality, and notify the requester.
+    if (newStatus === "rejected") {
+      try {
+        await reverseAccountBalances(scope.companyId, Number(id));
+      } catch (e) { console.error("Failed to reverse expense GL on reject:", e); }
+
+      // Best-effort budget release — read the expense line + period from the
+      // journal row and decrement the "used" column on the matching budget.
+      try {
+        const [line] = await rawQuery<any>(
+          `SELECT jl."accountCode", jl.debit
+             FROM journal_lines jl
+            WHERE jl."journalId" = $1 AND jl.debit > 0
+            ORDER BY jl.debit DESC LIMIT 1`,
+          [Number(id)]
+        );
+        if (line?.accountCode && Number(line.debit) > 0) {
+          const period = new Date(exp.createdAt || Date.now()).toISOString().slice(0, 7);
+          await rawExecute(
+            `UPDATE budgets SET used = GREATEST(used - $1, 0)
+              WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
+            [Number(line.debit), scope.companyId, line.accountCode, period]
+          );
+        }
+      } catch (e) { console.error("Failed to release expense budget on reject:", e); }
+
+      // Notify the requester so they learn about the rejection reason.
+      if (exp.createdBy) {
+        createNotification({
+          companyId: scope.companyId,
+          assignmentId: Number(exp.createdBy),
+          type: "expense_rejected",
+          title: "تم رفض طلب المصروف",
+          body: `تم رفض المصروف ${exp.ref || id}${notes ? ` — ${notes}` : ''}`,
+          priority: "high",
+          refType: "expense",
+          refId: Number(id),
+          actionUrl: `/finance/expenses/${id}`,
+        }).catch(console.error);
+      }
+    }
+
     try {
       await rawExecute(
         `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('expense',$1,$2,$3,$4,$5)`,
@@ -3382,51 +3514,16 @@ router.patch("/expenses/:id/approve", async (req, res) => {
       );
     } catch (e) { console.error("Failed to log approval action:", e); }
 
-    const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
-    res.json({ message: labels[newStatus] || newStatus, status: newStatus });
-  } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
-  }
-});
-
-router.patch("/custodies/:id/approve", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    const { id } = req.params;
-    const { approved, notes } = req.body as any;
-
-    const [cust] = await rawQuery<any>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
-      [Number(id), scope.companyId]
-    );
-    if (!cust) { res.status(404).json({ error: "العهدة غير موجودة" }); return; }
-
-    const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
-    if ((newStatus === "rejected" || newStatus === "returned") && !notes) {
-      res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return;
-    }
-
-    await rawExecute(
-      `UPDATE journal_entries SET status = $1 WHERE id = $2`,
-      [newStatus, Number(id)]
-    );
-
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('custody',$1,$2,$3,$4,$5)`,
-        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error("Failed to log approval action:", e); }
-
     createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: newStatus,
-      entity: "custodies",
-      entityId: Number(id),
-      after: { ref: cust.ref, status: newStatus, notes },
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: newStatus, entity: "expenses", entityId: Number(id),
+      before: { status: exp.status }, after: { status: newStatus, notes: notes ?? null },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: `expense.${newStatus}`, entity: "journal_entries", entityId: Number(id),
+      details: `مصروف ${exp.ref || id} — ${newStatus}`,
     }).catch(console.error);
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
@@ -3435,6 +3532,12 @@ router.patch("/custodies/:id/approve", async (req, res) => {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
 });
+
+// NOTE: the authoritative PATCH /custodies/:id/approve handler lives earlier
+// in this file (~line 3046). A second copy used to live here but was dead code
+// — Express routes on first-match, so only the earlier handler ever ran. The
+// live handler already covers GL reversal, notifications, audit, and events
+// on approve/reject/return, so this duplicate was removed to avoid drift.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUBSIDIARY LEDGER — دفتر الأستاذ المساعد

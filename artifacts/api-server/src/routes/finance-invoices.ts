@@ -10,6 +10,8 @@ import {
   initiateApprovalChain,
   getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
+  updateAccountBalances,
+  reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -248,6 +250,18 @@ invoicesRouter.post("/invoices", async (req, res) => {
       }
     });
 
+    // Invoice creation posts a raw journal (AR Dr / Revenue Cr / VAT payable Cr)
+    // but must also push those deltas into chart_of_accounts.currentBalance so
+    // trial balance + dashboards stay consistent. DELETE /invoices/:id now
+    // reverses these same lines.
+    try {
+      await updateAccountBalances(effectiveCompanyId, [
+        { accountCode: invArCode, debit: total, credit: 0 },
+        { accountCode: invRevenueCode, debit: 0, credit: baseAmount },
+        { accountCode: invVatPayableCode, debit: 0, credit: vatAmount },
+      ]);
+    } catch (e) { console.error("Failed to update account balances for invoice:", e); }
+
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.created", entity: "invoices", entityId: insertId, details: JSON.stringify({ ref, total, dueDate: finalDueDate, vatAmount, lineCount: validatedLines.length }) }).catch(console.error);
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "invoices", entityId: insertId, after: { ref, total, vatAmount, clientId: clientId ?? null } }).catch(console.error);
@@ -369,6 +383,15 @@ invoicesRouter.post("/invoices/:id/payment", async (req, res) => {
       );
     });
 
+    // Mirror the payment journal into chart_of_accounts so cash goes up and
+    // AR comes down. Without this, trial balance + receivables aging drift.
+    try {
+      await updateAccountBalances(scope.companyId, [
+        { accountCode: cashAccountCode, debit: Number(amount), credit: 0 },
+        { accountCode: arAccountCode, debit: 0, credit: Number(amount) },
+      ]);
+    } catch (e) { console.error("Failed to update account balances for payment:", e); }
+
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: Number(id), details: JSON.stringify({ amount, method, newStatus }) }).catch(console.error);
 
     res.json({ message: "تم تسجيل الدفعة", newPaidAmount: newPaid, status: newStatus });
@@ -429,8 +452,50 @@ invoicesRouter.patch("/invoices/:id", async (req, res) => {
 invoicesRouter.delete("/invoices/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`UPDATE invoices SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    const id = Number(req.params.id);
+    const [inv] = await rawQuery<any>(
+      `SELECT id, ref, status, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!inv) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (Number(inv.paidAmount) > 0) {
+      res.status(422).json({ error: "لا يمكن حذف فاتورة عليها تحصيلات — قم بعكس التحصيل أولاً" });
+      return;
+    }
+
+    // Reverse the GL balances that were pushed at creation time so AR /
+    // Revenue / VAT payable drop back. The journal_entries row is located via
+    // its ref (JE-<invoice ref>) since invoices don't store a journalId column.
+    const [je] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+      [scope.companyId, `JE-${inv.ref}`]
+    );
+    if (je) {
+      try {
+        await reverseAccountBalances(scope.companyId, Number(je.id));
+        await rawExecute(
+          `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1`,
+          [Number(je.id)]
+        );
+      } catch (e) { console.error("Failed to reverse invoice GL on delete:", e); }
+    }
+
+    await rawExecute(
+      `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1`,
+      [id]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "invoices", entityId: id,
+      before: { status: inv.status }, after: { status: "cancelled" },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "invoice.deleted", entity: "invoices", entityId: id,
+      details: `تم حذف الفاتورة ${inv.ref} وعكس رصيد GL`,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete invoice error:");
@@ -449,6 +514,36 @@ invoicesRouter.patch("/invoices/:id/approve", async (req, res) => {
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
     await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+
+    // Audit + event + requester notification — without these, the invoice
+    // state change is invisible to dashboards and the creator never learns.
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: newStatus, entity: "invoices", entityId: Number(id),
+      before: { status: inv.status }, after: { status: newStatus, notes: notes ?? null },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: `invoice.${newStatus}`, entity: "invoices", entityId: Number(id),
+      details: `فاتورة ${inv.ref || id} — ${newStatus}`,
+    }).catch(console.error);
+
+    if (inv.createdBy) {
+      const titleMap: Record<string, string> = { approved: "تم اعتماد الفاتورة", rejected: "تم رفض الفاتورة", returned: "تم إرجاع الفاتورة" };
+      createNotification({
+        companyId: scope.companyId,
+        assignmentId: Number(inv.createdBy),
+        type: `invoice_${newStatus}`,
+        title: titleMap[newStatus] || `حالة الفاتورة: ${newStatus}`,
+        body: `الفاتورة ${inv.ref || id}${notes ? ` — ${notes}` : ''}`,
+        priority: newStatus === "rejected" ? "high" : "normal",
+        refType: "invoice",
+        refId: Number(id),
+        actionUrl: `/finance/invoices/${id}`,
+      }).catch(console.error);
+    }
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {

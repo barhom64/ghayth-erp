@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, createJournalEntry } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, createJournalEntry, emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -51,6 +51,16 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
       [scope.companyId, b.plateNumber, b.make, b.model, b.year, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1`, [insertId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_vehicles", entityId: insertId,
+      after: { plateNumber: b.plateNumber, make: b.make, model: b.model, year: b.year, status: 'available' },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.vehicle.created", entity: "fleet_vehicles", entityId: insertId,
+      details: `مركبة جديدة: ${b.plateNumber}${b.make ? ` — ${b.make}` : ''}${b.model ? ` ${b.model}` : ''}`,
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });
@@ -92,6 +102,11 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
       entity: "fleet_drivers",
       entityId: insertId,
       after: { name: b.name, phone: b.phone, licenseNumber: b.licenseNumber, employeeId: b.employeeId },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.driver.created", entity: "fleet_drivers", entityId: insertId,
+      details: `سائق جديد: ${b.name}`,
     }).catch(console.error);
 
     res.status(201).json(row);
@@ -521,14 +536,24 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       console.error("Journal entry creation failed for trip", tripId, jeErr);
     }
 
-    try {
-      await rawExecute(
-        `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [scope.companyId, scope.userId, 'fleet.trip.completed', 'fleet_trips', String(tripId), JSON.stringify({ tripId, vehicleId: trip.vehicleId, driverId: trip.driverId, distanceKm: actualDistanceKm, fuelCost: actualFuelCost, driverFare, depreciation, totalCost, journalEntryId })]
-      );
-    } catch (evtErr) {
-      console.error("Event log creation failed for trip", tripId, evtErr);
-    }
+    // Persist audit + event via the shared helpers so they land in audit_logs
+    // and event_logs with consistent shape. Swallowing this behind a raw
+    // INSERT used to mean a failed insert would silently drop the lifecycle
+    // record.
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "complete", entity: "fleet_trips", entityId: tripId,
+      before: { status: trip.status, distance: trip.distance, cost: trip.cost },
+      after: {
+        status: "completed", distance: actualDistanceKm, cost: totalCost,
+        fuelCost: actualFuelCost, driverFare, depreciation, journalEntryId,
+      },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.trip.completed", entity: "fleet_trips", entityId: tripId,
+      details: `رحلة #${tripId} — ${actualDistanceKm.toFixed(1)} كم — تكلفة ${totalCost.toFixed(2)} ريال`,
+    }).catch(console.error);
 
     // Bus emission — closes the fleet.trip.started → fleet.trip.completed
     // pair so rules engine + audit-log subscribers see the full lifecycle.
@@ -1337,17 +1362,105 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
     if (!b.vehicleId || !b.violationType) {
       res.status(400).json({ error: "المركبة ونوع المخالفة مطلوبان" }); return;
     }
+    const fineAmount = Number(b.fineAmount || 0);
+    // "company" (default) = company pays the fine → GL expense.
+    // "driver" = fine liability shifted to driver → payroll deduction in current period.
+    const liability: 'company' | 'driver' = b.liability === 'driver' ? 'driver' : 'company';
+
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_traffic_violations
        ("companyId","vehicleId","driverId","violationType","violationDate","fineAmount","location","violationNumber",status,notes,"paidAt")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10)`,
       [scope.companyId, b.vehicleId, b.driverId || null, b.violationType,
        b.violationDate || new Date().toISOString().split('T')[0],
-       b.fineAmount || 0, b.location || null, b.violationNumber || null,
+       fineAmount, b.location || null, b.violationNumber || null,
        b.notes || null, null]
     );
+
+    // GL posting — company-borne fines hit expense account immediately. If
+    // the GL fails we roll back the violation row so we never have a visible
+    // fine without its accounting impact.
+    let journalEntryId: number | null = null;
+    if (fineAmount > 0 && liability === 'company') {
+      try {
+        journalEntryId = await createJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          createdBy: scope.userId,
+          ref: `TV-${insertId}`,
+          description: `مخالفة مرورية — ${b.violationType}${b.violationNumber ? ` #${b.violationNumber}` : ''}`,
+          sourceType: "fleet_traffic_violation",
+          sourceId: insertId,
+          lines: [
+            { accountCode: "5290", debit: fineAmount, credit: 0 }, // fleet other expenses / fines
+            { accountCode: "2100", debit: 0, credit: fineAmount }, // accounts payable (govt)
+          ],
+        });
+      } catch (jeErr) {
+        console.error("Traffic violation journal entry failed:", jeErr);
+        await rawExecute(`DELETE FROM fleet_traffic_violations WHERE id=$1`, [insertId]).catch(() => {});
+        res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة" });
+        return;
+      }
+    }
+
+    // Driver-liability: create a payroll deduction + notify the driver so
+    // they see the deduction before it lands on their payslip.
+    let deductionId: number | null = null;
+    let driverAssignmentId: number | null = null;
+    if (fineAmount > 0 && liability === 'driver' && b.driverId) {
+      try {
+        const [driver] = await rawQuery<any>(
+          `SELECT fd."employeeId", ea.id AS "assignmentId"
+           FROM fleet_drivers fd
+           LEFT JOIN employee_assignments ea ON ea."employeeId" = fd."employeeId" AND ea."companyId" = fd."companyId" AND ea.status = 'active'
+           WHERE fd.id = $1 AND fd."companyId" = $2`,
+          [b.driverId, scope.companyId]
+        );
+        if (driver?.employeeId) {
+          const { insertId: pdId } = await rawExecute(
+            `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,reason,date,"createdAt")
+             VALUES ($1,$2,'traffic_violation',$3,$4,CURRENT_DATE,NOW())`,
+            [scope.companyId, driver.employeeId, fineAmount, `مخالفة مرورية: ${b.violationType}`]
+          );
+          deductionId = pdId;
+          driverAssignmentId = driver.assignmentId ?? null;
+        }
+      } catch (pdErr) {
+        console.error("Traffic violation payroll deduction failed:", pdErr);
+      }
+      if (driverAssignmentId) {
+        createNotification({
+          companyId: scope.companyId,
+          assignmentId: driverAssignmentId,
+          type: "traffic_violation_deducted",
+          title: "تم تسجيل مخالفة مرورية على عهدتك",
+          body: `${b.violationType} — قيمة ${fineAmount} ﷼ — سيتم الخصم في الراتب القادم${b.violationNumber ? ` (رقم: ${b.violationNumber})` : ''}`,
+          priority: "high",
+          refType: "fleet_traffic_violation",
+          refId: insertId,
+          actionUrl: `/fleet/violations/${insertId}`,
+        }).catch(console.error);
+      }
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_traffic_violations", entityId: insertId,
+      after: {
+        vehicleId: b.vehicleId, driverId: b.driverId ?? null,
+        violationType: b.violationType, fineAmount, liability,
+        journalEntryId, deductionId,
+      },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.traffic_violation.created", entity: "fleet_traffic_violations", entityId: insertId,
+      details: `${b.violationType} — ${fineAmount} ﷼ — ${liability === 'driver' ? 'على السائق' : 'على الشركة'}`,
+    }).catch(console.error);
+
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [insertId]);
-    res.status(201).json(row);
+    res.status(201).json({ ...row, journalEntryId, deductionId, liability });
   } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
 });
 
@@ -1355,12 +1468,56 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!existing) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    if (existing.status === 'paid') {
+      res.status(409).json({ error: "المخالفة مدفوعة بالفعل" }); return;
+    }
+
+    // Post the cash-out journal entry BEFORE flipping status so dual-entry is guaranteed.
+    const fineAmount = Number(existing.fineAmount || 0);
+    if (fineAmount > 0) {
+      try {
+        await createJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          createdBy: scope.userId,
+          ref: `TV-${id}-PAY`,
+          description: `سداد مخالفة مرورية #${existing.violationNumber ?? id}`,
+          sourceType: "fleet_traffic_violation_payment",
+          sourceId: id,
+          lines: [
+            { accountCode: "2100", debit: fineAmount, credit: 0 }, // clear AP
+            { accountCode: "1100", debit: 0, credit: fineAmount }, // cash out
+          ],
+        });
+      } catch (jeErr) {
+        console.error("Traffic violation payment JE failed:", jeErr);
+        res.status(500).json({ error: "فشل قيد السداد — لم يتم تسجيل العملية" });
+        return;
+      }
+    }
+
     await rawExecute(
       `UPDATE fleet_traffic_violations SET status='paid', "paidAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "pay", entity: "fleet_traffic_violations", entityId: id,
+      before: { status: existing.status }, after: { status: "paid", fineAmount },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.traffic_violation.paid", entity: "fleet_traffic_violations", entityId: id,
+      details: `سداد مخالفة ${existing.violationNumber ?? id} بقيمة ${fineAmount}`,
+    }).catch(console.error);
+
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [id]);
-    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Pay violation error:"); }
 });

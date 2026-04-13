@@ -8,8 +8,10 @@ import {
   getManagerAssignmentId,
   getDirectorAssignmentId,
   getCfoAssignmentId,
+  getLegalResponsible,
   haversineDistance,
   emitEvent,
+  createAuditLog,
 } from "./businessHelpers.js";
 import { broadcastAlert } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
@@ -270,11 +272,22 @@ async function fleetStatusCheck(): Promise<string> {
         `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — تم تعليق حالتها`,
         "warning", "fleet_vehicle", v.id
       );
+      // Persist the preventive-due event in event_logs so audit trail shows
+      // the transition, then trigger the in-memory listener that auto-creates
+      // the maintenance work order + assigns the fleet manager.
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "fleet.preventive.due", entity: "fleet_vehicles", entityId: Number(v.id),
+          details: `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — حالة needs_service`,
+        });
+      } catch {}
       eventBus.emit("fleet.vehicle.breakdown", {
         companyId: company.id,
         entityId: v.id,
         plateNumber: v.plateNumber,
         description: `صيانة متأخرة — تجاوزت موعد الصيانة المحدد`,
+        source: "preventive_due",
       });
       actions++;
     }
@@ -773,11 +786,46 @@ async function hourlyApprovalEscalation(): Promise<string> {
 
       if (shouldAutoApprove) {
         const { processApprovalStep } = await import("./businessHelpers.js");
-        await processApprovalStep({
+        const result = await processApprovalStep({
           companyId: req.companyId, branchId: req.branchId,
           refType: req.refType, refId: req.refId,
           approved: true, decidedBy: 0,
         });
+        // Propagate the approval onto the underlying domain record. The HR
+        // route handler does this itself; the cron path must mirror the same
+        // logic, otherwise an auto-approved request leaves the domain record
+        // stuck in its original state forever.
+        if (result.status === "approved") {
+          const entityUpdateMap: Record<string, { table: string; column: string }> = {
+            purchase_order: { table: "purchase_orders", column: "status" },
+            official_letter: { table: "official_letters", column: "status" },
+          };
+          const target = entityUpdateMap[req.refType];
+          if (target) {
+            await rawExecute(
+              `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
+              [req.refId]
+            ).catch((e) => console.error("[hourly_escalation] domain update failed:", e));
+          }
+          const journalRefTypes = ["expense", "salary_advance", "custody"];
+          if (journalRefTypes.includes(req.refType)) {
+            await rawExecute(
+              `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
+              [req.refId]
+            ).catch((e) => console.error("[hourly_escalation] journal update failed:", e));
+          }
+          // Audit + event so the auto-approval is visible in reports.
+          createAuditLog({
+            companyId: req.companyId, branchId: req.branchId, userId: 0,
+            action: "auto_approved", entity: req.refType, entityId: req.refId,
+            reason: "Auto-approved on timeout by hourly escalation cron",
+          }).catch(console.error);
+          emitEvent({
+            companyId: req.companyId, userId: 0,
+            action: `${req.refType}.auto_approved`, entity: req.refType, entityId: req.refId,
+            details: `Auto-approved on timeout after ${Math.round(hoursSinceCreation)}h`,
+          }).catch(console.error);
+        }
         autoApprovals++;
       } else {
         const [hrAssignment] = await rawQuery<any>(
@@ -908,8 +956,18 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       const newIdx = PHASE_ORDER.indexOf(phase);
       if (currentIdx >= newIdx) continue;
 
+      // Also flip the invoice status to 'overdue' when appropriate — reports,
+      // collection stages and dashboards key off invoices.status, not off
+      // overduePhase, so leaving status='sent' made overdue invoices
+      // invisible in half the UI.
       await rawExecute(
-        `UPDATE invoices SET "overduePhase" = $1 WHERE id = $2`,
+        `UPDATE invoices
+            SET "overduePhase" = $1,
+                status = CASE
+                  WHEN status IN ('sent','partial') THEN 'overdue'
+                  ELSE status
+                END
+          WHERE id = $2`,
         [phase, inv.id]
       ).catch(() => {});
 
@@ -990,11 +1048,15 @@ async function dailyInventoryCheck(): Promise<string> {
 
 async function dailyPropertyCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  let actions = 0;
+  let alerted = 0;
+  let expired = 0;
+  let renewalNotices = 0;
   for (const company of companies) {
+    // 1. Alert expiring contracts (≤30 days)
     const expiring = await rawQuery<any>(
       `SELECT rc.id, rc."tenantName", rc."endDate",
-              (rc."endDate"::date - CURRENT_DATE) AS "daysLeft"
+              (rc."endDate"::date - CURRENT_DATE) AS "daysLeft",
+              rc."autoRenewal", rc."renewalNoticeDays", rc."renewalNoticeSentAt"
        FROM rental_contracts rc
        WHERE rc."companyId" = $1 AND rc.status = 'active'
          AND rc."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
@@ -1008,30 +1070,102 @@ async function dailyPropertyCheck(): Promise<string> {
         Number(c.daysLeft) <= 7 ? "critical" : "warning",
         "rental_contract", c.id
       );
-      actions++;
+      alerted++;
+    }
+
+    // 2. Send renewal notice at renewalNoticeDays (default 60) before endDate — only once
+    const needsNotice = await rawQuery<any>(
+      `SELECT rc.id, rc."tenantName", rc."endDate"
+       FROM rental_contracts rc
+       WHERE rc."companyId" = $1 AND rc.status = 'active'
+         AND rc."renewalNoticeSentAt" IS NULL
+         AND rc."endDate" <= CURRENT_DATE + (COALESCE(rc."renewalNoticeDays",60) || ' days')::interval
+         AND rc."endDate" > CURRENT_DATE`,
+      [company.id]
+    );
+    for (const c of needsNotice) {
+      await broadcastAlert(
+        company.id, "rental_contract_renewal_notice",
+        `تنبيه تجديد عقد: ${c.tenantName}`,
+        `يقترب موعد انتهاء العقد (${c.endDate}) — اتخذ قرار التجديد أو الإنهاء`,
+        "warning", "rental_contract", c.id
+      );
+      await rawExecute(
+        `UPDATE rental_contracts SET "renewalNoticeSentAt"=NOW() WHERE id=$1`, [c.id]
+      ).catch(() => {});
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "lease.renewal_notice", entity: "rental_contracts", entityId: Number(c.id),
+          details: `تنبيه تجديد — ينتهي ${c.endDate}`,
+        });
+      } catch {}
+      renewalNotices++;
+    }
+
+    // 3. Auto-expire contracts whose endDate has passed — mark expired, free the unit, cancel pending rent_payments
+    const expiredContracts = await rawQuery<any>(
+      `SELECT id, "unitId", "tenantName" FROM rental_contracts
+       WHERE "companyId" = $1 AND status = 'active' AND "endDate" < CURRENT_DATE`,
+      [company.id]
+    );
+    for (const c of expiredContracts) {
+      await rawExecute(
+        `UPDATE rental_contracts SET status='expired', "closedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1`,
+        [c.id]
+      );
+      if (c.unitId) {
+        await rawExecute(
+          `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND status='rented'`,
+          [c.unitId]
+        );
+      }
+      await rawExecute(
+        `UPDATE rent_payments SET status='cancelled', "updatedAt"=NOW() WHERE "contractId"=$1 AND status IN ('pending','partial')`,
+        [c.id]
+      ).catch(() => {});
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "lease.expired", entity: "rental_contracts", entityId: Number(c.id),
+          details: `انتهاء تلقائي — ${c.tenantName ?? ''}`,
+        });
+      } catch {}
+      expired++;
     }
   }
-  return `Property check: ${actions} expiring contracts alerted`;
+  return `Property check: ${alerted} expiring alerts, ${renewalNotices} renewal notices, ${expired} auto-expired`;
 }
 
 async function dailyLegalCheck(): Promise<string> {
+  // Upcoming hearings are stored on legal_sessions.nextSessionDate — the
+  // parent legal_cases.nextHearingDate is never populated, so the old query
+  // returned zero rows. Join to sessions and pick the soonest future session
+  // per case.
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const cases = await rawQuery<any>(
-      `SELECT id, title, "nextHearingDate"
-       FROM legal_cases
-       WHERE "companyId" = $1 AND status = 'open'
-         AND "nextHearingDate" IS NOT NULL
-         AND "nextHearingDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
+    const upcoming = await rawQuery<any>(
+      `SELECT DISTINCT ON (lc.id)
+              lc.id, lc.title, lc."lawyerName", lc.priority,
+              ls."nextSessionDate" AS "hearingDate"
+         FROM legal_cases lc
+         JOIN legal_sessions ls ON ls."caseId" = lc.id
+        WHERE lc."companyId" = $1
+          AND lc.status IN ('open','in_progress')
+          AND lc."deletedAt" IS NULL
+          AND ls."nextSessionDate" IS NOT NULL
+          AND ls."nextSessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+        ORDER BY lc.id, ls."nextSessionDate" ASC`,
       [company.id]
     );
-    for (const c of cases) {
+    for (const c of upcoming) {
       await broadcastAlert(
         company.id, "legal_hearing",
         `جلسة قضائية قريبة: ${c.title}`,
-        `موعد الجلسة: ${c.nextHearingDate}`,
-        "warning", "legal_case", c.id
+        `موعد الجلسة: ${c.hearingDate}${c.lawyerName ? ` — المحامي ${c.lawyerName}` : ''}`,
+        c.priority === 'high' ? "critical" : "warning",
+        "legal_case", c.id
       );
       actions++;
     }
@@ -1115,34 +1249,108 @@ async function dailySlaGeneral(): Promise<string> {
 }
 
 async function monthlyRentPenalties(): Promise<string> {
+  // Runs DAILY — full escalation ladder (alert → notification → field_visit →
+  // escalation → penalty_applied → legal_transfer). Each phase is idempotent
+  // (keyed on late_rent_actions.phase) and only fires once per payment.
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let penalties = 0;
+  let legalHandoffs = 0;
   for (const company of companies) {
     const overduePayments = await rawQuery<any>(
-      `SELECT rp.id, rp."dueDate", rp.amount, c.id AS "contractId", c."tenantName"
-       FROM rent_payments rp JOIN rental_contracts c ON c.id = rp."contractId"
-       WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
-         AND rp."dueDate" < CURRENT_DATE - INTERVAL '30 days'`,
+      `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId", c."tenantName", c."tenantPhone", c."unitId"
+         FROM rent_payments rp
+         JOIN rental_contracts c ON c.id = rp."contractId"
+        WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
+          AND rp."dueDate" < CURRENT_DATE`,
       [company.id]
     );
     for (const p of overduePayments) {
       const lateDays = Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000);
+      let targetStage: string | null = null;
+      if (lateDays >= 90) targetStage = 'legal_transfer';
+      else if (lateDays >= 60) targetStage = 'penalty_applied';
+      else if (lateDays >= 30) targetStage = 'escalation';
+      else if (lateDays >= 14) targetStage = 'field_visit';
+      else if (lateDays >= 7) targetStage = 'notification';
+      else if (lateDays >= 3) targetStage = 'alert';
+      if (!targetStage) continue;
+
       const existing = await rawQuery<any>(
-        `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = 'penalty_applied' LIMIT 1`,
-        [p.id]
+        `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = $2 LIMIT 1`,
+        [p.id, targetStage]
       );
       if (existing.length > 0) continue;
 
-      const lateFee = Number(p.amount) * 0.02;
-      await rawExecute(`UPDATE rent_payments SET amount = amount + $1 WHERE id = $2`, [lateFee, p.id]);
+      let actionLabel = targetStage;
+      if (targetStage === 'penalty_applied') {
+        const lateFee = Math.round(Number(p.amount) * 0.02 * 100) / 100;
+        await rawExecute(`UPDATE rent_payments SET amount = amount + $1, "updatedAt"=NOW() WHERE id = $2`, [lateFee, p.id]);
+        actionLabel = `غرامة تأخير ${lateFee}`;
+        penalties++;
+      } else if (targetStage === 'legal_transfer') {
+        try {
+          const responsible = await getLegalResponsible(company.id);
+          const lawyerName = responsible?.employeeName ?? null;
+
+          const { insertId: caseId } = await rawExecute(
+            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description)
+             VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
+            [
+              company.id,
+              `RENT-${p.id}-${Date.now()}`,
+              `تحصيل إيجار — ${p.tenantName}`,
+              p.tenantName,
+              lawyerName,
+              `إيجار متأخر ${lateDays} يوم — مبلغ ${p.amount} ريال`,
+            ]
+          );
+          legalHandoffs++;
+
+          // Notify the responsible lawyer + emit a lifecycle event so the
+          // auto-created case isn't orphaned in open/NULL-assignee limbo.
+          if (responsible) {
+            await createNotification({
+              companyId: company.id,
+              assignmentId: responsible.assignmentId,
+              type: "legal_case_assigned",
+              title: "قضية إيجار متأخر (تلقائية)",
+              body: `تم إنشاء قضية تحصيل إيجار متأخر — ${p.tenantName} — مبلغ ${p.amount} ريال`,
+              priority: "high",
+              refType: "legal_case",
+              refId: Number(caseId),
+              actionUrl: `/legal/cases/${caseId}`,
+            });
+          }
+          await emitEvent({
+            companyId: company.id, userId: null,
+            action: "legal.case.created", entity: "legal_cases", entityId: Number(caseId),
+            details: `قضية إيجار متأخر — ${p.tenantName}`,
+          });
+        } catch (err) {
+          console.error("[monthlyRentPenalties] legal_cases insert failed:", err);
+        }
+        actionLabel = 'تحويل للقسم القانوني';
+      } else if (targetStage === 'alert') actionLabel = 'تنبيه بالتأخر';
+      else if (targetStage === 'notification') actionLabel = 'إشعار رسمي';
+      else if (targetStage === 'field_visit') actionLabel = 'زيارة ميدانية';
+      else if (targetStage === 'escalation') actionLabel = 'تصعيد لإدارة الأملاك';
+
       await rawExecute(
-        `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes) VALUES ($1,$2,'penalty_applied','غرامة تأخير تلقائية',NOW(),$3)`,
-        [p.contractId, p.id, `تأخر ${lateDays} يوم — غرامة ${lateFee} ريال`]
+        `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
+         VALUES ($1,$2,$3,$4,NOW(),$5)`,
+        [p.contractId, p.id, targetStage, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
       ).catch(() => {});
-      penalties++;
+
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: `rent.late.${targetStage}`, entity: "rent_payments", entityId: Number(p.id),
+          details: `تأخر ${lateDays} يوم — ${actionLabel}`,
+        });
+      } catch {}
     }
   }
-  return `Monthly rent penalties: ${penalties}`;
+  return `Rent escalation: ${penalties} penalties, ${legalHandoffs} legal handoffs`;
 }
 
 async function monthlyPayrollPrep(): Promise<string> {
@@ -1470,6 +1678,50 @@ async function probationAlertCheck(): Promise<string> {
     alerted++;
   }
   return `Probation alerts: ${alerted}`;
+}
+
+/**
+ * Letters approved more than 30 minutes ago but never dispatched (sentAt NULL)
+ * mean the in-memory `hr.letter.approved` listener fired while the queue was
+ * down, or the server restarted before the listener consumed it. This job
+ * re-emits the event through the persistent bus so the listener runs again.
+ */
+async function retryStuckOfficialLetters(): Promise<string> {
+  let retried = 0;
+  const stuck = await rawQuery<any>(
+    `SELECT id, "companyId", "branchId", subject, type, "employeeId", status, "approvedAt"
+       FROM official_letters
+      WHERE status = 'approved'
+        AND "sentAt" IS NULL
+        AND "approvedAt" IS NOT NULL
+        AND "approvedAt" < NOW() - INTERVAL '30 minutes'
+      ORDER BY "approvedAt" ASC
+      LIMIT 50`
+  );
+  for (const letter of stuck) {
+    try {
+      await emitEvent({
+        companyId: letter.companyId,
+        branchId: letter.branchId ?? undefined,
+        userId: null,
+        action: "hr.letter.approved",
+        entity: "official_letter",
+        entityId: Number(letter.id),
+        details: `إعادة محاولة إرسال الخطاب #${letter.id}`,
+        after: {
+          status: "approved",
+          subject: letter.subject,
+          type: letter.type,
+          employeeId: letter.employeeId,
+          retry: true,
+        },
+      });
+      retried++;
+    } catch (err) {
+      console.error("[retryStuckOfficialLetters] emit failed:", err);
+    }
+  }
+  return `Stuck official letters retried: ${retried}`;
 }
 
 async function processEmailQueue(): Promise<string> {
@@ -2218,6 +2470,53 @@ async function weeklyDataCleanup(): Promise<string> {
     cleaned += archivedLogs;
   } catch {}
 
+  // Orphaned workflow_instances: delete instances whose refTable row no longer exists.
+  // Only handle the known refTables — safer than a generic EXISTS loop.
+  try {
+    const orphanRefTables = [
+      "hr_leave_requests",
+      "purchase_requests",
+      "official_letters",
+      "journal_entries",
+    ];
+    for (const tbl of orphanRefTables) {
+      const { affectedRows } = await rawExecute(
+        `DELETE FROM workflow_instances wi
+           WHERE wi."refTable" = $1
+             AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = wi."refId")`,
+        [tbl]
+      ).catch(() => ({ affectedRows: 0 }));
+      cleaned += affectedRows;
+    }
+  } catch {}
+
+  // Mark orphaned approval_requests as cancelled when their referenced entity was hard-deleted.
+  // approval_requests uses refType+refId (not a workflow FK).
+  try {
+    const orphanRefTypes: Record<string, string> = {
+      leave: "hr_leave_requests",
+      purchase_request: "purchase_requests",
+      official_letter: "official_letters",
+      journal_entry: "journal_entries",
+      expense: "expenses",
+      salary_advance: "salary_advances",
+      custody: "custody_records",
+      invoice: "invoices",
+      purchase_order: "purchase_orders",
+    };
+    for (const [refType, tbl] of Object.entries(orphanRefTypes)) {
+      const { affectedRows } = await rawExecute(
+        `UPDATE approval_requests ar
+            SET status = 'cancelled'
+          WHERE ar."refType" = $1
+            AND ar.status IN ('pending','in_progress')
+            AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = ar."refId")`,
+        [refType]
+      ).catch(() => ({ affectedRows: 0 }));
+      cleaned += affectedRows;
+    }
+  } catch {}
+
   return `Data cleanup: ${cleaned} records cleaned`;
 }
 
@@ -2241,7 +2540,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_project_check", description: "فحص تأخر المشاريع", schedule: "0 9 * * *", handler: dailyProjectCheck },
   { name: "daily_crm_check", description: "فحص متابعات CRM", schedule: "0 10 * * *", handler: dailyCrmCheck },
   { name: "daily_sla_general", description: "فحص SLA العام", schedule: "0 11 * * *", handler: dailySlaGeneral },
-  { name: "monthly_rent_penalties", description: "غرامات الإيجارات المتأخرة", schedule: "0 6 1 * *", handler: monthlyRentPenalties },
+  { name: "monthly_rent_penalties", description: "تصعيد الإيجارات المتأخرة (6 مراحل)", schedule: "0 7 * * *", handler: monthlyRentPenalties },
   { name: "monthly_payroll_prep", description: "تذكير الرواتب يوم 25", schedule: "0 8 25 * *", handler: monthlyPayrollPrep },
   { name: "monthly_closing_prep", description: "تذكير الإقفال يوم 28", schedule: "0 8 28 * *", handler: monthlyClosingPrep },
   { name: "weekly_hr_report", description: "تقرير HR الأسبوعي", schedule: "0 8 * * 0", handler: weeklyHrReport },
@@ -2269,6 +2568,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_vendor_contract_expiry", description: "تنبيه انتهاء عقود الموردين (90/30 يوم)", schedule: "0 7 * * 1", handler: vendorContractExpiryAlerts },
   { name: "daily_system_health_report", description: "تقرير صحة النظام اليومي للمدير التقني", schedule: "0 6 * * *", handler: dailySystemHealthReport },
   { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
+  { name: "retry_stuck_official_letters", description: "إعادة محاولة إرسال الخطابات المعتمدة العالقة", schedule: "*/15 * * * *", handler: retryStuckOfficialLetters },
 ];
 
 export async function seedCronJobs(): Promise<void> {

@@ -50,6 +50,10 @@ const SAFE_NAMES = new Set([
   "table", "values", "whereExtra", "placeholders", "updates", "refMap",
   "target", "completedAt", "fields", "empVals", "vals", "roles", "conds",
   "GOV_SAFE_COLUMNS", "secretValue", "tasks",
+  // `tbl` in cronScheduler.ts orphan-cleanup loops iterates over hardcoded
+  // string allowlists (orphanRefTables / orphanRefTypes) — no user input
+  // can reach the interpolation point.
+  "tbl",
 ]);
 
 // Member expressions like `params.length` or `sets.join(...)` are allowed

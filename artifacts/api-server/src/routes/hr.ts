@@ -1133,6 +1133,18 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
         );
       }
 
+      // Returning the request puts it back in the employee's hands for
+      // amendments — release the reserved days so the balance correctly
+      // reflects availability while the request is being reworked. Without
+      // this, the employee can't re-submit because their reserved pool
+      // still counts the previous attempt.
+      await rawExecute(
+        `UPDATE hr_leave_balances
+         SET reserved = GREATEST(reserved - $1, 0)
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+      );
+
       const [reqAssignment] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [request.employeeId, scope.companyId]
@@ -1152,6 +1164,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           [Number(id), reason, scope.userId, scope.companyId]
         );
       } catch (e) { console.error("Failed to log approval action:", e); }
+
+      emitEvent({
+        companyId: scope.companyId, userId: scope.userId,
+        action: "leave.returned", entity: "hr_leave_requests", entityId: Number(id),
+        details: `طلب إجازة ${id} — إرجاع: ${reason}`,
+      }).catch(console.error);
 
       res.json({ message: "تم الإرجاع", status: "returned" });
       return;
@@ -1270,7 +1288,25 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
     );
     const leaveStart = new Date(request.startDate);
     const leaveEnd = new Date(request.endDate);
+    // Retroactive leave approval: if the employee was marked 'absent' on any
+    // day covered by the leave, remove those absence rows FIRST so the
+    // ON CONFLICT DO NOTHING insert can turn them into 'on_leave' and the
+    // next payroll run won't double-deduct (absence deduction + leave-used).
     for (const asn of allAssignments) {
+      await rawExecute(
+        `DELETE FROM attendance
+         WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent'`,
+        [asn.id, request.startDate, request.endDate]
+      ).catch((e) => console.error("Failed to clear absent days for leave approval:", e));
+      // Also drop any stale absence-based payroll_deductions queued for those
+      // days so an already-generated deduction row doesn't still withhold pay.
+      await rawExecute(
+        `DELETE FROM payroll_deductions
+         WHERE "companyId" = $1 AND "employeeId" = $2 AND type = 'absence'
+           AND date BETWEEN $3 AND $4
+           AND (status IS NULL OR status <> 'deducted_in_payroll')`,
+        [asn.companyId, request.employeeId, request.startDate, request.endDate]
+      ).catch((e) => console.error("Failed to clear pending absence deductions:", e));
       for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split("T")[0];
         await rawExecute(
@@ -2280,6 +2316,21 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
           [request.refId]
         );
       }
+
+      // Cancel any queued email/WhatsApp dispatches for a rejected official
+      // letter — otherwise the queue workers will send it after it was denied.
+      if (request.refType === "official_letter") {
+        await rawExecute(
+          `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+            WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
+          [request.refId]
+        ).catch((e) => console.error("cancel email_queue for rejected letter failed:", e));
+        await rawExecute(
+          `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+            WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
+          [request.refId]
+        ).catch(() => { /* whatsapp_queue may not exist */ });
+      }
     }
 
     emitEvent({
@@ -2539,9 +2590,9 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
     const scope = req.scope!;
     const { employeeId, type, subject, content, status } = req.body as any;
     const { insertId } = await rawExecute(
-      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [scope.companyId, employeeId, type ?? "general", subject, content, status ?? "draft"]
+      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scope.companyId, employeeId, type ?? "general", subject, content, status ?? "draft", scope.activeAssignmentId]
     );
 
     const approvalResult = await initiateApprovalChain({
@@ -2566,6 +2617,33 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { type, subject, content },
+    }).catch(console.error);
+
+    // Leave a creation trail: the approval chain writes its own rows but the
+    // letter itself had no audit entry, so the employee timeline started at
+    // "approved" with no visible "filed on X by Y" record.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "official_letter",
+      entityId: insertId,
+      action: "hr.letter.created",
+      after: {
+        employeeId,
+        type: type ?? "general",
+        subject,
+        status: approvalResult.requiresApproval ? "pending_approval" : (status ?? "draft"),
+      },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.letter.created",
+      entity: "official_letter",
+      entityId: insertId,
+      after: { employeeId, type: type ?? "general", subject },
     }).catch(console.error);
 
     res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
@@ -2619,20 +2697,51 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
 router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = Number(req.params.id);
     const [leaveReq] = await rawQuery<any>(
-      `SELECT lr."employeeId" FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
-      [Number(req.params.id), scope.companyId]
+      `SELECT lr.id, lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr.status
+       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
+      [id, scope.companyId]
     );
     if (!leaveReq) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
     const isOwnRequest = leaveReq.employeeId === scope.employeeId;
     if (!isOwnRequest && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       res.status(403).json({ error: "غير مصرح: حذف طلبات الإجازة مقصور على صاحب الطلب أو HR أو المالك" }); return;
     }
+    if (leaveReq.status !== 'pending') {
+      res.status(409).json({ error: "لا يمكن حذف طلب تمت معالجته — استخدم الإلغاء بدلاً من الحذف" });
+      return;
+    }
+
     const [row] = await rawQuery<any>(
       `DELETE FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' RETURNING id`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) { res.status(404).json({ error: "طلب الإجازة غير موجود أو لا يمكن حذفه (تمت معالجته)" }); return; }
+
+    // Deleting a pending leave request must release the reserved balance so
+    // the employee can use those days again. Previously deletion left orphan
+    // reservations that silently capped leave availability.
+    const year = new Date(leaveReq.startDate).getFullYear();
+    await rawExecute(
+      `UPDATE hr_leave_balances
+       SET reserved = GREATEST(reserved - $1, 0)
+       WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+      [leaveReq.days, scope.companyId, leaveReq.employeeId, leaveReq.leaveTypeId, year]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "hr_leave_requests", entityId: id,
+      before: { employeeId: leaveReq.employeeId, days: leaveReq.days, status: "pending" },
+      after: { status: "deleted" },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "leave.deleted", entity: "hr_leave_requests", entityId: id,
+      details: `حذف طلب إجازة — ${leaveReq.days} أيام — رصيد مُحرّر`,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -2744,7 +2853,7 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
     }
     const id = Number(req.params.id);
     const [exists] = await rawQuery<any>(
-      `SELECT id, status FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]
+      `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]
     );
     if (!exists) { res.status(404).json({ error: "دورة الرواتب غير موجودة" }); return; }
     if (exists.status === "posted") {
@@ -2754,6 +2863,19 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       await client.query(`UPDATE payroll_lines SET "deletedAt" = NOW() WHERE "runId" = $1 AND "deletedAt" IS NULL`, [id]);
       await client.query(`UPDATE payroll_runs SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     });
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "payroll_runs", entityId: id,
+      before: { period: exists.period, status: exists.status, totalNet: exists.totalNet },
+      after: { status: "deleted" },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "payroll.deleted", entity: "payroll_runs", entityId: id,
+      details: `حذف دورة رواتب ${exists.period}`,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -2894,6 +3016,53 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
         `UPDATE official_letters SET status = $1 WHERE id = $2`,
         [newStatus, Number(id)]
       );
+    }
+
+    // If the letter was rejected or returned, cancel any queued dispatches
+    // so the queue worker doesn't send it after the fact.
+    if (newStatus === "rejected" || newStatus === "returned") {
+      await rawExecute(
+        `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+          WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
+        [Number(id)]
+      ).catch((e) => console.error("cancel email_queue for rejected letter failed:", e));
+      await rawExecute(
+        `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+          WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
+        [Number(id)]
+      ).catch(() => { /* whatsapp_queue may not exist */ });
+
+      // Notify whoever filed the letter about the rejection/return so they
+      // can see the reason and take action. Prefer the creator assignment
+      // (the HR officer who filed it), fall back to the employee's own
+      // assignment when the letter was filed by the employee themselves.
+      const [targetAssignment] = await rawQuery<any>(
+        `SELECT COALESCE(
+                  ol."createdByAssignmentId",
+                  (SELECT ea.id FROM employee_assignments ea
+                    WHERE ea."employeeId" = ol."employeeId"
+                      AND ea."companyId" = ol."companyId"
+                      AND ea.status = 'active'
+                    LIMIT 1)
+                ) AS "assignmentId"
+           FROM official_letters ol
+          WHERE ol.id = $1`,
+        [Number(id)]
+      );
+      if (targetAssignment?.assignmentId) {
+        await createNotification({
+          companyId: scope.companyId,
+          assignmentId: Number(targetAssignment.assignmentId),
+          type: newStatus === "rejected" ? "letter_rejected" : "letter_returned",
+          title: newStatus === "rejected" ? "تم رفض طلب الخطاب" : "تم إرجاع طلب الخطاب",
+          body: `طلب خطاب "${letter.subject ?? letter.type ?? ""}" — ${
+            newStatus === "rejected" ? "مرفوض" : "مُرجع للتعديل"
+          }${notes ? `. السبب: ${notes}` : ""}`,
+          priority: "high",
+          refType: "official_letter",
+          refId: Number(id),
+        }).catch((e) => console.error("notify letter creator failed:", e));
+      }
     }
 
     try {

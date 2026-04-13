@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 
 const VALID_REQUEST_TRANSITIONS: Record<string, string[]> = {
   pending: ["in_review", "approved", "rejected", "returned"],
@@ -397,6 +397,23 @@ router.post("/:id/approve", async (req, res) => {
     });
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
     await logCommunication(scope.companyId, 'outbound', `طلب معتمد: ${row?.title || '#'+id}`, `تمت الموافقة على الطلب رقم ${id}${notes ? ' - '+notes : ''}`, 'request', id);
+    if (row?.requesterId) {
+      await createNotification({
+        companyId: scope.companyId,
+        assignmentId: Number(row.requesterId),
+        type: "request_approved",
+        title: "تمت الموافقة على طلبك",
+        body: `طلبك "${row.title || '#' + id}" تمت الموافقة عليه${notes ? `. ملاحظات: ${notes}` : ""}`,
+        priority: "medium",
+        refType: "request",
+        refId: id,
+      }).catch((e) => console.error("notify requester approved failed:", e));
+    }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "request.approved", entity: "request", entityId: id,
+      before: { status: validation.request!.status }, after: { status: "approved" },
+    }).catch(console.error);
     res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "approved" }, notifications: ["إشعار لمقدم الطلب بالاعتماد"], overrideLogged: isOverride } });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -438,6 +455,23 @@ router.post("/:id/reject", async (req, res) => {
     });
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
     await logCommunication(scope.companyId, 'outbound', `طلب مرفوض: ${row?.title || '#'+id}`, `تم رفض الطلب رقم ${id} - السبب: ${notes}`, 'request', id);
+    if (row?.requesterId) {
+      await createNotification({
+        companyId: scope.companyId,
+        assignmentId: Number(row.requesterId),
+        type: "request_rejected",
+        title: "تم رفض طلبك",
+        body: `طلبك "${row.title || '#' + id}" تم رفضه. السبب: ${notes}`,
+        priority: "high",
+        refType: "request",
+        refId: id,
+      }).catch((e) => console.error("notify requester rejected failed:", e));
+    }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "request.rejected", entity: "request", entityId: id,
+      before: { status: validation.request!.status }, after: { status: "rejected", reason: notes },
+    }).catch(console.error);
     res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "rejected" }, notifications: ["إشعار لمقدم الطلب بالرفض"], overrideLogged: isOverride } });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -479,6 +513,23 @@ router.post("/:id/return", async (req, res) => {
     });
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
     await logCommunication(scope.companyId, 'outbound', `طلب مُرجع: ${row?.title || '#'+id}`, `تم إرجاع الطلب رقم ${id} للتعديل - السبب: ${notes}`, 'request', id);
+    if (row?.requesterId) {
+      await createNotification({
+        companyId: scope.companyId,
+        assignmentId: Number(row.requesterId),
+        type: "request_returned",
+        title: "تم إرجاع طلبك للتعديل",
+        body: `طلبك "${row.title || '#' + id}" تم إرجاعه. السبب: ${notes}`,
+        priority: "high",
+        refType: "request",
+        refId: id,
+      }).catch((e) => console.error("notify requester returned failed:", e));
+    }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "request.returned", entity: "request", entityId: id,
+      before: { status: validation.request!.status }, after: { status: "returned", reason: notes },
+    }).catch(console.error);
     res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "returned" }, notifications: ["إشعار لمقدم الطلب بالإرجاع"], overrideLogged: isOverride } });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -499,8 +550,47 @@ router.delete("/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
+    // Only the requester (while still pending/draft) or a manager may delete.
+    // Approved/rejected/closed/converted requests are terminal — deleting them
+    // would erase the audit trail of an already-processed decision and orphan
+    // any downstream entities created via convert.
+    const [request] = await rawQuery<any>(
+      `SELECT id, status, "requesterId", "convertedTo" FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
+    );
+    if (!request) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+
+    const isManager = MANAGER_ROLES.includes(scope.role);
+    const isOwner = String(request.requesterId) === String(scope.activeAssignmentId);
+    if (!isManager && !isOwner) {
+      res.status(403).json({ error: "غير مصرح لك بحذف هذا الطلب" });
+      return;
+    }
+
+    if (!["pending", "draft", "returned"].includes(request.status)) {
+      res.status(409).json({
+        error: `لا يمكن حذف طلب في حالة "${request.status}". استخدم الإلغاء بدلاً من الحذف.`,
+      });
+      return;
+    }
+    if (request.convertedTo) {
+      res.status(409).json({ error: "لا يمكن حذف طلب تم تحويله إلى كيان آخر" });
+      return;
+    }
+
     const result = await rawExecute(`DELETE FROM requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "request",
+      entityId: id,
+      action: "request_deleted",
+      before: { status: request.status, requesterId: request.requesterId },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف الطلب بنجاح" });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -544,13 +634,37 @@ router.post("/:id/convert", async (req, res) => {
       createdId = insertId;
       targetEndpoint = `/finance/purchase-orders/${insertId}`;
     } else if (targetType === "case") {
+      // Auto-resolve the responsible lawyer/manager so the case is never
+      // stuck in "unassigned" purgatory after conversion from a request.
+      const legalResp = await getLegalResponsible(scope.companyId);
       const { insertId } = await rawExecute(
-        `INSERT INTO legal_cases ("companyId", title, description, status, priority, "caseType", "createdAt")
-         VALUES ($1, $2, $3, 'open', $4, 'civil', NOW())`,
-        [scope.companyId, `قضية: ${request.title}`, request.description || request.title, request.priority || "medium"]
+        `INSERT INTO legal_cases ("companyId", title, description, status, priority, "caseType", "lawyerName", "createdAt")
+         VALUES ($1, $2, $3, 'open', $4, 'civil', $5, NOW())`,
+        [scope.companyId, `قضية: ${request.title}`, request.description || request.title, request.priority || "medium", legalResp?.employeeName ?? null]
       );
       createdId = insertId;
       targetEndpoint = `/legal/cases/${insertId}`;
+      if (legalResp?.assignmentId) {
+        await createNotification({
+          companyId: scope.companyId,
+          assignmentId: legalResp.assignmentId,
+          type: "legal_case_created",
+          title: "قضية قانونية جديدة",
+          body: `تم إنشاء قضية جديدة من طلب رقم ${id}: ${request.title}`,
+          priority: "high",
+          refType: "legal_case",
+          refId: insertId,
+        }).catch(console.error);
+      }
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "legal.case.created",
+        entity: "legal_case",
+        entityId: insertId,
+        after: { title: `قضية: ${request.title}`, lawyerName: legalResp?.employeeName ?? null, sourceRequestId: id },
+      }).catch(console.error);
     }
 
     await rawExecute(
