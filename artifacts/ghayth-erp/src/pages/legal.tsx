@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useApiQuery, asList } from "@/lib/api";
 import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -355,28 +356,31 @@ function FinancialLegalTab() {
           {(report.recentJudgments || []).length > 0 && (
             <Card>
               <CardHeader><CardTitle>الأحكام الأخيرة</CardTitle></CardHeader>
-              <CardContent className="p-0">
-                <DataTable<any>
-                  noToolbar
-                  pageSize={0}
-                  data={report.recentJudgments || []}
-                  emptyMessage="لا توجد أحكام"
-                  columns={[
-                    { key: "caseTitle", header: "القضية", className: "font-medium", render: (j) => j.caseTitle || `قضية #${j.caseId}` },
-                    { key: "judgmentDate", header: "تاريخ الحكم", render: (j) => j.judgmentDate ? formatDateAr(j.judgmentDate) : "-" },
-                    {
-                      key: "verdict",
-                      header: "النتيجة",
-                      render: (j) => (
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${j.verdict === 'win' ? 'bg-green-100 text-green-700' : j.verdict === 'loss' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
-                          {j.verdict === 'win' ? 'ربح' : j.verdict === 'loss' ? 'خسارة' : j.verdict || "-"}
-                        </span>
-                      ),
-                    },
-                    { key: "amount", header: "المبلغ", render: (j) => formatCurrency(j.amount || 0) },
-                    { key: "paidAmount", header: "المدفوع", render: (j) => formatCurrency(j.paidAmount || 0) },
-                  ]}
-                />
+              <CardContent>
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>القضية</TableHead>
+                    <TableHead>تاريخ الحكم</TableHead>
+                    <TableHead>النتيجة</TableHead>
+                    <TableHead>المبلغ</TableHead>
+                    <TableHead>المدفوع</TableHead>
+                  </TableRow></TableHeader>
+                  <tbody>
+                    {(report.recentJudgments || []).map((j: any) => (
+                      <TableRow key={j.id}>
+                        <TableCell className="font-medium">{j.caseTitle || `قضية #${j.caseId}`}</TableCell>
+                        <TableCell>{j.judgmentDate ? formatDateAr(j.judgmentDate) : "-"}</TableCell>
+                        <TableCell>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${j.verdict === 'win' ? 'bg-green-100 text-green-700' : j.verdict === 'loss' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {j.verdict === 'win' ? 'ربح' : j.verdict === 'loss' ? 'خسارة' : j.verdict || "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatCurrency(j.amount || 0)}</TableCell>
+                        <TableCell>{formatCurrency(j.paidAmount || 0)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </tbody>
+                </Table>
               </CardContent>
             </Card>
           )}

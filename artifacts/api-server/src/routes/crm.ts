@@ -3,30 +3,13 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
-import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
+import { createAuditLog, createNotification } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
 
 const STAGE_ORDER = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
-
-// Compute the due date for the CRM follow-up obligation.
-// Preference order:
-// 1. expectedCloseDate if set and in the future
-// 2. now + stage followUpDays (min 1 day)
-function computeCrmFollowUpDue(stage: string, expectedCloseDate: string | null | undefined): Date {
-  const now = Date.now();
-  if (expectedCloseDate) {
-    const ecd = new Date(expectedCloseDate);
-    if (!Number.isNaN(ecd.getTime()) && ecd.getTime() > now) return ecd;
-  }
-  const cfg = STAGE_AUTO_ACTIONS[stage];
-  const days = Math.max(cfg?.followUpDays ?? 3, 1);
-  return new Date(now + days * 86400000);
-}
 
 const STAGE_AUTO_ACTIONS: Record<string, { followUpDays: number; description: string }> = {
   lead: { followUpDays: 0, description: 'فرصة جديدة — بدء التأهيل' },
@@ -108,37 +91,6 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       entity: "crm_opportunities",
       entityId: insertId,
       after: { title: b.title, clientId: b.clientId, value: b.value, stage },
-    }).catch(console.error);
-
-    // Register CRM follow-up obligation (skipped for terminal stages)
-    if (stage !== 'closed_won' && stage !== 'closed_lost') {
-      try {
-        const dueAt = computeCrmFollowUpDue(stage, b.expectedCloseDate);
-        await registerObligation({
-          companyId: scope.companyId,
-          branchId: scope.branchId ?? null,
-          entityType: "crm_opportunity",
-          entityId: insertId,
-          obligationType: "follow_up",
-          title: `متابعة فرصة CRM — ${b.title} (${stage})`,
-          dueAt: dueAt.toISOString(),
-          metadata: { stage, value: b.value || 0, clientId: b.clientId ?? null, contactName: b.contactName ?? null, assignedEmployeeId: b.assignedTo ?? null },
-          dedupeKey: `crm-opp-${insertId}-followup`,
-          escalationSteps: [
-            { hoursAfterDue: 24, notifyRole: "sales_manager" },
-            { hoursAfterDue: 72, notifyRole: "general_manager" },
-          ],
-        });
-      } catch (obErr) { console.error("CRM opportunity obligation failed:", obErr); }
-    }
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "crm.opportunity.created",
-      entity: "crm_opportunities",
-      entityId: insertId,
-      details: `فرصة جديدة: ${b.title} — ${b.value || 0} ريال — ${stage}`,
     }).catch(console.error);
 
     res.status(201).json({ ...row, autoAction: stageConfig?.description });
@@ -235,16 +187,6 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     if (b.stage === 'closed_won' && existing.stage !== 'closed_won') {
       await handleDealWon(scope, existing, b.value ?? existing.value);
       autoActions.push('إنشاء عقد + فاتورة + تحديث إيرادات العميل');
-      // Mark follow-up obligation as met and emit deal-won event
-      await markObligationMet(scope.companyId, "crm_opportunity", oppId, "follow_up").catch(console.error);
-      emitEvent({
-        companyId: scope.companyId,
-        userId: scope.userId,
-        action: "crm.deal.won",
-        entity: "crm_opportunities",
-        entityId: oppId,
-        details: `صفقة ناجحة: ${existing.title} — ${b.value ?? existing.value} ريال`,
-      }).catch(console.error);
     }
 
     if (b.stage === 'closed_lost' && existing.stage !== 'closed_lost') {
@@ -255,52 +197,6 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
           [oppId, `تحليل خسارة: ${b.lostReason || 'غير محدد'} — القيمة المفقودة: ${existing.value} ريال`, scope.userId]
         );
       } catch (e) { console.error("Lost analysis error:", e); }
-      // Cancel follow-up obligation and emit deal-lost event
-      await cancelObligation(scope.companyId, "crm_opportunity", oppId).catch(console.error);
-      emitEvent({
-        companyId: scope.companyId,
-        userId: scope.userId,
-        action: "crm.deal.lost",
-        entity: "crm_opportunities",
-        entityId: oppId,
-        details: `صفقة خاسرة: ${existing.title} — السبب: ${b.lostReason || 'غير محدد'}`,
-      }).catch(console.error);
-    }
-
-    // Stage change (non-terminal) → refresh follow-up obligation window
-    if (
-      b.stage && b.stage !== existing.stage &&
-      b.stage !== 'closed_won' && b.stage !== 'closed_lost'
-    ) {
-      try {
-        await cancelObligation(scope.companyId, "crm_opportunity", oppId);
-        const effectiveEcd = b.expectedCloseDate !== undefined ? b.expectedCloseDate : existing.expectedCloseDate;
-        const dueAt = computeCrmFollowUpDue(b.stage, effectiveEcd);
-        await registerObligation({
-          companyId: scope.companyId,
-          branchId: scope.branchId ?? null,
-          entityType: "crm_opportunity",
-          entityId: oppId,
-          obligationType: "follow_up",
-          title: `متابعة فرصة CRM — ${existing.title} (${b.stage})`,
-          dueAt: dueAt.toISOString(),
-          metadata: { stage: b.stage, value: b.value ?? existing.value, clientId: existing.clientId, assignedEmployeeId: b.assignedTo ?? existing.assignedTo ?? null },
-          dedupeKey: `crm-opp-${oppId}-followup-${b.stage}`,
-          escalationSteps: [
-            { hoursAfterDue: 24, notifyRole: "sales_manager" },
-            { hoursAfterDue: 72, notifyRole: "general_manager" },
-          ],
-        });
-      } catch (obErr) { console.error("CRM stage-change obligation refresh failed:", obErr); }
-
-      emitEvent({
-        companyId: scope.companyId,
-        userId: scope.userId,
-        action: "crm.opportunity.stage_changed",
-        entity: "crm_opportunities",
-        entityId: oppId,
-        details: `تغيير مرحلة: ${existing.title} — من ${existing.stage} إلى ${b.stage}`,
-      }).catch(console.error);
     }
 
     createAuditLog({
@@ -415,63 +311,6 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Get opportunity error:"); }
 });
 
-// Explicit "convert opportunity to client" endpoint. Marks the opportunity as
-// won, runs the deal-won side-effects (client + contract + invoice), then
-// writes the lifecycle markers (convertedAt / convertedClientId) in the same
-// atomic transition via the lifecycle engine.
-router.post("/opportunities/:id/convert", requirePermission("crm:update"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(
-      `SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!existing) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
-    if (existing.convertedAt) {
-      res.status(409).json({ error: "تم تحويل هذه الفرصة مسبقاً", field: "convertedAt" });
-      return;
-    }
-
-    const dealValue = (req.body?.value as number | undefined) ?? existing.value ?? 0;
-
-    // handleDealWon creates / resolves the client and writes a contract +
-    // invoice using the global pool. It is idempotent enough for first-call
-    // use and guards every side-effect with its own try/catch.
-    await handleDealWon(scope, existing, dealValue);
-
-    // Re-read the opportunity to pick up the clientId that handleDealWon may
-    // have just populated, so we can mirror it into convertedClientId.
-    const [afterDealWon] = await rawQuery<any>(
-      `SELECT "clientId" FROM crm_opportunities WHERE id=$1`,
-      [id]
-    );
-    const convertedClientId = afterDealWon?.clientId ?? null;
-
-    const updated = await applyTransition({
-      entity: "crm_opportunities",
-      id,
-      scope,
-      action: "crm.opportunity.converted",
-      toState: "won",
-      reason: (req.body?.notes as string | undefined)?.trim(),
-      setExtras: {
-        stage: "closed_won",
-        convertedAt: { raw: "NOW()" },
-        convertedClientId,
-        value: dealValue,
-      },
-      extraWhere: `"deletedAt" IS NULL`,
-      after: { convertedClientId, stage: "closed_won" },
-    });
-    res.json({ ...updated, event: "crm.opportunity.converted", convertedClientId });
-  } catch (err) {
-    const mapped = lifecycleErrorResponse(err);
-    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
-    handleRouteError(err, res, "Convert opportunity error:");
-  }
-});
-
 router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -479,71 +318,8 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
     const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
     await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await cancelObligation(scope.companyId, "crm_opportunity", id).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "crm.opportunity.deleted",
-      entity: "crm_opportunities",
-      entityId: id,
-      details: `حذف فرصة CRM`,
-    }).catch(console.error);
     res.json({ message: "تم حذف الفرصة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete opportunity error:"); }
-});
-
-// Related deals for a given opportunity: other opportunities that share the
-// same clientId or contact name / phone / email. Used by the lead / opportunity
-// detail page instead of fetching the full list client-side.
-router.get("/opportunities/:id/related", requirePermission("crm:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const [base] = await rawQuery<any>(
-      `SELECT id, "clientId", "contactName", "contactPhone", "contactEmail"
-         FROM crm_opportunities
-        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!base) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
-
-    const conds: string[] = [];
-    const params: any[] = [scope.companyId, id];
-    if (base.clientId) {
-      params.push(base.clientId);
-      conds.push(`"clientId" = $${params.length}`);
-    }
-    if (base.contactName) {
-      params.push(base.contactName);
-      conds.push(`"contactName" = $${params.length}`);
-    }
-    if (base.contactPhone) {
-      params.push(base.contactPhone);
-      conds.push(`"contactPhone" = $${params.length}`);
-    }
-    if (base.contactEmail) {
-      params.push(base.contactEmail);
-      conds.push(`"contactEmail" = $${params.length}`);
-    }
-    if (conds.length === 0) {
-      res.json({ data: [], total: 0 });
-      return;
-    }
-
-    const rows = await rawQuery<any>(
-      `SELECT o.*, cl.name AS "clientName"
-         FROM crm_opportunities o
-         LEFT JOIN clients cl ON cl.id = o."clientId"
-        WHERE o."companyId" = $1
-          AND o.id <> $2
-          AND o."deletedAt" IS NULL
-          AND (${conds.join(" OR ")})
-        ORDER BY o."createdAt" DESC
-        LIMIT 50`,
-      params
-    );
-    res.json({ data: rows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "Related opportunities error:"); }
 });
 
 router.get("/opportunities/:id/activities", requirePermission("crm:read"), async (req, res) => {

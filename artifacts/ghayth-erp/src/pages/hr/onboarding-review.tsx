@@ -10,7 +10,7 @@ export default function OnboardingReviewPage() {
   const { data } = useApiQuery<any>(["employees"], "/employees?limit=200");
   const { data: stepsData } = useApiQuery<any>(["onboarding-steps"], "/hr/onboarding-steps");
   const employees = data?.data || [];
-  const steps: string[] = stepsData?.data || ["تسليم أجهزة تقنية المعلومات", "توقيع عقد العمل", "تعريف المدير", "دورة التعريف"];
+  const steps: string[] = stepsData?.data || ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير", "دورة التعريف"];
 
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);

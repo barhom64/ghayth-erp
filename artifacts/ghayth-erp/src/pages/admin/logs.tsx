@@ -138,7 +138,7 @@ export default function AdminLogsPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download className="h-4 w-4 me-1" />تصدير جدولي
+            <Download className="h-4 w-4 me-1" />تصدير CSV
           </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
         </div>

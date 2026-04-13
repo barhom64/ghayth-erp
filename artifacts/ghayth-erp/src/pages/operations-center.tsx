@@ -153,7 +153,7 @@ export default function OperationsCenter() {
         </div>
         <div className="rounded-xl p-4 border-2 border-gray-100 bg-white text-center">
           <p className="text-3xl font-black text-gray-900">{slaItems.length}</p>
-          <p className="text-sm text-gray-500 mt-1">تجاوز مستوى الخدمة</p>
+          <p className="text-sm text-gray-500 mt-1">تجاوز SLA</p>
         </div>
         <div className="rounded-xl p-4 border-2 border-gray-100 bg-white text-center">
           <p className="text-3xl font-black text-gray-900">{Object.keys(sections).length}</p>
@@ -207,7 +207,7 @@ export default function OperationsCenter() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <Timer className="w-5 h-5 text-red-500" />
-                عناصر تجاوزت مستوى الخدمة
+                عناصر تجاوزت SLA
                 <Badge variant="destructive" className="text-xs">{slaItems.length}</Badge>
               </CardTitle>
             </CardHeader>

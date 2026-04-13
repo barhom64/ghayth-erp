@@ -61,7 +61,7 @@ export default function MarketingCreate() {
             <SelectContent>
               <SelectItem value="digital">إعلان رقمي</SelectItem>
               <SelectItem value="email">بريد إلكتروني</SelectItem>
-              <SelectItem value="sms">رسائل نصية</SelectItem>
+              <SelectItem value="sms">رسائل SMS</SelectItem>
               <SelectItem value="social_media">وسائل تواصل</SelectItem>
               <SelectItem value="print">مطبوعات</SelectItem>
               <SelectItem value="event">فعاليات</SelectItem>
@@ -74,12 +74,12 @@ export default function MarketingCreate() {
             <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر القناة</SelectItem>
-              <SelectItem value="google">إعلانات جوجل</SelectItem>
-              <SelectItem value="facebook">فيسبوك</SelectItem>
-              <SelectItem value="instagram">إنستغرام</SelectItem>
-              <SelectItem value="twitter">منصة إكس</SelectItem>
-              <SelectItem value="snapchat">سناب شات</SelectItem>
-              <SelectItem value="tiktok">تيك توك</SelectItem>
+              <SelectItem value="google">Google Ads</SelectItem>
+              <SelectItem value="facebook">Facebook</SelectItem>
+              <SelectItem value="instagram">Instagram</SelectItem>
+              <SelectItem value="twitter">X (Twitter)</SelectItem>
+              <SelectItem value="snapchat">Snapchat</SelectItem>
+              <SelectItem value="tiktok">TikTok</SelectItem>
               <SelectItem value="email">بريد إلكتروني</SelectItem>
               <SelectItem value="sms">رسائل نصية</SelectItem>
               <SelectItem value="other">أخرى</SelectItem>

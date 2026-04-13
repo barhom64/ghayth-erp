@@ -96,7 +96,7 @@ export default function OwnersCreate() {
             <p className="text-sm font-bold text-gray-600 mb-3">البيانات البنكية (لتحويل الإيرادات)</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>رقم الآيبان</Label>
+                <Label>الآيبان (IBAN)</Label>
                 <Input className="mt-1" dir="ltr" value={form.iban} onChange={e => setForm({ ...form, iban: e.target.value })} placeholder="SA0000000000000000000000" />
               </div>
               <div>

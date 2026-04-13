@@ -43,7 +43,7 @@ function IntegrationsList() {
   const handleCreate = async () => {
     try {
       let parsedConfig = {};
-      try { parsedConfig = JSON.parse(form.config); } catch { toast({ variant: "destructive", title: "خطأ في صيغة الإعدادات" }); return; }
+      try { parsedConfig = JSON.parse(form.config); } catch { toast({ variant: "destructive", title: "خطأ في صيغة الإعدادات JSON" }); return; }
       await createMut.mutateAsync({ ...form, config: parsedConfig });
       setForm({ name: "", type: "email", config: "{}", status: "inactive" });
       setShowForm(false);
@@ -101,11 +101,11 @@ function IntegrationsList() {
                 <option value="email">بريد إلكتروني</option>
                 <option value="sms">رسائل نصية</option>
                 <option value="whatsapp">واتساب</option>
-                <option value="webhook">خطاف استدعاء</option>
+                <option value="webhook">Webhook</option>
               </select>
             </div>
             <div className="md:col-span-2">
-              <Label>الإعدادات (بصيغة جيسون)</Label>
+              <Label>الإعدادات (JSON)</Label>
               <textarea
                 className="w-full border rounded-md p-2 font-mono text-sm min-h-[100px]"
                 value={form.config}

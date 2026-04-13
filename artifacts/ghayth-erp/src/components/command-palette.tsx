@@ -75,12 +75,12 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
     },
     {
       id: "check-in",
-      label: "تسجيل حضور بالرمز المصوّر",
+      label: "تسجيل حضور QR",
       icon: QrCode,
       iconColor: "text-purple-600 bg-purple-50",
       category: "إجراءات سريعة",
       action: () => { navigate("/hr/attendance/qr-scanner"); onClose(); },
-      keywords: ["حضور", "رمز مصور", "تسجيل"],
+      keywords: ["حضور", "QR", "تسجيل"],
     },
     {
       id: "run-payroll",
@@ -280,7 +280,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
               <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
             </button>
           )}
-          <kbd className="hidden sm:flex items-center gap-1 shrink-0 px-1.5 py-0.5 text-[10px] text-gray-400 bg-gray-100 rounded border border-gray-200">إغلاق</kbd>
+          <kbd className="hidden sm:flex items-center gap-1 shrink-0 px-1.5 py-0.5 text-[10px] text-gray-400 bg-gray-100 rounded border border-gray-200">Esc</kbd>
         </div>
 
         <div ref={listRef} className="overflow-y-auto flex-1 py-1">
@@ -332,11 +332,11 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
             <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-gray-200">↑↓</kbd> للتنقل
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-gray-200">إدخال</kbd> للفتح
+            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-gray-200">Enter</kbd> للفتح
           </span>
           <span className="flex items-center gap-1">
             <Command className="h-3 w-3" />
-            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-gray-200">ك</kbd> لوحة الأوامر
+            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-gray-200">K</kbd> لوحة الأوامر
           </span>
         </div>
       </div>

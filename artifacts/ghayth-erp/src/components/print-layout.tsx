@@ -49,12 +49,12 @@ function LetterheadHeader({ branch }: { branch?: BranchLetterhead }) {
             )}
           </div>
         </div>
-        <div className="text-left text-xs text-gray-600 space-y-0.5">
-          {branch.phone && <p>هاتف: <span dir="ltr">{branch.phone}</span></p>}
-          {branch.email && <p>بريد إلكتروني: <span dir="ltr">{branch.email}</span></p>}
-          {branch.website && <p>الموقع الإلكتروني: <span dir="ltr">{branch.website}</span></p>}
-          {branch.taxNumber && <p>الرقم الضريبي: <span dir="ltr">{branch.taxNumber}</span></p>}
-          {branch.crNumber && <p>السجل التجاري: <span dir="ltr">{branch.crNumber}</span></p>}
+        <div className="text-left text-xs text-gray-600 space-y-0.5" dir="ltr">
+          {branch.phone && <p>Tel: {branch.phone}</p>}
+          {branch.email && <p>Email: {branch.email}</p>}
+          {branch.website && <p>Web: {branch.website}</p>}
+          {branch.taxNumber && <p>VAT: {branch.taxNumber}</p>}
+          {branch.crNumber && <p>CR: {branch.crNumber}</p>}
         </div>
       </div>
       {branch.address && (

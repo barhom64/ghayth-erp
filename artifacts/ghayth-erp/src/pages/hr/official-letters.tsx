@@ -13,8 +13,11 @@ import { cn } from "@/lib/utils";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
-import { DataTable, DataTableColumn } from "@/components/ui/data-table";
+import { useSortedData } from "@/hooks/use-sorted-data";
+import { SortableTableHead } from "@/components/sortable-table-head";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { useAppContext } from "@/contexts/app-context";
+import { useQueryClient } from "@tanstack/react-query";
 import { ApprovalActions } from "@/components/approval-actions";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
@@ -31,7 +34,7 @@ const typeMap: Record<string, string> = {
 export default function OfficialLettersPage() {
   const [showForm, setShowForm] = useState(false);
   const [previewLetter, setPreviewLetter] = useState<any>(null);
-  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
+  const { data } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
   const items = data?.data || [];
   const { toast } = useToast();
   const [form, setForm] = useState({ employeeId: "", type: "general", subject: "", content: "" });
@@ -40,55 +43,15 @@ export default function OfficialLettersPage() {
   const branch = useBranchLetterhead(user?.branchId);
   const { roleLevel } = useAppContext();
   const canApprove = roleLevel >= 70;
+  const qc = useQueryClient();
   const [advFilters, setAdvFilters] = useFilters();
 
   const filtered = applyFilters(items, advFilters, {
-    searchFields: ["subject", "employeeName"] as any,
-    statusField: "status" as any,
-    dateField: "createdAt" as any,
+    searchFields: ["", ""],
+    statusField: "",
+    dateField: "",
   });
-
-  const columns: DataTableColumn<any>[] = [
-    { key: "subject", header: "الموضوع", sortable: true, className: "font-medium", render: (l) => l.subject },
-    { key: "type", header: "النوع", sortable: true, render: (l) => typeMap[l.type] || l.type },
-    { key: "employeeName", header: "الموظف", sortable: true, className: "text-gray-500", render: (l) => l.employeeName || "-" },
-    { key: "createdAt", header: "التاريخ", sortable: true, className: "text-gray-500", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (l) => <StatusBadge status={l.status} /> },
-    {
-      key: "actions",
-      header: "إجراءات",
-      render: (l) => (
-        <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setPreviewLetter(l)} title="معاينة وطباعة">
-            <Eye className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
-    {
-      key: "approval",
-      header: "اعتماد",
-      hidden: !canApprove,
-      render: (l) => (
-        <ApprovalActions
-          entityType="official_letter"
-          entityId={l.id}
-          currentStatus={l.status}
-          approveEndpoint={`/hr/official-letters/${l.id}/approve`}
-          rejectEndpoint={`/hr/official-letters/${l.id}/approve`}
-          returnEndpoint={`/hr/official-letters/${l.id}/approve`}
-          approveMethod="PATCH"
-          rejectMethod="PATCH"
-          returnMethod="PATCH"
-          approveBody={() => ({ approved: true })}
-          rejectBody={(notes) => ({ approved: false, notes })}
-          returnBody={(notes) => ({ approved: null, notes })}
-          pendingStatuses={["draft", "pending_approval"]}
-          invalidateKeys={[["official-letters"]]}
-        />
-      ),
-    },
-  ];
+  const { sortedData, sortState, handleSort } = useSortedData(filtered);
 
   const handleSubmit = async () => {
     try {
@@ -171,17 +134,58 @@ export default function OfficialLettersPage() {
         </Card>
       )}
 
-      <DataTable<any>
-        columns={columns}
-        data={filtered}
-        isLoading={isLoading}
-        isError={isError}
-        error={error as Error | null}
-        onRetry={() => refetch()}
-        noToolbar
-        emptyMessage="لا توجد خطابات"
-        emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
-      />
+      <div className="border rounded-lg bg-card overflow-hidden"><div className="overflow-x-auto">
+        <Table>
+          <TableHeader><TableRow>
+            <SortableTableHead column="subject" label="الموضوع" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="type" label="النوع" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="employeeName" label="الموظف" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="createdAt" label="التاريخ" sortState={sortState} onSort={handleSort} />
+            <SortableTableHead column="status" label="الحالة" sortState={sortState} onSort={handleSort} />
+            <th className="p-3 text-start font-medium">إجراءات</th>
+            {canApprove && <th className="p-3 text-start font-medium">اعتماد</th>}
+          </TableRow></TableHeader>
+          <TableBody>
+            {(sortedData || []).map((l: any) => (
+              <tr key={l.id} className="border-b hover:bg-gray-50">
+                <td className="p-3 font-medium">{l.subject}</td>
+                <td className="p-3">{typeMap[l.type] || l.type}</td>
+                <td className="p-3 text-gray-500">{l.employeeName || "-"}</td>
+                <td className="p-3 text-gray-500">{l.createdAt ? formatDateAr(l.createdAt) : "-"}</td>
+                <td className="p-3"><StatusBadge status={l.status} /></td>
+                <td className="p-3">
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => setPreviewLetter(l)} title="معاينة وطباعة">
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </td>
+                {canApprove && (
+                  <td className="p-3">
+                    <ApprovalActions
+                      entityType="official_letter"
+                      entityId={l.id}
+                      currentStatus={l.status}
+                      approveEndpoint={`/hr/official-letters/${l.id}/approve`}
+                      rejectEndpoint={`/hr/official-letters/${l.id}/approve`}
+                      returnEndpoint={`/hr/official-letters/${l.id}/approve`}
+                      approveMethod="PATCH"
+                      rejectMethod="PATCH"
+                      returnMethod="PATCH"
+                      approveBody={() => ({ approved: true })}
+                      rejectBody={(notes) => ({ approved: false, notes })}
+                      returnBody={(notes) => ({ approved: null, notes })}
+                      pendingStatuses={["draft", "pending_approval"]}
+                      invalidateKeys={[["official-letters"]]}
+                    />
+                  </td>
+                )}
+              </tr>
+            ))}
+            {filtered.length === 0 && <tr><td colSpan={canApprove ? 7 : 6} className="p-8 text-center text-gray-400">لا توجد خطابات</td></tr>}
+          </TableBody>
+        </Table>
+      </div></div>
 
       {previewLetter && (
         <PrintPreviewModal

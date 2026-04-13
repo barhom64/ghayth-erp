@@ -148,69 +148,6 @@ export function requirePermission(...requiredPerms: string[]) {
   };
 }
 
-/**
- * Variant of `requirePermission` that passes when the user holds ANY of the
- * supplied permissions (OR semantics), versus `requirePermission` which
- * requires ALL of them (AND semantics). Useful for cross-role dashboards
- * where several roles should reach the same endpoint for different reasons.
- */
-export function requireAnyPermission(...candidatePerms: string[]) {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const scope = req.scope;
-    if (!scope) {
-      res.status(401).json({ error: "غير مصرح" });
-      return;
-    }
-
-    if (scope.isOwner || scope.role === "owner") {
-      next();
-      return;
-    }
-
-    try {
-      const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId);
-      const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
-
-      const effectivePerms = new Set(rolePerms);
-      for (const p of userOverrides.granted) effectivePerms.add(p);
-      for (const p of userOverrides.revoked) effectivePerms.delete(p);
-
-      const hasWildcard = effectivePerms.has("*");
-      const hasAny = candidatePerms.some((perm) => {
-        if (hasWildcard) return true;
-        if (effectivePerms.has(perm)) return true;
-        const [module] = perm.split(":");
-        return effectivePerms.has(`${module}:*`);
-      });
-
-      if (!hasAny) {
-        const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress;
-        logSecurityEvent({
-          userId: scope.userId,
-          companyId: scope.companyId,
-          role: scope.role,
-          path: req.path,
-          method: req.method,
-          requiredPerms: candidatePerms,
-          reason: "permission_denied_any",
-          ip,
-        }).catch(console.error);
-
-        res.status(403).json({
-          error: "لا تملك الصلاحية اللازمة",
-          requiredAny: candidatePerms,
-        });
-        return;
-      }
-
-      next();
-    } catch (err) {
-      console.error("Permission check error:", err);
-      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات" });
-    }
-  };
-}
-
 export function invalidatePermissionCache(role?: string, companyId?: number): void {
   if (role && companyId) {
     permissionCache.delete(`${role}:${companyId}`);

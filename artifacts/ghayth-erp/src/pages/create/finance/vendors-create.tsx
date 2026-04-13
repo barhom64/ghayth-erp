@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 
 const DRAFT_KEY = "finance_vendors_create";
-const INITIAL = { name: "", contactPerson: "", phone: "", email: "", taxNumber: "", address: "", paymentTerms: "", category: "", date: new Date().toISOString().split("T")[0] };
+const INITIAL = { name: "", contactPerson: "", phone: "", email: "", taxNumber: "", address: "", paymentTerms: "", category: "" };
 
 export default function VendorsCreate() {
   const [, setLocation] = useLocation();
@@ -26,7 +26,7 @@ export default function VendorsCreate() {
       return;
     }
     try {
-      await createMut.mutateAsync({ ...form, date: form.date || undefined });
+      await createMut.mutateAsync(form);
       clearDraft();
       toast({ title: "تم إضافة المورد بنجاح" });
       setLocation("/finance/vendors");
@@ -44,10 +44,7 @@ export default function VendorsCreate() {
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>التاريخ</Label>
-          <Input className="mt-1" type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-        </div>
+        <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div><Label>الاسم</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
