@@ -71,12 +71,37 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;
     if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
-    const { items, supplierId, notes, expectedDate } = req.body as any;
+    // The frontend create-form (purchase-orders-create.tsx) sends
+    // `expectedDelivery` + items with `productId`, while the API
+    // historically accepted `expectedDate` + items with `itemName`.
+    // Accept BOTH conventions so the frontend is not silently saving
+    // lines named "بند" and losing the delivery date.
+    const { items, supplierId, notes } = req.body as any;
+    const expectedDate = req.body?.expectedDate ?? req.body?.expectedDelivery ?? null;
 
     if (!items || !Array.isArray(items) || items.length === 0) { res.status(400).json({ error: "عناصر طلب الشراء مطلوبة" }); return; }
 
     const totalAmount = items.reduce((sum: number, i: any) => sum + Number(i.quantity ?? 1) * Number(i.unitPrice ?? 0), 0);
     if (totalAmount <= 0) { res.status(400).json({ error: "إجمالي الطلب يجب أن يكون أكبر من صفر" }); return; }
+
+    // Resolve product names in bulk for any items that only sent a
+    // productId so purchase_request_items.itemName reflects the actual
+    // product the buyer picked instead of the fallback placeholder.
+    const productIds = Array.from(
+      new Set(
+        items
+          .map((i: any) => Number(i.productId))
+          .filter((id: number) => Number.isFinite(id) && id > 0)
+      )
+    );
+    const productNameById = new Map<number, string>();
+    if (productIds.length > 0) {
+      const productRows = await rawQuery<{ id: number; name: string }>(
+        `SELECT id, name FROM products WHERE id = ANY($1) AND "companyId" = $2`,
+        [productIds, scope.companyId]
+      ).catch(() => [] as { id: number; name: string }[]);
+      for (const p of productRows) productNameById.set(Number(p.id), p.name);
+    }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('pr_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
     const ref = `PR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
@@ -93,9 +118,14 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
       for (const item of items) {
         const base = params.length;
         valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
+        const resolvedName =
+          item.itemName ||
+          item.description ||
+          (item.productId ? productNameById.get(Number(item.productId)) : undefined) ||
+          "بند";
         params.push(
           insertId,
-          item.itemName || item.description || "بند",
+          resolvedName,
           Number(item.quantity ?? 1),
           Number(item.unitPrice ?? 0),
           Number(item.quantity ?? 1) * Number(item.unitPrice ?? 0),

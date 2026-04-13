@@ -12,14 +12,18 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Clock, Sun, Moon, Coffee, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Keys are the numeric Day.getDay() values (0=Sun .. 6=Sat) because
+// the backend parses shift.days with `split(",").map(Number)` at
+// check-in time — string keys like "sun" become NaN and every day
+// is then considered a non-working day.
 const daysOfWeek = [
-  { key: "sun", label: "الأحد" },
-  { key: "mon", label: "الإثنين" },
-  { key: "tue", label: "الثلاثاء" },
-  { key: "wed", label: "الأربعاء" },
-  { key: "thu", label: "الخميس" },
-  { key: "fri", label: "الجمعة" },
-  { key: "sat", label: "السبت" },
+  { key: "0", label: "الأحد" },
+  { key: "1", label: "الإثنين" },
+  { key: "2", label: "الثلاثاء" },
+  { key: "3", label: "الأربعاء" },
+  { key: "4", label: "الخميس" },
+  { key: "5", label: "الجمعة" },
+  { key: "6", label: "السبت" },
 ];
 
 const DRAFT_KEY = "hr_shifts_create";
@@ -40,7 +44,7 @@ export default function ShiftsCreate() {
     isDefault: false,
     branchId: "",
   });
-  const [selectedDays, setSelectedDays] = useState<string[]>(["sun", "mon", "tue", "wed", "thu"]);
+  const [selectedDays, setSelectedDays] = useState<string[]>(["0", "1", "2", "3", "4"]);
 
   const toggleDay = (day: string) => {
     setSelectedDays((prev) =>

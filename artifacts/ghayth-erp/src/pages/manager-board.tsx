@@ -108,11 +108,25 @@ export default function ManagerBoard() {
       custody: `/finance/custodies/${item.id}/approve`,
       letter: `/hr/official-letters/${item.id}/approve`,
     };
+    // Different backend routes expect different field names for the
+    // rejection reason: /hr/leave-requests reads `reason`, while the
+    // finance/letter routes destructure `notes`. Send both so we match
+    // whichever the endpoint picks up — and only if the user actually
+    // typed something, otherwise we trip the backend's "reason required"
+    // 400 guard immediately.
+    if (!notes) {
+      toast({ variant: "destructive", title: "يرجى ذكر سبب الرفض" });
+      setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+      return;
+    }
     try {
-      await apiFetch(endpointMap[item._type], { method: "PATCH", body: JSON.stringify({ approved: false, reason: notes || "" }) });
+      await apiFetch(endpointMap[item._type], {
+        method: "PATCH",
+        body: JSON.stringify({ approved: false, reason: notes, notes }),
+      });
       toast({ title: "تم الرفض" });
       refetchAction();
-    } catch { toast({ variant: "destructive", title: "فشل في الرفض" }); }
+    } catch (err: any) { toast({ variant: "destructive", title: "فشل في الرفض", description: err?.message }); }
     setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
   };
 
