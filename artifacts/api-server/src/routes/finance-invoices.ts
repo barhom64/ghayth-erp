@@ -449,6 +449,36 @@ invoicesRouter.patch("/invoices/:id/approve", async (req, res) => {
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
     await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+
+    // Audit + event + requester notification — without these, the invoice
+    // state change is invisible to dashboards and the creator never learns.
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: newStatus, entity: "invoices", entityId: Number(id),
+      before: { status: inv.status }, after: { status: newStatus, notes: notes ?? null },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: `invoice.${newStatus}`, entity: "invoices", entityId: Number(id),
+      details: `فاتورة ${inv.ref || id} — ${newStatus}`,
+    }).catch(console.error);
+
+    if (inv.createdBy) {
+      const titleMap: Record<string, string> = { approved: "تم اعتماد الفاتورة", rejected: "تم رفض الفاتورة", returned: "تم إرجاع الفاتورة" };
+      createNotification({
+        companyId: scope.companyId,
+        assignmentId: Number(inv.createdBy),
+        type: `invoice_${newStatus}`,
+        title: titleMap[newStatus] || `حالة الفاتورة: ${newStatus}`,
+        body: `الفاتورة ${inv.ref || id}${notes ? ` — ${notes}` : ''}`,
+        priority: newStatus === "rejected" ? "high" : "normal",
+        refType: "invoice",
+        refId: Number(id),
+        actionUrl: `/finance/invoices/${id}`,
+      }).catch(console.error);
+    }
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
