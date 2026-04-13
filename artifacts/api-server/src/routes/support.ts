@@ -1,4 +1,9 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -141,7 +146,7 @@ router.get("/tickets/:id", async (req, res) => {
       `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" WHERE t.id=$1 AND t."companyId"=$2`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!ticket) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
+    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
     const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 ORDER BY "createdAt"`, [ticket.id]);
 
     const now = new Date();
@@ -162,7 +167,7 @@ router.post("/tickets/:id/replies", async (req, res) => {
     const ticketId = Number(req.params.id);
 
     const [ticket] = await rawQuery<any>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
-    if (!ticket) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
+    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
 
     const { insertId } = await rawExecute(
       `INSERT INTO ticket_replies ("ticketId","authorId","authorName",message,"isInternal") VALUES ($1,$2,$3,$4,$5)`,
@@ -200,7 +205,7 @@ router.post("/tickets/:id/field-visit", async (req, res) => {
     const b = req.body;
 
     const [ticket] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
-    if (!ticket) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
+    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
 
     let distanceKm: number | null = null;
     if (b.clientLat && b.clientLon && b.officeLat && b.officeLon) {
@@ -246,7 +251,7 @@ router.patch("/tickets/:id", async (req, res) => {
     const ticketId = Number(req.params.id);
 
     const [ticket] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
-    if (!ticket) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
+    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
 
     const b = req.body;
     const sets: string[] = [`"updatedAt"=NOW()`];
@@ -324,7 +329,7 @@ router.delete("/tickets/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("التذكرة غير موجودة");
     await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف التذكرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
@@ -401,10 +406,21 @@ router.post("/tickets/:id/csat", async (req, res) => {
     const scope = req.scope!;
     const ticketId = Number(req.params.id);
     const { score, comment } = req.body;
-    if (!score || score < 1 || score > 5) { res.status(400).json({ error: "التقييم يجب أن يكون بين 1 و 5" }); return; }
+    if (!score || score < 1 || score > 5) {
+      throw new ValidationError("التقييم يجب أن يكون بين 1 و 5", {
+        field: "score",
+        fix: "اختر تقييماً من نجمة واحدة حتى خمس نجوم.",
+      });
+    }
     const [ticket] = await rawQuery<any>(`SELECT id, "assigneeId", status FROM support_tickets WHERE id=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
-    if (!ticket) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
-    if (!['resolved', 'closed'].includes(ticket.status)) { res.status(400).json({ error: "لا يمكن تقييم تذكرة غير محلولة" }); return; }
+    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
+    if (!['resolved', 'closed'].includes(ticket.status)) {
+      throw new ConflictError("لا يمكن تقييم تذكرة غير محلولة", {
+        field: "status",
+        fix: "انتظر حتى يتم حل التذكرة قبل التقييم.",
+        meta: { currentStatus: ticket.status },
+      });
+    }
     await rawExecute(
       `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
       [ticketId, scope.companyId, ticket.assigneeId, score, comment || null]
@@ -454,7 +470,7 @@ router.get("/kb/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المقالة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المقالة غير موجودة");
     await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(() => {});
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
@@ -464,7 +480,12 @@ router.post("/kb", async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, content, category, tags } = req.body;
-    if (!title) { res.status(400).json({ error: "عنوان المقالة مطلوب" }); return; }
+    if (!title) {
+      throw new ValidationError("عنوان المقالة مطلوب", {
+        field: "title",
+        fix: "أدخل عنواناً للمقالة قبل الحفظ.",
+      });
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,
       [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]

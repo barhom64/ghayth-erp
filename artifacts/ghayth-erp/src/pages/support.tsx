@@ -2,8 +2,13 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+// P4.1 primitives — Support domain sweep.
+// Page header, status chips and the ticket status column now come
+// from the shared P1 primitives instead of per-page custom JSX.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
+import { textColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp } from "lucide-react";
@@ -79,12 +84,12 @@ function Support() {
       key: "priority", header: "الأولوية", sortable: true,
       render: (t) => (
         <div className="flex flex-col gap-1">
-          <StatusBadge status={t.priority} />
+          <PageStatusBadge status={t.priority} />
           {t.slaBreached && <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />خرق مستوى الخدمة</Badge>}
         </div>
       ),
     },
-    { key: "status", header: "الحالة", sortable: true, render: (t) => <StatusBadge status={t.status} /> },
+    statusColumn("status", "الحالة", "ticket"),
     {
       key: "actions", header: "الإجراءات",
       render: (t) => (
@@ -104,22 +109,19 @@ function Support() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">الدعم الفني</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">إدارة تذاكر الدعم الفني ومتابعة الطلبات</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/support/create">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              تذكرة جديدة
-            </Button>
-          </Link>
-        </div>
-      </div>
-
+    <PageShell
+      title="الدعم الفني"
+      subtitle="إدارة تذاكر الدعم الفني ومتابعة الطلبات"
+      breadcrumbs={[{ label: "الدعم" }]}
+      actions={
+        <Link href="/support/create">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            تذكرة جديدة
+          </Button>
+        </Link>
+      }
+    >
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي التذاكر</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.totalTickets || 0}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-amber-600">مفتوحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{stats?.openTickets || 0}</div></CardContent></Card>
@@ -205,7 +207,7 @@ function Support() {
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة التذكرة" data={previewItem} fields={previewFields} />
-    </div>
+    </PageShell>
   );
 }
 
@@ -248,7 +250,7 @@ function KBManagement() {
         </span>
       ),
     },
-    { key: "status", header: "الحالة", sortable: true, render: (item) => <StatusBadge status={item.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (item) => <PageStatusBadge status={item.status} /> },
     {
       key: "actions", header: "إجراءات",
       render: (item) => (
