@@ -445,21 +445,6 @@ router.patch("/tickets/:id", async (req, res) => {
         }
       }
 
-      // Emit the lifecycle event so the audit trail + subscribers fire.
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "support.ticket.resolved",
-        entity: "support_tickets",
-        entityId: ticketId,
-        before: { status: ticket.status, resolvedAt: ticket.resolvedAt ?? null },
-        after: {
-          status: "resolved",
-          resolvedAt: new Date().toISOString(),
-          resolutionTimeHours: Number(resolutionTimeHours.toFixed(2)),
-        },
-      }).catch(console.error);
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1`, [ticketId]);
