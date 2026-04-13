@@ -8,6 +8,7 @@ import { createAuditLog, createNotification, createJournalEntry } from "../lib/b
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -517,6 +518,53 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       costBreakdown: { fuel: actualFuelCost, driverFare, depreciation, total: totalCost },
     });
   } catch (err) { handleRouteError(err, res, "Complete trip error:"); }
+});
+
+router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const tripId = Number(req.params.id);
+    const reason = (req.body?.reason as string | undefined)?.trim();
+    if (!reason) {
+      validationError(res, "سبب الإلغاء مطلوب", "reason", "اكتب سبب إلغاء الرحلة");
+      return;
+    }
+
+    const updated = await applyTransition({
+      entity: "fleet_trips",
+      id: tripId,
+      scope,
+      action: "fleet.trip.cancelled",
+      fromStates: ["scheduled", "planned", "in_progress"],
+      toState: "cancelled",
+      reason,
+      setExtras: {
+        cancelledAt: { raw: "NOW()" },
+        cancellationReason: reason,
+      },
+      after: { cancellationReason: reason },
+      onApply: async (row, client) => {
+        // Release vehicle and driver so the resources come back to the pool.
+        if (row.vehicleId) {
+          await client.query(
+            `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+            [row.vehicleId, scope.companyId]
+          );
+        }
+        if (row.driverId) {
+          await client.query(
+            `UPDATE fleet_drivers SET status='available' WHERE id=$1 AND "companyId"=$2`,
+            [row.driverId, scope.companyId]
+          );
+        }
+      },
+    });
+    res.json({ ...updated, event: "fleet.trip.cancelled" });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Cancel trip error:");
+  }
 });
 
 router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (req, res) => {

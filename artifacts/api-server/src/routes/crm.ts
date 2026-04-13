@@ -5,6 +5,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, createNotification } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -309,6 +310,63 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
       nextStages: row.stage === 'closed_won' || row.stage === 'closed_lost' ? [] : STAGE_ORDER.slice(STAGE_ORDER.indexOf(row.stage) + 1),
     });
   } catch (err) { handleRouteError(err, res, "Get opportunity error:"); }
+});
+
+// Explicit "convert opportunity to client" endpoint. Marks the opportunity as
+// won, runs the deal-won side-effects (client + contract + invoice), then
+// writes the lifecycle markers (convertedAt / convertedClientId) in the same
+// atomic transition via the lifecycle engine.
+router.post("/opportunities/:id/convert", requirePermission("crm:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
+    if (existing.convertedAt) {
+      res.status(409).json({ error: "تم تحويل هذه الفرصة مسبقاً", field: "convertedAt" });
+      return;
+    }
+
+    const dealValue = (req.body?.value as number | undefined) ?? existing.value ?? 0;
+
+    // handleDealWon creates / resolves the client and writes a contract +
+    // invoice using the global pool. It is idempotent enough for first-call
+    // use and guards every side-effect with its own try/catch.
+    await handleDealWon(scope, existing, dealValue);
+
+    // Re-read the opportunity to pick up the clientId that handleDealWon may
+    // have just populated, so we can mirror it into convertedClientId.
+    const [afterDealWon] = await rawQuery<any>(
+      `SELECT "clientId" FROM crm_opportunities WHERE id=$1`,
+      [id]
+    );
+    const convertedClientId = afterDealWon?.clientId ?? null;
+
+    const updated = await applyTransition({
+      entity: "crm_opportunities",
+      id,
+      scope,
+      action: "crm.opportunity.converted",
+      toState: "won",
+      reason: (req.body?.notes as string | undefined)?.trim(),
+      setExtras: {
+        stage: "closed_won",
+        convertedAt: { raw: "NOW()" },
+        convertedClientId,
+        value: dealValue,
+      },
+      extraWhere: `"deletedAt" IS NULL`,
+      after: { convertedClientId, stage: "closed_won" },
+    });
+    res.json({ ...updated, event: "crm.opportunity.converted", convertedClientId });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Convert opportunity error:");
+  }
 });
 
 router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req, res) => {

@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, createJournalEntry } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -146,6 +147,102 @@ router.delete("/contracts/:id", async (req, res) => {
     await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف العقد بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
+});
+
+// ---------------------------------------------------------------------------
+// Lifecycle endpoints: renew and terminate
+// ---------------------------------------------------------------------------
+
+router.post("/contracts/:id/renew", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { newEndDate, newValue, notes } = req.body ?? {};
+    if (!newEndDate) {
+      validationError(res, "تاريخ نهاية التجديد مطلوب", "newEndDate", "حدد تاريخ النهاية الجديد");
+      return;
+    }
+    const [current] = await rawQuery<any>(
+      `SELECT id, "endDate", value, "renewalCount" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!current) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (new Date(newEndDate) <= new Date(current.endDate)) {
+      validationError(res, "تاريخ نهاية التجديد يجب أن يكون بعد تاريخ النهاية الحالي", "newEndDate", "اختر تاريخاً لاحقاً لتاريخ النهاية الحالي");
+      return;
+    }
+
+    const setExtras: Record<string, any> = {
+      endDate: newEndDate,
+      renewedAt: { raw: "NOW()" },
+      renewalCount: { raw: `COALESCE("renewalCount", 0) + 1` },
+    };
+    if (newValue !== undefined && newValue !== null) {
+      setExtras.value = newValue;
+    }
+    if (notes) {
+      setExtras.notes = notes;
+    }
+
+    const updated = await applyTransition({
+      entity: "legal_contracts",
+      id,
+      scope,
+      action: "legal.contract.renewed",
+      fromStates: ["active", "draft", "expired"],
+      toState: "active",
+      reason: notes ?? null,
+      setExtras,
+      extraWhere: `"deletedAt" IS NULL`,
+      after: {
+        endDate: newEndDate,
+        value: newValue ?? current.value,
+        renewalCount: (current.renewalCount ?? 0) + 1,
+      },
+    });
+    res.json({ ...updated, event: "legal.contract.renewed" });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Renew contract error:");
+  }
+});
+
+router.post("/contracts/:id/terminate", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { reason, effectiveDate } = req.body ?? {};
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      validationError(res, "سبب إنهاء العقد مطلوب", "reason", "اكتب سبب الإنهاء");
+      return;
+    }
+
+    const updated = await applyTransition({
+      entity: "legal_contracts",
+      id,
+      scope,
+      action: "legal.contract.terminated",
+      fromStates: ["active", "draft"],
+      toState: "terminated",
+      reason,
+      setExtras: {
+        terminationDate: effectiveDate ?? { raw: "NOW()" },
+        terminationReason: reason,
+        endDate: effectiveDate ?? { raw: "CURRENT_DATE" },
+      },
+      extraWhere: `"deletedAt" IS NULL`,
+      after: {
+        terminationReason: reason,
+        terminationDate: effectiveDate ?? new Date().toISOString(),
+      },
+    });
+    res.json({ ...updated, event: "legal.contract.terminated" });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Terminate contract error:");
+  }
 });
 
 router.get("/cases", async (req, res) => {
