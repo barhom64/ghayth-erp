@@ -22,6 +22,7 @@ import {
   computeViolationImpact,
 } from "../lib/impactPreview.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
+import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -225,6 +226,22 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
          VALUES ($1,$2,$3,'late',$4,$5,$6,'pending_payroll')`,
         [scope.companyId, scope.activeAssignmentId, attendanceId, lateMinutes, deductionAmount, period]
       );
+
+      // ── Step 12b: Auto-create an inquiry memo (محضر استفسار) for the lateness ──
+      // يخضع لسياسة اللائحة الحية — idempotent، لا يُنشئ محضراً جديداً إن كان موجوداً
+      ensureInquiryMemoForViolation({
+        companyId: scope.companyId,
+        branchId: assignment?.branchId ?? scope.branchId,
+        assignmentId: scope.activeAssignmentId,
+        employeeId: scope.employeeId ?? assignment?.employeeId ?? 0,
+        violationId,
+        incidentType: "late",
+        incidentDate: today,
+        incidentDurationMinutes: lateMinutes,
+        incidentDescription: `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`,
+        source: "auto",
+        createdBy: scope.userId,
+      }).catch((err) => console.error("ensureInquiryMemoForViolation (check-in) error:", err));
     }
 
     // ── Step 13: Count monthly violations for penalty escalation ──
@@ -347,7 +364,7 @@ router.post("/check-out", requirePermission("hr:create"), async (req, res) => {
 
     // ── Fetch assignment for salary ──
     const [assignment] = await rawQuery<any>(
-      `SELECT ea.salary, ea."branchId", b.lat AS "branchLat", b.lon AS "branchLon"
+      `SELECT ea.salary, ea."branchId", ea."employeeId", b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE ea.id = $1`,
@@ -446,9 +463,10 @@ router.post("/check-out", requirePermission("hr:create"), async (req, res) => {
       const minuteRate = dailySalary / 480;
       const earlyDeductionAmount = Math.round(minuteRate * earlyDepartureMinutes * 100) / 100;
 
-      await rawExecute(
+      const { insertId: earlyViolationId } = await rawExecute(
         `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)`,
+         VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)
+         RETURNING id`,
         [scope.companyId, scope.activeAssignmentId,
           `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
           earlyDeductionAmount, period]
@@ -461,6 +479,21 @@ router.post("/check-out", requirePermission("hr:create"), async (req, res) => {
           [scope.companyId, scope.activeAssignmentId, existing.id, earlyDepartureMinutes, earlyDeductionAmount, period]
         );
       }
+
+      // ── Auto-create inquiry memo for early departure ──
+      ensureInquiryMemoForViolation({
+        companyId: scope.companyId,
+        branchId: assignment?.branchId ?? scope.branchId,
+        assignmentId: scope.activeAssignmentId,
+        employeeId: scope.employeeId ?? assignment?.employeeId ?? 0,
+        violationId: earlyViolationId,
+        incidentType: "early_leave",
+        incidentDate: today,
+        incidentDurationMinutes: earlyDepartureMinutes,
+        incidentDescription: `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
+        source: "auto",
+        createdBy: scope.userId,
+      }).catch((err) => console.error("ensureInquiryMemoForViolation (check-out) error:", err));
 
       // ── Notify employee about early departure ──
       createNotification({

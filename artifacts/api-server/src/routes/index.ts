@@ -69,6 +69,7 @@ import { budgetRouter } from "./finance-budget.js";
 import { accountsRouter } from "./finance-accounts.js";
 import { vendorsRouter } from "./finance-vendors.js";
 import { attendanceRouter } from "./hr-attendance.js";
+import hrDisciplineRouter from "./hr-discipline.js";
 import digitalSignatureRouter from "./digital-signature.js";
 
 const router: IRouter = Router();
@@ -114,6 +115,7 @@ router.use("/dashboard", dashboardRouter);
 router.use("/employees", requireModule("hr"), employeesRouter);
 router.use("/clients", requireModule("crm"), clientsRouter);
 router.use("/hr", requireModule("hr"), attendanceRouter);
+router.use("/hr/discipline", requireModule("hr"), hrDisciplineRouter);
 router.use("/hr", requireModule("hr"), hrRouter);
 router.use("/hr/training", requireModule("hr"), trainingRouter);
 router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
