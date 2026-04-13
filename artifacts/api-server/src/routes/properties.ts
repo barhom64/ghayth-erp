@@ -6,6 +6,7 @@ import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline
 import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
+import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -281,6 +282,39 @@ router.post("/contracts", async (req, res) => {
       }
     }
 
+    // Register lifecycle obligations (renewal notice + expiration)
+    try {
+      const renewalNoticeDays = Number(b.renewalNoticeDays || 60);
+      const renewalNoticeDate = new Date(endDate);
+      renewalNoticeDate.setDate(renewalNoticeDate.getDate() - renewalNoticeDays);
+      if (renewalNoticeDate > new Date()) {
+        await registerObligation({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          entityType: "rental_contract",
+          entityId: insertId,
+          obligationType: "renewal",
+          title: `إشعار تجديد عقد ${contractNumber} — ${b.tenantName || ""}`,
+          dueAt: renewalNoticeDate.toISOString(),
+          metadata: { contractNumber, endDate: b.endDate, tenantName: b.tenantName },
+          dedupeKey: `contract-${insertId}-renewal-notice`,
+          escalationSteps: [{ hoursAfterDue: 24, notifyRole: "property_manager" }, { hoursAfterDue: 72, notifyRole: "general_manager" }],
+        });
+      }
+      await registerObligation({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        entityType: "rental_contract",
+        entityId: insertId,
+        obligationType: "document_expiry",
+        title: `انتهاء عقد ${contractNumber} — ${b.tenantName || ""}`,
+        dueAt: endDate.toISOString(),
+        metadata: { contractNumber, unitId: b.unitId },
+        dedupeKey: `contract-${insertId}-expiry`,
+        escalationSteps: [{ hoursAfterDue: 0, notifyRole: "property_manager" }],
+      });
+    } catch (obErr) { console.error("Contract obligation registration failed:", obErr); }
+
     const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [insertId]);
     const schedule = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`, [insertId]);
 
@@ -314,6 +348,12 @@ router.patch("/contracts/:id", async (req, res) => {
     addField("depositAmount", b.depositAmount);
     addField("paymentDay", b.paymentDay);
     addField("notes", b.notes);
+    // Status transitions to terminated/renewed/expired must go through dedicated
+    // lifecycle endpoints (/renew, /terminate) so obligations + events fire.
+    if (b.status !== undefined && ["terminated", "renewed", "expired"].includes(b.status)) {
+      validationError(res, `لا يمكن تغيير حالة العقد إلى ${b.status} عبر PATCH`, "status", "استخدم /contracts/:id/renew أو /contracts/:id/terminate");
+      return;
+    }
     addField("status", b.status);
     addField("contractNumber", b.contractNumber);
     addField("ejarNumber", b.ejarNumber);
@@ -361,118 +401,212 @@ router.delete("/contracts/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
 });
 
-// Terminate (close) a rental contract — final settlement handoff
-router.post("/contracts/:id/terminate", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const reason = (req.body?.reason || "").toString().trim() || "إنهاء طبيعي";
-    const [existing] = await rawQuery<any>(
-      `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!existing) { res.status(404).json({ error: "العقد غير موجود" }); return; }
-    if (existing.status === 'terminated' || existing.status === 'closed') {
-      res.status(409).json({ error: "العقد منتهي بالفعل" }); return;
-    }
+// ────────────────────────────────────────────────────────────────────────────
+// Contract lifecycle endpoints — renew / terminate
+// Status model: active → (renewed | terminated | expired)
+// ────────────────────────────────────────────────────────────────────────────
 
-    await rawExecute(
-      `UPDATE rental_contracts
-          SET status='terminated', "terminatedAt"=NOW(), "closedAt"=NOW(), "terminationReason"=$1, "updatedAt"=NOW()
-        WHERE id=$2`,
-      [reason, id]
-    );
-    // Free the unit
-    if (existing.unitId) {
-      await rawExecute(`UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1`, [existing.unitId]);
-    }
-    // Cancel any still-pending rent installments
-    await rawExecute(
-      `UPDATE rent_payments SET status='cancelled', "updatedAt"=NOW() WHERE "contractId"=$1 AND status IN ('pending','partial')`,
-      [id]
-    );
-
-    // Audit + event
-    await createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      entity: "rental_contracts", entityId: id,
-      action: "terminate",
-      after: { reason, terminatedAt: new Date().toISOString() },
-      reason,
-    }).catch(() => {});
-    await emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "lease.terminated", entity: "rental_contracts", entityId: id,
-      details: reason,
-    }).catch(() => {});
-
-    const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [id]);
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Terminate contract error:"); }
-});
-
-// Renew a rental contract — creates a new linked contract starting from old endDate
+/** Renew an active contract — extends endDate, generates new installments, resets obligations */
 router.post("/contracts/:id/renew", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body || {};
-    const [existing] = await rawQuery<any>(
+    const [contract] = await rawQuery<any>(
       `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!contract) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!["active", "expired"].includes(contract.status)) {
+      validationError(res, `لا يمكن تجديد عقد بحالة ${contract.status}`, "status", "يمكن تجديد العقود النشطة أو المنتهية فقط");
+      return;
+    }
 
-    const oldEnd = new Date(existing.endDate);
-    const newStart = b.startDate ? new Date(b.startDate) : new Date(oldEnd.getTime() + 86400000);
-    const renewalMonths = Number(b.renewalPeriodMonths || existing.renewalPeriodMonths || 12);
-    const newEnd = new Date(newStart);
-    newEnd.setMonth(newEnd.getMonth() + renewalMonths);
-    const newMonthlyRent = Number(b.monthlyRent || existing.monthlyRent);
-    const totalContractValue = Number(b.totalContractValue || newMonthlyRent * renewalMonths);
+    const renewalMonths = Number(b.renewalPeriodMonths || contract.renewalPeriodMonths || 12);
+    const newStartDate = new Date(b.newStartDate || contract.endDate);
+    const newEndDate = new Date(newStartDate);
+    newEndDate.setMonth(newEndDate.getMonth() + renewalMonths);
 
-    const { insertId: newId } = await rawExecute(
-      `INSERT INTO rental_contracts ("companyId","unitId","tenantId","tenantName","tenantPhone","tenantEmail","tenantIdNumber","startDate","endDate","monthlyRent","depositAmount","paymentDay",notes,status,
-       "contractNumber","contractType","paymentFrequency","yearlyRent","totalContractValue","autoRenewal","renewalNoticeDays","renewalPeriodMonths","ownerId","numberOfInstallments","renewedFromId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
-      [scope.companyId, existing.unitId, existing.tenantId, existing.tenantName, existing.tenantPhone, existing.tenantEmail, existing.tenantIdNumber,
-       newStart.toISOString().split('T')[0], newEnd.toISOString().split('T')[0],
-       newMonthlyRent, existing.depositAmount || 0, existing.paymentDay || 1, existing.notes || null,
-       `${existing.contractNumber || 'RC'}-R${Date.now().toString(36).toUpperCase()}`,
-       existing.contractType || 'residential', existing.paymentFrequency || 'monthly',
-       newMonthlyRent * 12, totalContractValue, existing.autoRenewal || false,
-       existing.renewalNoticeDays || 60, renewalMonths, existing.ownerId || null,
-       renewalMonths, id]
+    const newMonthlyRent = Number(b.monthlyRent || contract.monthlyRent);
+    const newYearlyRent = b.yearlyRent ? Number(b.yearlyRent) : newMonthlyRent * 12;
+    const newTotal = Number(b.totalContractValue || (newMonthlyRent * renewalMonths));
+
+    // Update contract
+    await rawExecute(
+      `UPDATE rental_contracts
+         SET "startDate"=$1,"endDate"=$2,"monthlyRent"=$3,"yearlyRent"=$4,"totalContractValue"=$5,
+             status='active',"updatedAt"=NOW()
+       WHERE id=$6 AND "companyId"=$7`,
+      [newStartDate.toISOString().split("T")[0], newEndDate.toISOString().split("T")[0],
+       newMonthlyRent, newYearlyRent, newTotal, id, scope.companyId]
     );
 
-    // Generate installments for the renewal
-    const installmentCount = renewalMonths;
-    const installmentAmount = Math.round((totalContractValue / installmentCount) * 100) / 100;
+    // Generate new payment schedule for the renewal period
+    const freq = contract.paymentFrequency || "monthly";
+    const freqMonths = freq === "quarterly" ? 3 : freq === "semi_annual" ? 6 : freq === "annual" ? 12 : 1;
+    const installmentCount = Math.ceil(renewalMonths / freqMonths);
+    const installmentAmount = Math.round((newTotal / installmentCount) * 100) / 100;
+    const [maxRow] = await rawQuery<any>(
+      `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1`,
+      [id]
+    );
+    const startNum = Number(maxRow?.max || 0);
     for (let i = 0; i < installmentCount; i++) {
-      const due = new Date(newStart); due.setMonth(due.getMonth() + i);
+      const dueDate = new Date(newStartDate);
+      dueDate.setMonth(dueDate.getMonth() + (i * freqMonths));
+      if (contract.paymentDay) dueDate.setDate(Math.min(Number(contract.paymentDay), 28));
       const isLast = i === installmentCount - 1;
-      const amt = isLast ? totalContractValue - (installmentAmount * (installmentCount - 1)) : installmentAmount;
+      const amt = isLast ? newTotal - (installmentAmount * (installmentCount - 1)) : installmentAmount;
       await rawExecute(
-        `INSERT INTO rent_payments ("contractId","dueDate",amount,"paidAmount",status,notes) VALUES ($1,$2,$3,0,'pending',$4)`,
-        [newId, due.toISOString().split('T')[0], Math.round(amt * 100) / 100, `تجديد - قسط ${i + 1}/${installmentCount}`]
+        `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status)
+         VALUES ($1,$2,$3,$4,$5,'pending')`,
+        [scope.companyId, id, startNum + i + 1, dueDate.toISOString().split("T")[0], Math.round(amt * 100) / 100]
       );
     }
 
-    // Close the old contract
-    await rawExecute(
-      `UPDATE rental_contracts SET status='renewed', "closedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1`,
-      [id]
-    );
+    // Cancel old obligations and register new ones for the renewed period
+    await cancelObligation(scope.companyId, "rental_contract", id, "renewal");
+    await cancelObligation(scope.companyId, "rental_contract", id, "document_expiry");
+
+    const renewalNoticeDays = Number(contract.renewalNoticeDays || 60);
+    const renewalNoticeDate = new Date(newEndDate);
+    renewalNoticeDate.setDate(renewalNoticeDate.getDate() - renewalNoticeDays);
+    if (renewalNoticeDate > new Date()) {
+      await registerObligation({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        entityType: "rental_contract",
+        entityId: id,
+        obligationType: "renewal",
+        title: `إشعار تجديد عقد ${contract.contractNumber} — ${contract.tenantName || ""}`,
+        dueAt: renewalNoticeDate.toISOString(),
+        metadata: { contractNumber: contract.contractNumber, endDate: newEndDate.toISOString() },
+        dedupeKey: `contract-${id}-renewal-notice-${newEndDate.toISOString().split("T")[0]}`,
+      });
+    }
+    await registerObligation({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      entityType: "rental_contract",
+      entityId: id,
+      obligationType: "document_expiry",
+      title: `انتهاء عقد ${contract.contractNumber} — ${contract.tenantName || ""}`,
+      dueAt: newEndDate.toISOString(),
+      dedupeKey: `contract-${id}-expiry-${newEndDate.toISOString().split("T")[0]}`,
+    });
 
     await emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "lease.renewed", entity: "rental_contracts", entityId: newId,
-      details: `تجديد عقد ${id} → ${newId} — ${newStart.toISOString().split('T')[0]} → ${newEnd.toISOString().split('T')[0]}`,
-    }).catch(() => {});
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "property.contract.renewed",
+      entity: "rental_contract",
+      entityId: id,
+      details: `تجديد عقد ${contract.contractNumber} حتى ${newEndDate.toISOString().split("T")[0]}`,
+    });
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "renew", entity: "rental_contracts", entityId: id,
+      before: { endDate: contract.endDate, totalContractValue: contract.totalContractValue },
+      after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
+    }).catch(console.error);
 
-    const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [newId]);
-    res.status(201).json(row);
+    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [id]);
+    res.json({ ...updated, event: "property.contract.renewed", renewalMonths });
   } catch (err) { handleRouteError(err, res, "Renew contract error:"); }
+});
+
+/** Terminate an active contract — early termination with optional fee */
+router.post("/contracts/:id/terminate", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body || {};
+    const [contract] = await rawQuery<any>(
+      `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!contract) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!["active", "draft"].includes(contract.status)) {
+      validationError(res, `لا يمكن إنهاء عقد بحالة ${contract.status}`, "status", "العقد منتهي أو ملغي مسبقاً");
+      return;
+    }
+    if (!b.reason) {
+      validationError(res, "يجب تحديد سبب الإنهاء", "reason", "أدخل سبب إنهاء العقد");
+      return;
+    }
+
+    const terminationDate = b.terminationDate || new Date().toISOString().split("T")[0];
+    const earlyFee = Number(b.earlyTerminationFee ?? contract.earlyTerminationFee ?? 0);
+
+    // Update contract
+    await rawExecute(
+      `UPDATE rental_contracts
+         SET status='terminated',"terminatedAt"=NOW(),"terminationReason"=$1,"updatedAt"=NOW()
+       WHERE id=$2 AND "companyId"=$3`,
+      [b.reason, id, scope.companyId]
+    ).catch(async () => {
+      // If terminatedAt/terminationReason columns don't exist, fall back to status-only
+      await rawExecute(
+        `UPDATE rental_contracts SET status='terminated',"updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+        [id, scope.companyId]
+      );
+    });
+
+    // Cancel remaining pending installments
+    await rawExecute(
+      `UPDATE contract_payment_schedule SET status='cancelled'
+       WHERE "contractId"=$1 AND status='pending' AND "dueDate" > $2`,
+      [id, terminationDate]
+    );
+
+    // Free the unit
+    if (contract.unitId) {
+      await rawExecute(
+        `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+        [contract.unitId, scope.companyId]
+      );
+    }
+
+    // Cancel active obligations
+    await cancelObligation(scope.companyId, "rental_contract", id, "renewal");
+    await cancelObligation(scope.companyId, "rental_contract", id, "document_expiry");
+
+    // Book early termination fee as revenue if applicable
+    let journalEntryId: number | null = null;
+    if (earlyFee > 0) {
+      try {
+        journalEntryId = await createJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          createdBy: scope.activeAssignmentId ?? scope.userId,
+          ref: `TERM-${id}-${Date.now()}`,
+          description: `رسوم إنهاء مبكر لعقد ${contract.contractNumber} — ${b.reason}`,
+          lines: [
+            { accountCode: "1200", debit: earlyFee, credit: 0 },
+            { accountCode: "4100", debit: 0, credit: earlyFee },
+          ],
+        });
+      } catch (jeErr) { console.error("Termination fee JE failed:", jeErr); }
+    }
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "property.contract.terminated",
+      entity: "rental_contract",
+      entityId: id,
+      details: `إنهاء عقد ${contract.contractNumber}: ${b.reason}`,
+    });
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "terminate", entity: "rental_contracts", entityId: id,
+      before: { status: contract.status },
+      after: { status: "terminated", reason: b.reason, earlyFee, journalEntryId },
+    }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [id]);
+    res.json({ ...updated, event: "property.contract.terminated", earlyFee, journalEntryId });
+  } catch (err) { handleRouteError(err, res, "Terminate contract error:"); }
 });
 
 router.patch("/tenants/:id", async (req, res) => {

@@ -54,6 +54,13 @@ const SAFE_NAMES = new Set([
   // string allowlists (orphanRefTables / orphanRefTypes) — no user input
   // can reach the interpolation point.
   "tbl",
+  // `lim` in routes/events.ts is computed via Math.min/Math.max(Number(...))
+  // so it's always a clamped integer, never a raw string.
+  "lim",
+  // `extra` in routes/finance-recurring.ts is built from hardcoded SQL
+  // fragments plus properly parameterized $n placeholders — same pattern as
+  // `where` and `conditions` above.
+  "extra",
 ]);
 
 // Member expressions like `params.length` or `sets.join(...)` are allowed

@@ -3,7 +3,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
+import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
@@ -11,6 +12,21 @@ const router = Router();
 router.use(authMiddleware);
 
 const STAGE_ORDER = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
+
+// Compute the due date for the CRM follow-up obligation.
+// Preference order:
+// 1. expectedCloseDate if set and in the future
+// 2. now + stage followUpDays (min 1 day)
+function computeCrmFollowUpDue(stage: string, expectedCloseDate: string | null | undefined): Date {
+  const now = Date.now();
+  if (expectedCloseDate) {
+    const ecd = new Date(expectedCloseDate);
+    if (!Number.isNaN(ecd.getTime()) && ecd.getTime() > now) return ecd;
+  }
+  const cfg = STAGE_AUTO_ACTIONS[stage];
+  const days = Math.max(cfg?.followUpDays ?? 3, 1);
+  return new Date(now + days * 86400000);
+}
 
 const STAGE_AUTO_ACTIONS: Record<string, { followUpDays: number; description: string }> = {
   lead: { followUpDays: 0, description: 'فرصة جديدة — بدء التأهيل' },
@@ -92,6 +108,37 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       entity: "crm_opportunities",
       entityId: insertId,
       after: { title: b.title, clientId: b.clientId, value: b.value, stage },
+    }).catch(console.error);
+
+    // Register CRM follow-up obligation (skipped for terminal stages)
+    if (stage !== 'closed_won' && stage !== 'closed_lost') {
+      try {
+        const dueAt = computeCrmFollowUpDue(stage, b.expectedCloseDate);
+        await registerObligation({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          entityType: "crm_opportunity",
+          entityId: insertId,
+          obligationType: "follow_up",
+          title: `متابعة فرصة CRM — ${b.title} (${stage})`,
+          dueAt: dueAt.toISOString(),
+          metadata: { stage, value: b.value || 0, clientId: b.clientId ?? null, contactName: b.contactName ?? null, assignedEmployeeId: b.assignedTo ?? null },
+          dedupeKey: `crm-opp-${insertId}-followup`,
+          escalationSteps: [
+            { hoursAfterDue: 24, notifyRole: "sales_manager" },
+            { hoursAfterDue: 72, notifyRole: "general_manager" },
+          ],
+        });
+      } catch (obErr) { console.error("CRM opportunity obligation failed:", obErr); }
+    }
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "crm.opportunity.created",
+      entity: "crm_opportunities",
+      entityId: insertId,
+      details: `فرصة جديدة: ${b.title} — ${b.value || 0} ريال — ${stage}`,
     }).catch(console.error);
 
     res.status(201).json({ ...row, autoAction: stageConfig?.description });
@@ -188,6 +235,16 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     if (b.stage === 'closed_won' && existing.stage !== 'closed_won') {
       await handleDealWon(scope, existing, b.value ?? existing.value);
       autoActions.push('إنشاء عقد + فاتورة + تحديث إيرادات العميل');
+      // Mark follow-up obligation as met and emit deal-won event
+      await markObligationMet(scope.companyId, "crm_opportunity", oppId, "follow_up").catch(console.error);
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "crm.deal.won",
+        entity: "crm_opportunities",
+        entityId: oppId,
+        details: `صفقة ناجحة: ${existing.title} — ${b.value ?? existing.value} ريال`,
+      }).catch(console.error);
     }
 
     if (b.stage === 'closed_lost' && existing.stage !== 'closed_lost') {
@@ -198,6 +255,52 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
           [oppId, `تحليل خسارة: ${b.lostReason || 'غير محدد'} — القيمة المفقودة: ${existing.value} ريال`, scope.userId]
         );
       } catch (e) { console.error("Lost analysis error:", e); }
+      // Cancel follow-up obligation and emit deal-lost event
+      await cancelObligation(scope.companyId, "crm_opportunity", oppId).catch(console.error);
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "crm.deal.lost",
+        entity: "crm_opportunities",
+        entityId: oppId,
+        details: `صفقة خاسرة: ${existing.title} — السبب: ${b.lostReason || 'غير محدد'}`,
+      }).catch(console.error);
+    }
+
+    // Stage change (non-terminal) → refresh follow-up obligation window
+    if (
+      b.stage && b.stage !== existing.stage &&
+      b.stage !== 'closed_won' && b.stage !== 'closed_lost'
+    ) {
+      try {
+        await cancelObligation(scope.companyId, "crm_opportunity", oppId);
+        const effectiveEcd = b.expectedCloseDate !== undefined ? b.expectedCloseDate : existing.expectedCloseDate;
+        const dueAt = computeCrmFollowUpDue(b.stage, effectiveEcd);
+        await registerObligation({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          entityType: "crm_opportunity",
+          entityId: oppId,
+          obligationType: "follow_up",
+          title: `متابعة فرصة CRM — ${existing.title} (${b.stage})`,
+          dueAt: dueAt.toISOString(),
+          metadata: { stage: b.stage, value: b.value ?? existing.value, clientId: existing.clientId, assignedEmployeeId: b.assignedTo ?? existing.assignedTo ?? null },
+          dedupeKey: `crm-opp-${oppId}-followup-${b.stage}`,
+          escalationSteps: [
+            { hoursAfterDue: 24, notifyRole: "sales_manager" },
+            { hoursAfterDue: 72, notifyRole: "general_manager" },
+          ],
+        });
+      } catch (obErr) { console.error("CRM stage-change obligation refresh failed:", obErr); }
+
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "crm.opportunity.stage_changed",
+        entity: "crm_opportunities",
+        entityId: oppId,
+        details: `تغيير مرحلة: ${existing.title} — من ${existing.stage} إلى ${b.stage}`,
+      }).catch(console.error);
     }
 
     createAuditLog({
@@ -376,6 +479,15 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
     const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
     await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await cancelObligation(scope.companyId, "crm_opportunity", id).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "crm.opportunity.deleted",
+      entity: "crm_opportunities",
+      entityId: id,
+      details: `حذف فرصة CRM`,
+    }).catch(console.error);
     res.json({ message: "تم حذف الفرصة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete opportunity error:"); }
 });

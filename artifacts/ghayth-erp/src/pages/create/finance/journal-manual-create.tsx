@@ -23,6 +23,7 @@ export default function JournalManualCreatePage() {
 
   const [form, setForm] = useState({
     description: "",
+    date: new Date().toISOString().split("T")[0],
     costCenter: "",
     notes: "",
     lines: [emptyLine(), emptyLine()],
@@ -67,7 +68,7 @@ export default function JournalManualCreatePage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isBalanced) { toast({ variant: "destructive", title: "القيد غير متوازن — يجب أن يتساوى مجموع المدين والدائن" }); return; }
-    createMutation.mutate(form);
+    createMutation.mutate({ ...form, date: form.date || undefined });
   }
 
   return (
@@ -95,6 +96,10 @@ export default function JournalManualCreatePage() {
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1">البيان *</label>
                 <input className="w-full border rounded-lg px-3 py-2 text-sm" required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف القيد اليدوي" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">التاريخ</label>
+                <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
               </div>
               <CostCenterSelect
                 value={form.costCenter}

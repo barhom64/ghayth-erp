@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import { Plus, Shield, AlertTriangle, CheckCircle, XCircle, Clock } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type BankGuarantee = {
@@ -88,6 +89,76 @@ export default function BankGuaranteesPage() {
   const list: BankGuarantee[] = data?.data ?? data ?? [];
   const summary = data?.summary ?? {};
 
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "ref",
+      header: "رقم الضمان",
+      sortable: true,
+      render: (row) => <span className="font-mono text-blue-600 text-xs">{row.ref}</span>,
+    },
+    {
+      key: "issueDate",
+      header: "تاريخ الإصدار",
+      sortable: true,
+      render: (row) => <span className="text-gray-500 text-xs">{row.issueDate ? formatDate(row.issueDate) : "-"}</span>,
+    },
+    {
+      key: "expiryDate",
+      header: "تاريخ الانتهاء",
+      sortable: true,
+      render: (row) => <span className="text-gray-500 text-xs">{row.expiryDate ? formatDate(row.expiryDate) : "-"}</span>,
+    },
+    { key: "bank", header: "البنك", sortable: true },
+    { key: "beneficiary", header: "الجهة المستفيدة", sortable: true },
+    {
+      key: "amount",
+      header: "المبلغ",
+      sortable: true,
+      render: (row) => <span className="font-semibold">{formatCurrency(row.amount)}</span>,
+    },
+    {
+      key: "guaranteeType",
+      header: "النوع",
+      sortable: true,
+      render: (row) => GUARANTEE_TYPES.find(t => t.value === row.guaranteeType)?.label ?? row.guaranteeType,
+    },
+    {
+      key: "alertStatus",
+      header: "الحالة",
+      sortable: true,
+      render: (row) => {
+        const cfg = alertConfig[row.alertStatus] ?? alertConfig.active;
+        const StatusIcon = cfg.Icon;
+        return (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-${cfg.color}-100 text-${cfg.color}-700`}>
+            <StatusIcon className="h-3 w-3" />
+            {cfg.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: "daysToExpiry",
+      header: "الأيام المتبقية",
+      sortable: true,
+      render: (row) => (
+        <span className={row.daysToExpiry < 0 ? "text-red-600 font-bold" : row.daysToExpiry <= 7 ? "text-red-500 font-semibold" : row.daysToExpiry <= 30 ? "text-yellow-600" : "text-gray-600"}>
+          {row.daysToExpiry < 0 ? `منتهي منذ ${Math.abs(row.daysToExpiry)} يوم` : `${row.daysToExpiry} يوم`}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (row) => (
+        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => openEdit(row)} className="text-blue-600 hover:underline text-sm">تعديل</button>
+          <button onClick={() => setDeleteId(row.id)} className="text-red-600 hover:underline text-sm">حذف</button>
+        </div>
+      ),
+    },
+  ];
+
   function openNew() {
     setEditing(null);
     setForm({ ref: "", bank: "", beneficiary: "", amount: "", issueDate: "", expiryDate: "", guaranteeType: "performance", notes: "" });
@@ -162,66 +233,15 @@ export default function BankGuaranteesPage() {
         </div>
       )}
 
-      {isLoading ? (
-        <div className="text-center py-16 text-gray-400">جاري التحميل...</div>
-      ) : list.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">لا توجد ضمانات بنكية مسجلة</div>
-      ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">رقم الضمان</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">البنك</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">الجهة المستفيدة</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">المبلغ</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">النوع</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">تاريخ الإصدار</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">تاريخ الانتهاء</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">الحالة</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">الأيام المتبقية</th>
-                  <th className="px-3 py-3 text-right text-xs text-gray-500">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((row) => {
-                  const cfg = alertConfig[row.alertStatus] ?? alertConfig.active;
-                  const StatusIcon = cfg.Icon;
-                  return (
-                    <tr key={row.id} className="border-b hover:bg-gray-50">
-                      <td className="px-3 py-3">{row.ref}</td>
-                      <td className="px-3 py-3">{row.bank}</td>
-                      <td className="px-3 py-3">{row.beneficiary}</td>
-                      <td className="px-3 py-3 font-semibold">{formatCurrency(row.amount)}</td>
-                      <td className="px-3 py-3">{GUARANTEE_TYPES.find(t => t.value === row.guaranteeType)?.label ?? row.guaranteeType}</td>
-                      <td className="px-3 py-3 text-gray-500">{formatDate(row.issueDate)}</td>
-                      <td className="px-3 py-3 text-gray-500">{formatDate(row.expiryDate)}</td>
-                      <td className="px-3 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-${cfg.color}-100 text-${cfg.color}-700`}>
-                          <StatusIcon className="h-3 w-3" />
-                          {cfg.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className={row.daysToExpiry < 0 ? "text-red-600 font-bold" : row.daysToExpiry <= 7 ? "text-red-500 font-semibold" : row.daysToExpiry <= 30 ? "text-yellow-600" : "text-gray-600"}>
-                          {row.daysToExpiry < 0 ? `منتهي منذ ${Math.abs(row.daysToExpiry)} يوم` : `${row.daysToExpiry} يوم`}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex gap-2">
-                          <button onClick={() => openEdit(row)} className="text-blue-600 hover:underline text-sm">تعديل</button>
-                          <button onClick={() => setDeleteId(row.id)} className="text-red-600 hover:underline text-sm">حذف</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+      <DataTable
+        columns={columns}
+        data={list}
+        isLoading={isLoading}
+        emptyMessage="لا توجد ضمانات بنكية مسجلة"
+        emptyIcon={<Shield className="h-6 w-6 text-slate-400" />}
+        noToolbar
+      />
+
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>

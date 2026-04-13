@@ -14,8 +14,10 @@ import {
   processApprovalStep,
   createJournalEntry,
   getAccountCodeFromMapping,
+  checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import {
   computeLeaveImpact,
   computeTerminationImpact,
@@ -1374,6 +1376,28 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
       entity: "hr_leave_requests", entityId: Number(id),
       details: JSON.stringify({ affectedAssignments: allAssignments.length }) }).catch(console.error);
 
+    // Register return-to-work obligation (fires the day after the leave ends)
+    try {
+      const returnDate = new Date(leaveEnd);
+      returnDate.setDate(returnDate.getDate() + 1);
+      await registerObligation({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        entityType: "hr_leave_request",
+        entityId: Number(id),
+        obligationType: "follow_up",
+        title: `عودة للعمل — ${request.employeeName || `موظف #${request.employeeId}`} (${request.leaveTypeName || ""})`,
+        dueAt: returnDate.toISOString(),
+        assignedTo: request.employeeAssignmentId ?? null,
+        metadata: { employeeId: request.employeeId, leaveStart: request.startDate, leaveEnd: request.endDate, days: request.days },
+        dedupeKey: `leave-${id}-return`,
+        escalationSteps: [
+          { hoursAfterDue: 8, notifyRole: "hr_manager" },
+          { hoursAfterDue: 24, notifyRole: "general_manager" },
+        ],
+      });
+    } catch (obErr) { console.error("Return-to-work obligation failed:", obErr); }
+
     res.json({ message: "تمت الموافقة النهائية", status: "approved", affectedAssignments: allAssignments.length });
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
@@ -2694,6 +2718,85 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
+/**
+ * Cancel an approved leave request — restores balance, cancels obligations.
+ * Use when leave is no longer needed (e.g. employee returned early, emergency).
+ */
+router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body || {};
+    if (!b.reason) {
+      validationError(res, "سبب الإلغاء مطلوب", "reason", "أدخل سبب إلغاء الإجازة");
+      return;
+    }
+    const [request] = await rawQuery<any>(
+      `SELECT lr.*, lt.name AS "leaveTypeName"
+       FROM hr_leave_requests lr
+       LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+       WHERE lr.id = $1 AND lr."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!request) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
+    const isOwn = request.employeeId === scope.employeeId;
+    if (!isOwn && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+      res.status(403).json({ error: "غير مصرح: إلغاء الإجازة مقصور على صاحب الطلب أو HR أو المالك" });
+      return;
+    }
+    if (!["approved", "pending"].includes(request.status)) {
+      validationError(res, `لا يمكن إلغاء إجازة بحالة ${request.status}`, "status", "الإجازة مُلغاة أو مرفوضة مسبقاً");
+      return;
+    }
+
+    // Restore balance if was approved (used → 0, or reduce used by days)
+    if (request.status === "approved") {
+      const year = new Date(request.startDate).getFullYear();
+      await rawExecute(
+        `UPDATE hr_leave_balances
+           SET used = GREATEST(used - $1, 0)
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+      );
+      // Clear attendance 'on_leave' records for future dates
+      await rawExecute(
+        `DELETE FROM attendance
+         WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
+           AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
+        [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
+      ).catch(() => {});
+    } else if (request.status === "pending") {
+      // Release reserved balance
+      const year = new Date(request.startDate).getFullYear();
+      await rawExecute(
+        `UPDATE hr_leave_balances
+           SET reserved = GREATEST(reserved - $1, 0)
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+      );
+    }
+
+    await rawExecute(
+      `UPDATE hr_leave_requests SET status = 'cancelled', notes = COALESCE(notes,'') || ' | إلغاء: ' || $1 WHERE id = $2`,
+      [b.reason, id]
+    );
+
+    // Cancel return-to-work obligation
+    await cancelObligation(scope.companyId, "hr_leave_request", id);
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "leave.cancelled",
+      entity: "hr_leave_requests",
+      entityId: id,
+      details: `إلغاء إجازة #${id}: ${b.reason}`,
+    }).catch(console.error);
+
+    res.json({ message: "تم إلغاء الإجازة", status: "cancelled", reason: b.reason });
+  } catch (err) { handleRouteError(err, res, "Cancel leave error:"); }
+});
+
 router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2826,6 +2929,57 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
           );
         }
       });
+
+      // Register monthly GOSI submission obligation (due 14th of NEXT month)
+      try {
+        const [pyYear, pyMonth] = String(period).split("-").map(Number);
+        if (pyYear && pyMonth) {
+          const gosiDue = new Date(pyYear, pyMonth, 14); // pyMonth is 1-12, Date month is 0-11, so pyMonth is next month
+          if (totalGosiPayable > 0) {
+            await registerObligation({
+              companyId: scope.companyId,
+              branchId: scope.branchId ?? null,
+              entityType: "payroll_run",
+              entityId: Number(req.params.id),
+              obligationType: "declaration",
+              title: `تقديم اشتراكات التأمينات الاجتماعية — ${period} (${totalGosiPayable.toFixed(2)} ريال)`,
+              dueAt: gosiDue.toISOString(),
+              metadata: { period, gosiPayable: totalGosiPayable, employeeShare: totalGosiEmployee, employerShare: totalGosiEmployer },
+              dedupeKey: `payroll-${req.params.id}-gosi-submission`,
+              escalationSteps: [
+                { hoursAfterDue: 0, notifyRole: "finance_manager" },
+                { hoursAfterDue: 24, notifyRole: "general_manager" },
+              ],
+            });
+          }
+          // Salary disbursement obligation — due end of current period
+          const disbursementDue = new Date(pyYear, pyMonth, 0); // last day of period
+          await registerObligation({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            entityType: "payroll_run",
+            entityId: Number(req.params.id),
+            obligationType: "payment",
+            title: `صرف رواتب — ${period} (${totalBankPayout.toFixed(2)} ريال صافي)`,
+            dueAt: disbursementDue.toISOString(),
+            metadata: { period, totalNet: totalBankPayout, employeeCount: lines.length },
+            dedupeKey: `payroll-${req.params.id}-disbursement`,
+            escalationSteps: [
+              { hoursAfterDue: 0, notifyRole: "finance_manager" },
+              { hoursAfterDue: 24, notifyRole: "general_manager" },
+            ],
+          });
+        }
+      } catch (obErr) { console.error("Payroll obligation registration failed:", obErr); }
+
+      await emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "payroll.posted",
+        entity: "payroll_runs",
+        entityId: Number(req.params.id),
+        details: `ترحيل رواتب ${period}: صافي ${totalBankPayout.toFixed(2)} / GOSI ${totalGosiPayable.toFixed(2)}`,
+      }).catch(console.error);
 
       const [row] = await rawQuery<any>(
         `SELECT * FROM payroll_runs WHERE id = $1`,
@@ -4532,6 +4686,223 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
       },
     });
   } catch (err) { handleRouteError(err, res, "Gratuity calculation error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONTHLY HR ACCRUALS — إقفالات شهرية: إجازات + مكافأة نهاية الخدمة
+// Posts two liabilities to GL each month: accrued leave days (at current
+// daily rate) and accrued EOS gratuity (1/24 of salary for first 5 years,
+// then 1/12 afterwards). Idempotent per period via the JE ref check.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { period } = (req.body || {}) as { period?: string };
+    const targetPeriod = period || new Date().toISOString().slice(0, 7);
+
+    if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
+      res.status(400).json({ error: "صيغة الفترة غير صحيحة (YYYY-MM)" });
+      return;
+    }
+
+    const accrualDate = `${targetPeriod}-01`;
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, accrualDate);
+    if (!periodCheck.open) {
+      res.status(422).json({ error: `لا يمكن تسجيل استحقاقات في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
+      return;
+    }
+
+    const ref = `HR-ACCRUAL-${targetPeriod}`;
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [scope.companyId, ref]
+    );
+    if (existing) {
+      res.status(409).json({ error: "تم تسجيل استحقاقات هذه الفترة مسبقاً", journalId: existing.id });
+      return;
+    }
+
+    const employees = await rawQuery<any>(
+      `SELECT ea."employeeId", ea.salary, ea."startDate",
+              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+       FROM employee_assignments ea
+       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
+                                      AND ec."companyId"=$1 AND ec.status='active'
+       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary > 0`,
+      [scope.companyId]
+    );
+
+    if (employees.length === 0) {
+      res.status(400).json({ error: "لا يوجد موظفون نشطون لاحتساب الاستحقاقات" });
+      return;
+    }
+
+    const periodEnd = new Date(`${targetPeriod}-28`);
+    let totalLeaveAccrual = 0;
+    let totalEosAccrual = 0;
+    const breakdown: any[] = [];
+    const DEFAULT_ANNUAL_LEAVE_DAYS = 21;
+
+    for (const emp of employees) {
+      const salary = Number(emp.salary) || 0;
+      if (salary <= 0) continue;
+
+      const dailyRate = salary / 30;
+      const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
+      const leaveAccrual = Math.round(dailyRate * monthlyLeaveDays * 100) / 100;
+
+      const startDate = new Date(emp.contractStart || emp.startDate);
+      const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
+      let monthlyEosAccrual = 0;
+      if (yearsOfService < 1) {
+        monthlyEosAccrual = salary / 24;
+      } else if (yearsOfService <= 5) {
+        monthlyEosAccrual = salary / 24;
+      } else {
+        monthlyEosAccrual = salary / 12;
+      }
+      monthlyEosAccrual = Math.round(monthlyEosAccrual * 100) / 100;
+
+      totalLeaveAccrual += leaveAccrual;
+      totalEosAccrual += monthlyEosAccrual;
+      breakdown.push({
+        employeeId: emp.employeeId,
+        salary,
+        leaveAccrual,
+        eosAccrual: monthlyEosAccrual,
+      });
+    }
+
+    totalLeaveAccrual = Math.round(totalLeaveAccrual * 100) / 100;
+    totalEosAccrual = Math.round(totalEosAccrual * 100) / 100;
+
+    if (totalLeaveAccrual <= 0 && totalEosAccrual <= 0) {
+      res.status(400).json({ error: "لا توجد مبالغ استحقاق لاحتسابها" });
+      return;
+    }
+
+    const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "hr_leave_accrual_expense", "debit", "5120"),
+      getAccountCodeFromMapping(scope.companyId, "hr_leave_accrual_liability", "credit", "2220"),
+      getAccountCodeFromMapping(scope.companyId, "hr_eos_accrual_expense", "debit", "5130"),
+      getAccountCodeFromMapping(scope.companyId, "hr_eos_accrual_liability", "credit", "2230"),
+    ]);
+
+    const lines = [
+      { accountCode: leaveExpenseCode, debit: totalLeaveAccrual, credit: 0 },
+      { accountCode: eosExpenseCode, debit: totalEosAccrual, credit: 0 },
+      { accountCode: leaveLiabilityCode, debit: 0, credit: totalLeaveAccrual },
+      { accountCode: eosLiabilityCode, debit: 0, credit: totalEosAccrual },
+    ].filter((l) => l.debit > 0 || l.credit > 0);
+
+    let journalId: number | null = null;
+    try {
+      journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: `استحقاقات شهرية: إجازات ${totalLeaveAccrual} + نهاية خدمة ${totalEosAccrual} (${employees.length} موظف)`,
+        lines,
+      });
+    } catch (journalErr) {
+      console.error("HR accrual journal entry failed:", journalErr);
+      res.status(500).json({ error: "فشل تسجيل قيد الاستحقاقات" });
+      return;
+    }
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "hr.accruals.posted",
+      entity: "journal_entries",
+      entityId: journalId,
+      details: JSON.stringify({ period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }),
+    }).catch(console.error);
+
+    res.status(201).json({
+      journalId,
+      ref,
+      period: targetPeriod,
+      totalLeaveAccrual,
+      totalEosAccrual,
+      employeeCount: employees.length,
+      breakdown,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "HR accruals error:");
+  }
+});
+
+// Preview accruals without posting
+router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const period = (req.query.period as string) || new Date().toISOString().slice(0, 7);
+
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      res.status(400).json({ error: "صيغة الفترة غير صحيحة (YYYY-MM)" });
+      return;
+    }
+
+    const ref = `HR-ACCRUAL-${period}`;
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [scope.companyId, ref]
+    );
+
+    const employees = await rawQuery<any>(
+      `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."startDate",
+              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+       FROM employee_assignments ea
+       JOIN employees e ON e.id=ea."employeeId"
+       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
+                                      AND ec."companyId"=$1 AND ec.status='active'
+       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary > 0
+       ORDER BY e.name`,
+      [scope.companyId]
+    );
+
+    const periodEnd = new Date(`${period}-28`);
+    const DEFAULT_ANNUAL_LEAVE_DAYS = 21;
+    let totalLeaveAccrual = 0;
+    let totalEosAccrual = 0;
+    const rows = employees.map((emp: any) => {
+      const salary = Number(emp.salary) || 0;
+      const dailyRate = salary / 30;
+      const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
+      const leaveAccrual = Math.round(dailyRate * monthlyLeaveDays * 100) / 100;
+      const startDate = new Date(emp.contractStart || emp.startDate);
+      const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
+      const monthlyEosAccrual = Math.round(
+        (yearsOfService > 5 ? salary / 12 : salary / 24) * 100
+      ) / 100;
+      totalLeaveAccrual += leaveAccrual;
+      totalEosAccrual += monthlyEosAccrual;
+      return {
+        employeeId: emp.employeeId,
+        employeeName: emp.employeeName,
+        salary,
+        yearsOfService: Math.round(yearsOfService * 100) / 100,
+        leaveAccrual,
+        eosAccrual: monthlyEosAccrual,
+      };
+    });
+
+    res.json({
+      period,
+      alreadyPosted: !!existing,
+      existingJournalId: existing?.id ?? null,
+      employeeCount: employees.length,
+      totalLeaveAccrual: Math.round(totalLeaveAccrual * 100) / 100,
+      totalEosAccrual: Math.round(totalEosAccrual * 100) / 100,
+      total: Math.round((totalLeaveAccrual + totalEosAccrual) * 100) / 100,
+      rows,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "HR accruals preview error:");
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

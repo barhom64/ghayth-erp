@@ -9,6 +9,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -490,6 +491,14 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
 
     const [trip] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
     if (!trip) { res.status(404).json({ error: "الرحلة غير موجودة" }); return; }
+    if (trip.status === "completed") {
+      validationError(res, "الرحلة مكتملة بالفعل", "status", "لا يمكن إكمال رحلة مكتملة مرة أخرى");
+      return;
+    }
+    if (trip.status === "cancelled") {
+      validationError(res, "الرحلة ملغاة", "status", "لا يمكن إكمال رحلة ملغاة");
+      return;
+    }
 
     const endMileage = b.endMileage || 0;
     const startMileage = b.startMileage || 0;
@@ -586,6 +595,7 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
   } catch (err) { handleRouteError(err, res, "Complete trip error:"); }
 });
 
+/** Cancel a trip — frees vehicle+driver via the lifecycle engine, no cost posted */
 router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -716,6 +726,26 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
       });
     }
 
+    // Register obligation for the scheduled service date (for previews, inspections, etc.)
+    try {
+      const serviceDate = new Date(b.serviceDate || new Date().toISOString());
+      if (serviceDate > new Date()) {
+        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
+        await registerObligation({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          entityType: "fleet_maintenance",
+          entityId: insertId,
+          obligationType: "maintenance",
+          title: `صيانة مجدولة — ${veh?.plateNumber || `مركبة #${b.vehicleId}`} / ${b.type || ""}`,
+          dueAt: serviceDate.toISOString(),
+          metadata: { vehicleId: b.vehicleId, type: b.type },
+          dedupeKey: `maintenance-${insertId}-scheduled`,
+          escalationSteps: [{ hoursAfterDue: 24, notifyRole: "fleet_manager" }],
+        });
+      }
+    } catch (obErr) { console.error("Maintenance obligation registration failed:", obErr); }
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create maintenance error:"); }
 });
@@ -727,6 +757,14 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
     const b = req.body;
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!m) { res.status(404).json({ error: "سجل الصيانة غير موجود" }); return; }
+    if (m.status === "completed") {
+      validationError(res, "سجل الصيانة مكتمل بالفعل", "status", "لا يمكن إكمال سجل مكتمل");
+      return;
+    }
+    if (m.status === "cancelled") {
+      validationError(res, "سجل الصيانة ملغى", "status", "لا يمكن إكمال سجل ملغى");
+      return;
+    }
     const finalCost = Number(b.cost || m.cost || 0);
     await rawExecute(`UPDATE fleet_maintenance SET status='completed', cost=$1 WHERE id=$2`, [finalCost, id]);
     if (m.vehicleId) {
@@ -752,8 +790,81 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       } catch (jErr) { console.error("Maintenance journal entry failed:", jErr); }
     }
 
-    res.json({ ...m, status: 'completed', cost: finalCost });
+    // Mark the scheduled obligation as met and register the next one
+    try {
+      await markObligationMet(scope.companyId, "fleet_maintenance", id, "maintenance");
+      if (m.nextServiceDate) {
+        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [m.vehicleId]);
+        const nextDate = new Date(m.nextServiceDate);
+        await registerObligation({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          entityType: "fleet_vehicle",
+          entityId: Number(m.vehicleId),
+          obligationType: "maintenance",
+          title: `صيانة دورية قادمة — ${veh?.plateNumber || `مركبة #${m.vehicleId}`}`,
+          dueAt: nextDate.toISOString(),
+          metadata: { previousMaintenanceId: id, type: m.type },
+          dedupeKey: `vehicle-${m.vehicleId}-next-service-${nextDate.toISOString().split("T")[0]}`,
+        });
+      }
+    } catch (obErr) { console.error("Maintenance obligation update failed:", obErr); }
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "fleet.maintenance.completed",
+      entity: "fleet_maintenance",
+      entityId: id,
+      details: `إكمال صيانة #${id} بتكلفة ${finalCost} ريال`,
+    });
+
+    res.json({ ...m, status: 'completed', cost: finalCost, event: "fleet.maintenance.completed" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+/** Cancel a maintenance job — frees vehicle, no cost posted */
+router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body || {};
+    const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!m) { res.status(404).json({ error: "سجل الصيانة غير موجود" }); return; }
+    if (m.status === "completed") {
+      validationError(res, "لا يمكن إلغاء صيانة مكتملة", "status", "السجل مكتمل مسبقاً");
+      return;
+    }
+    if (m.status === "cancelled") {
+      validationError(res, "السجل ملغى بالفعل", "status", "لا حاجة لإلغاء سجل ملغى");
+      return;
+    }
+    if (!b.reason) {
+      validationError(res, "سبب الإلغاء مطلوب", "reason", "أدخل سبب إلغاء الصيانة");
+      return;
+    }
+
+    await rawExecute(
+      `UPDATE fleet_maintenance SET status='cancelled', description=COALESCE(description,'') || ' | إلغاء: ' || $1 WHERE id=$2`,
+      [b.reason, id]
+    );
+    if (m.vehicleId) {
+      await rawExecute(`UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [m.vehicleId, scope.companyId]);
+    }
+    await cancelObligation(scope.companyId, "fleet_maintenance", id, "maintenance");
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "fleet.maintenance.cancelled",
+      entity: "fleet_maintenance",
+      entityId: id,
+      details: `إلغاء صيانة #${id}: ${b.reason}`,
+    });
+
+    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1`, [id]);
+    res.json({ ...updated, event: "fleet.maintenance.cancelled" });
+  } catch (err) { handleRouteError(err, res, "Cancel maintenance error:"); }
 });
 
 router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {

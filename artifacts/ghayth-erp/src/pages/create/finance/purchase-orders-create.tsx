@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -30,7 +30,7 @@ export default function PurchaseOrdersCreate() {
   const products = productsData?.data || [];
   const { data: copySource } = useApiQuery<any>(["po-copy", copyFromId || ""], `/finance/purchase-orders/${copyFromId}`, !!copyFromId);
 
-  const INITIAL = { supplierId: "", notes: "", branchId: selectedBranchId ? String(selectedBranchId) : "", companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "", costCenter: "", expectedDelivery: "" };
+  const INITIAL = { supplierId: "", notes: "", branchId: selectedBranchId ? String(selectedBranchId) : "", companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "", costCenter: "", expectedDelivery: "", date: new Date().toISOString().split("T")[0] };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [items, setItems] = useState([{ productId: "", quantity: "1", unitPrice: "" }]);
@@ -86,6 +86,7 @@ export default function PurchaseOrdersCreate() {
         companyId: form.companyId ? Number(form.companyId) : undefined,
         costCenter: form.costCenter || undefined,
         expectedDelivery: form.expectedDelivery || undefined,
+        date: form.date || undefined,
         totalAmount,
         items: validItems.map((i) => ({
           productId: i.productId ? Number(i.productId) : undefined,
@@ -110,7 +111,10 @@ export default function PurchaseOrdersCreate() {
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <CreationDateField />
+        <div>
+          <Label>التاريخ</Label>
+          <Input className="mt-1" type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
