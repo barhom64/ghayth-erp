@@ -49,6 +49,36 @@ export async function createNotification(params: {
   }
 }
 
+/**
+ * Publish an event on the in-process event bus.
+ *
+ * **IMPORTANT**: this function is a publisher only — it does NOT write to
+ * `event_logs` directly. Persistence is owned by the listener catalog in
+ * `eventListeners.ts` so every event has exactly one row in `event_logs`
+ * (via `logEvent` inside the listener) and exactly one row in `audit_logs`
+ * (via `logAudit`).
+ *
+ * Before the fix in commit <this>, emitEvent ALSO inserted into event_logs
+ * itself. Combined with the listener's `logEvent`, every event produced
+ * **two** rows in event_logs — which is exactly the duplication the
+ * programmer reported on Step 3 transfer testing ("3 events → 6 rows").
+ *
+ * If a new event name is added without a matching `eventBus.on(...)`
+ * listener, event_logs will silently lose the row. The CI lint rule
+ * `lintEventCoverage.mjs` (P6.1 — P6 enforcement phase) will fail any PR
+ * that emits an event name that's not in the listener catalog; until that
+ * lint lands, run:
+ *
+ *   grep -rhoE 'action:\s*"([a-z][a-z_]*\.)+[a-z_]+"' \
+ *     artifacts/api-server/src/routes artifacts/api-server/src/lib \
+ *     | sort -u > /tmp/emitted.txt
+ *   grep -hoE 'eventBus\.on\("[a-z._]+"' \
+ *     artifacts/api-server/src/lib/eventListeners.ts \
+ *     | sort -u > /tmp/listened.txt
+ *   comm -23 /tmp/emitted.txt /tmp/listened.txt
+ *
+ * Any output from that command is an orphan event that needs a listener.
+ */
 export async function emitEvent(params: {
   companyId: number;
   branchId?: number;
@@ -62,18 +92,10 @@ export async function emitEvent(params: {
   [key: string]: any;
 }) {
   try {
-    await rawExecute(
-      `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [
-        params.companyId,
-        params.userId,
-        params.action,
-        params.entity,
-        params.entityId,
-        params.details ?? null,
-      ]
-    );
+    // NOTE: The previous implementation wrote to event_logs here. That
+    // write is now done by `logEvent` inside the listener in
+    // eventListeners.ts (one row per event, end of story). See the
+    // function doc above for the rationale.
     eventBus.emit(params.action, {
       companyId: params.companyId,
       branchId: params.branchId,
