@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Progress } from "@/components/ui/progress";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+// P4.6 — Projects sweep: shared header + status chips.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { FolderKanban, Plus, Activity, CheckCircle, DollarSign, Eye } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
@@ -83,7 +85,7 @@ export default function Projects() {
         </div>
       ),
     },
-    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <PageStatusBadge status={p.status} domain="project" /> },
     {
       key: "actions",
       header: "الإجراءات",
@@ -101,19 +103,21 @@ export default function Projects() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">إدارة المشاريع</h1>
-        {canManage && (
+    <PageShell
+      title="إدارة المشاريع"
+      subtitle="متابعة المشاريع والمراحل والتكاليف"
+      breadcrumbs={[{ label: "العمليات" }]}
+      actions={
+        canManage ? (
           <Link href="/projects/create">
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
               مشروع جديد
             </Button>
           </Link>
-        )}
-      </div>
-
+        ) : null
+      }
+    >
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50"><FolderKanban className="w-6 h-6 text-blue-600" /></div>
@@ -190,6 +194,6 @@ export default function Projects() {
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة المشروع" data={previewItem} fields={previewFields} />
-    </div>
+    </PageShell>
   );
 }

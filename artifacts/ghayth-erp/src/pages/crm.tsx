@@ -3,12 +3,15 @@ import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
 import { Target, BarChart3, Plus, Eye } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+// P4.3 — CRM domain sweep. Shared header + status chips from P1 primitives.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
+import { currencyColumn } from "@/components/data-table-presets";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
@@ -26,8 +29,11 @@ const STAGE_LABELS: Record<string, string> = {
 export default function CRM() {
   const [tab, setTab] = useState("opportunities");
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">إدارة علاقات العملاء</h1>
+    <PageShell
+      title="إدارة علاقات العملاء"
+      subtitle="متابعة فرص البيع وخط الأنابيب"
+      breadcrumbs={[{ label: "المبيعات والعملاء" }]}
+    >
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="opportunities" className="gap-2"><Target className="h-4 w-4" /> الفرص</TabsTrigger>
@@ -36,7 +42,7 @@ export default function CRM() {
         <TabsContent value="opportunities" className="mt-6"><OpportunitiesTab /></TabsContent>
         <TabsContent value="pipeline" className="mt-6"><PipelineTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 
@@ -97,11 +103,11 @@ function OpportunitiesTab() {
   const columns: DataTableColumn<any>[] = [
     { key: "title", header: "الفرصة", sortable: true, render: (o) => <span className="font-medium">{o.title}</span> },
     { key: "contactName", header: "جهة الاتصال", sortable: true, render: (o) => o.contactName || o.clientName || "-" },
-    { key: "stage", header: "المرحلة", sortable: true, render: (o) => <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700">{STAGE_LABELS[o.stage] || o.stage}</span> },
-    { key: "value", header: "القيمة", sortable: true, render: (o) => <span className="font-bold">{formatCurrency(o.value || 0)}</span> },
+    { key: "stage", header: "المرحلة", sortable: true, render: (o) => <PageStatusBadge status={o.stage}>{STAGE_LABELS[o.stage] || o.stage}</PageStatusBadge> },
+    currencyColumn("value", "القيمة"),
     { key: "probability", header: "الاحتمالية", sortable: true, render: (o) => `${o.probability}%` },
     { key: "assigneeName", header: "المسؤول", sortable: true, render: (o) => o.assigneeName || "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (o) => <StatusBadge status={o.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (o) => <PageStatusBadge status={o.status} /> },
     {
       key: "actions",
       header: "الإجراءات",

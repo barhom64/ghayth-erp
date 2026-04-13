@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+// P4.5 — Property sweep: shared header + status chips.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { Building, Plus, Eye } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -61,7 +63,7 @@ export default function Properties() {
     },
     { key: "area", header: "المساحة", sortable: true, render: (u) => u.area ? `${u.area} م²` : "—" },
     { key: "monthlyRent", header: "الإيجار", sortable: true, className: "font-bold", render: (u) => formatCurrency(u.monthlyRent || 0) },
-    { key: "status", header: "الحالة", sortable: true, render: (u) => <StatusBadge status={u.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (u) => <PageStatusBadge status={u.status} /> },
     {
       key: "actions",
       header: "الإجراءات",
@@ -81,21 +83,18 @@ export default function Properties() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">الوحدات العقارية</h1>
-          <p className="text-gray-500 text-sm mt-1">إدارة وتتبع الوحدات العقارية</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {canManage && (
-            <Link href="/properties/create">
-              <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة وحدة</Button>
-            </Link>
-          )}
-        </div>
-      </div>
-
+    <PageShell
+      title="الوحدات العقارية"
+      subtitle="إدارة وتتبع الوحدات العقارية"
+      breadcrumbs={[{ label: "العقارات" }]}
+      actions={
+        canManage ? (
+          <Link href="/properties/create">
+            <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة وحدة</Button>
+          </Link>
+        ) : null
+      }
+    >
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي الوحدات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.totalUnits || 0}</div></CardContent></Card>
         <Card className="bg-emerald-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">متاحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.available || 0}</div></CardContent></Card>
@@ -155,6 +154,6 @@ export default function Properties() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

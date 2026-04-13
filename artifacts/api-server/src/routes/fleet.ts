@@ -1,4 +1,10 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -119,7 +125,7 @@ router.get("/vehicles/:id", requirePermission("fleet:read"), async (req, res) =>
     const scope = req.scope!;
     const vehicleId = Number(req.params.id);
     const [row] = await rawQuery<any>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" WHERE v.id=$1 AND v."companyId"=$2`, [vehicleId, scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المركبة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المركبة غير موجودة");
     const [trips, maintenance, fuelLogs, insurance] = await Promise.all([
       rawQuery<any>(
         `SELECT t.id, t."fromLocation", t."toLocation", t.distance, t.cost, t.status, t."startTime", t."endTime", d.name AS "driverName"
@@ -163,7 +169,7 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المركبة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("المركبة غير موجودة");
     const b = req.body;
     if (b.status !== undefined && b.status !== existing.status) {
       const preview = await getVehicleStatusImpact(id, scope.companyId, b.status);
@@ -213,7 +219,7 @@ router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, re
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المركبة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("المركبة غير موجودة");
     await rawExecute(`UPDATE fleet_vehicles SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف المركبة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
@@ -223,7 +229,7 @@ router.get("/drivers/:id", requirePermission("fleet:read"), async (req, res) => 
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "السائق غير موجود" }); return; }
+    if (!row) throw new NotFoundError("السائق غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
@@ -233,7 +239,7 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "السائق غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("السائق غير موجود");
     const b = req.body;
     const sets: string[] = [];
     const params: any[] = [];
@@ -255,7 +261,7 @@ router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "السائق غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("السائق غير موجود");
     await rawExecute(`UPDATE fleet_drivers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف السائق بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
@@ -490,7 +496,7 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
     const b = req.body;
 
     const [trip] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
-    if (!trip) { res.status(404).json({ error: "الرحلة غير موجودة" }); return; }
+    if (!trip) throw new NotFoundError("الرحلة غير موجودة");
     if (trip.status === "completed") {
       validationError(res, "الرحلة مكتملة بالفعل", "status", "لا يمكن إكمال رحلة مكتملة مرة أخرى");
       return;
@@ -649,7 +655,7 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
     const tripId = Number(req.params.id);
     const b = req.body;
     const [trip] = await rawQuery<any>(`SELECT "vehicleId","driverId" FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
-    if (!trip) { res.status(404).json({ error: "الرحلة غير موجودة" }); return; }
+    if (!trip) throw new NotFoundError("الرحلة غير موجودة");
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,NOW())`,
       [trip.vehicleId, trip.driverId, b.lat || b.latitude, b.lon || b.longitude, b.speed || 0]
@@ -756,7 +762,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
     const id = Number(req.params.id);
     const b = req.body;
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!m) { res.status(404).json({ error: "سجل الصيانة غير موجود" }); return; }
+    if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
       validationError(res, "سجل الصيانة مكتمل بالفعل", "status", "لا يمكن إكمال سجل مكتمل");
       return;
@@ -830,7 +836,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
     const id = Number(req.params.id);
     const b = req.body || {};
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!m) { res.status(404).json({ error: "سجل الصيانة غير موجود" }); return; }
+    if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
       validationError(res, "لا يمكن إلغاء صيانة مكتملة", "status", "السجل مكتمل مسبقاً");
       return;
@@ -1159,7 +1165,7 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
       `UPDATE fleet_trips SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "الرحلة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("الرحلة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1169,7 +1175,7 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الرحلة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الرحلة غير موجودة");
     await rawExecute(`UPDATE fleet_trips SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -1191,7 +1197,7 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
       `UPDATE fleet_maintenance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "سجل الصيانة غير موجود" }); return; }
+    if (!row) throw new NotFoundError("سجل الصيانة غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1201,7 +1207,7 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "سجل الصيانة غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("سجل الصيانة غير موجود");
     await rawExecute(`UPDATE fleet_maintenance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -1225,7 +1231,7 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
       `UPDATE fleet_fuel_logs SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "سجل الوقود غير موجود" }); return; }
+    if (!row) throw new NotFoundError("سجل الوقود غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1235,7 +1241,7 @@ router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, r
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "سجل الوقود غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("سجل الوقود غير موجود");
     await rawExecute(`UPDATE fleet_fuel_logs SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -1258,7 +1264,7 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
       `UPDATE fleet_insurance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "سجل التأمين غير موجود" }); return; }
+    if (!row) throw new NotFoundError("سجل التأمين غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1268,7 +1274,7 @@ router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, r
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "سجل التأمين غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
     await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -1383,7 +1389,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
        WHERE p.id=$1 AND p."companyId"=$2`,
       [id, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "الخطة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الخطة غير موجودة");
 
     if (b.nextServiceDate !== undefined) { params.push(b.nextServiceDate); sets.push(`"nextServiceDate"=$${params.length}`); }
     if (b.nextServiceMileage !== undefined) { params.push(b.nextServiceMileage); sets.push(`"nextServiceMileage"=$${params.length}`); }
@@ -1417,7 +1423,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
       `UPDATE fleet_preventive_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!rows[0]) { res.status(404).json({ error: "الخطة غير موجودة" }); return; }
+    if (!rows[0]) throw new NotFoundError("الخطة غير موجودة");
 
     // If parts were consumed during this service, deduct from warehouse inventory
     if (b.partsUsed && Array.isArray(b.partsUsed) && b.partsUsed.length > 0) {
@@ -1583,7 +1589,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
       `SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("المخالفة غير موجودة");
     if (existing.status === 'paid') {
       res.status(409).json({ error: "المخالفة مدفوعة بالفعل" }); return;
     }
@@ -1648,7 +1654,7 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
        WHERE v.id=$1 AND v."companyId"=$2`,
       [vehicleId, scope.companyId]
     );
-    if (!vehicle) { res.status(404).json({ error: "المركبة غير موجودة" }); return; }
+    if (!vehicle) throw new NotFoundError("المركبة غير موجودة");
 
     const [fuelCost] = await rawQuery<any>(
       `SELECT COALESCE(SUM("totalCost"),0) AS total, COALESCE(SUM(liters),0) AS liters,

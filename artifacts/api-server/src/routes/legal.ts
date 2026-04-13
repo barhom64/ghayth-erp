@@ -1,4 +1,10 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -102,7 +108,7 @@ router.get("/contracts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!row) throw new NotFoundError("العقد غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
@@ -112,7 +118,7 @@ router.patch("/contracts/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id, "startDate", "endDate" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("العقد غير موجود");
     const b = req.body;
     const effectiveStart = b.startDate || existing.startDate;
     const effectiveEnd = b.endDate || existing.endDate;
@@ -144,7 +150,7 @@ router.delete("/contracts/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("العقد غير موجود");
     await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف العقد بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
@@ -167,7 +173,7 @@ router.post("/contracts/:id/renew", async (req, res) => {
       `SELECT id, "endDate", value, "renewalCount" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!current) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!current) throw new NotFoundError("العقد غير موجود");
     if (new Date(newEndDate) <= new Date(current.endDate)) {
       validationError(res, "تاريخ نهاية التجديد يجب أن يكون بعد تاريخ النهاية الحالي", "newEndDate", "اختر تاريخاً لاحقاً لتاريخ النهاية الحالي");
       return;
@@ -312,7 +318,7 @@ router.get("/cases/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("القضية غير موجودة");
 
     const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [row.id]);
 
@@ -325,7 +331,7 @@ router.patch("/cases/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("القضية غير موجودة");
     const b = req.body;
 
     if (b.status !== undefined && b.status !== existing.status) {
@@ -394,7 +400,7 @@ router.delete("/cases/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("القضية غير موجودة");
     await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف القضية بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete case error:"); }
@@ -410,7 +416,7 @@ router.post("/cases/:id/close", async (req, res) => {
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!lc) throw new NotFoundError("القضية غير موجودة");
     if (lc.status === "closed") {
       validationError(res, "القضية مغلقة بالفعل", "status", "لا حاجة لإغلاق قضية مغلقة");
       return;
@@ -453,7 +459,7 @@ router.get("/cases/:caseId/sessions", async (req, res) => {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
     const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
-    if (!legalCase) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!legalCase) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [caseId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
@@ -466,7 +472,7 @@ router.post("/cases/:caseId/sessions", async (req, res) => {
     const caseId = Number(req.params.caseId);
 
     const [legalCase] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
-    if (!legalCase) { res.status(404).json({ error: "القضية غير موجودة أو غير مصرح بها" }); return; }
+    if (!legalCase) throw new NotFoundError("القضية غير موجودة أو غير مصرح بها");
 
     let distanceToCourtKm: number | null = null;
     if (b.courtLat && b.courtLon && b.officeLat && b.officeLon) {
@@ -619,7 +625,7 @@ router.get("/cases/:caseId/correspondence", async (req, res) => {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
-    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!lc) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC`, [caseId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
@@ -631,7 +637,7 @@ router.post("/cases/:caseId/correspondence", async (req, res) => {
     const caseId = Number(req.params.caseId);
     const b = req.body;
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
-    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
       `INSERT INTO legal_correspondence ("caseId","companyId",direction,subject,parties,"correspondenceDate","documentRef",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [caseId, scope.companyId, b.direction || 'outgoing', b.subject, b.parties, b.correspondenceDate || new Date().toISOString().split('T')[0], b.documentRef || null, b.notes || null]
@@ -646,7 +652,7 @@ router.get("/cases/:caseId/judgments", async (req, res) => {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
-    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!lc) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 ORDER BY "judgmentDate" DESC`, [caseId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
@@ -658,7 +664,7 @@ router.post("/cases/:caseId/judgments", async (req, res) => {
     const caseId = Number(req.params.caseId);
     const b = req.body;
     const [lc] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
-    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
       `INSERT INTO legal_judgments ("caseId","companyId","judgmentDate","judgmentType",verdict,amount,"paidAmount","dueDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [caseId, scope.companyId, b.judgmentDate, b.judgmentType || 'judgment', b.verdict, b.amount || 0, b.paidAmount || 0, b.dueDate || null, b.notes || null]
@@ -758,7 +764,7 @@ router.patch("/cases/:id/financial-risk", async (req, res) => {
     const id = Number(req.params.id);
     const { financialRisk, riskLevel } = req.body;
     const [existing] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("القضية غير موجودة");
     await rawExecute(
       `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3`,
       [financialRisk || 0, riskLevel || 'medium', id]

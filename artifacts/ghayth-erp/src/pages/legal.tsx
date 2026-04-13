@@ -3,8 +3,10 @@ import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+// P4.7 — Legal sweep: shared header + status chips.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -17,9 +19,11 @@ export default function Legal() {
   const { data: stats } = useApiQuery(["legal-stats"], "/legal/stats");
   const s: any = stats || {};
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">الشؤون القانونية</h1>
-
+    <PageShell
+      title="الشؤون القانونية"
+      subtitle="العقود والقضايا والجلسات والأحكام"
+      breadcrumbs={[{ label: "القانونية" }]}
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "العقود النشطة", value: s.activeContracts || 0, color: "text-blue-600 bg-blue-50" },
@@ -46,7 +50,7 @@ export default function Legal() {
         <TabsContent value="cases" className="mt-6"><CasesTab /></TabsContent>
         <TabsContent value="financial" className="mt-6"><FinancialLegalTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 
@@ -90,7 +94,7 @@ function ContractsTab() {
     { key: "startDate", header: "من", sortable: true, render: (c) => formatDateAr(c.startDate) },
     { key: "endDate", header: "إلى", sortable: true, render: (c) => formatDateAr(c.endDate) },
     { key: "value", header: "القيمة", sortable: true, render: (c) => c.value ? formatCurrency(Number(c.value)) : "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <PageStatusBadge status={c.status} domain="legal_case" /> },
     {
       key: "actions", header: "الإجراءات",
       render: (c) => (
@@ -218,8 +222,8 @@ function CasesTab() {
     { key: "court", header: "المحكمة", sortable: true, render: (c) => c.court || "-" },
     { key: "opposingParty", header: "الخصم", sortable: true, render: (c) => c.opposingParty || "-" },
     { key: "lawyerName", header: "المحامي", sortable: true, render: (c) => c.lawyerName || "-" },
-    { key: "priority", header: "الأولوية", sortable: true, render: (c) => <StatusBadge status={c.priority} /> },
-    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    { key: "priority", header: "الأولوية", sortable: true, render: (c) => <PageStatusBadge status={c.priority} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <PageStatusBadge status={c.status} domain="legal_case" /> },
     {
       key: "actions", header: "الإجراءات",
       render: (c) => (

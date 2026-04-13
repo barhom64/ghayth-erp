@@ -1,4 +1,10 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -85,7 +91,7 @@ router.get("/units/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!row) { res.status(404).json({ error: "الوحدة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("الوحدة غير موجودة");
 
     const [contracts, payments, maintenance, timeline] = await Promise.all([
       rawQuery<any>(
@@ -129,7 +135,7 @@ router.patch("/units/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id, status FROM property_units WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الوحدة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الوحدة غير موجودة");
     const b = req.body;
     if (b.status !== undefined && b.status !== existing.status) {
       const preview = await getPropertyUnitStatusImpact(id, scope.companyId, b.status);
@@ -188,7 +194,7 @@ router.delete("/units/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الوحدة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الوحدة غير موجودة");
     await rawExecute(`UPDATE property_units SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف الوحدة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
@@ -385,7 +391,7 @@ router.patch("/contracts/:id", async (req, res) => {
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE rental_contracts SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("العقد غير موجود");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
 });
@@ -395,7 +401,7 @@ router.delete("/contracts/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("العقد غير موجود");
     await rawExecute(`UPDATE rental_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف العقد" });
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
@@ -416,7 +422,7 @@ router.post("/contracts/:id/renew", async (req, res) => {
       `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!contract) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!contract) throw new NotFoundError("العقد غير موجود");
     if (!["active", "expired"].includes(contract.status)) {
       validationError(res, `لا يمكن تجديد عقد بحالة ${contract.status}`, "status", "يمكن تجديد العقود النشطة أو المنتهية فقط");
       return;
@@ -525,7 +531,7 @@ router.post("/contracts/:id/terminate", async (req, res) => {
       `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!contract) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!contract) throw new NotFoundError("العقد غير موجود");
     if (!["active", "draft"].includes(contract.status)) {
       validationError(res, `لا يمكن إنهاء عقد بحالة ${contract.status}`, "status", "العقد منتهي أو ملغي مسبقاً");
       return;
@@ -644,7 +650,7 @@ router.patch("/tenants/:id", async (req, res) => {
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE tenants SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "المستأجر غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("المستأجر غير موجود");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update tenant error:"); }
 });
@@ -654,7 +660,7 @@ router.delete("/tenants/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM tenants WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المستأجر غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المستأجر غير موجود");
     await rawExecute(`UPDATE tenants SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف المستأجر" });
   } catch (err) { handleRouteError(err, res, "Delete tenant error:"); }
@@ -696,7 +702,7 @@ router.post("/payments/:id/pay", async (req, res) => {
         WHERE rp.id = $1`,
       [Number(id)]
     );
-    if (!existing) { res.status(404).json({ error: "القسط غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("القسط غير موجود");
 
     // 1. Post journal entry FIRST. If this fails, the payment update never happens,
     //    preserving dual-entry invariants (no cash recorded without a GL post).
@@ -1032,7 +1038,7 @@ router.patch("/maintenance-requests/:id/approve", async (req, res) => {
       `SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
-    if (!mr) { res.status(404).json({ error: "طلب الصيانة غير موجود" }); return; }
+    if (!mr) throw new NotFoundError("طلب الصيانة غير موجود");
 
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
     if (newStatus === "rejected" && !notes) {
@@ -1094,7 +1100,7 @@ router.post("/maintenance-requests/:id/complete", async (req, res) => {
     const id = Number(req.params.id);
     const b = req.body;
     const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!mr) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!mr) throw new NotFoundError("الطلب غير موجود");
 
     const validationErrors: string[] = [];
     if (!b.closureReport && !mr.closureReport) validationErrors.push("تقرير الإغلاق مطلوب");
@@ -1395,7 +1401,7 @@ router.get("/tenants/:id", async (req, res) => {
       : [];
 
     if (!tenantRecord && contracts.length === 0) {
-      res.status(404).json({ error: "المستأجر غير موجود" }); return;
+      throw new NotFoundError("المستأجر غير موجود");
     }
 
     const contractIds = contracts.map((c: any) => c.id);
@@ -1473,7 +1479,7 @@ router.get("/buildings/:id", async (req, res) => {
        GROUP BY b.id`,
       [id, scope.companyId]
     );
-    if (!building) { res.status(404).json({ error: "المبنى غير موجود" }); return; }
+    if (!building) throw new NotFoundError("المبنى غير موجود");
     res.json(building);
   } catch (err) { handleRouteError(err, res, "Building detail error:"); }
 });
@@ -1511,7 +1517,7 @@ router.patch("/buildings/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM property_buildings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المبنى غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المبنى غير موجود");
     const b = req.body;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
@@ -1544,7 +1550,7 @@ router.delete("/buildings/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM property_buildings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المبنى غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المبنى غير موجود");
     await rawExecute(`UPDATE property_buildings SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف المبنى" });
   } catch (err) { handleRouteError(err, res, "Delete building error:"); }
@@ -1650,7 +1656,7 @@ router.patch("/maintenance-requests/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("الطلب غير موجود");
     const b = req.body;
     const params: any[] = [];
     const sets: string[] = [];
@@ -1825,7 +1831,7 @@ router.get("/owners/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [owner] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!owner) { res.status(404).json({ error: "المالك غير موجود" }); return; }
+    if (!owner) throw new NotFoundError("المالك غير موجود");
     const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const units = await rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const contracts = await rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 ORDER BY c.id DESC`, [id, scope.companyId]);
@@ -1863,7 +1869,7 @@ router.patch("/owners/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المالك غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المالك غير موجود");
     const b = req.body;
     const fields: string[] = [];
     const params: any[] = [];
@@ -1894,7 +1900,7 @@ router.delete("/owners/:id", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المالك غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المالك غير موجود");
     await rawExecute(`UPDATE property_owners SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف المالك" });
   } catch (err) { handleRouteError(err, res, "Delete owner error:"); }
@@ -1905,7 +1911,7 @@ router.get("/contracts/:id/schedule", async (req, res) => {
     const scope = req.scope!;
     const contractId = Number(req.params.id);
     const [contract] = await rawQuery<any>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2`, [contractId, scope.companyId]);
-    if (!contract) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!contract) throw new NotFoundError("العقد غير موجود");
     const schedule = await rawQuery<any>(
       `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`,
       [contractId]
@@ -1925,7 +1931,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", async (req, res) => {
       `SELECT cps.*, rc."tenantName", u."unitNumber", u."buildingName" FROM contract_payment_schedule cps JOIN rental_contracts rc ON rc.id=cps."contractId" LEFT JOIN property_units u ON u.id=rc."unitId" WHERE cps.id=$1 AND cps."contractId"=$2 AND cps."companyId"=$3`,
       [installmentId, contractId, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "القسط غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("القسط غير موجود");
     const newPaid = Number(existing.paidAmount || 0) + paidAmount;
     const newStatus = newPaid >= Number(existing.amount) ? 'paid' : 'partial';
     const receiptNumber = b.receiptNumber || `RCP-${Date.now().toString(36).toUpperCase()}`;
@@ -2019,7 +2025,7 @@ router.patch("/inspections/:id", async (req, res) => {
       `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!rows[0]) { res.status(404).json({ error: "الفحص غير موجود" }); return; }
+    if (!rows[0]) throw new NotFoundError("الفحص غير موجود");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update inspection error:"); }
 });
@@ -2114,7 +2120,7 @@ router.patch("/deposits/:id/refund", async (req, res) => {
       `SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2 AND status='held'`,
       [id, scope.companyId]
     );
-    if (!deposit) { res.status(404).json({ error: "الوديعة غير موجودة أو تم إرجاعها" }); return; }
+    if (!deposit) throw new NotFoundError("الوديعة غير موجودة أو تم إرجاعها");
     const refundAmount = Number(b.refundAmount || deposit.amount);
     if (refundAmount < 0 || refundAmount > Number(deposit.amount)) {
       res.status(400).json({ error: "قيمة الإرجاع غير صحيحة — يجب أن تكون بين صفر وقيمة الوديعة" });

@@ -1,4 +1,9 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -170,7 +175,7 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
     }
 
     const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" WHERE ${detailWhere}`, detailParams);
-    if (!project) { res.status(404).json({ error: "المشروع غير موجود" }); return; }
+    if (!project) throw new NotFoundError("المشروع غير موجود");
     const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex"`, [project.id]);
     const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."dueDate"`, [project.id]);
 
@@ -237,7 +242,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
       return;
     }
     const [existing] = await rawQuery<any>(findQuery, findParams);
-    if (!existing) { res.status(404).json({ error: "المشروع غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المشروع غير موجود");
     const b = req.body;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
@@ -270,7 +275,7 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
       return;
     }
     const [existing] = await rawQuery<any>(findQuery, findParams);
-    if (!existing) { res.status(404).json({ error: "المشروع غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المشروع غير موجود");
     await rawExecute(`UPDATE projects SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف المشروع بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete project error:"); }
@@ -295,10 +300,10 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
     const phaseId = Number(req.params.phaseId);
 
     const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2`, [projectId, scope.companyId]);
-    if (!project) { res.status(404).json({ error: "المشروع غير موجود" }); return; }
+    if (!project) throw new NotFoundError("المشروع غير موجود");
 
     const [phase] = await rawQuery<any>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
-    if (!phase) { res.status(404).json({ error: "المرحلة غير موجودة" }); return; }
+    if (!phase) throw new NotFoundError("المرحلة غير موجودة");
 
     await rawExecute(`UPDATE project_phases SET status='completed' WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
 
@@ -601,7 +606,7 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       `UPDATE project_milestones SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!rows[0]) { res.status(404).json({ error: "المعلم غير موجود" }); return; }
+    if (!rows[0]) throw new NotFoundError("المعلم غير موجود");
 
     // If milestone was marked completed, mark its obligation as met
     if (b.status === 'completed') {
@@ -687,7 +692,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
       `UPDATE project_risks SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!rows[0]) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
+    if (!rows[0]) throw new NotFoundError("المخاطرة غير موجودة");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update risk error:"); }
 });

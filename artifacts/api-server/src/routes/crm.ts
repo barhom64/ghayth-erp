@@ -1,4 +1,9 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -152,13 +157,18 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     const b = req.body;
 
     const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2`, [oppId, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الفرصة غير موجودة");
 
     if ((b.stage === 'closed_won' || b.stage === 'closed_lost') && existing.stage !== b.stage) {
       const hasClientInfo = existing.clientId || existing.contactName || b.clientId || b.contactName;
       if (!hasClientInfo) {
-        res.status(422).json({ error: "لا يمكن إغلاق الصفقة بدون بيانات العميل (clientId أو contactName مطلوب)", field: "clientId" });
-        return;
+        throw new ValidationError(
+          "لا يمكن إغلاق الصفقة بدون بيانات العميل",
+          {
+            field: "clientId",
+            fix: "أضف بيانات العميل (اسم أو ID) قبل محاولة إغلاق الصفقة.",
+          },
+        );
       }
     }
 
@@ -399,7 +409,7 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
     const activities = await rawQuery<any>(
       `SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "scheduledAt" DESC`,
@@ -427,10 +437,13 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       `SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الفرصة غير موجودة");
     if (existing.convertedAt) {
-      res.status(409).json({ error: "تم تحويل هذه الفرصة مسبقاً", field: "convertedAt" });
-      return;
+      throw new ConflictError("تم تحويل هذه الفرصة مسبقاً", {
+        field: "convertedAt",
+        fix: "الفرصة مرتبطة بالفعل بعميل. افتح العميل من رابط الفرصة.",
+        meta: { convertedAt: existing.convertedAt },
+      });
     }
 
     const dealValue = (req.body?.value as number | undefined) ?? existing.value ?? 0;
@@ -477,7 +490,7 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الفرصة غير موجودة");
     await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     await cancelObligation(scope.companyId, "crm_opportunity", id).catch(console.error);
     emitEvent({
@@ -505,7 +518,7 @@ router.get("/opportunities/:id/related", requirePermission("crm:read"), async (r
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!base) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
+    if (!base) throw new NotFoundError("الفرصة غير موجودة");
 
     const conds: string[] = [];
     const params: any[] = [scope.companyId, id];

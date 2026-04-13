@@ -3,8 +3,10 @@ import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+// P4.4 — Fleet sweep: shared header + status chips.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { Car, Users, MapPin, Wrench, Fuel, Plus, Eye, FileCheck, Link2, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +19,11 @@ import { useAppContext } from "@/contexts/app-context";
 export default function Fleet() {
   const [tab, setTab] = useState("vehicles");
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">إدارة الأسطول</h1>
+    <PageShell
+      title="إدارة الأسطول"
+      subtitle="المركبات والسائقون والرحلات والصيانة والوقود"
+      breadcrumbs={[{ label: "الأسطول" }]}
+    >
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="vehicles" className="gap-2"><Car className="h-4 w-4" /> المركبات</TabsTrigger>
@@ -33,7 +38,7 @@ export default function Fleet() {
         <TabsContent value="maintenance" className="mt-6"><MaintenanceTab /></TabsContent>
         <TabsContent value="fuel" className="mt-6"><FuelTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 
@@ -104,7 +109,7 @@ function VehiclesTab() {
       render: (v) => `${formatNumber(v.currentMileage || 0)} كم`,
     },
     { key: "driverName", header: "السائق", sortable: true, render: (v) => v.driverName || "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (v) => <StatusBadge status={v.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} domain="vehicle" /> },
     {
       key: "registration",
       header: "الاستمارة",
@@ -245,7 +250,7 @@ function DriversTab() {
     { key: "licenseNumber", header: "رقم الرخصة", sortable: true, render: (d) => d.licenseNumber || "-" },
     { key: "rating", header: "التقييم", sortable: true, render: (d) => <>⭐ {d.rating}</> },
     { key: "totalTrips", header: "الرحلات", sortable: true },
-    { key: "status", header: "الحالة", sortable: true, render: (d) => <StatusBadge status={d.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (d) => <PageStatusBadge status={d.status} /> },
     {
       key: "actions",
       header: "الإجراءات",
@@ -339,7 +344,7 @@ function TripsTab() {
     { key: "fromLocation", header: "من", sortable: true, className: "max-w-[150px] truncate", render: (t) => t.fromLocation || "-" },
     { key: "toLocation", header: "إلى", sortable: true, className: "max-w-[150px] truncate", render: (t) => t.toLocation || "-" },
     { key: "distance", header: "المسافة", sortable: true, ltr: true, className: "text-right", render: (t) => t.distance ? `${t.distance} كم` : "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (t) => <StatusBadge status={t.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (t) => <PageStatusBadge status={t.status} domain="trip" /> },
   ];
 
   return (
@@ -408,7 +413,7 @@ function MaintenanceTab() {
     { key: "description", header: "الوصف", sortable: true, className: "max-w-[200px] truncate", render: (r) => r.description || "-" },
     { key: "cost", header: "التكلفة", sortable: true, render: (r) => formatCurrency(r.cost || 0) },
     { key: "serviceDate", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.serviceDate) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <StatusBadge status={r.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} /> },
   ];
 
   return (
