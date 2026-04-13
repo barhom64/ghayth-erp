@@ -594,6 +594,22 @@ async function inquiryMemoEscalation(): Promise<string> {
         [memo.id, memo.companyId]
       ).catch(() => {});
 
+      // Tell the employee why their memo moved on — otherwise the auto-decline
+      // is silent from the employee's perspective and they may later dispute
+      // an imposed penalty without ever seeing the 72h window close.
+      if (memo.assignmentId) {
+        createNotification({
+          companyId: memo.companyId,
+          assignmentId: memo.assignmentId,
+          type: "inquiry_memo",
+          title: "تجاوز مهلة الرد على محضر الاستفسار",
+          body: `انقضت مهلة 72 ساعة على المحضر ${memo.memoNumber} دون رد، وقد اعتُبر عدم الرد رفضاً ضمنياً.`,
+          priority: "high",
+          refType: "hr_inquiry_memo",
+          refId: memo.id,
+        }).catch(console.error);
+      }
+
       const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch(() => null);
       if (managerAssignmentId) {
         createNotification({

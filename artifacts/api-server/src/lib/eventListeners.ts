@@ -175,6 +175,14 @@ export function registerEventListeners() {
     }
   });
 
+  // Return-to-work closure (emitted by the daily leave_return_to_work_closure
+  // cron when an approved leave's endDate has passed). Without this subscriber
+  // the completion transition would leave no row in audit_logs.
+  eventBus.on("leave.completed", async (payload) => {
+    await logEvent("leave.completed", payload);
+    await logAudit("leave.completed", { ...payload, action: "complete" });
+  });
+
   eventBus.on("attendance.checkin", async (payload) => {
     await logEvent("attendance.checkin", payload);
     await logAudit("attendance.checkin", { ...payload, action: "create" });
@@ -370,6 +378,18 @@ export function registerEventListeners() {
     await logAudit("hr.memo.gm_decided", {
       ...payload,
       action: "gm_decide",
+      entity: "hr_inquiry_memo",
+    });
+  });
+
+  // Auto-escalation fired by the inquiry_memo_escalation cron when a memo
+  // has been sitting in pending_employee for >72h. Keeps the global audit
+  // trail aligned with the per-memo timeline row inserted by the cron.
+  eventBus.on("hr.memo.auto_escalated", async (payload) => {
+    await logEvent("hr.memo.auto_escalated", payload);
+    await logAudit("hr.memo.auto_escalated", {
+      ...payload,
+      action: "auto_escalate",
       entity: "hr_inquiry_memo",
     });
   });
