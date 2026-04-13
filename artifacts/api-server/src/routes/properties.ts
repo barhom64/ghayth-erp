@@ -3,7 +3,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createJournalEntry, emitEvent } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 
@@ -643,10 +643,35 @@ router.post("/late-rent/escalate", async (req, res) => {
       if (targetStage === 'legal_transfer') {
         action = 'تحويل للقسم القانوني';
         try {
-          await rawExecute(
-            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty",status,priority,description) VALUES ($1,$2,$3,'property_rent',$4,'open','high',$5)`,
-            [cid, `RENT-${payment.id}-${Date.now()}`, `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`, payment.tenantName, `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`]
+          // Resolve a real responsible person so the auto-created case isn't
+          // orphaned in open/NULL-assignee limbo.
+          const responsible = await getLegalResponsible(cid);
+          const lawyerName = responsible?.employeeName ?? null;
+
+          const { insertId: caseId } = await rawExecute(
+            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
+            [cid, `RENT-${payment.id}-${Date.now()}`, `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`, payment.tenantName, lawyerName, `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`]
           );
+
+          emitEvent({
+            companyId: cid, userId: scope.userId,
+            action: "legal.case.created", entity: "legal_cases", entityId: Number(caseId),
+            details: `قضية إيجار متأخر — ${payment.tenantName}`,
+          }).catch(console.error);
+
+          if (responsible) {
+            createNotification({
+              companyId: cid,
+              assignmentId: responsible.assignmentId,
+              type: "legal_case_assigned",
+              title: "قضية إيجار متأخر مسندة إليك",
+              body: `تم إنشاء قضية تحصيل إيجار متأخر للمستأجر ${payment.tenantName} — وحدة ${payment.unitNumber}`,
+              priority: "high",
+              refType: "legal_case",
+              refId: Number(caseId),
+              actionUrl: `/legal/cases/${caseId}`,
+            }).catch(console.error);
+          }
         } catch (legalErr) {
           console.error("Failed to create legal case:", legalErr);
         }

@@ -3,7 +3,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createJournalEntry } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
@@ -262,16 +262,45 @@ router.post("/cases", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    // Always resolve a responsible lawyer: if caller didn't supply one, fall back
+    // to legal_manager → general_manager → owner so the case never lands in
+    // open-with-NULL-assignee limbo.
+    let lawyerName: string | null = b.lawyerName || null;
+    const responsible = await getLegalResponsible(scope.companyId);
+    if (!lawyerName && responsible) lawyerName = responsible.employeeName;
+
     const { insertId } = await rawExecute(
       `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, b.lawyerName, b.status || 'open', b.priority || 'medium', b.description]
+      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description]
     );
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_cases", entityId: insertId,
-      after: { title: b.title, caseType: b.caseType, status: 'open', priority: b.priority || 'medium' },
+      after: { title: b.title, caseType: b.caseType, status: 'open', priority: b.priority || 'medium', lawyerName },
     }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "legal.case.created", entity: "legal_cases", entityId: insertId,
+      details: `قضية جديدة: ${b.title || b.caseNumber || ''}`,
+    }).catch(console.error);
+
+    // Notify the responsible lawyer so the case appears in their inbox.
+    if (responsible) {
+      createNotification({
+        companyId: scope.companyId,
+        assignmentId: responsible.assignmentId,
+        type: "legal_case_assigned",
+        title: "قضية قانونية جديدة مسندة إليك",
+        body: `تم إسناد القضية "${b.title || b.caseNumber || insertId}" إليك — الرجاء المتابعة`,
+        priority: b.priority === 'high' ? 'high' : 'normal',
+        refType: "legal_case",
+        refId: insertId,
+        actionUrl: `/legal/cases/${insertId}`,
+      }).catch(console.error);
+    }
 
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -326,6 +355,33 @@ router.patch("/cases/:id", async (req, res) => {
       action: "update", entity: "legal_cases", entityId: id,
       before: { status: existing.status }, after: { status: b.status || existing.status },
     }).catch(console.error);
+
+    // Lifecycle events + closure notification so no case ends silently.
+    if (b.status !== undefined && b.status !== existing.status) {
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: `legal.case.${b.status}`, entity: "legal_cases", entityId: id,
+        details: `القضية #${id} انتقلت من ${existing.status} إلى ${b.status}`,
+        before: { status: existing.status }, after: { status: b.status },
+      }).catch(console.error);
+
+      if (b.status === 'closed') {
+        const responsible = await getLegalResponsible(scope.companyId);
+        if (responsible) {
+          createNotification({
+            companyId: scope.companyId,
+            assignmentId: responsible.assignmentId,
+            type: "legal_case_closed",
+            title: "قضية قانونية مغلقة",
+            body: `تم إغلاق القضية "${existing.title || existing.caseNumber || id}"`,
+            priority: "normal",
+            refType: "legal_case",
+            refId: id,
+            actionUrl: `/legal/cases/${id}`,
+          }).catch(console.error);
+        }
+      }
+    }
 
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
     res.json({ ...row, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });

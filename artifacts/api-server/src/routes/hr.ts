@@ -2280,6 +2280,21 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
           [request.refId]
         );
       }
+
+      // Cancel any queued email/WhatsApp dispatches for a rejected official
+      // letter — otherwise the queue workers will send it after it was denied.
+      if (request.refType === "official_letter") {
+        await rawExecute(
+          `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+            WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
+          [request.refId]
+        ).catch((e) => console.error("cancel email_queue for rejected letter failed:", e));
+        await rawExecute(
+          `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+            WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
+          [request.refId]
+        ).catch(() => { /* whatsapp_queue may not exist */ });
+      }
     }
 
     emitEvent({
@@ -2894,6 +2909,21 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
         `UPDATE official_letters SET status = $1 WHERE id = $2`,
         [newStatus, Number(id)]
       );
+    }
+
+    // If the letter was rejected or returned, cancel any queued dispatches
+    // so the queue worker doesn't send it after the fact.
+    if (newStatus === "rejected" || newStatus === "returned") {
+      await rawExecute(
+        `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+          WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
+        [Number(id)]
+      ).catch((e) => console.error("cancel email_queue for rejected letter failed:", e));
+      await rawExecute(
+        `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+          WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
+        [Number(id)]
+      ).catch(() => { /* whatsapp_queue may not exist */ });
     }
 
     try {

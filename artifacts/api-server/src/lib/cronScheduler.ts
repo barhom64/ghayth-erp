@@ -8,6 +8,7 @@ import {
   getManagerAssignmentId,
   getDirectorAssignmentId,
   getCfoAssignmentId,
+  getLegalResponsible,
   haversineDistance,
   emitEvent,
 } from "./businessHelpers.js";
@@ -270,11 +271,22 @@ async function fleetStatusCheck(): Promise<string> {
         `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — تم تعليق حالتها`,
         "warning", "fleet_vehicle", v.id
       );
+      // Persist the preventive-due event in event_logs so audit trail shows
+      // the transition, then trigger the in-memory listener that auto-creates
+      // the maintenance work order + assigns the fleet manager.
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "fleet.preventive.due", entity: "fleet_vehicles", entityId: Number(v.id),
+          details: `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — حالة needs_service`,
+        });
+      } catch {}
       eventBus.emit("fleet.vehicle.breakdown", {
         companyId: company.id,
         entityId: v.id,
         plateNumber: v.plateNumber,
         description: `صيانة متأخرة — تجاوزت موعد الصيانة المحدد`,
+        source: "preventive_due",
       });
       actions++;
     }
@@ -1074,23 +1086,34 @@ async function dailyPropertyCheck(): Promise<string> {
 }
 
 async function dailyLegalCheck(): Promise<string> {
+  // Upcoming hearings are stored on legal_sessions.nextSessionDate — the
+  // parent legal_cases.nextHearingDate is never populated, so the old query
+  // returned zero rows. Join to sessions and pick the soonest future session
+  // per case.
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const cases = await rawQuery<any>(
-      `SELECT id, title, "nextHearingDate"
-       FROM legal_cases
-       WHERE "companyId" = $1 AND status = 'open'
-         AND "nextHearingDate" IS NOT NULL
-         AND "nextHearingDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
+    const upcoming = await rawQuery<any>(
+      `SELECT DISTINCT ON (lc.id)
+              lc.id, lc.title, lc."lawyerName", lc.priority,
+              ls."nextSessionDate" AS "hearingDate"
+         FROM legal_cases lc
+         JOIN legal_sessions ls ON ls."caseId" = lc.id
+        WHERE lc."companyId" = $1
+          AND lc.status IN ('open','in_progress')
+          AND lc."deletedAt" IS NULL
+          AND ls."nextSessionDate" IS NOT NULL
+          AND ls."nextSessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+        ORDER BY lc.id, ls."nextSessionDate" ASC`,
       [company.id]
     );
-    for (const c of cases) {
+    for (const c of upcoming) {
       await broadcastAlert(
         company.id, "legal_hearing",
         `جلسة قضائية قريبة: ${c.title}`,
-        `موعد الجلسة: ${c.nextHearingDate}`,
-        "warning", "legal_case", c.id
+        `موعد الجلسة: ${c.hearingDate}${c.lawyerName ? ` — المحامي ${c.lawyerName}` : ''}`,
+        c.priority === 'high' ? "critical" : "warning",
+        "legal_case", c.id
       );
       actions++;
     }
@@ -1214,18 +1237,43 @@ async function monthlyRentPenalties(): Promise<string> {
         penalties++;
       } else if (targetStage === 'legal_transfer') {
         try {
-          await rawExecute(
-            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty",status,priority,description)
-             VALUES ($1,$2,$3,'property_rent',$4,'open','high',$5)`,
+          const responsible = await getLegalResponsible(company.id);
+          const lawyerName = responsible?.employeeName ?? null;
+
+          const { insertId: caseId } = await rawExecute(
+            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description)
+             VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
             [
               company.id,
               `RENT-${p.id}-${Date.now()}`,
               `تحصيل إيجار — ${p.tenantName}`,
               p.tenantName,
+              lawyerName,
               `إيجار متأخر ${lateDays} يوم — مبلغ ${p.amount} ريال`,
             ]
           );
           legalHandoffs++;
+
+          // Notify the responsible lawyer + emit a lifecycle event so the
+          // auto-created case isn't orphaned in open/NULL-assignee limbo.
+          if (responsible) {
+            await createNotification({
+              companyId: company.id,
+              assignmentId: responsible.assignmentId,
+              type: "legal_case_assigned",
+              title: "قضية إيجار متأخر (تلقائية)",
+              body: `تم إنشاء قضية تحصيل إيجار متأخر — ${p.tenantName} — مبلغ ${p.amount} ريال`,
+              priority: "high",
+              refType: "legal_case",
+              refId: Number(caseId),
+              actionUrl: `/legal/cases/${caseId}`,
+            });
+          }
+          await emitEvent({
+            companyId: company.id, userId: null,
+            action: "legal.case.created", entity: "legal_cases", entityId: Number(caseId),
+            details: `قضية إيجار متأخر — ${p.tenantName}`,
+          });
         } catch (err) {
           console.error("[monthlyRentPenalties] legal_cases insert failed:", err);
         }
@@ -1578,6 +1626,50 @@ async function probationAlertCheck(): Promise<string> {
     alerted++;
   }
   return `Probation alerts: ${alerted}`;
+}
+
+/**
+ * Letters approved more than 30 minutes ago but never dispatched (sentAt NULL)
+ * mean the in-memory `hr.letter.approved` listener fired while the queue was
+ * down, or the server restarted before the listener consumed it. This job
+ * re-emits the event through the persistent bus so the listener runs again.
+ */
+async function retryStuckOfficialLetters(): Promise<string> {
+  let retried = 0;
+  const stuck = await rawQuery<any>(
+    `SELECT id, "companyId", "branchId", subject, type, "employeeId", status, "approvedAt"
+       FROM official_letters
+      WHERE status = 'approved'
+        AND "sentAt" IS NULL
+        AND "approvedAt" IS NOT NULL
+        AND "approvedAt" < NOW() - INTERVAL '30 minutes'
+      ORDER BY "approvedAt" ASC
+      LIMIT 50`
+  );
+  for (const letter of stuck) {
+    try {
+      await emitEvent({
+        companyId: letter.companyId,
+        branchId: letter.branchId ?? undefined,
+        userId: null,
+        action: "hr.letter.approved",
+        entity: "official_letter",
+        entityId: Number(letter.id),
+        details: `إعادة محاولة إرسال الخطاب #${letter.id}`,
+        after: {
+          status: "approved",
+          subject: letter.subject,
+          type: letter.type,
+          employeeId: letter.employeeId,
+          retry: true,
+        },
+      });
+      retried++;
+    } catch (err) {
+      console.error("[retryStuckOfficialLetters] emit failed:", err);
+    }
+  }
+  return `Stuck official letters retried: ${retried}`;
 }
 
 async function processEmailQueue(): Promise<string> {
@@ -2424,6 +2516,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_vendor_contract_expiry", description: "تنبيه انتهاء عقود الموردين (90/30 يوم)", schedule: "0 7 * * 1", handler: vendorContractExpiryAlerts },
   { name: "daily_system_health_report", description: "تقرير صحة النظام اليومي للمدير التقني", schedule: "0 6 * * *", handler: dailySystemHealthReport },
   { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
+  { name: "retry_stuck_official_letters", description: "إعادة محاولة إرسال الخطابات المعتمدة العالقة", schedule: "*/15 * * * *", handler: retryStuckOfficialLetters },
 ];
 
 export async function seedCronJobs(): Promise<void> {
