@@ -39,6 +39,14 @@ export const PERMISSIONS = [
   "hr:delete",
   "hr:approve",
   "hr:discipline:approve",
+  // `hr:self` gates self-service endpoints (check-in/out, submit own leave).
+  // Routes pair it with `hr:create` via requireAnyPermission so managers
+  // retain access through their existing create grant, while employees are
+  // unblocked through this narrower self-scoped permission. Role bindings
+  // live in migration 070_rbac_self_service_and_gaps.sql (employee,
+  // branch_manager, hr_manager) rather than ROLE_PERMISSIONS here, because
+  // the catalog's role map encodes the conservative 068 seed intent.
+  "hr:self",
 
   // Finance
   "finance:read",
