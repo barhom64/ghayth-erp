@@ -50,12 +50,27 @@ const checkInLimiter = rateLimit({
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+  // Step 4 of the HR operational audit — attendance check-in.
+  // Converts the two raw res.status(400) bailouts to ConflictError with
+  // meta pointing at the blocking row, and guards against a missing
+  // active assignment. The deep GPS + late + penalty logic is unchanged.
   try {
     const scope = req.scope!;
     const now = new Date();
     const today = now.toISOString().split("T")[0];
     const period = today.slice(0, 7);
     const { lat, lon, notes } = req.body as any;
+
+    // Guard: the caller must have an active assignment. Without this, the
+    // INSERT INTO attendance below would hit a 23502 NOT NULL on
+    // "assignmentId" — opaque from the UI. Fail cleanly with a typed error
+    // the frontend can show as a real message.
+    if (!scope.activeAssignmentId) {
+      throw new ConflictError("لا يوجد تعيين نشط لهذا الحساب", {
+        field: "assignmentId",
+        fix: "تواصل مع مدير الموارد البشرية لتفعيل تعيينك الوظيفي.",
+      });
+    }
 
     // ── Step 1: GPS + timestamp received ──
 
@@ -66,8 +81,21 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
       [scope.activeAssignmentId, today]
     );
     if (existing) {
-      res.status(400).json({ error: "لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة" });
-      return;
+      throw new ConflictError(
+        existing.checkOut
+          ? "لقد سجلت الحضور والانصراف اليوم"
+          : "لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة",
+        {
+          field: "attendance",
+          fix: existing.checkOut
+            ? "لا يمكن إعادة تسجيل الحضور بعد الانصراف. الإجراء يتم مرة واحدة في اليوم."
+            : "افتح صفحة الحضور واستخدم زر الانصراف لإكمال الدوام.",
+          meta: {
+            existingAttendanceId: existing.id,
+            alreadyCheckedOut: !!existing.checkOut,
+          },
+        }
+      );
     }
 
     // ── Step 3: Fetch assignment, shift, and branch ──
@@ -128,8 +156,11 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
       [scope.employeeId, today]
     );
     if (activeLeave) {
-      res.status(400).json({ error: "أنت في إجازة مُعتمدة اليوم. لا يمكن تسجيل الحضور.", leaveRequestId: activeLeave.id });
-      return;
+      throw new ConflictError("أنت في إجازة مُعتمدة اليوم. لا يمكن تسجيل الحضور", {
+        field: "attendance",
+        fix: "الإجازة المعتمدة تمنع تسجيل الحضور. راجع تفاصيل الإجازة.",
+        meta: { leaveRequestId: activeLeave.id },
+      });
     }
 
     // ── Step 6: GPS validation (Haversine) ──
@@ -350,6 +381,10 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
 });
 
 router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+  // Step 4 of the HR operational audit — attendance check-out.
+  // Symmetric treatment to check-in: ConflictError when the caller is
+  // trying to check out without having checked in, or when they've
+  // already checked out. Assignment guard matches the check-in handler.
   try {
     const scope = req.scope!;
     const now = new Date();
@@ -357,18 +392,33 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
     const period = today.slice(0, 7);
     const { notes, lat, lon } = req.body as any;
 
+    if (!scope.activeAssignmentId) {
+      throw new ConflictError("لا يوجد تعيين نشط لهذا الحساب", {
+        field: "assignmentId",
+        fix: "تواصل مع مدير الموارد البشرية لتفعيل تعيينك الوظيفي.",
+      });
+    }
+
     const [existing] = await rawQuery<any>(
       `SELECT id, "checkIn", "checkOut" FROM attendance
        WHERE "assignmentId" = $1 AND date = $2`,
       [scope.activeAssignmentId, today]
     );
     if (!existing) {
-      res.status(400).json({ error: "لم تسجل حضوراً اليوم" });
-      return;
+      throw new ConflictError("لم تسجل حضوراً اليوم", {
+        field: "attendance",
+        fix: "يجب تسجيل الحضور أولاً قبل تسجيل الانصراف.",
+      });
     }
     if (existing.checkOut) {
-      res.status(400).json({ error: "لقد سجلت الانصراف مسبقاً اليوم" });
-      return;
+      throw new ConflictError("لقد سجلت الانصراف مسبقاً اليوم", {
+        field: "attendance",
+        fix: "تم تسجيل انصرافك بالفعل. لا يمكن إعادة الانصراف في نفس اليوم.",
+        meta: {
+          existingAttendanceId: existing.id,
+          checkOutAt: existing.checkOut,
+        },
+      });
     }
 
     // ── Fetch assignment for salary ──
@@ -699,13 +749,25 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
 });
 
 router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+  // Step 5 of the HR operational audit — leave request submission.
+  // The handler has 12 different validation branches, every single one
+  // of which used to be `res.status(400).json({ error: "..." })` — which
+  // meant the leave-create form never got `code` or `field` and the user
+  // saw the same generic toast for every kind of rejection (out of
+  // balance, overlapping, gender-restricted, career-limited, minimum-
+  // service, document-required, department-absent-percentage, no manager).
+  // Each branch is now a TypedError with the most specific shape the
+  // frontend can branch on, and carries `meta` fields the UI can use to
+  // explain the rejection precisely.
   try {
     const scope = req.scope!;
     let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = req.body as any;
 
     if (!startDate || !endDate) {
-      res.status(400).json({ error: "تاريخا البداية والنهاية مطلوبة" });
-      return;
+      throw new ValidationError("تاريخا البداية والنهاية مطلوبان", {
+        field: !startDate ? "startDate" : "endDate",
+        fix: "حدّد تاريخ البداية وتاريخ النهاية للإجازة.",
+      });
     }
 
     if (!leaveTypeId && leaveTypeName) {
@@ -717,8 +779,10 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     }
 
     if (!leaveTypeId) {
-      res.status(400).json({ error: "نوع الإجازة مطلوب" });
-      return;
+      throw new ValidationError("نوع الإجازة مطلوب", {
+        field: "leaveTypeId",
+        fix: "اختر نوع الإجازة من القائمة.",
+      });
     }
 
     const start = new Date(startDate);
@@ -744,8 +808,10 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       [leaveTypeId, scope.companyId]
     );
     if (!leaveType) {
-      res.status(400).json({ error: "نوع الإجازة غير موجود" });
-      return;
+      throw new NotFoundError("نوع الإجازة غير موجود", {
+        field: "leaveTypeId",
+        fix: "اختر نوع إجازة صحيحاً من القائمة.",
+      });
     }
 
     // ── Validation 2: Check balance (accounting for reserved days) ──
@@ -759,10 +825,20 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     if (balance) {
       const effectiveRemaining = Math.max(0, Number(balance.entitled) - Number(balance.used) - Number(balance.reserved));
       if (effectiveRemaining < days) {
-        res.status(400).json({
-          error: `رصيد الإجازة غير كافٍ. المتبقي الفعلي (بعد الحجوزات): ${effectiveRemaining} يوم، المطلوب: ${days} يوم`,
-        });
-        return;
+        throw new ConflictError(
+          `رصيد الإجازة غير كافٍ. المتبقي الفعلي (بعد الحجوزات): ${effectiveRemaining} يوم، المطلوب: ${days} يوم`,
+          {
+            field: "days",
+            fix: "قلّل عدد أيام الإجازة أو انتظر تجديد الرصيد.",
+            meta: {
+              requested: days,
+              remaining: effectiveRemaining,
+              entitled: Number(balance.entitled),
+              used: Number(balance.used),
+              reserved: Number(balance.reserved),
+            },
+          }
+        );
       }
     } else {
       const [usedRow] = await rawQuery<any>(
@@ -772,9 +848,22 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         [scope.employeeId, leaveTypeId, year]
       );
       const entitled = Number(leaveType.annualDays ?? 21);
-      if (entitled - Number(usedRow?.used ?? 0) < days) {
-        res.status(400).json({ error: `رصيد الإجازة غير كافٍ` });
-        return;
+      const alreadyUsed = Number(usedRow?.used ?? 0);
+      const effectiveRemaining = entitled - alreadyUsed;
+      if (effectiveRemaining < days) {
+        throw new ConflictError(
+          `رصيد الإجازة غير كافٍ. المتبقي: ${effectiveRemaining} يوم، المطلوب: ${days} يوم`,
+          {
+            field: "days",
+            fix: "قلّل عدد أيام الإجازة أو انتظر تجديد الرصيد.",
+            meta: {
+              requested: days,
+              remaining: effectiveRemaining,
+              entitled,
+              used: alreadyUsed,
+            },
+          }
+        );
       }
     }
 
@@ -786,14 +875,23 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       [scope.employeeId, endDate, startDate]
     );
     if (overlap) {
-      res.status(400).json({ error: "يوجد طلب إجازة متداخل في هذه الفترة" });
-      return;
+      throw new ConflictError("يوجد طلب إجازة متداخل في هذه الفترة", {
+        field: "startDate",
+        fix: "اختر فترة لا تتداخل مع إجازة معتمدة أو معلّقة.",
+        meta: { overlappingLeaveId: overlap.id },
+      });
     }
 
     // ── Validation 4: Document requirement ──
     if (leaveType.requiresDocument && !documentUrl && !reason) {
-      res.status(400).json({ error: "هذا النوع من الإجازة يتطلب إرفاق مستند أو سبب مفصل" });
-      return;
+      throw new ValidationError(
+        "هذا النوع من الإجازة يتطلب إرفاق مستند أو سبب مفصل",
+        {
+          field: "documentUrl",
+          fix: "أرفق مستنداً داعماً أو اكتب سبباً مفصلاً للإجازة.",
+          meta: { leaveTypeName: leaveType.name },
+        }
+      );
     }
 
     // ── Validation 5: Gender restriction ──
@@ -802,8 +900,17 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         `SELECT gender FROM employees WHERE id = $1`, [scope.employeeId]
       );
       if (emp?.gender && emp.gender !== leaveType.genderRestriction) {
-        res.status(400).json({ error: `هذا النوع من الإجازة مخصص للموظفين ${leaveType.genderRestriction === "female" ? "الإناث" : "الذكور"} فقط` });
-        return;
+        throw new ForbiddenError(
+          `هذا النوع من الإجازة مخصص للموظفين ${leaveType.genderRestriction === "female" ? "الإناث" : "الذكور"} فقط`,
+          {
+            field: "leaveTypeId",
+            fix: "اختر نوع إجازة غير مقيّد بالجنس.",
+            meta: {
+              required: leaveType.genderRestriction,
+              employeeGender: emp.gender,
+            },
+          }
+        );
       }
     }
 
@@ -816,8 +923,17 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         const hireDate = new Date(ass.hireDate);
         const monthsOfService = (new Date().getFullYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
         if (monthsOfService < leaveType.minServiceMonths) {
-          res.status(400).json({ error: `يشترط مدة خدمة لا تقل عن ${leaveType.minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر` });
-          return;
+          throw new ConflictError(
+            `يشترط مدة خدمة لا تقل عن ${leaveType.minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر`,
+            {
+              field: "leaveTypeId",
+              fix: "انتظر حتى تكتمل مدة الخدمة المطلوبة أو اختر نوع إجازة آخر.",
+              meta: {
+                requiredMonths: leaveType.minServiceMonths,
+                actualMonths: monthsOfService,
+              },
+            }
+          );
         }
       }
     }
@@ -830,8 +946,14 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         [scope.employeeId, leaveTypeId]
       );
       if (prevHajj) {
-        res.status(400).json({ error: "لقد حصلت على هذا النوع من الإجازة مسبقاً (مرة واحدة فقط)" });
-        return;
+        throw new ConflictError(
+          "لقد حصلت على هذا النوع من الإجازة مسبقاً (مرة واحدة فقط)",
+          {
+            field: "leaveTypeId",
+            fix: "لا يمكن تقديم هذا الطلب أكثر من مرة في المسار المهني.",
+            meta: { previousLeaveId: prevHajj.id },
+          }
+        );
       }
     }
 
@@ -855,8 +977,18 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       const totalDept = Number(deptTotal?.cnt ?? 1);
       const absentDept = Number(deptAbsent?.cnt ?? 0);
       if (totalDept > 0 && ((absentDept + 1) / totalDept) * 100 > maxDeptPct) {
-        res.status(400).json({ error: `نسبة الغياب في القسم ستتجاوز الحد المسموح (${maxDeptPct}%). الزملاء الغائبون: ${absentDept}/${totalDept}` });
-        return;
+        throw new ConflictError(
+          `نسبة الغياب في القسم ستتجاوز الحد المسموح (${maxDeptPct}%). الزملاء الغائبون: ${absentDept}/${totalDept}`,
+          {
+            field: "startDate",
+            fix: "اختر تاريخاً آخر أو نسّق مع زملائك الغائبين.",
+            meta: {
+              maxAbsentPct: maxDeptPct,
+              currentlyAbsent: absentDept,
+              totalInDept: totalDept,
+            },
+          }
+        );
       }
     }
 
@@ -893,10 +1025,13 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       managerAssignmentId = companyFallback?.id ?? null;
     }
     if (!managerAssignmentId) {
-      res.status(409).json({
-        error: "لا يوجد مدير معتمد لاستلام طلبات الإجازة. الرجاء تعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات.",
-      });
-      return;
+      throw new ConflictError(
+        "لا يوجد مدير معتمد لاستلام طلبات الإجازة",
+        {
+          fix: "الرجاء التواصل مع الإدارة لتعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات.",
+          meta: { missingRoles: ["branch_manager", "hr_manager", "general_manager", "owner"] },
+        }
+      );
     }
 
     // Read approval chain from DB (fall back to default manager→HR if none configured)
@@ -1010,6 +1145,11 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
 
 // Staged leave approval: manager (stage 1) → HR (stage 2)
 router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
+  // Step 6 of the HR operational audit — leave approval workflow.
+  // 4 authorization / state branches rewritten to ForbiddenError +
+  // ConflictError, each one carrying meta so the frontend can show
+  // "this stage needs the branch manager, not you" instead of a
+  // generic 403.
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -1017,8 +1157,13 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
 
     // Authorization: only branch_manager, hr_manager, or owner roles can approve leave
     if (!["branch_manager", "hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: صلاحية الموافقة محصورة بالمدير أو HR أو المالك" });
-      return;
+      throw new ForbiddenError(
+        "صلاحية الموافقة محصورة بالمدير أو HR أو المالك",
+        {
+          fix: "اطلب من مديرك المباشر أو مدير الموارد البشرية تنفيذ الموافقة.",
+          meta: { yourRole: scope.role },
+        }
+      );
     }
 
     const [request] = await rawQuery<any>(
@@ -1030,7 +1175,11 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
     if (request.status !== "pending") {
-      res.status(400).json({ error: "تم البت في هذا الطلب مسبقاً" }); return;
+      throw new ConflictError("تم البت في هذا الطلب مسبقاً", {
+        field: "status",
+        fix: "الطلب إما معتمد أو مرفوض أو ملغى — لا يمكن إعادة البت فيه.",
+        meta: { currentStatus: request.status },
+      });
     }
 
     // Find the current pending stage for this request
@@ -1047,12 +1196,17 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
       const isAssignedApprover = currentStage.assignedTo === scope.activeAssignmentId;
 
       if (currentStage.assignedTo && !isAssignedApprover) {
-        res.status(403).json({
-          error: "هذه المرحلة مخصصة لموافق آخر. لا يمكنك اتخاذ القرار.",
-          requiredRole: stageRequiredRole,
-          currentStage: currentStage.stage,
-        });
-        return;
+        throw new ForbiddenError(
+          "هذه المرحلة مخصصة لموافق آخر — لا يمكنك اتخاذ القرار",
+          {
+            fix: "اطلب من الموافق المخصص لهذه المرحلة تنفيذ القرار.",
+            meta: {
+              requiredRole: stageRequiredRole,
+              currentStage: currentStage.stage,
+              assignedTo: currentStage.assignedTo,
+            },
+          }
+        );
       }
 
       if (!currentStage.assignedTo) {
@@ -1063,12 +1217,17 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           (stageRequiredRole === "hr_manager" && scope.role === "hr_manager") ||
           (stageRequiredRole === scope.role);
         if (!roleMatchesStage) {
-          res.status(403).json({
-            error: `هذه المرحلة تتطلب موافقة ${stageRequiredRole}. دورك الحالي: ${scope.role}`,
-            requiredRole: stageRequiredRole,
-            currentStage: currentStage.stage,
-          });
-          return;
+          throw new ForbiddenError(
+            `هذه المرحلة تتطلب موافقة ${stageRequiredRole}`,
+            {
+              fix: `دورك الحالي (${scope.role}) لا يطابق الدور المطلوب.`,
+              meta: {
+                requiredRole: stageRequiredRole,
+                currentStage: currentStage.stage,
+                yourRole: scope.role,
+              },
+            }
+          );
         }
       }
     }
@@ -2837,18 +2996,31 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
     if (!leaveReq) throw new NotFoundError("طلب الإجازة غير موجود");
     const isOwnRequest = leaveReq.employeeId === scope.employeeId;
     if (!isOwnRequest && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: حذف طلبات الإجازة مقصور على صاحب الطلب أو HR أو المالك" }); return;
+      throw new ForbiddenError(
+        "حذف طلبات الإجازة مقصور على صاحب الطلب أو HR أو المالك",
+        { fix: "اطلب من مدير الموارد البشرية تنفيذ الحذف." }
+      );
     }
     if (leaveReq.status !== 'pending') {
-      res.status(409).json({ error: "لا يمكن حذف طلب تمت معالجته — استخدم الإلغاء بدلاً من الحذف" });
-      return;
+      throw new ConflictError(
+        "لا يمكن حذف طلب تمت معالجته — استخدم الإلغاء بدلاً من الحذف",
+        {
+          field: "status",
+          fix: "الطلبات المعتمدة أو المرفوضة تُلغى عبر زر 'إلغاء' لا 'حذف'.",
+          meta: { currentStatus: leaveReq.status },
+        }
+      );
     }
 
     const [row] = await rawQuery<any>(
       `DELETE FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' RETURNING id`,
       [id, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "طلب الإجازة غير موجود أو لا يمكن حذفه (تمت معالجته)" }); return; }
+    if (!row) {
+      // Race: the request was either decided or deleted between the SELECT
+      // and the DELETE. Same NotFoundError shape as everywhere else.
+      throw new NotFoundError("طلب الإجازة غير موجود أو لا يمكن حذفه (تمت معالجته)");
+    }
 
     // Deleting a pending leave request must release the reserved balance so
     // the employee can use those days again. Previously deletion left orphan
