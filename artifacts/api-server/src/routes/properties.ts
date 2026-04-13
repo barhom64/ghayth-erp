@@ -902,6 +902,39 @@ router.patch("/maintenance-requests/:id/approve", async (req, res) => {
       );
     } catch (e) { console.error("Failed to log approval action:", e); }
 
+    // Audit + event + creator notification. Without these the requester
+    // (tenant-facing officer or reporting staff) has no idea whether their
+    // maintenance request was approved, rejected, or returned for rework.
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: newStatus, entity: "maintenance_requests", entityId: id,
+      before: { status: mr.status }, after: { status: newStatus, notes: notes ?? null },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: `maintenance.${newStatus}`, entity: "maintenance_requests", entityId: id,
+      details: `طلب صيانة ${mr.title || id} — ${newStatus}`,
+    }).catch(console.error);
+
+    if (mr.createdBy) {
+      const titleMap: Record<string, string> = {
+        approved: "تم اعتماد طلب الصيانة",
+        rejected: "تم رفض طلب الصيانة",
+        returned: "تم إرجاع طلب الصيانة للمراجعة",
+      };
+      createNotification({
+        companyId: scope.companyId,
+        assignmentId: Number(mr.createdBy),
+        type: `maintenance_${newStatus}`,
+        title: titleMap[newStatus] || `حالة طلب الصيانة: ${newStatus}`,
+        body: `${mr.title || `طلب #${id}`}${notes ? ` — ${notes}` : ''}`,
+        priority: newStatus === "rejected" ? "high" : "normal",
+        refType: "maintenance_request",
+        refId: id,
+        actionUrl: `/properties/maintenance/${id}`,
+      }).catch(console.error);
+    }
+
     res.json({ id, status: newStatus });
   } catch (err) { handleRouteError(err, res, "خطأ في اعتماد طلب الصيانة"); }
 });
@@ -1844,6 +1877,9 @@ router.post("/deposits", async (req, res) => {
     if (!b.contractId || !b.amount) {
       res.status(400).json({ error: "العقد والمبلغ مطلوبان" }); return;
     }
+    if (Number(b.amount) <= 0) {
+      res.status(400).json({ error: "قيمة الوديعة يجب أن تكون أكبر من صفر" }); return;
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO property_security_deposits
        ("companyId","contractId",amount,"receivedDate",status,notes,"refundAmount","refundDate","refundReason")
@@ -1853,7 +1889,9 @@ router.post("/deposits", async (req, res) => {
        b.notes || null, b.refundAmount || null, b.refundDate || null, b.refundReason || null]
     );
 
-    // Create accounting journal entry
+    // Post the GL entry. If it fails, undo the deposit row — we must never
+    // have a 'held' deposit without a corresponding cash/liability posting,
+    // otherwise trial balance is permanently wrong.
     try {
       await createJournalEntry({
         companyId: scope.companyId, branchId: scope.branchId ?? 0,
@@ -1865,7 +1903,23 @@ router.post("/deposits", async (req, res) => {
           { accountCode: "2300", debit: 0, credit: Number(b.amount) },
         ],
       });
-    } catch (jErr) { console.error("Deposit journal entry failed:", jErr); }
+    } catch (jErr) {
+      console.error("Deposit journal entry failed:", jErr);
+      await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1`, [insertId]).catch(() => {});
+      res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي للوديعة — لم يتم تسجيل الوديعة" });
+      return;
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "property_security_deposits", entityId: insertId,
+      after: { contractId: b.contractId, amount: b.amount, status: "held" },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "deposit.received", entity: "property_security_deposits", entityId: insertId,
+      details: `وديعة عقد #${b.contractId} بقيمة ${b.amount}`,
+    }).catch(console.error);
 
     const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -1883,11 +1937,15 @@ router.patch("/deposits/:id/refund", async (req, res) => {
     );
     if (!deposit) { res.status(404).json({ error: "الوديعة غير موجودة أو تم إرجاعها" }); return; }
     const refundAmount = Number(b.refundAmount || deposit.amount);
-    await rawExecute(
-      `UPDATE property_security_deposits SET status='refunded', "refundAmount"=$1, "refundDate"=$2, "refundReason"=$3 WHERE id=$4`,
-      [refundAmount, b.refundDate || new Date().toISOString().split('T')[0], b.refundReason || null, id]
-    );
-    // Journal entry for refund
+    if (refundAmount < 0 || refundAmount > Number(deposit.amount)) {
+      res.status(400).json({ error: "قيمة الإرجاع غير صحيحة — يجب أن تكون بين صفر وقيمة الوديعة" });
+      return;
+    }
+
+    // Post the GL entry FIRST so that if it fails, the deposit row stays in
+    // 'held' state. The previous implementation swallowed journal errors and
+    // still flipped the status to 'refunded', leaving cash + deposit liability
+    // permanently out of sync.
     try {
       await createJournalEntry({
         companyId: scope.companyId, branchId: scope.branchId ?? 0,
@@ -1899,7 +1957,29 @@ router.patch("/deposits/:id/refund", async (req, res) => {
           { accountCode: "1100", debit: 0, credit: refundAmount },
         ],
       });
-    } catch (jErr) { console.error("Deposit refund journal entry failed:", jErr); }
+    } catch (jErr) {
+      console.error("Deposit refund journal entry failed:", jErr);
+      res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي لإرجاع الوديعة — لم يتم تنفيذ الإرجاع" });
+      return;
+    }
+
+    await rawExecute(
+      `UPDATE property_security_deposits SET status='refunded', "refundAmount"=$1, "refundDate"=$2, "refundReason"=$3 WHERE id=$4`,
+      [refundAmount, b.refundDate || new Date().toISOString().split('T')[0], b.refundReason || null, id]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "refund", entity: "property_security_deposits", entityId: id,
+      before: { status: "held", amount: deposit.amount },
+      after: { status: "refunded", refundAmount, reason: b.refundReason ?? null },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "deposit.refunded", entity: "property_security_deposits", entityId: id,
+      details: `إرجاع وديعة عقد #${deposit.contractId} بقيمة ${refundAmount}`,
+    }).catch(console.error);
+
     const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [id]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Refund deposit error:"); }
