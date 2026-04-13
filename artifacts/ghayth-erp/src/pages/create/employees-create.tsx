@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useApiMutation, useApiQuery, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,42 +71,27 @@ export default function EmployeesCreate() {
 
   const [creationResult, setCreationResult] = useState<Record<string, any> | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم الموظف" });
-      return;
-    }
-    if (!form.nationalId) {
-      toast({ variant: "destructive", title: "يرجى إدخال رقم الهوية" });
-      return;
-    }
-    if (!form.nationality) {
-      toast({ variant: "destructive", title: "يرجى اختيار الجنسية" });
-      return;
-    }
-    if (!form.phone) {
-      toast({ variant: "destructive", title: "يرجى إدخال رقم الجوال" });
-      return;
-    }
-    if (!form.managerId) {
-      toast({ variant: "destructive", title: "يرجى اختيار المدير المباشر" });
-      return;
-    }
-    if (!form.department) {
-      toast({ variant: "destructive", title: "يرجى اختيار القسم" });
-      return;
-    }
-    if (!form.jobTitle) {
-      toast({ variant: "destructive", title: "يرجى اختيار المسمى الوظيفي" });
-      return;
-    }
-    if (!form.contractType) {
-      toast({ variant: "destructive", title: "يرجى اختيار نوع العقد" });
-      return;
-    }
-    if (!form.salary || Number(form.salary) <= 0) {
-      toast({ variant: "destructive", title: "يرجى إدخال الراتب الأساسي" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "يرجى إدخال اسم الموظف";
+    if (!form.nationalId) localErrors.nationalId = "يرجى إدخال رقم الهوية";
+    if (!form.nationality) localErrors.nationality = "يرجى اختيار الجنسية";
+    if (!form.phone) localErrors.phone = "يرجى إدخال رقم الجوال";
+    if (!form.managerId) localErrors.managerId = "يرجى اختيار المدير المباشر";
+    if (!form.department) localErrors.department = "يرجى اختيار القسم";
+    if (!form.jobTitle) localErrors.jobTitle = "يرجى اختيار المسمى الوظيفي";
+    if (!form.contractType) localErrors.contractType = "يرجى اختيار نوع العقد";
+    if (!form.salary || Number(form.salary) <= 0) localErrors.salary = "يرجى إدخال الراتب الأساسي";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -120,8 +105,17 @@ export default function EmployeesCreate() {
       clearDraft();
       toast({ title: "تم إضافة الموظف بنجاح" });
       setCreationResult(result as Record<string, any>);
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الموظف" });
+    } catch (err) {
+      if (err instanceof ApiError && err.field) {
+        setFieldErrors({ [err.field]: err.fix ?? err.message });
+        toast({
+          variant: "destructive",
+          title: err.code === "CONFLICT" ? "لا يمكن تنفيذ هذه العملية الآن" : "البيانات غير صالحة",
+          description: err.fix ?? err.message,
+        });
+      } else {
+        toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الموظف" });
+      }
     }
   };
 
@@ -223,12 +217,12 @@ export default function EmployeesCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="md:col-span-2"><Label>الاسم الرباعي <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-        <div><Label>رقم الهوية / الإقامة <span className="text-red-500">*</span></Label><Input className="mt-1" dir="ltr" value={form.nationalId} onChange={(e) => setForm((f) => ({ ...f, nationalId: e.target.value }))} placeholder="مثال: 1234567890" /></div>
+        <div className="md:col-span-2"><Label>الاسم الرباعي <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /><FieldHint field="name" /></div>
+        <div><Label>رقم الهوية / الإقامة <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("nationalId")}`} dir="ltr" value={form.nationalId} onChange={(e) => setForm((f) => ({ ...f, nationalId: e.target.value }))} placeholder="مثال: 1234567890" /><FieldHint field="nationalId" /></div>
         <div>
           <Label>الجنسية <span className="text-red-500">*</span></Label>
           <Select value={form.nationality} onValueChange={(v) => setForm((f) => ({ ...f, nationality: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger className={`mt-1 ${errCls("nationality")}`}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="سعودي">سعودي</SelectItem>
               <SelectItem value="يمني">يمني</SelectItem>
@@ -253,8 +247,8 @@ export default function EmployeesCreate() {
           </Select>
         </div>
         <div><Label>تاريخ الميلاد</Label><div className="mt-1"><DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} /></div></div>
-        <div><Label>رقم الجوال <span className="text-red-500">*</span></Label><Input className="mt-1" dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
-        <div><Label>البريد الإلكتروني</Label><Input className="mt-1" type="email" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></div>
+        <div><Label>رقم الجوال <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("phone")}`} dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /><FieldHint field="phone" /></div>
+        <div><Label>البريد الإلكتروني</Label><Input className={`mt-1 ${errCls("email")}`} type="email" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /><FieldHint field="email" /></div>
 
         <div className="md:col-span-2">
           <Label>المدير المباشر <span className="text-red-500">*</span></Label>
@@ -268,8 +262,9 @@ export default function EmployeesCreate() {
                 setShowManagerDropdown(true);
                 if (!e.target.value) setForm((f) => ({ ...f, managerId: "" }));
               }}
-              className="w-full"
+              className={`w-full ${errCls("managerId")}`}
             />
+            <FieldHint field="managerId" />
             {showManagerDropdown && managerSearch && !form.managerId && (
               <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto mt-1">
                 {employeesList
@@ -325,7 +320,7 @@ export default function EmployeesCreate() {
         <div>
           <Label>المسمى الوظيفي</Label>
           <Select value={form.jobTitle || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, jobTitle: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المسمى الوظيفي" /></SelectTrigger>
+            <SelectTrigger className={`mt-1 ${errCls("jobTitle")}`}><SelectValue placeholder="اختر المسمى الوظيفي" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر المسمى الوظيفي</SelectItem>
               {jobTitles.length > 0
@@ -344,11 +339,12 @@ export default function EmployeesCreate() {
               }
             </SelectContent>
           </Select>
+          <FieldHint field="jobTitle" />
         </div>
         <div>
           <Label>القسم</Label>
           <Select value={form.department || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, department: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+            <SelectTrigger className={`mt-1 ${errCls("department")}`}><SelectValue placeholder="اختر القسم" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر القسم</SelectItem>
               {departments.length > 0
@@ -366,6 +362,7 @@ export default function EmployeesCreate() {
               }
             </SelectContent>
           </Select>
+          <FieldHint field="department" />
         </div>
         <div>
           <Label>الفرع</Label>
@@ -389,7 +386,7 @@ export default function EmployeesCreate() {
         <div>
           <Label>نوع العقد</Label>
           <Select value={form.contractType} onValueChange={(v) => setForm((f) => ({ ...f, contractType: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger className={`mt-1 ${errCls("contractType")}`}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="full_time">دوام كامل</SelectItem>
               <SelectItem value="part_time">دوام جزئي</SelectItem>
@@ -397,8 +394,9 @@ export default function EmployeesCreate() {
               <SelectItem value="freelance">عمل حر</SelectItem>
             </SelectContent>
           </Select>
+          <FieldHint field="contractType" />
         </div>
-        <div><Label>الراتب الأساسي</Label><Input className="mt-1" type="number" dir="ltr" value={form.salary} onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))} /></div>
+        <div><Label>الراتب الأساسي</Label><Input className={`mt-1 ${errCls("salary")}`} type="number" dir="ltr" value={form.salary} onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))} /><FieldHint field="salary" /></div>
         <div><Label>تاريخ التعيين</Label><div className="mt-1"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></div></div>
 
         <div className="md:col-span-2 border-t pt-4 mt-2">

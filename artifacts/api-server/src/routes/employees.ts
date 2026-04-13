@@ -256,6 +256,32 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       }
     }
 
+    if (email) {
+      const emailRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE email = $1 LIMIT 1`,
+        [email]
+      );
+      if (emailRows.length > 0) {
+        throw new ConflictError("البريد الإلكتروني مستخدم مسبقاً", {
+          field: "email",
+          fix: "استخدم بريداً إلكترونياً آخر أو راجع بيانات الموظف الحالي.",
+        });
+      }
+    }
+
+    if (nationalId) {
+      const nidRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE "nationalId" = $1 LIMIT 1`,
+        [nationalId]
+      );
+      if (nidRows.length > 0) {
+        throw new ConflictError("الرقم مرتبط بموظف آخر", {
+          field: "nationalId",
+          fix: "تحقق من رقم الهوية أو أدخل رقماً مختلفاً.",
+        });
+      }
+    }
+
     const result = await withTransaction(async (client) => {
       // ── Step 1: Auto-generate employee number (EMP-YYYY-NNN) ──
       let finalEmpNumber = empNumber;

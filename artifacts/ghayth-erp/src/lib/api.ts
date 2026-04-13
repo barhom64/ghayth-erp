@@ -296,9 +296,8 @@ export function useApiMutation<TData = any, TBody = any>(
     //      legacy generic toast so pre-P1.3 call sites behave identically.
     onError: (error, body) => {
       if (error instanceof ApiError) {
-        // Field-level validation error → let the form react inline.
         if (
-          error.code === "VALIDATION_ERROR" &&
+          (error.code === "VALIDATION_ERROR" || error.code === "CONFLICT") &&
           error.field &&
           options?.onFieldError
         ) {
