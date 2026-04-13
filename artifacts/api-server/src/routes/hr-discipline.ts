@@ -509,7 +509,7 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
 });
 
 // Step 3: GM final decision + apply penalty
-router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve", "hr:update"), async (req, res) => {
+router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -579,8 +579,8 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve",
           const period = memo.incidentDate.slice(0, 7);
           await client.query(
             `INSERT INTO attendance_deductions
-               ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-             VALUES ($1,$2,NULL,'penalty',$3,$4,$5,'pending_payroll')`,
+               ("companyId","assignmentId",type,minutes,amount,period,status)
+             VALUES ($1,$2,'penalty',$3,$4,$5,'pending_payroll')`,
             [
               scope.companyId,
               memo.assignmentId,
