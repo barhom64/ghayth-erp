@@ -59,7 +59,21 @@ Acceptance met: every parent page file is now well under the 600-line target (la
 
 ## Phase 7 — Smoke tests for critical paths
 
-No automated tests exist yet. Before adding a full suite, cover the handful of flows a failure of which would block the business.
+Test runner: **`vitest` in `@workspace/api-server`**. Run with `pnpm --filter @workspace/api-server test`.
+
+### Unit tests (landed)
+
+- [x] `tests/unit/algorithms.test.ts` — covers `haversineDistance`, `estimateTravelTime`, `fieldTaskDistance`, `movingAverage`, `selectLeastLoadedResource`, `criticalPathLength`, `slaHours`, `maintenancePriority`, `slaDeadlineForPriority`, `maintenanceSlaDeadline`. **32 tests.**
+- [x] `tests/unit/auditDiff.test.ts` — covers `computeDiff` including the null-before/null-after create/delete cases and the framework-field skip list. **9 tests.**
+- [x] `tests/unit/rbacCatalog.test.ts` — covers `PERMISSIONS`, `isKnownPermission`, `ROLE_PERMISSIONS` (owner/general_manager wildcard guard, hr:discipline:approve separation of duties, employee read-only scope, finance_manager full CRUD, branch_manager read-only cross-module), `getRolePermissions`. **17 tests.**
+
+Total: **58 unit tests, all passing** (`pnpm --filter @workspace/api-server test`).
+
+### Integration smoke tests (blocked — schema baseline gap)
+
+The originally-planned end-to-end flows below require a real PostgreSQL with the full runtime schema. **This is currently blocked**: the drizzle schema in `lib/db/src/schema/index.ts` only defines ~23 tables, but the runtime code reads/writes ~150+ tables (`users`, `audit_logs`, `governance_policies`, `documents`, `tasks`, `fleet_vehicles`, `maintenance_requests`, …). No `CREATE TABLE users` migration exists anywhere in the repo, so `drizzle-kit push` against an empty DB cannot produce a bootable baseline. The real dev DB has drifted from whatever was last versioned.
+
+Before the integration tests below can be written, someone needs to either (a) reverse-engineer the live dev DB into a `000_baseline.sql` migration, or (b) finish the drizzle schema so `drizzle-kit push` produces a complete baseline.
 
 - [ ] Login → bootstrap → create company → create user → assign role.
 - [ ] HR check-in with GPS → late-penalty tier calculation → inquiry memo auto-creation.
@@ -68,8 +82,6 @@ No automated tests exist yet. Before adding a full suite, cover the handful of f
 - [ ] HR discipline 3-step workflow: employee justification → manager recommendation → GM approval → penalty application.
 - [ ] Leave request with approval chain.
 - [ ] Fleet trip start → end → odometer → fuel record.
-
-Target test runner: `vitest` running in the `api-server` package against an ephemeral PostgreSQL (testcontainers or a dedicated `ghayth_erp_test` db). Smoke tests only — unit test coverage can come later.
 
 ## Phase 8 — Blueprint docs per module
 
