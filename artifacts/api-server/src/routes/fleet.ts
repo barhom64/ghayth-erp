@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, createJournalEntry } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, createJournalEntry, emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -521,14 +521,24 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       console.error("Journal entry creation failed for trip", tripId, jeErr);
     }
 
-    try {
-      await rawExecute(
-        `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [scope.companyId, scope.userId, 'fleet.trip.completed', 'fleet_trips', String(tripId), JSON.stringify({ tripId, vehicleId: trip.vehicleId, driverId: trip.driverId, distanceKm: actualDistanceKm, fuelCost: actualFuelCost, driverFare, depreciation, totalCost, journalEntryId })]
-      );
-    } catch (evtErr) {
-      console.error("Event log creation failed for trip", tripId, evtErr);
-    }
+    // Persist audit + event via the shared helpers so they land in audit_logs
+    // and event_logs with consistent shape. Swallowing this behind a raw
+    // INSERT used to mean a failed insert would silently drop the lifecycle
+    // record.
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "complete", entity: "fleet_trips", entityId: tripId,
+      before: { status: trip.status, distance: trip.distance, cost: trip.cost },
+      after: {
+        status: "completed", distance: actualDistanceKm, cost: totalCost,
+        fuelCost: actualFuelCost, driverFare, depreciation, journalEntryId,
+      },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.trip.completed", entity: "fleet_trips", entityId: tripId,
+      details: `رحلة #${tripId} — ${actualDistanceKm.toFixed(1)} كم — تكلفة ${totalCost.toFixed(2)} ريال`,
+    }).catch(console.error);
 
     // Bus emission — closes the fleet.trip.started → fleet.trip.completed
     // pair so rules engine + audit-log subscribers see the full lifecycle.
@@ -1352,7 +1362,9 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
        b.notes || null, null]
     );
 
-    // GL posting — company-borne fines hit expense account immediately
+    // GL posting — company-borne fines hit expense account immediately. If
+    // the GL fails we roll back the violation row so we never have a visible
+    // fine without its accounting impact.
     let journalEntryId: number | null = null;
     if (fineAmount > 0 && liability === 'company') {
       try {
@@ -1371,15 +1383,23 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
         });
       } catch (jeErr) {
         console.error("Traffic violation journal entry failed:", jeErr);
+        await rawExecute(`DELETE FROM fleet_traffic_violations WHERE id=$1`, [insertId]).catch(() => {});
+        res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة" });
+        return;
       }
     }
 
-    // Driver-liability: create a payroll deduction for the current month so it is withheld on the next run
+    // Driver-liability: create a payroll deduction + notify the driver so
+    // they see the deduction before it lands on their payslip.
     let deductionId: number | null = null;
+    let driverAssignmentId: number | null = null;
     if (fineAmount > 0 && liability === 'driver' && b.driverId) {
       try {
         const [driver] = await rawQuery<any>(
-          `SELECT "employeeId" FROM fleet_drivers WHERE id = $1 AND "companyId" = $2`,
+          `SELECT fd."employeeId", ea.id AS "assignmentId"
+           FROM fleet_drivers fd
+           LEFT JOIN employee_assignments ea ON ea."employeeId" = fd."employeeId" AND ea."companyId" = fd."companyId" AND ea.status = 'active'
+           WHERE fd.id = $1 AND fd."companyId" = $2`,
           [b.driverId, scope.companyId]
         );
         if (driver?.employeeId) {
@@ -1389,19 +1409,40 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
             [scope.companyId, driver.employeeId, fineAmount, `مخالفة مرورية: ${b.violationType}`]
           );
           deductionId = pdId;
+          driverAssignmentId = driver.assignmentId ?? null;
         }
       } catch (pdErr) {
         console.error("Traffic violation payroll deduction failed:", pdErr);
       }
+      if (driverAssignmentId) {
+        createNotification({
+          companyId: scope.companyId,
+          assignmentId: driverAssignmentId,
+          type: "traffic_violation_deducted",
+          title: "تم تسجيل مخالفة مرورية على عهدتك",
+          body: `${b.violationType} — قيمة ${fineAmount} ﷼ — سيتم الخصم في الراتب القادم${b.violationNumber ? ` (رقم: ${b.violationNumber})` : ''}`,
+          priority: "high",
+          refType: "fleet_traffic_violation",
+          refId: insertId,
+          actionUrl: `/fleet/violations/${insertId}`,
+        }).catch(console.error);
+      }
     }
 
-    try {
-      eventBus.emit("fleet.traffic.violation.created", {
-        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        entity: "fleet_traffic_violations", entityId: insertId, action: "create",
-        after: { vehicleId: b.vehicleId, driverId: b.driverId, fineAmount, liability, journalEntryId, deductionId },
-      });
-    } catch {}
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_traffic_violations", entityId: insertId,
+      after: {
+        vehicleId: b.vehicleId, driverId: b.driverId ?? null,
+        violationType: b.violationType, fineAmount, liability,
+        journalEntryId, deductionId,
+      },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.traffic_violation.created", entity: "fleet_traffic_violations", entityId: insertId,
+      details: `${b.violationType} — ${fineAmount} ﷼ — ${liability === 'driver' ? 'على السائق' : 'على الشركة'}`,
+    }).catch(console.error);
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [insertId]);
     res.status(201).json({ ...row, journalEntryId, deductionId, liability });
@@ -1449,6 +1490,18 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
       `UPDATE fleet_traffic_violations SET status='paid', "paidAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "pay", entity: "fleet_traffic_violations", entityId: id,
+      before: { status: existing.status }, after: { status: "paid", fineAmount },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.traffic_violation.paid", entity: "fleet_traffic_violations", entityId: id,
+      details: `سداد مخالفة ${existing.violationNumber ?? id} بقيمة ${fineAmount}`,
+    }).catch(console.error);
+
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [id]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Pay violation error:"); }
