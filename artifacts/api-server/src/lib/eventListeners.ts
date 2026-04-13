@@ -493,6 +493,308 @@ export function registerEventListeners() {
     await logEvent("hr.discipline.regulation.delete", payload);
   });
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Audit/event-log closure pass — 2026-04-13
+  //
+  // Static audit of every `emitEvent(action: "...")` call across routes and
+  // lib modules revealed 67 distinct event names that were being broadcast
+  // without a matching `eventBus.on(...)` subscriber. Their rows still
+  // landed in event_logs (emitEvent writes directly), but audit_logs never
+  // saw them because logAudit only runs inside listeners. Each listener
+  // below follows the same logEvent + logAudit pattern used everywhere
+  // else in this file. Grouped by domain for readability.
+  // ──────────────────────────────────────────────────────────────────────
+
+  // ── Obligations engine (global system events from obligationsEngine.ts) ──
+  eventBus.on("system.obligation.breached", async (payload) => {
+    await logEvent("system.obligation.breached", payload);
+    await logAudit("system.obligation.breached", { ...payload, action: "breach", entity: "system_obligation" });
+  });
+  eventBus.on("system.obligation.escalated", async (payload) => {
+    await logEvent("system.obligation.escalated", payload);
+    await logAudit("system.obligation.escalated", { ...payload, action: "escalate", entity: "system_obligation" });
+  });
+
+  // ── Legal — case + contract lifecycle ──
+  eventBus.on("legal.case.created", async (payload) => {
+    await logEvent("legal.case.created", payload);
+    await logAudit("legal.case.created", { ...payload, action: "create", entity: "legal_case" });
+  });
+  eventBus.on("legal.case.closed", async (payload) => {
+    await logEvent("legal.case.closed", payload);
+    await logAudit("legal.case.closed", { ...payload, action: "close", entity: "legal_case" });
+  });
+  eventBus.on("legal.case.judgment", async (payload) => {
+    await logEvent("legal.case.judgment", payload);
+    await logAudit("legal.case.judgment", { ...payload, action: "judgment", entity: "legal_case" });
+  });
+  eventBus.on("legal.contract.renewed", async (payload) => {
+    await logEvent("legal.contract.renewed", payload);
+    await logAudit("legal.contract.renewed", { ...payload, action: "renew", entity: "legal_contract" });
+  });
+  eventBus.on("legal.contract.terminated", async (payload) => {
+    await logEvent("legal.contract.terminated", payload);
+    await logAudit("legal.contract.terminated", { ...payload, action: "terminate", entity: "legal_contract" });
+  });
+
+  // ── CRM — deal + opportunity lifecycle ──
+  eventBus.on("crm.deal.won", async (payload) => {
+    await logEvent("crm.deal.won", payload);
+    await logAudit("crm.deal.won", { ...payload, action: "win", entity: "crm_deal" });
+  });
+  eventBus.on("crm.deal.lost", async (payload) => {
+    await logEvent("crm.deal.lost", payload);
+    await logAudit("crm.deal.lost", { ...payload, action: "lose", entity: "crm_deal" });
+  });
+  eventBus.on("crm.opportunity.converted", async (payload) => {
+    await logEvent("crm.opportunity.converted", payload);
+    await logAudit("crm.opportunity.converted", { ...payload, action: "convert", entity: "crm_opportunity" });
+  });
+  eventBus.on("crm.opportunity.deleted", async (payload) => {
+    await logEvent("crm.opportunity.deleted", payload);
+    await logAudit("crm.opportunity.deleted", { ...payload, action: "delete", entity: "crm_opportunity" });
+  });
+  eventBus.on("crm.opportunity.stage_changed", async (payload) => {
+    await logEvent("crm.opportunity.stage_changed", payload);
+    await logAudit("crm.opportunity.stage_changed", { ...payload, action: "stage_change", entity: "crm_opportunity" });
+  });
+
+  // ── Finance — invoices / vouchers / expenses / journals / fiscal ──
+  eventBus.on("invoice.sent", async (payload) => {
+    await logEvent("invoice.sent", payload);
+    await logAudit("invoice.sent", { ...payload, action: "send", entity: "invoice" });
+  });
+  eventBus.on("invoice.deleted", async (payload) => {
+    await logEvent("invoice.deleted", payload);
+    await logAudit("invoice.deleted", { ...payload, action: "delete", entity: "invoice" });
+  });
+  eventBus.on("invoice.credit_memo", async (payload) => {
+    await logEvent("invoice.credit_memo", payload);
+    await logAudit("invoice.credit_memo", { ...payload, action: "credit_memo", entity: "invoice" });
+  });
+  eventBus.on("invoice.debit_memo", async (payload) => {
+    await logEvent("invoice.debit_memo", payload);
+    await logAudit("invoice.debit_memo", { ...payload, action: "debit_memo", entity: "invoice" });
+  });
+  eventBus.on("voucher.deleted", async (payload) => {
+    await logEvent("voucher.deleted", payload);
+    await logAudit("voucher.deleted", { ...payload, action: "delete", entity: "voucher" });
+  });
+  eventBus.on("expense.deleted", async (payload) => {
+    await logEvent("expense.deleted", payload);
+    await logAudit("expense.deleted", { ...payload, action: "delete", entity: "expense" });
+  });
+  eventBus.on("journal.posted", async (payload) => {
+    await logEvent("journal.posted", payload);
+    await logAudit("journal.posted", { ...payload, action: "post", entity: "journal_entry" });
+  });
+  eventBus.on("journal.reversed", async (payload) => {
+    await logEvent("journal.reversed", payload);
+    await logAudit("journal.reversed", { ...payload, action: "reverse", entity: "journal_entry" });
+  });
+  eventBus.on("journal.manual_created", async (payload) => {
+    await logEvent("journal.manual_created", payload);
+    await logAudit("journal.manual_created", { ...payload, action: "create", entity: "journal_entry" });
+  });
+  eventBus.on("recurring_journal.created", async (payload) => {
+    await logEvent("recurring_journal.created", payload);
+    await logAudit("recurring_journal.created", { ...payload, action: "create", entity: "recurring_journal" });
+  });
+  eventBus.on("fiscal.year_end_closed", async (payload) => {
+    await logEvent("fiscal.year_end_closed", payload);
+    await logAudit("fiscal.year_end_closed", { ...payload, action: "close", entity: "fiscal_year" });
+  });
+  eventBus.on("fiscal_period.close", async (payload) => {
+    await logEvent("fiscal_period.close", payload);
+    await logAudit("fiscal_period.close", { ...payload, action: "close", entity: "fiscal_period" });
+  });
+  eventBus.on("fiscal_period.reopen", async (payload) => {
+    await logEvent("fiscal_period.reopen", payload);
+    await logAudit("fiscal_period.reopen", { ...payload, action: "reopen", entity: "fiscal_period" });
+  });
+  eventBus.on("payment_run.executed", async (payload) => {
+    await logEvent("payment_run.executed", payload);
+    await logAudit("payment_run.executed", { ...payload, action: "execute", entity: "payment_run" });
+  });
+  eventBus.on("bad_debt.posted", async (payload) => {
+    await logEvent("bad_debt.posted", payload);
+    await logAudit("bad_debt.posted", { ...payload, action: "post", entity: "bad_debt_provision" });
+  });
+  eventBus.on("hr.accruals.posted", async (payload) => {
+    await logEvent("hr.accruals.posted", payload);
+    await logAudit("hr.accruals.posted", { ...payload, action: "post", entity: "hr_accruals" });
+  });
+
+  // ── HR — employee / leave / payroll / letters ──
+  eventBus.on("hr.letter.created", async (payload) => {
+    await logEvent("hr.letter.created", payload);
+    await logAudit("hr.letter.created", { ...payload, action: "create", entity: "official_letter" });
+  });
+  eventBus.on("employee.terminated", async (payload) => {
+    await logEvent("employee.terminated", payload);
+    await logAudit("employee.terminated", { ...payload, action: "terminate", entity: "employee" });
+  });
+  eventBus.on("leave.cancelled", async (payload) => {
+    await logEvent("leave.cancelled", payload);
+    await logAudit("leave.cancelled", { ...payload, action: "cancel", entity: "leave_request" });
+  });
+  eventBus.on("leave.deleted", async (payload) => {
+    await logEvent("leave.deleted", payload);
+    await logAudit("leave.deleted", { ...payload, action: "delete", entity: "leave_request" });
+  });
+  eventBus.on("leave.returned", async (payload) => {
+    await logEvent("leave.returned", payload);
+    await logAudit("leave.returned", { ...payload, action: "return", entity: "leave_request" });
+  });
+  eventBus.on("payroll.run", async (payload) => {
+    await logEvent("payroll.run", payload);
+    await logAudit("payroll.run", { ...payload, action: "run", entity: "payroll_run" });
+  });
+  eventBus.on("payroll.posted", async (payload) => {
+    await logEvent("payroll.posted", payload);
+    await logAudit("payroll.posted", { ...payload, action: "post", entity: "payroll_run" });
+  });
+  eventBus.on("payroll.deleted", async (payload) => {
+    await logEvent("payroll.deleted", payload);
+    await logAudit("payroll.deleted", { ...payload, action: "delete", entity: "payroll_run" });
+  });
+
+  // ── Property — buildings / units / owners / leases / deposits ──
+  eventBus.on("property.building.created", async (payload) => {
+    await logEvent("property.building.created", payload);
+    await logAudit("property.building.created", { ...payload, action: "create", entity: "property_building" });
+  });
+  eventBus.on("property.unit.created", async (payload) => {
+    await logEvent("property.unit.created", payload);
+    await logAudit("property.unit.created", { ...payload, action: "create", entity: "property_unit" });
+  });
+  eventBus.on("property.owner.created", async (payload) => {
+    await logEvent("property.owner.created", payload);
+    await logAudit("property.owner.created", { ...payload, action: "create", entity: "property_owner" });
+  });
+  eventBus.on("property.contract.renewed", async (payload) => {
+    await logEvent("property.contract.renewed", payload);
+    await logAudit("property.contract.renewed", { ...payload, action: "renew", entity: "rental_contract" });
+  });
+  eventBus.on("property.contract.terminated", async (payload) => {
+    await logEvent("property.contract.terminated", payload);
+    await logAudit("property.contract.terminated", { ...payload, action: "terminate", entity: "rental_contract" });
+  });
+  eventBus.on("lease.created", async (payload) => {
+    await logEvent("lease.created", payload);
+    await logAudit("lease.created", { ...payload, action: "create", entity: "rental_contract" });
+  });
+  eventBus.on("lease.expired", async (payload) => {
+    await logEvent("lease.expired", payload);
+    await logAudit("lease.expired", { ...payload, action: "expire", entity: "rental_contract" });
+  });
+  eventBus.on("lease.renewal_notice", async (payload) => {
+    await logEvent("lease.renewal_notice", payload);
+    await logAudit("lease.renewal_notice", { ...payload, action: "notice", entity: "rental_contract" });
+  });
+  eventBus.on("tenant.created", async (payload) => {
+    await logEvent("tenant.created", payload);
+    await logAudit("tenant.created", { ...payload, action: "create", entity: "tenant" });
+  });
+  eventBus.on("rent_payment.received", async (payload) => {
+    await logEvent("rent_payment.received", payload);
+    await logAudit("rent_payment.received", { ...payload, action: "receive", entity: "rent_payment" });
+  });
+  eventBus.on("deposit.received", async (payload) => {
+    await logEvent("deposit.received", payload);
+    await logAudit("deposit.received", { ...payload, action: "receive", entity: "deposit" });
+  });
+  eventBus.on("deposit.refunded", async (payload) => {
+    await logEvent("deposit.refunded", payload);
+    await logAudit("deposit.refunded", { ...payload, action: "refund", entity: "deposit" });
+  });
+
+  // ── Fleet — vehicles / drivers / trips / maintenance / violations ──
+  eventBus.on("fleet.vehicle.created", async (payload) => {
+    await logEvent("fleet.vehicle.created", payload);
+    await logAudit("fleet.vehicle.created", { ...payload, action: "create", entity: "fleet_vehicle" });
+  });
+  eventBus.on("fleet.driver.created", async (payload) => {
+    await logEvent("fleet.driver.created", payload);
+    await logAudit("fleet.driver.created", { ...payload, action: "create", entity: "fleet_driver" });
+  });
+  eventBus.on("fleet.trip.cancelled", async (payload) => {
+    await logEvent("fleet.trip.cancelled", payload);
+    await logAudit("fleet.trip.cancelled", { ...payload, action: "cancel", entity: "fleet_trip" });
+  });
+  eventBus.on("fleet.maintenance.completed", async (payload) => {
+    await logEvent("fleet.maintenance.completed", payload);
+    await logAudit("fleet.maintenance.completed", { ...payload, action: "complete", entity: "fleet_maintenance" });
+  });
+  eventBus.on("fleet.maintenance.cancelled", async (payload) => {
+    await logEvent("fleet.maintenance.cancelled", payload);
+    await logAudit("fleet.maintenance.cancelled", { ...payload, action: "cancel", entity: "fleet_maintenance" });
+  });
+  eventBus.on("fleet.preventive.due", async (payload) => {
+    await logEvent("fleet.preventive.due", payload);
+    await logAudit("fleet.preventive.due", { ...payload, action: "due", entity: "fleet_maintenance" });
+  });
+  eventBus.on("fleet.traffic_violation.created", async (payload) => {
+    await logEvent("fleet.traffic_violation.created", payload);
+    await logAudit("fleet.traffic_violation.created", { ...payload, action: "create", entity: "fleet_traffic_violation" });
+  });
+  eventBus.on("fleet.traffic_violation.paid", async (payload) => {
+    await logEvent("fleet.traffic_violation.paid", payload);
+    await logAudit("fleet.traffic_violation.paid", { ...payload, action: "pay", entity: "fleet_traffic_violation" });
+  });
+
+  // ── Purchase — PO lifecycle + PR conversion ──
+  eventBus.on("purchase_order.received", async (payload) => {
+    await logEvent("purchase_order.received", payload);
+    await logAudit("purchase_order.received", { ...payload, action: "receive", entity: "purchase_order" });
+  });
+  eventBus.on("purchase_order.vendor_confirmed", async (payload) => {
+    await logEvent("purchase_order.vendor_confirmed", payload);
+    await logAudit("purchase_order.vendor_confirmed", { ...payload, action: "vendor_confirm", entity: "purchase_order" });
+  });
+  eventBus.on("purchase_order.payment_scheduled", async (payload) => {
+    await logEvent("purchase_order.payment_scheduled", payload);
+    await logAudit("purchase_order.payment_scheduled", { ...payload, action: "schedule_payment", entity: "purchase_order" });
+  });
+  eventBus.on("purchase_request.converted", async (payload) => {
+    await logEvent("purchase_request.converted", payload);
+    await logAudit("purchase_request.converted", { ...payload, action: "convert", entity: "purchase_request" });
+  });
+
+  // ── Projects ──
+  eventBus.on("project.created", async (payload) => {
+    await logEvent("project.created", payload);
+    await logAudit("project.created", { ...payload, action: "create", entity: "project" });
+  });
+  eventBus.on("project.closed", async (payload) => {
+    await logEvent("project.closed", payload);
+    await logAudit("project.closed", { ...payload, action: "close", entity: "project" });
+  });
+
+  // ── Recruitment ──
+  eventBus.on("recruitment.job.closed", async (payload) => {
+    await logEvent("recruitment.job.closed", payload);
+    await logAudit("recruitment.job.closed", { ...payload, action: "close", entity: "recruitment_job" });
+  });
+  eventBus.on("recruitment.job.reopened", async (payload) => {
+    await logEvent("recruitment.job.reopened", payload);
+    await logAudit("recruitment.job.reopened", { ...payload, action: "reopen", entity: "recruitment_job" });
+  });
+
+  // ── Generic workflow request lifecycle ──
+  eventBus.on("request.approved", async (payload) => {
+    await logEvent("request.approved", payload);
+    await logAudit("request.approved", { ...payload, action: "approve", entity: "request" });
+  });
+  eventBus.on("request.rejected", async (payload) => {
+    await logEvent("request.rejected", payload);
+    await logAudit("request.rejected", { ...payload, action: "reject", entity: "request" });
+  });
+  eventBus.on("request.returned", async (payload) => {
+    await logEvent("request.returned", payload);
+    await logAudit("request.returned", { ...payload, action: "return", entity: "request" });
+  });
+
   const auditEntities = [
     "employee", "client", "invoice", "voucher", "expense", "purchase_request",
     "purchase_order", "salary_advance", "custody", "vendor", "leave_request",
