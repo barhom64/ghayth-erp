@@ -96,8 +96,8 @@ export default function CrmCreate() {
                 <SelectItem value="qualified">مؤهلة</SelectItem>
                 <SelectItem value="proposal">عرض سعر</SelectItem>
                 <SelectItem value="negotiation">تفاوض</SelectItem>
-                <SelectItem value="won">مكسوبة</SelectItem>
-                <SelectItem value="lost">خاسرة</SelectItem>
+                <SelectItem value="closed_won">مكسوبة</SelectItem>
+                <SelectItem value="closed_lost">خاسرة</SelectItem>
               </SelectContent>
             </Select>
           </div>
