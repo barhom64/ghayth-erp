@@ -184,6 +184,13 @@ const DAY_TOKENS: Record<string, number> = {
   "خمسة أيام": 5, "٥ أيام": 5, "5 أيام": 5,
 };
 
+// Match longer tokens before shorter ones so that "يومان" is not swallowed
+// by "يوم" (which is a substring of "يومان" / "يومين"). Without this ordering
+// every 2-day penalty collapses to 1 day.
+const DAY_TOKENS_SORTED: Array<[string, number]> = Object.entries(DAY_TOKENS).sort(
+  (a, b) => b[0].length - a[0].length,
+);
+
 /**
  * يحوّل نص الجزاء إلى {amount, warningOnly, termination} بناءً على الأجر اليومي.
  *   "5%"                      → 5% من اليوم
@@ -226,8 +233,8 @@ export function parsePenaltyLabel(
     const pct = Math.min(100, Math.max(0, Number(pctMatch[1])));
     return { amount: Math.round((safeWage * pct) / 100 * 100) / 100, warningOnly: false, termination: null };
   }
-  // أيام مذكورة
-  for (const [tok, days] of Object.entries(DAY_TOKENS)) {
+  // أيام مذكورة (longest token first — see DAY_TOKENS_SORTED comment)
+  for (const [tok, days] of DAY_TOKENS_SORTED) {
     if (t.includes(tok)) {
       return { amount: Math.round(safeWage * days * 100) / 100, warningOnly: false, termination: null };
     }

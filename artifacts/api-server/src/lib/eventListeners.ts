@@ -338,6 +338,57 @@ export function registerEventListeners() {
     await logAudit("leave.escalated", { ...payload, action: "escalate" });
   });
 
+  // ──────────────────────────────────────────────────────────────────────
+  // HR discipline — memo lifecycle
+  // Every state transition already writes a row into `hr_inquiry_memo_events`
+  // (the per-memo timeline), and notifications are dispatched directly from
+  // the route handlers. These subscribers add the system-wide audit-log and
+  // event-log rows so the memo history is visible in the global audit trail
+  // the same way any other entity's history is.
+  // ──────────────────────────────────────────────────────────────────────
+  eventBus.on("hr.memo.created", async (payload) => {
+    await logEvent("hr.memo.created", payload);
+    await logAudit("hr.memo.created", { ...payload, action: "create", entity: "hr_inquiry_memo" });
+  });
+
+  eventBus.on("hr.memo.justified", async (payload) => {
+    await logEvent("hr.memo.justified", payload);
+    await logAudit("hr.memo.justified", { ...payload, action: "justify", entity: "hr_inquiry_memo" });
+  });
+
+  eventBus.on("hr.memo.manager_recommended", async (payload) => {
+    await logEvent("hr.memo.manager_recommended", payload);
+    await logAudit("hr.memo.manager_recommended", {
+      ...payload,
+      action: "manager_recommend",
+      entity: "hr_inquiry_memo",
+    });
+  });
+
+  eventBus.on("hr.memo.gm_decided", async (payload) => {
+    await logEvent("hr.memo.gm_decided", payload);
+    await logAudit("hr.memo.gm_decided", {
+      ...payload,
+      action: "gm_decide",
+      entity: "hr_inquiry_memo",
+    });
+  });
+
+  eventBus.on("hr.memo.cancelled", async (payload) => {
+    await logEvent("hr.memo.cancelled", payload);
+    await logAudit("hr.memo.cancelled", { ...payload, action: "cancel", entity: "hr_inquiry_memo" });
+  });
+
+  eventBus.on("hr.discipline.regulation.create", async (payload) => {
+    await logEvent("hr.discipline.regulation.create", payload);
+  });
+  eventBus.on("hr.discipline.regulation.update", async (payload) => {
+    await logEvent("hr.discipline.regulation.update", payload);
+  });
+  eventBus.on("hr.discipline.regulation.delete", async (payload) => {
+    await logEvent("hr.discipline.regulation.delete", payload);
+  });
+
   const auditEntities = [
     "employee", "client", "invoice", "voucher", "expense", "purchase_request",
     "purchase_order", "salary_advance", "custody", "vendor", "leave_request",

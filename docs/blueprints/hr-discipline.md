@@ -93,10 +93,54 @@ From `lib/cronScheduler.ts`:
 
 Cross-referenced from `docs/KNOWN_ISSUES.md`:
 
-- **Phase 7 smoke test (pending):** the 3-step flow
-  (justification → manager recommendation → GM approval → penalty
-  application) is on the target list for the vitest smoke suite but
-  not yet covered.
+### Verified gaps (April 2026 system audit)
+
+1. **Two parallel penalty paths, only one enforces separation of duties.**
+   Late-check-in and early-departure flows in `routes/hr-attendance.ts:159,184,346`
+   and `routes/hr.ts:225,284,477` write directly to `attendance_deductions`
+   with `type='late'` / `type='penalty'` without ever creating an inquiry
+   memo. Only memo-based penalties go through the 3-step chain. This is
+   intentional (a 10-minute tardy should not cost a full memo), but the
+   boundary is not written down anywhere — document and set a threshold
+   (e.g. late > 30min OR repeat offender triggers memo path).
+
+2. **`hr.memo.*` events are emitted but had no domain subscribers.**
+   Until the April 2026 wiring, the five `hr.memo.*` events were bus
+   breadcrumbs only — the notification fan-out happened via direct
+   `createNotification` calls inside the route handlers. Subscribers
+   now live in `lib/eventListeners.ts` and mirror every memo state
+   transition into `audit_logs`, so any future automation (rules engine,
+   escalation, KPI dashboards) can hang off the bus instead of polling
+   `hr_inquiry_memo_events`.
+
+3. **No PDF memo / formal letter generation.** The inquiry memo is a
+   legal document under Saudi labour law; employees should receive a
+   signed PDF. Currently the only rendering path is the web UI. Target:
+   a `POST /hr/discipline/memos/:id/pdf` handler that uses `pdfkit`
+   (already a dependency) to produce the Arabic RTL letter with the
+   regulation reference, the three signatures, and the QR code.
+
+4. **`cronScheduler.dailyDeductionCheck` inserts `payroll_deductions`
+   with `amount=0`** (`cronScheduler.ts:632-639`). The actual absence
+   deduction comes from `absenceMap` in `hr.ts:1731` calculated as
+   `basic/30 × days`. The zero-amount row is just a bookkeeping marker
+   and can confuse readers who think absence discipline is broken.
+   Either remove the insert or rename the column to `isMarker`.
+
+5. **Only `parsePenaltyLabel` is unit-tested.** The DB-bound helpers
+   (`resolveArticle`, `resolvePenalty`, `countPriorOccurrences`,
+   `ensureInquiryMemoForViolation`) are covered only by manual testing
+   today; they will get vitest integration coverage once the Phase 7
+   schema-baseline blocker lifts. The pure parser is covered by
+   `tests/unit/disciplineEngine.test.ts` (30 tests — and caught one
+   real bug where `"يومان"` was being swallowed by `"يوم"` due to
+   substring-match ordering).
+
+### Cross-references
+
+- **Phase 7 smoke test (pending):** the full 3-step flow is on the
+  target list for the vitest smoke suite but not yet covered; blocked
+  on the schema-baseline gap documented in `docs/KNOWN_ISSUES.md`.
 - **Deeper gap #1 (lifecycle enforcement):** memo states are currently
   enforced inside `hr-discipline.ts` rather than through
   `lib/lifecycleEngine.ts`. Migrating them is tracked under the
