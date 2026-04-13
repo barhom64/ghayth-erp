@@ -5,7 +5,6 @@ import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Plus, Calendar, Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Timer, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -13,6 +12,13 @@ import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/appro
 import { ProcessStages, EntityTimeline } from "@/components/shared/entity-timeline";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+// P3 pilot — switch the page header, status chip, and selected columns
+// to the new unified primitives (P1.1 / P1.4 / P1.6).  Approval actions,
+// expanded-row stage rendering, and the KPI cards stay as-is for this
+// pilot pass; they'll move in P3 follow-ups.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
+import { textColumn, dateColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 
 const typeMap: Record<string, string> = {
   annual: "سنوية", sick: "مرضية", personal: "شخصية", unpaid: "بدون راتب",
@@ -107,6 +113,10 @@ export default function LeavesPage() {
     qc.invalidateQueries({ queryKey: ["leave-stages"] });
   };
 
+  // P3 pilot — column definitions now use the P1.4 presets where they
+  // fit cleanly. The custom-render columns (employee with avatar,
+  // approval-actions, more-menu) stay inline because they need
+  // page-local state (`expandedId`, `handleApprovalDone`).
   const columns: DataTableColumn<any>[] = [
     {
       key: "employeeName",
@@ -127,24 +137,9 @@ export default function LeavesPage() {
       sortable: true,
       render: (l) => l.leaveTypeName || typeMap[l.leaveType] || l.leaveType || "-",
     },
-    {
-      key: "startDate",
-      header: "من",
-      sortable: true,
-      render: (l) => <span className="text-gray-500">{l.startDate}</span>,
-    },
-    {
-      key: "endDate",
-      header: "إلى",
-      sortable: true,
-      render: (l) => <span className="text-gray-500">{l.endDate}</span>,
-    },
-    {
-      key: "days",
-      header: "الأيام",
-      sortable: true,
-      render: (l) => <span className="font-medium">{l.days || "-"}</span>,
-    },
+    dateColumn("startDate", "من"),
+    dateColumn("endDate", "إلى"),
+    textColumn("days", "الأيام"),
     {
       key: "reason",
       header: "السبب",
@@ -157,12 +152,7 @@ export default function LeavesPage() {
         </div>
       ),
     },
-    {
-      key: "status",
-      header: "الحالة",
-      sortable: true,
-      render: (l) => <StatusBadge status={l.status} />,
-    },
+    statusColumn("status", "الحالة", "leave"),
     {
       key: "approval",
       header: "إجراءات الموافقة",
@@ -185,11 +175,8 @@ export default function LeavesPage() {
         />
       ),
     },
-    {
-      key: "more",
-      header: "",
-      width: "80px",
-      render: (l) => (
+    actionsColumn(
+      (l) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <Link href={`/hr/leaves/create?copyLeaveType=${encodeURIComponent(l.leaveTypeId || l.leaveType || "")}&copyReason=${encodeURIComponent(l.reason || "")}`}>
             <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500" title="نسخ الطلب">
@@ -204,7 +191,8 @@ export default function LeavesPage() {
           </button>
         </div>
       ),
-    },
+      { width: "80px" },
+    ),
   ];
 
   const kpis = [
@@ -215,17 +203,34 @@ export default function LeavesPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">طلبات الإجازات</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">متابعة وإدارة طلبات إجازات الموظفين</p>
-        </div>
+    <PageShell
+      title="طلبات الإجازات"
+      subtitle="متابعة وإدارة طلبات إجازات الموظفين"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
         <Link href="/hr/leaves/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />طلب إجازة</Button>
         </Link>
-      </div>
-
+      }
+      filters={
+        <AdvancedFilters
+          config={{
+            searchPlaceholder: "بحث بالاسم...",
+            statuses: [
+              { value: "pending", label: "معلقة" },
+              { value: "approved", label: "موافق عليها" },
+              { value: "rejected", label: "مرفوضة" },
+              { value: "returned", label: "مُرجعة" },
+              { value: "cancelled", label: "ملغية" },
+            ],
+            showDateRange: true,
+          }}
+          values={filters}
+          onChange={setFilters}
+          resultCount={filtered?.length}
+        />
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -242,23 +247,6 @@ export default function LeavesPage() {
         ))}
       </div>
 
-      <AdvancedFilters
-        config={{
-          searchPlaceholder: "بحث بالاسم...",
-          statuses: [
-            { value: "pending", label: "معلقة" },
-            { value: "approved", label: "موافق عليها" },
-            { value: "rejected", label: "مرفوضة" },
-            { value: "returned", label: "مُرجعة" },
-            { value: "cancelled", label: "ملغية" },
-          ],
-          showDateRange: true,
-        }}
-        values={filters}
-        onChange={setFilters}
-        resultCount={filtered?.length}
-      />
-
       <DataTable
         columns={columns}
         data={filtered}
@@ -274,6 +262,6 @@ export default function LeavesPage() {
           ) : null
         }
       />
-    </div>
+    </PageShell>
   );
 }
