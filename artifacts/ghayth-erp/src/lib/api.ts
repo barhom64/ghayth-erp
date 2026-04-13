@@ -1,6 +1,91 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 
+/**
+ * ApiError — P1.3 of the unification plan (docs/UNIFICATION_PLAN.md).
+ *
+ * The API server emits typed errors (P0.3: ValidationError / NotFoundError /
+ * ConflictError / ForbiddenError / IntegrationError). Before this class,
+ * `apiFetch` threw a plain `Error` with just `.message`, so the frontend lost
+ * the structured `code` / `field` / `fix` / `status` / `meta` fields the
+ * server worked so hard to attach.
+ *
+ * `apiFetch` now throws `ApiError` when the server returns a non-2xx JSON
+ * payload. The class is a `Error` subclass so existing `getErrorMessage`
+ * and `instanceof Error` checks keep working. New call sites can read the
+ * structured fields directly:
+ *
+ *   try { await createLeave(body); }
+ *   catch (err) {
+ *     if (err instanceof ApiError && err.code === "VALIDATION_ERROR") {
+ *       setFieldError(err.field!, err.fix ?? err.message);
+ *       return;
+ *     }
+ *     throw err;  // let the boundary / default toast handle it
+ *   }
+ *
+ * `PageErrorBoundary` (P0.5) reads `err.response` — set here so the boundary
+ * can branch on code without the caller having to pass anything extra.
+ */
+export class ApiError extends Error {
+  public readonly status: number;
+  public readonly code: string;
+  public readonly field?: string;
+  public readonly fix?: string;
+  public readonly meta?: Record<string, unknown>;
+  /**
+   * Copy of the raw server response body — `PageErrorBoundary` reads this
+   * to adapt its fallback UI to the error code.
+   */
+  public readonly response: {
+    error: string;
+    code: string;
+    field?: string;
+    fix?: string;
+    status: number;
+    meta?: Record<string, unknown>;
+  };
+
+  constructor(
+    message: string,
+    init: {
+      status: number;
+      code?: string;
+      field?: string;
+      fix?: string;
+      meta?: Record<string, unknown>;
+    },
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = init.status;
+    this.code = init.code ?? inferCodeFromStatus(init.status);
+    this.field = init.field;
+    this.fix = init.fix;
+    this.meta = init.meta;
+    this.response = {
+      error: message,
+      code: this.code,
+      ...(init.field !== undefined ? { field: init.field } : {}),
+      ...(init.fix !== undefined ? { fix: init.fix } : {}),
+      status: init.status,
+      ...(init.meta !== undefined ? { meta: init.meta } : {}),
+    };
+  }
+}
+
+/** Fallback code when the server response didn't include one. */
+function inferCodeFromStatus(status: number): string {
+  if (status === 404) return "NOT_FOUND";
+  if (status === 403) return "FORBIDDEN";
+  if (status === 409) return "CONFLICT";
+  if (status === 422) return "VALIDATION_ERROR";
+  if (status === 502) return "INTEGRATION_ERROR";
+  if (status >= 500) return "SERVER_ERROR";
+  if (status >= 400) return "CLIENT_ERROR";
+  return "UNKNOWN";
+}
+
 function getToken() {
   return localStorage.getItem("erp_token");
 }
@@ -75,8 +160,19 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "خطأ في الخادم" }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const body = await res.json().catch(() => ({ error: "خطأ في الخادم" }));
+    // Preserve the typed-error shape the server sent (P0.3 / P1.3).
+    // The server's typed errors ship { error, code, field?, fix?, meta? }.
+    // Older routes still ship { error } — the ApiError constructor fills
+    // in a default code from the status so PageErrorBoundary can still
+    // branch cleanly.
+    throw new ApiError(body.error || `HTTP ${res.status}`, {
+      status: res.status,
+      code: typeof body.code === "string" ? body.code : undefined,
+      field: typeof body.field === "string" ? body.field : undefined,
+      fix: typeof body.fix === "string" ? body.fix : undefined,
+      meta: body.meta && typeof body.meta === "object" ? body.meta : undefined,
+    });
   }
   if (res.status === 204 || res.headers.get("content-length") === "0") {
     return {} as T;
@@ -132,6 +228,42 @@ export interface ApiMutationOptions<TData = any, TBody = any> {
   successMessage?: string | false;
   onSuccess?: (data: TData, body: TBody) => void;
   onError?: (error: Error, body: TBody) => void;
+  /**
+   * P1.3 — invoked when the server returns a VALIDATION_ERROR with a `field`.
+   * Lets the form mark the specific input as errored instead of showing a
+   * toast. If this handler is set, the default error toast is suppressed for
+   * validation errors only (other error codes still toast).
+   */
+  onFieldError?: (field: string, message: string, fix?: string) => void;
+  /**
+   * P1.3 — called before the default error toast for any non-validation
+   * code. Return `true` to suppress the default toast (you handled it).
+   * Useful for pages that want a custom message for e.g. CONFLICT while
+   * keeping the default for everything else.
+   */
+  onCodeError?: (code: string, error: ApiError, body: TBody) => boolean | void;
+}
+
+/**
+ * Translate a server error code to the arabic toast title. Unknown codes
+ * fall back to the generic "تعذّر تنفيذ العملية". Messages always come
+ * from the server — this function only picks the title.
+ */
+function toastTitleForCode(code: string): string {
+  switch (code) {
+    case "VALIDATION_ERROR":
+      return "البيانات غير صالحة";
+    case "NOT_FOUND":
+      return "السجل غير موجود";
+    case "CONFLICT":
+      return "لا يمكن تنفيذ هذه العملية الآن";
+    case "FORBIDDEN":
+      return "غير مصرح بهذه العملية";
+    case "INTEGRATION_ERROR":
+      return "خدمة خارجية متعطّلة";
+    default:
+      return "تعذّر تنفيذ العملية";
+  }
 }
 
 export function useApiMutation<TData = any, TBody = any>(
@@ -154,10 +286,46 @@ export function useApiMutation<TData = any, TBody = any>(
       }
       options?.onSuccess?.(data, body);
     },
-    // Default error handler: surface the backend's error message instead of
-    // leaving the user staring at a button that does nothing. Callers can
-    // still opt out with `{ silent: true }` when they render inline errors.
+    // Default error handler — P1.3 upgrade:
+    //   1. If the error is a typed ApiError, we route it through
+    //      `onFieldError` / `onCodeError` first so callers can opt into
+    //      structured handling without killing the default toast.
+    //   2. The default toast title is picked by error code rather than a
+    //      single generic "تعذّر تنفيذ العملية" for everything.
+    //   3. Plain errors (network, non-JSON) still fall through to the
+    //      legacy generic toast so pre-P1.3 call sites behave identically.
     onError: (error, body) => {
+      if (error instanceof ApiError) {
+        // Field-level validation error → let the form react inline.
+        if (
+          error.code === "VALIDATION_ERROR" &&
+          error.field &&
+          options?.onFieldError
+        ) {
+          options.onFieldError(error.field, error.message, error.fix);
+          options.onError?.(error, body);
+          return;
+        }
+        // Custom code handler → caller decides whether to show the toast.
+        if (options?.onCodeError) {
+          const suppressed = options.onCodeError(error.code, error, body);
+          if (suppressed === true) {
+            options.onError?.(error, body);
+            return;
+          }
+        }
+        if (!options?.silent) {
+          toast({
+            title: toastTitleForCode(error.code),
+            description: error.fix ?? error.message,
+            variant: "destructive",
+          });
+        }
+        options?.onError?.(error, body);
+        return;
+      }
+
+      // Non-ApiError path — legacy behaviour preserved.
       if (!options?.silent) {
         toast({
           title: "تعذّر تنفيذ العملية",
