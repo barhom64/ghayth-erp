@@ -10,6 +10,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
@@ -138,10 +139,10 @@ export default function PurchaseOrdersCreate() {
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label>مركز التكلفة</Label>
-          <Input className="mt-1" value={form.costCenter} onChange={(e) => setForm((f) => ({ ...f, costCenter: e.target.value }))} placeholder="مثال: مشروع-001" />
-        </div>
+        <CostCenterSelect
+          value={form.costCenter}
+          onChange={(v) => setForm((f) => ({ ...f, costCenter: v }))}
+        />
         <div>
           <Label>تاريخ التسليم المتوقع</Label>
           <div className="mt-1"><DatePicker value={form.expectedDelivery} onChange={(v) => setForm((f) => ({ ...f, expectedDelivery: v }))} /></div>

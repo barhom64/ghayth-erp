@@ -5,6 +5,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
 import { ArrowRight } from "lucide-react";
@@ -95,10 +96,10 @@ export default function JournalManualCreatePage() {
                 <label className="block text-sm font-medium mb-1">البيان *</label>
                 <input className="w-full border rounded-lg px-3 py-2 text-sm" required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف القيد اليدوي" />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">مركز التكلفة</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.costCenter} onChange={e => setForm(f => ({ ...f, costCenter: e.target.value }))} placeholder="مثال: الإدارة العامة" />
-              </div>
+              <CostCenterSelect
+                value={form.costCenter}
+                onChange={(v) => setForm(f => ({ ...f, costCenter: v }))}
+              />
             </div>
 
             <div className="rounded-xl border overflow-hidden">

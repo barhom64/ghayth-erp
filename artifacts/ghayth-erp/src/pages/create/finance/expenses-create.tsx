@@ -12,6 +12,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { CostCenterSelect, ProjectSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 
 const OPERATION_TYPES = [
@@ -445,29 +446,16 @@ export default function ExpensesCreate() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>مركز التكلفة <span className="text-red-500">*</span></Label>
-              <Select value={form.costCenter || "_none"} onValueChange={(v) => setForm({ ...form, costCenter: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">اختر مركز التكلفة</SelectItem>
-                  {branches.map((b: any) => <SelectItem key={`br-${b.id}`} value={`فرع-${b.name}`}>فرع: {b.name}</SelectItem>)}
-                  {departments.map((d: any) => <SelectItem key={`dp-${d.id}`} value={`قسم-${d.name}`}>قسم: {d.name}</SelectItem>)}
-                  {projects.map((p: any) => <SelectItem key={`pj-${p.id}`} value={`مشروع-${p.name || p.title}`}>مشروع: {p.name || p.title}</SelectItem>)}
-                  <SelectItem value="عام">عام</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>المشروع المرتبط</Label>
-              <Select value={form.projectId || "_none"} onValueChange={(v) => setForm({ ...form, projectId: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">بدون مشروع</SelectItem>
-                  {projects.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.name || p.title || `مشروع #${p.id}`}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <CostCenterSelect
+              value={form.costCenter}
+              onChange={(v) => setForm({ ...form, costCenter: v })}
+              required
+            />
+            <ProjectSelect
+              value={form.projectId}
+              onChange={(v) => setForm({ ...form, projectId: v })}
+              label="المشروع المرتبط"
+            />
             <div>
               <Label>نوع الجهة المرتبطة</Label>
               <Select value={form.relatedEntityType || "_none"} onValueChange={(v) => setForm({ ...form, relatedEntityType: v === "_none" ? "" : v })}>
