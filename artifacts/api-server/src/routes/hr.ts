@@ -2590,9 +2590,9 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
     const scope = req.scope!;
     const { employeeId, type, subject, content, status } = req.body as any;
     const { insertId } = await rawExecute(
-      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [scope.companyId, employeeId, type ?? "general", subject, content, status ?? "draft"]
+      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scope.companyId, employeeId, type ?? "general", subject, content, status ?? "draft", scope.activeAssignmentId]
     );
 
     const approvalResult = await initiateApprovalChain({
@@ -2617,6 +2617,33 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { type, subject, content },
+    }).catch(console.error);
+
+    // Leave a creation trail: the approval chain writes its own rows but the
+    // letter itself had no audit entry, so the employee timeline started at
+    // "approved" with no visible "filed on X by Y" record.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "official_letter",
+      entityId: insertId,
+      action: "hr.letter.created",
+      after: {
+        employeeId,
+        type: type ?? "general",
+        subject,
+        status: approvalResult.requiresApproval ? "pending_approval" : (status ?? "draft"),
+      },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.letter.created",
+      entity: "official_letter",
+      entityId: insertId,
+      after: { employeeId, type: type ?? "general", subject },
     }).catch(console.error);
 
     res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
@@ -3004,6 +3031,38 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
           WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
         [Number(id)]
       ).catch(() => { /* whatsapp_queue may not exist */ });
+
+      // Notify whoever filed the letter about the rejection/return so they
+      // can see the reason and take action. Prefer the creator assignment
+      // (the HR officer who filed it), fall back to the employee's own
+      // assignment when the letter was filed by the employee themselves.
+      const [targetAssignment] = await rawQuery<any>(
+        `SELECT COALESCE(
+                  ol."createdByAssignmentId",
+                  (SELECT ea.id FROM employee_assignments ea
+                    WHERE ea."employeeId" = ol."employeeId"
+                      AND ea."companyId" = ol."companyId"
+                      AND ea.status = 'active'
+                    LIMIT 1)
+                ) AS "assignmentId"
+           FROM official_letters ol
+          WHERE ol.id = $1`,
+        [Number(id)]
+      );
+      if (targetAssignment?.assignmentId) {
+        await createNotification({
+          companyId: scope.companyId,
+          assignmentId: Number(targetAssignment.assignmentId),
+          type: newStatus === "rejected" ? "letter_rejected" : "letter_returned",
+          title: newStatus === "rejected" ? "تم رفض طلب الخطاب" : "تم إرجاع طلب الخطاب",
+          body: `طلب خطاب "${letter.subject ?? letter.type ?? ""}" — ${
+            newStatus === "rejected" ? "مرفوض" : "مُرجع للتعديل"
+          }${notes ? `. السبب: ${notes}` : ""}`,
+          priority: "high",
+          refType: "official_letter",
+          refId: Number(id),
+        }).catch((e) => console.error("notify letter creator failed:", e));
+      }
     }
 
     try {
