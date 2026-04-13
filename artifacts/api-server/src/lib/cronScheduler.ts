@@ -1174,34 +1174,83 @@ async function dailySlaGeneral(): Promise<string> {
 }
 
 async function monthlyRentPenalties(): Promise<string> {
+  // Runs DAILY — full escalation ladder (alert → notification → field_visit →
+  // escalation → penalty_applied → legal_transfer). Each phase is idempotent
+  // (keyed on late_rent_actions.phase) and only fires once per payment.
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let penalties = 0;
+  let legalHandoffs = 0;
   for (const company of companies) {
     const overduePayments = await rawQuery<any>(
-      `SELECT rp.id, rp."dueDate", rp.amount, c.id AS "contractId", c."tenantName"
-       FROM rent_payments rp JOIN rental_contracts c ON c.id = rp."contractId"
-       WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
-         AND rp."dueDate" < CURRENT_DATE - INTERVAL '30 days'`,
+      `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId", c."tenantName", c."tenantPhone", c."unitId"
+         FROM rent_payments rp
+         JOIN rental_contracts c ON c.id = rp."contractId"
+        WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
+          AND rp."dueDate" < CURRENT_DATE`,
       [company.id]
     );
     for (const p of overduePayments) {
       const lateDays = Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000);
+      let targetStage: string | null = null;
+      if (lateDays >= 90) targetStage = 'legal_transfer';
+      else if (lateDays >= 60) targetStage = 'penalty_applied';
+      else if (lateDays >= 30) targetStage = 'escalation';
+      else if (lateDays >= 14) targetStage = 'field_visit';
+      else if (lateDays >= 7) targetStage = 'notification';
+      else if (lateDays >= 3) targetStage = 'alert';
+      if (!targetStage) continue;
+
       const existing = await rawQuery<any>(
-        `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = 'penalty_applied' LIMIT 1`,
-        [p.id]
+        `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = $2 LIMIT 1`,
+        [p.id, targetStage]
       );
       if (existing.length > 0) continue;
 
-      const lateFee = Number(p.amount) * 0.02;
-      await rawExecute(`UPDATE rent_payments SET amount = amount + $1 WHERE id = $2`, [lateFee, p.id]);
+      let actionLabel = targetStage;
+      if (targetStage === 'penalty_applied') {
+        const lateFee = Math.round(Number(p.amount) * 0.02 * 100) / 100;
+        await rawExecute(`UPDATE rent_payments SET amount = amount + $1, "updatedAt"=NOW() WHERE id = $2`, [lateFee, p.id]);
+        actionLabel = `غرامة تأخير ${lateFee}`;
+        penalties++;
+      } else if (targetStage === 'legal_transfer') {
+        try {
+          await rawExecute(
+            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty",status,priority,description)
+             VALUES ($1,$2,$3,'property_rent',$4,'open','high',$5)`,
+            [
+              company.id,
+              `RENT-${p.id}-${Date.now()}`,
+              `تحصيل إيجار — ${p.tenantName}`,
+              p.tenantName,
+              `إيجار متأخر ${lateDays} يوم — مبلغ ${p.amount} ريال`,
+            ]
+          );
+          legalHandoffs++;
+        } catch (err) {
+          console.error("[monthlyRentPenalties] legal_cases insert failed:", err);
+        }
+        actionLabel = 'تحويل للقسم القانوني';
+      } else if (targetStage === 'alert') actionLabel = 'تنبيه بالتأخر';
+      else if (targetStage === 'notification') actionLabel = 'إشعار رسمي';
+      else if (targetStage === 'field_visit') actionLabel = 'زيارة ميدانية';
+      else if (targetStage === 'escalation') actionLabel = 'تصعيد لإدارة الأملاك';
+
       await rawExecute(
-        `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes) VALUES ($1,$2,'penalty_applied','غرامة تأخير تلقائية',NOW(),$3)`,
-        [p.contractId, p.id, `تأخر ${lateDays} يوم — غرامة ${lateFee} ريال`]
+        `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
+         VALUES ($1,$2,$3,$4,NOW(),$5)`,
+        [p.contractId, p.id, targetStage, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
       ).catch(() => {});
-      penalties++;
+
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: `rent.late.${targetStage}`, entity: "rent_payments", entityId: Number(p.id),
+          details: `تأخر ${lateDays} يوم — ${actionLabel}`,
+        });
+      } catch {}
     }
   }
-  return `Monthly rent penalties: ${penalties}`;
+  return `Rent escalation: ${penalties} penalties, ${legalHandoffs} legal handoffs`;
 }
 
 async function monthlyPayrollPrep(): Promise<string> {
@@ -2347,7 +2396,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_project_check", description: "فحص تأخر المشاريع", schedule: "0 9 * * *", handler: dailyProjectCheck },
   { name: "daily_crm_check", description: "فحص متابعات CRM", schedule: "0 10 * * *", handler: dailyCrmCheck },
   { name: "daily_sla_general", description: "فحص SLA العام", schedule: "0 11 * * *", handler: dailySlaGeneral },
-  { name: "monthly_rent_penalties", description: "غرامات الإيجارات المتأخرة", schedule: "0 6 1 * *", handler: monthlyRentPenalties },
+  { name: "monthly_rent_penalties", description: "تصعيد الإيجارات المتأخرة (6 مراحل)", schedule: "0 7 * * *", handler: monthlyRentPenalties },
   { name: "monthly_payroll_prep", description: "تذكير الرواتب يوم 25", schedule: "0 8 25 * *", handler: monthlyPayrollPrep },
   { name: "monthly_closing_prep", description: "تذكير الإقفال يوم 28", schedule: "0 8 28 * *", handler: monthlyClosingPrep },
   { name: "weekly_hr_report", description: "تقرير HR الأسبوعي", schedule: "0 8 * * 0", handler: weeklyHrReport },
