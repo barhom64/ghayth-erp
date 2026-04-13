@@ -1,4 +1,10 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -152,54 +158,101 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
     } = req.body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
+    // Step 1 audit — typed ValidationError on every required field so the
+    // frontend's useApiMutation.onFieldError highlights the exact input
+    // that's missing instead of showing a generic toast.
     if (!name) {
-      validationError(res, "لا يمكن إنشاء موظف بدون اسم", "name", "أدخل الاسم الكامل للموظف");
-      return;
+      throw new ValidationError("لا يمكن إنشاء موظف بدون اسم", {
+        field: "name",
+        fix: "أدخل الاسم الكامل للموظف",
+      });
     }
     if (!nationalId) {
-      validationError(res, "لا يمكن إنشاء موظف بدون رقم هوية", "nationalId", "أدخل رقم الهوية الوطنية أو رقم الإقامة");
-      return;
+      throw new ValidationError("لا يمكن إنشاء موظف بدون رقم هوية", {
+        field: "nationalId",
+        fix: "أدخل رقم الهوية الوطنية أو رقم الإقامة",
+      });
     }
     if (!nationality) {
-      validationError(res, "لا يمكن إنشاء موظف بدون جنسية", "nationality", "حدد جنسية الموظف");
-      return;
+      throw new ValidationError("لا يمكن إنشاء موظف بدون جنسية", {
+        field: "nationality",
+        fix: "حدد جنسية الموظف",
+      });
     }
     if (!phone) {
-      validationError(res, "رقم الجوال مطلوب", "phone", "أدخل رقم جوال الموظف");
-      return;
+      throw new ValidationError("رقم الجوال مطلوب", {
+        field: "phone",
+        fix: "أدخل رقم جوال الموظف",
+      });
     }
     if (!managerId) {
-      validationError(res, "المدير المباشر مطلوب", "managerId", "حدد المدير المباشر للموظف");
-      return;
+      throw new ValidationError("المدير المباشر مطلوب", {
+        field: "managerId",
+        fix: "حدد المدير المباشر للموظف",
+      });
     }
     if (!department && !departmentId) {
-      validationError(res, "القسم مطلوب", "department", "حدد القسم الذي ينتمي إليه الموظف");
-      return;
+      throw new ValidationError("القسم مطلوب", {
+        field: "department",
+        fix: "حدد القسم الذي ينتمي إليه الموظف",
+      });
     }
     if (!jobTitle || jobTitle === "موظف") {
-      validationError(res, "المسمى الوظيفي مطلوب", "jobTitle", "حدد المسمى الوظيفي للموظف");
-      return;
+      throw new ValidationError("المسمى الوظيفي مطلوب", {
+        field: "jobTitle",
+        fix: "حدد المسمى الوظيفي للموظف",
+      });
     }
     if (!contractType) {
-      validationError(res, "نوع العقد مطلوب", "contractType", "حدد نوع العقد للموظف");
-      return;
+      throw new ValidationError("نوع العقد مطلوب", {
+        field: "contractType",
+        fix: "حدد نوع العقد للموظف",
+      });
     }
     if (salary !== undefined && salary !== null && Number(salary) <= 0) {
-      validationError(res, "الراتب يجب أن يكون أكبر من صفر", "salary", "أدخل راتباً موجباً أكبر من صفر");
-      return;
+      throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
+        field: "salary",
+        fix: "أدخل راتباً موجباً أكبر من صفر",
+      });
     }
 
     const targetBranchId = branchId ?? scope.branchId;
     const effectiveHireDate = hireDate || new Date().toISOString().split("T")[0];
 
+    // Step 1 audit — resolve department explicitly. If the caller passed a
+    // `department` string that doesn't exist, we used to silently insert
+    // departmentId=null; now we surface it as a validation error with
+    // field="department" so the form can highlight the input.
     let resolvedDepartmentId = departmentId ?? null;
     if (!resolvedDepartmentId && department) {
-      const deptRows = await rawQuery(
+      const deptRows = await rawQuery<{ id: number }>(
         `SELECT id FROM departments WHERE name = $1 AND "companyId" = $2 LIMIT 1`,
         [department, effectiveCompanyId]
       );
       if (deptRows.length > 0) {
-        resolvedDepartmentId = deptRows[0].id;
+        resolvedDepartmentId = deptRows[0]!.id;
+      } else {
+        throw new ValidationError(`القسم "${department}" غير موجود`, {
+          field: "department",
+          fix: "اختر قسماً من القائمة أو أنشئ القسم أولاً من الإعدادات.",
+        });
+      }
+    }
+
+    // Step 1 audit — pre-check the manager exists. Without this the insert
+    // below would fail deep inside withTransaction with a 23503 FK error
+    // whose detail string doesn't always carry "managerId". By rejecting
+    // early we give the caller a clean field-tagged error.
+    if (managerId) {
+      const mgrRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE id = $1 LIMIT 1`,
+        [Number(managerId)]
+      );
+      if (mgrRows.length === 0) {
+        throw new ValidationError(`المدير رقم ${managerId} غير موجود`, {
+          field: "managerId",
+          fix: "اختر مديراً من قائمة الموظفين الحاليين.",
+        });
       }
     }
 

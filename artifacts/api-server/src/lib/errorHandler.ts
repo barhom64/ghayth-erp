@@ -99,7 +99,28 @@ export function isTypedError(err: unknown): err is TypedError {
   return err instanceof TypedError;
 }
 
-export function classifyDbError(err: unknown): { status: number; message: string } {
+/**
+ * Classified DB-error shape returned by `classifyDbError`. Extended from the
+ * original `{ status, message }` to also carry `code` + `field` + `fix` so
+ * `handleRouteError` can forward a fully-typed response to the client
+ * without losing the structured fields the frontend needs to highlight the
+ * right form input.
+ *
+ * This is the fix for the user-reported "every action says 'حدث خطأ'" —
+ * even when pg had already told us that the problem was e.g. a duplicate
+ * email, the old code threw the `code` + `field` away and shipped just a
+ * generic string. Now the client gets `{ code: "CONFLICT", field: "email" }`
+ * and `useApiMutation.onFieldError` can light up the input.
+ */
+export interface ClassifiedError {
+  status: number;
+  message: string;
+  code?: string;
+  field?: string;
+  fix?: string;
+}
+
+export function classifyDbError(err: unknown): ClassifiedError {
   const e = err as any;
   const msg = e?.message ?? String(err);
   const code = e?.code ?? "";
@@ -108,71 +129,161 @@ export function classifyDbError(err: unknown): { status: number; message: string
   }
 
   if (msg.includes("Failed to fetch") || msg.includes("ECONNREFUSED") || msg.includes("ECONNRESET") || msg.includes("ETIMEDOUT") || msg.includes("network") || code === "ECONNREFUSED") {
-    return { status: 503, message: "انقطع الاتصال بقاعدة البيانات، يرجى المحاولة لاحقاً" };
+    return {
+      status: 503,
+      message: "انقطع الاتصال بقاعدة البيانات، يرجى المحاولة لاحقاً",
+      code: "DB_UNAVAILABLE",
+    };
   }
 
+  // 23505 — unique-key violation. Now returns `code: CONFLICT` + the
+  // specific form `field` we think was duplicated, so the frontend can
+  // light up that input without another round-trip.
   if (code === "23505" || msg.includes("duplicate key") || msg.includes("unique constraint") || msg.includes("already exists")) {
     const detail = e?.detail ?? "";
-    if (detail.includes("empNumber") || detail.includes("emp_number")) return { status: 409, message: "الرقم الوظيفي مستخدم مسبقاً، يرجى اختيار رقم آخر" };
-    if (detail.includes("email")) return { status: 409, message: "البريد الإلكتروني مستخدم مسبقاً" };
-    if (detail.includes("phone")) return { status: 409, message: "رقم الهاتف مستخدم مسبقاً" };
-    if (detail.includes("nationalId") || detail.includes("national_id")) return { status: 409, message: "رقم الهوية مستخدم مسبقاً" };
-    if (detail.includes("plateNumber") || detail.includes("plate_number")) return { status: 409, message: "رقم اللوحة مستخدم مسبقاً" };
-    if (detail.includes("licenseNumber") || detail.includes("license_number")) return { status: 409, message: "رقم الرخصة مستخدم مسبقاً" };
-    if (detail.includes("caseNumber") || detail.includes("case_number")) return { status: 409, message: "رقم القضية مستخدم مسبقاً" };
-    if (detail.includes("sku")) return { status: 409, message: "رمز المنتج (SKU) مستخدم مسبقاً" };
-    if (detail.includes("ref")) return { status: 409, message: "الرقم المرجعي مستخدم مسبقاً" };
-    return { status: 409, message: "البيانات مكررة، يرجى التحقق والمحاولة مجدداً" };
+    const base = { status: 409, code: "CONFLICT" as const };
+    if (detail.includes("empNumber") || detail.includes("emp_number")) {
+      return { ...base, message: "الرقم الوظيفي مستخدم مسبقاً", field: "empNumber", fix: "اختر رقماً وظيفياً آخر أو اترك الحقل ليُنشأ تلقائياً." };
+    }
+    if (detail.includes("email")) {
+      return { ...base, message: "البريد الإلكتروني مستخدم مسبقاً", field: "email", fix: "تحقّق من صحة البريد أو استخدم بريداً آخر." };
+    }
+    if (detail.includes("phone")) {
+      return { ...base, message: "رقم الهاتف مستخدم مسبقاً", field: "phone", fix: "تحقّق من الرقم أو استخدم رقماً مختلفاً." };
+    }
+    if (detail.includes("nationalId") || detail.includes("national_id")) {
+      return { ...base, message: "رقم الهوية مستخدم مسبقاً", field: "nationalId", fix: "الرقم مرتبط بموظف آخر. تحقّق من بياناته أولاً." };
+    }
+    if (detail.includes("plateNumber") || detail.includes("plate_number")) {
+      return { ...base, message: "رقم اللوحة مستخدم مسبقاً", field: "plateNumber", fix: "تحقّق من أن المركبة غير مسجّلة مسبقاً." };
+    }
+    if (detail.includes("licenseNumber") || detail.includes("license_number")) {
+      return { ...base, message: "رقم الرخصة مستخدم مسبقاً", field: "licenseNumber" };
+    }
+    if (detail.includes("caseNumber") || detail.includes("case_number")) {
+      return { ...base, message: "رقم القضية مستخدم مسبقاً", field: "caseNumber" };
+    }
+    if (detail.includes("sku")) {
+      return { ...base, message: "رمز المنتج (SKU) مستخدم مسبقاً", field: "sku" };
+    }
+    if (detail.includes("ref")) {
+      return { ...base, message: "الرقم المرجعي مستخدم مسبقاً", field: "ref" };
+    }
+    return { ...base, message: "البيانات مكررة، يرجى التحقق والمحاولة مجدداً" };
   }
 
+  // 23503 — foreign-key violation. Most FK failures correspond to a specific
+  // form field (clientId, employeeId, branchId, …) so we forward both the
+  // field name and a human-readable message the client can show inline.
   if (code === "23503" || msg.includes("foreign key") || msg.includes("violates foreign key constraint")) {
     const detail = e?.detail ?? "";
-    if (detail.includes("clientId") || detail.includes("client")) return { status: 400, message: "العميل المحدد غير موجود أو محذوف" };
-    if (detail.includes("employeeId") || detail.includes("employee")) return { status: 400, message: "الموظف المحدد غير موجود أو محذوف" };
-    if (detail.includes("branchId") || detail.includes("branch")) return { status: 400, message: "الفرع المحدد غير موجود أو محذوف" };
-    if (detail.includes("companyId") || detail.includes("company")) return { status: 400, message: "الشركة المحددة غير موجودة" };
-    if (detail.includes("departmentId") || detail.includes("department")) return { status: 400, message: "القسم المحدد غير موجود" };
-    if (detail.includes("vehicleId") || detail.includes("vehicle")) return { status: 400, message: "المركبة المحددة غير موجودة" };
-    if (detail.includes("productId") || detail.includes("product")) return { status: 400, message: "المنتج المحدد غير موجود" };
-    return { status: 400, message: "مرجع غير صالح، يرجى التحقق من البيانات المدخلة" };
+    const base = { status: 400, code: "VALIDATION_ERROR" as const };
+    if (detail.includes("clientId") || detail.includes("client")) {
+      return { ...base, message: "العميل المحدد غير موجود أو محذوف", field: "clientId", fix: "اختر عميلاً موجوداً أو أنشئ عميلاً جديداً." };
+    }
+    if (detail.includes("managerId") || detail.includes("manager_id")) {
+      return { ...base, message: "المدير المحدد غير موجود", field: "managerId", fix: "تحقق من وجود المدير أو اختر مديراً آخر." };
+    }
+    if (detail.includes("employeeId") || detail.includes("employee")) {
+      return { ...base, message: "الموظف المحدد غير موجود أو محذوف", field: "employeeId" };
+    }
+    if (detail.includes("branchId") || detail.includes("branch")) {
+      return { ...base, message: "الفرع المحدد غير موجود أو محذوف", field: "branchId" };
+    }
+    if (detail.includes("companyId") || detail.includes("company")) {
+      return { ...base, message: "الشركة المحددة غير موجودة", field: "companyId" };
+    }
+    if (detail.includes("departmentId") || detail.includes("department")) {
+      return { ...base, message: "القسم المحدد غير موجود", field: "departmentId", fix: "تحقق من اسم القسم أو اختره من القائمة." };
+    }
+    if (detail.includes("vehicleId") || detail.includes("vehicle")) {
+      return { ...base, message: "المركبة المحددة غير موجودة", field: "vehicleId" };
+    }
+    if (detail.includes("productId") || detail.includes("product")) {
+      return { ...base, message: "المنتج المحدد غير موجود", field: "productId" };
+    }
+    return { ...base, message: "مرجع غير صالح، يرجى التحقق من البيانات المدخلة" };
   }
 
+  // 23502 — NOT-NULL violation. Maps the column → arabic field label so the
+  // message is useful even without field highlighting.
   if (code === "23502" || msg.includes("not-null constraint") || msg.includes("null value in column")) {
     const colMatch = msg.match(/column "([^"]+)"/);
     if (colMatch) {
-      const col = colMatch[1];
+      const col = colMatch[1]!;
       const colNames: Record<string, string> = {
         name: "الاسم", email: "البريد الإلكتروني", phone: "الهاتف",
         title: "العنوان", description: "الوصف", amount: "المبلغ",
         total: "الإجمالي", status: "الحالة", "startDate": "تاريخ البداية",
         "endDate": "تاريخ النهاية", "companyId": "الشركة", "branchId": "الفرع",
+        "employeeId": "الموظف", "departmentId": "القسم", "managerId": "المدير",
+        "jobTitle": "المسمى الوظيفي", "hireDate": "تاريخ التعيين",
+        "nationalId": "رقم الهوية", "contractType": "نوع العقد",
       };
-      return { status: 400, message: `الحقل "${colNames[col] ?? col}" مطلوب ولا يمكن أن يكون فارغاً` };
+      return {
+        status: 400,
+        code: "VALIDATION_ERROR",
+        message: `الحقل "${colNames[col] ?? col}" مطلوب ولا يمكن أن يكون فارغاً`,
+        field: col,
+        fix: "أدخل قيمة لهذا الحقل قبل الحفظ.",
+      };
     }
-    return { status: 400, message: "بيانات ناقصة، يرجى ملء جميع الحقول المطلوبة" };
+    return {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      message: "بيانات ناقصة، يرجى ملء جميع الحقول المطلوبة",
+    };
   }
 
+  // 23514 — CHECK constraint. Comes from e.g. status enum guards. We can't
+  // know which column without parsing the message, but we can report it as
+  // a VALIDATION_ERROR so the frontend treats it like a field problem.
   if (code === "23514" || msg.includes("check constraint") || msg.includes("violates check constraint")) {
-    return { status: 400, message: "القيمة المدخلة غير صالحة — تجاوز النطاق المسموح" };
+    return {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      message: "القيمة المدخلة غير صالحة — تجاوز النطاق المسموح",
+      fix: "تحقّق من القيمة وحاول مجدداً.",
+    };
   }
 
-  if (code === "42703" || msg.includes("column") && msg.includes("does not exist")) {
-    return { status: 500, message: "خطأ في هيكل قاعدة البيانات، يرجى التواصل مع الدعم الفني" };
+  if (code === "42703" || (msg.includes("column") && msg.includes("does not exist"))) {
+    return {
+      status: 500,
+      code: "SERVER_ERROR",
+      message: "خطأ في هيكل قاعدة البيانات، يرجى التواصل مع الدعم الفني",
+    };
   }
 
   if (code === "42601" || msg.includes("syntax error")) {
-    return { status: 500, message: "خطأ في الاستعلام، يرجى التواصل مع الدعم الفني" };
+    return {
+      status: 500,
+      code: "SERVER_ERROR",
+      message: "خطأ في الاستعلام، يرجى التواصل مع الدعم الفني",
+    };
   }
 
   if (msg.includes("timeout") || msg.includes("timed out") || code === "57014") {
-    return { status: 504, message: "انتهت مهلة الاستجابة، يرجى المحاولة مجدداً" };
+    return {
+      status: 504,
+      code: "TIMEOUT",
+      message: "انتهت مهلة الاستجابة، يرجى المحاولة مجدداً",
+    };
   }
 
   if (msg.includes("permission denied") || msg.includes("42501")) {
-    return { status: 403, message: "غير مصرح بالوصول لهذه البيانات" };
+    return {
+      status: 403,
+      code: "FORBIDDEN",
+      message: "غير مصرح بالوصول لهذه البيانات",
+    };
   }
 
-  return { status: 500, message: "حدث خطأ غير متوقع، يرجى المحاولة لاحقاً" };
+  return {
+    status: 500,
+    code: "SERVER_ERROR",
+    message: "حدث خطأ غير متوقع، يرجى المحاولة لاحقاً",
+  };
 }
 
 export function validationError(
@@ -181,7 +292,11 @@ export function validationError(
   field: string,
   fix: string
 ): void {
-  res.status(422).json({ error, field, fix });
+  // Legacy helper kept for backwards compatibility with the ~40 call sites
+  // that still use it. New code should `throw new ValidationError(...)`
+  // instead so the response goes through the TypedError → handleRouteError
+  // path and picks up `code: "VALIDATION_ERROR"` automatically.
+  res.status(422).json({ error, code: "VALIDATION_ERROR", field, fix });
 }
 
 export function handleRouteError(err: unknown, res: any, logContext: string): void {
@@ -202,7 +317,16 @@ export function handleRouteError(err: unknown, res: any, logContext: string): vo
   }
 
   console.error(`[ERROR] ${logContext}:`, err);
-  const { status, message } = classifyDbError(err);
+  const { status, message, code, field, fix } = classifyDbError(err);
   if (res.headersSent) return;
-  res.status(status).json({ error: message });
+  // Forward the full typed shape the client expects. Legacy consumers that
+  // read only `.error` still work (the field is always present); new
+  // consumers that check `.code` + `.field` finally have something to read
+  // when a pg error bubbles up.
+  res.status(status).json({
+    error: message,
+    ...(code ? { code } : {}),
+    ...(field ? { field } : {}),
+    ...(fix ? { fix } : {}),
+  });
 }

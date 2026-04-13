@@ -133,16 +133,65 @@ describe("handleRouteError (P0.3)", () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "INTEGRATION_ERROR" }));
   });
 
-  it("falls back to classifyDbError for plain errors", () => {
+  it("falls back to classifyDbError for plain errors — now with code forwarded", () => {
     const res = makeRes();
     // A plain error with no recognised pg code falls through to the generic
-    // bucket — the refactor intentionally preserves old behaviour for callers
-    // that have not migrated yet.
+    // SERVER_ERROR bucket. The response now also carries `code` so the
+    // frontend's <PageErrorBoundary> can branch on it even for un-typed
+    // errors that slipped through — that's the Step 1 audit fix that kills
+    // the "كل إجراء يرد 'حدث خطأ'" UX complaint.
     handleRouteError(new Error("something weird"), res, "misc");
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({
       error: "حدث خطأ غير متوقع، يرجى المحاولة لاحقاً",
+      code: "SERVER_ERROR",
     });
+  });
+
+  it("forwards pg 23505 duplicate email as CONFLICT + field", () => {
+    const res = makeRes();
+    // Simulated pg unique-violation with a typical detail string.
+    const pgErr = {
+      code: "23505",
+      message: 'duplicate key value violates unique constraint "employees_email_unique"',
+      detail: "Key (email)=(test@x.com) already exists.",
+    };
+    handleRouteError(pgErr, res, "create employee");
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: "CONFLICT",
+      field: "email",
+      error: expect.stringContaining("البريد"),
+    }));
+  });
+
+  it("forwards pg 23503 FK on departmentId as VALIDATION_ERROR + field", () => {
+    const res = makeRes();
+    const pgErr = {
+      code: "23503",
+      message: 'insert or update on table "employees" violates foreign key constraint',
+      detail: 'Key (departmentId)=(999) is not present in table "departments".',
+    };
+    handleRouteError(pgErr, res, "create employee");
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: "VALIDATION_ERROR",
+      field: "departmentId",
+    }));
+  });
+
+  it("forwards pg 23502 NOT NULL on hireDate as VALIDATION_ERROR + field", () => {
+    const res = makeRes();
+    const pgErr = {
+      code: "23502",
+      message: 'null value in column "hireDate" of relation "employee_assignments" violates not-null constraint',
+    };
+    handleRouteError(pgErr, res, "create assignment");
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: "VALIDATION_ERROR",
+      field: "hireDate",
+    }));
   });
 
   it("does not write the response twice when headers were already sent", () => {
