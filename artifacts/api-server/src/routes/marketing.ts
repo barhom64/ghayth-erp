@@ -161,4 +161,17 @@ router.patch("/campaigns/:id/revenue", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+router.get("/templates", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT * FROM document_templates WHERE "companyId" = $1 AND category = 'marketing' ORDER BY "createdAt" DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch {
+    res.json({ data: [] });
+  }
+});
+
 export default router;
