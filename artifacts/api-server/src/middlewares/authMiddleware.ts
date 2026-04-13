@@ -70,7 +70,13 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
   );
 
   const allowedCompanies = [...new Set(allAssignments.map((a: any) => a.companyId as number))];
-  const allowedBranches = [...new Set(allAssignments.map((a: any) => a.branchId as number))];
+  const allowedBranches = [
+    ...new Set(
+      allAssignments
+        .map((a: any) => a.branchId as number | null)
+        .filter((b): b is number => typeof b === "number"),
+    ),
+  ];
 
   if (assignment.role === "owner" || assignment.role === "general_manager") {
     const companyBranches = await rawQuery<any>(
@@ -82,11 +88,51 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
     }
   }
 
+  // CRITICAL: `employee_assignments.branchId` is nullable in the DB, and
+  // owner / general_manager rows almost always have `branchId = NULL`
+  // because they span all branches. The RequestScope type used to lie
+  // that `branchId: number` which caused dozens of routes to pass `null`
+  // into NOT NULL columns (journal_entries, fleet_vehicles, budgets, ...)
+  // and crash with "null value in column branchId" at runtime.
+  //
+  // Fall back to the first allowed branch so every downstream route has
+  // a valid branch id to attribute the action to. The frontend can still
+  // override it per-request for company-wide operations.
+  let effectiveBranchId: number | null = assignment.branchId ?? null;
+  if (effectiveBranchId == null && allowedBranches.length > 0) {
+    effectiveBranchId = allowedBranches[0];
+  }
+  if (effectiveBranchId == null) {
+    // Absolutely nothing to fall back to — new tenant with no branches
+    // yet. Create the implicit "default" branch so the scope is always
+    // non-null. This is a one-time bootstrap per company.
+    const [created] = await rawQuery<any>(
+      `INSERT INTO branches ("companyId", name, "isActive")
+       VALUES ($1, 'الفرع الرئيسي', true)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [assignment.companyId]
+    );
+    if (created?.id) {
+      effectiveBranchId = created.id;
+      allowedBranches.push(created.id);
+    } else {
+      const [anyBranch] = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches WHERE "companyId" = $1 ORDER BY id ASC LIMIT 1`,
+        [assignment.companyId]
+      );
+      effectiveBranchId = anyBranch?.id ?? 0;
+      if (anyBranch?.id && !allowedBranches.includes(anyBranch.id)) {
+        allowedBranches.push(anyBranch.id);
+      }
+    }
+  }
+
   return {
     userId: payload.userId,
     employeeId: assignment.employeeId,
     companyId: assignment.companyId,
-    branchId: assignment.branchId,
+    branchId: effectiveBranchId as number,
     activeAssignmentId,
     allowedCompanies,
     allowedBranches,

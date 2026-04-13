@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 function getToken() {
   return localStorage.getItem("erp_token");
@@ -124,10 +125,20 @@ export function useApiQuery<T = any>(
   });
 }
 
+export interface ApiMutationOptions<TData = any, TBody = any> {
+  /** Suppress the default error toast — callers that show inline errors. */
+  silent?: boolean;
+  /** Override the default success toast (pass false to disable). */
+  successMessage?: string | false;
+  onSuccess?: (data: TData, body: TBody) => void;
+  onError?: (error: Error, body: TBody) => void;
+}
+
 export function useApiMutation<TData = any, TBody = any>(
   path: string,
   method: string = "POST",
-  invalidateKeys?: string[][]
+  invalidateKeys?: string[][],
+  options?: ApiMutationOptions<TData, TBody>
 ) {
   const qc = useQueryClient();
   return useMutation<TData, Error, TBody>({
@@ -136,8 +147,25 @@ export function useApiMutation<TData = any, TBody = any>(
         method,
         body: JSON.stringify(body),
       }),
-    onSuccess: () => {
+    onSuccess: (data, body) => {
       invalidateKeys?.forEach((key) => qc.invalidateQueries({ queryKey: key }));
+      if (options?.successMessage !== false && options?.successMessage !== undefined) {
+        toast({ title: options.successMessage });
+      }
+      options?.onSuccess?.(data, body);
+    },
+    // Default error handler: surface the backend's error message instead of
+    // leaving the user staring at a button that does nothing. Callers can
+    // still opt out with `{ silent: true }` when they render inline errors.
+    onError: (error, body) => {
+      if (!options?.silent) {
+        toast({
+          title: "تعذّر تنفيذ العملية",
+          description: getErrorMessage(error),
+          variant: "destructive",
+        });
+      }
+      options?.onError?.(error, body);
     },
   });
 }
