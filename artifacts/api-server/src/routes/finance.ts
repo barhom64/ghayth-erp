@@ -1040,6 +1040,23 @@ router.get("/purchase-orders", async (req, res) => {
   }
 });
 
+router.get("/purchase-orders/pending-grn", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT po.id, po.ref, po.status, po."totalAmount" AS total, s.name AS "supplierName",
+              po."createdAt", po."expectedDelivery"
+       FROM purchase_orders po
+       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       WHERE po."companyId" = $1 AND po.status IN ('approved','sent','partial_received')
+         AND po."deletedAt" IS NULL
+       ORDER BY po."createdAt" DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "PO pending GRN error:"); }
+});
+
 router.get("/purchase-orders/:id", async (req, res) => {
   try {
     const scope = req.scope!;
