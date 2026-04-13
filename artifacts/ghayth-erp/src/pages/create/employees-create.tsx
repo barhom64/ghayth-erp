@@ -34,7 +34,7 @@ export default function EmployeesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
-  const createMut = useApiMutation("/employees", "POST", [["employees"]]);
+  const createMut = useApiMutation("/employees", "POST", [["employees"]], { silent: true });
   const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
   const { data: jobTitlesData } = useApiQuery<{ data: any[] }>(["job-titles-list"], "/employees/job-titles");
