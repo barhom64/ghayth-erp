@@ -3,8 +3,10 @@ import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+// P4.9 — Warehouse sweep: shared header + status chips.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -15,11 +17,11 @@ import { useAppContext } from "@/contexts/app-context";
 export default function Warehouse() {
   const [tab, setTab] = useState("products");
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">إدارة المستودعات</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">متابعة المخزون والمنتجات والحركات</p>
-      </div>
+    <PageShell
+      title="إدارة المستودعات"
+      subtitle="متابعة المخزون والمنتجات والحركات"
+      breadcrumbs={[{ label: "المستودعات" }]}
+    >
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="products" className="gap-2"><Package className="h-4 w-4" /> المنتجات</TabsTrigger>
@@ -32,7 +34,7 @@ export default function Warehouse() {
         <TabsContent value="categories" className="mt-6"><CategoriesTab /></TabsContent>
         <TabsContent value="suppliers" className="mt-6"><SuppliersTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 
@@ -79,7 +81,7 @@ function ProductsTab() {
     { key: "minStock", header: "الحد الأدنى", sortable: true, render: (p) => p.minStock },
     { key: "costPrice", header: "سعر التكلفة", sortable: true, render: (p) => formatCurrency(p.costPrice || 0) },
     { key: "sellPrice", header: "سعر البيع", sortable: true, render: (p) => formatCurrency(p.sellPrice || 0) },
-    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <PageStatusBadge status={p.status} /> },
     {
       key: "actions", header: "الإجراءات",
       render: (p) => (
@@ -307,7 +309,7 @@ function SuppliersTab() {
     { key: "contactPerson", header: "جهة الاتصال", sortable: true, render: (s) => s.contactPerson || "-" },
     { key: "phone", header: "الهاتف", sortable: true, ltr: true, render: (s) => s.phone || "-" },
     { key: "rating", header: "التقييم", sortable: true, render: (s) => <span>⭐ {s.rating}</span> },
-    { key: "status", header: "الحالة", sortable: true, render: (s) => <StatusBadge status={s.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (s) => <PageStatusBadge status={s.status} /> },
   ];
 
   return (

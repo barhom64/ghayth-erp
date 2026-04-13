@@ -1,4 +1,10 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -234,7 +240,7 @@ journalRouter.patch("/expenses/:id", async (req, res) => {
     const scope = req.scope!;
     const { description } = req.body as any;
     const [existing] = await rawQuery<any>(`SELECT id, "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المصروف غير موجود");
     const expenseDate = new Date(existing.createdAt).toISOString().split("T")[0];
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, expenseDate);
     if (!periodCheck.open) {
@@ -242,7 +248,7 @@ journalRouter.patch("/expenses/:id", async (req, res) => {
       return;
     }
     const [row] = await rawQuery<any>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`, [description, Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المصروف غير موجود");
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
@@ -253,7 +259,7 @@ journalRouter.delete("/expenses/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المصروف غير موجود");
     await reverseAccountBalances(scope.companyId, row.id);
     res.json({ success: true });
   } catch (err) {
@@ -268,7 +274,7 @@ journalRouter.patch("/expenses/:id/approve", async (req, res) => {
     const { id } = req.params;
     const { approved, notes } = req.body as any;
     const [exp] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
-    if (!exp) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!exp) throw new NotFoundError("المصروف غير موجود");
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
     await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
@@ -405,7 +411,7 @@ journalRouter.patch("/vouchers/:id", async (req, res) => {
     const scope = req.scope!;
     const { description } = req.body as any;
     const [row] = await rawQuery<any>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`, [description, Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "السند غير موجود" }); return; }
+    if (!row) throw new NotFoundError("السند غير موجود");
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
@@ -416,7 +422,7 @@ journalRouter.delete("/vouchers/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "السند غير موجود" }); return; }
+    if (!row) throw new NotFoundError("السند غير موجود");
     await reverseAccountBalances(scope.companyId, row.id);
     res.json({ success: true });
   } catch (err) {
@@ -477,7 +483,7 @@ journalRouter.patch("/accounts/:id", async (req, res) => {
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "الحساب غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Update account error:");
@@ -490,7 +496,7 @@ journalRouter.delete("/accounts/:id", async (req, res) => {
     if (!requireRole(scope, ["general_manager", "owner"], res)) return;
     const id = Number(req.params.id);
     const [account] = await rawQuery<any>(`SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!account) { res.status(404).json({ error: "الحساب غير موجود" }); return; }
+    if (!account) throw new NotFoundError("الحساب غير موجود");
     const [hasLines] = await rawQuery<any>(`SELECT COUNT(*)::int AS cnt FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL WHERE jl."accountCode" = $1 AND je."companyId" = $2`, [account.code, scope.companyId]);
     if (hasLines && hasLines.cnt > 0) { res.status(400).json({ error: `لا يمكن حذف الحساب "${account.name}" لأنه مرتبط بـ ${hasLines.cnt} قيد محاسبي`, linkedEntries: hasLines.cnt }); return; }
     const [hasChildren] = await rawQuery<any>(`SELECT COUNT(*)::int AS cnt FROM chart_of_accounts WHERE "parentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -571,7 +577,7 @@ journalRouter.patch("/salary-advances/:id/approve", async (req, res) => {
     const { id } = req.params;
     const { approved, notes } = req.body as any;
     const [entry] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`, [Number(id), scope.companyId]);
-    if (!entry) { res.status(404).json({ error: "السلفة غير موجودة" }); return; }
+    if (!entry) throw new NotFoundError("السلفة غير موجودة");
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
     if (newStatus === "rejected" && !notes) { res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return; }
     await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
@@ -646,7 +652,7 @@ journalRouter.get("/journal/:id", async (req, res) => {
        LIMIT 1`,
       [id, scope.allowedCompanies]
     );
-    if (!je) { res.status(404).json({ error: "القيد غير موجود" }); return; }
+    if (!je) throw new NotFoundError("القيد غير موجود");
     const lines = await rawQuery<any>(
       `SELECT jl.*, coa.name AS "accountName"
        FROM journal_lines jl
@@ -686,7 +692,7 @@ journalRouter.post("/journal/:id/reverse", async (req, res) => {
       `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
       [id, scope.companyId]
     );
-    if (!original) { res.status(404).json({ error: "القيد الأصلي غير موجود" }); return; }
+    if (!original) throw new NotFoundError("القيد الأصلي غير موجود");
     if (original.reversedById) {
       res.status(400).json({ error: `هذا القيد معكوس مسبقاً بالقيد #${original.reversedById}` });
       return;

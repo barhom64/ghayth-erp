@@ -1,4 +1,9 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  NotFoundError,
+  ValidationError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -286,7 +291,7 @@ router.get("/products/:id", requirePermission("warehouse:read"), async (req, res
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المنتج غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
 });
@@ -296,7 +301,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id, "costPrice", "sellPrice" FROM warehouse_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المنتج غير موجود");
     const b = req.body;
     const effectiveCost = b.costPrice !== undefined ? Number(b.costPrice) : Number(existing.costPrice);
     const effectiveSell = b.sellPrice !== undefined ? Number(b.sellPrice) : Number(existing.sellPrice);
@@ -326,7 +331,7 @@ router.delete("/products/:id", requirePermission("warehouse:delete"), async (req
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المنتج غير موجود");
     await rawExecute(`UPDATE warehouse_products SET "deletedAt"=NOW(), status='inactive' WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف المنتج بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete product error:"); }
@@ -700,7 +705,7 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "الفئة غير موجودة" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الفئة غير موجودة");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
 });
@@ -710,7 +715,7 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM warehouse_categories WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الفئة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الفئة غير موجودة");
     await rawExecute(`UPDATE warehouse_categories SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف الفئة" });
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
@@ -734,7 +739,7 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("المورد غير موجود");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
@@ -744,7 +749,7 @@ router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (re
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المورد غير موجود");
     await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف المورد" });
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
@@ -837,14 +842,14 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
     const b = req.body;
     // Ensure count exists and is in draft
     const [count] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [countId, scope.companyId]);
-    if (!count) { res.status(404).json({ error: "الجرد غير موجود" }); return; }
+    if (!count) throw new NotFoundError("الجرد غير موجود");
     if (count.status === 'approved') { res.status(400).json({ error: "لا يمكن تعديل جرد معتمد" }); return; }
 
     const [product] = await rawQuery<any>(
       `SELECT id, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2`,
       [b.productId, scope.companyId]
     );
-    if (!product) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+    if (!product) throw new NotFoundError("المنتج غير موجود");
 
     const physicalCount = Number(b.physicalCount || 0);
     const systemStock = Number(product.currentStock || 0);
@@ -879,7 +884,7 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
       `SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2 AND status='draft'`,
       [countId, scope.companyId]
     );
-    if (!count) { res.status(404).json({ error: "الجرد غير موجود أو تمت معالجته" }); return; }
+    if (!count) throw new NotFoundError("الجرد غير موجود أو تمت معالجته");
 
     const items = await rawQuery<any>(
       `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1`,

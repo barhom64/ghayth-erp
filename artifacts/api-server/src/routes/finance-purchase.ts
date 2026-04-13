@@ -1,4 +1,10 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -175,7 +181,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", async (req, res) => {
     const { approved, notes } = req.body as any;
 
     const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
-    if (!pr) { res.status(404).json({ error: "طلب الشراء غير موجود" }); return; }
+    if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
@@ -230,7 +236,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", async (req, res) => {
     const { id } = req.params;
 
     const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
-    if (!pr) { res.status(404).json({ error: "طلب الشراء غير موجود" }); return; }
+    if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
     if (pr.status !== "approved") { res.status(400).json({ error: "يمكن تحويل الطلبات المعتمدة فقط" }); return; }
 
     const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1`, [Number(id)]);
@@ -381,7 +387,7 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
     const { approved, notes } = req.body as any;
 
     const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
-    if (!po) { res.status(404).json({ error: "أمر الشراء غير موجود" }); return; }
+    if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
@@ -429,7 +435,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!po) { res.status(404).json({ error: "أمر الشراء غير موجود" }); return; }
+    if (!po) throw new NotFoundError("أمر الشراء غير موجود");
     if (!["approved", "partially_received"].includes(po.status)) {
       res.status(400).json({ error: "يمكن استلام الطلبات المعتمدة فقط" });
       return;
@@ -662,7 +668,7 @@ purchaseRouter.get("/purchase-orders/:id/match", async (req, res) => {
          FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
       [poId, scope.companyId]
     );
-    if (!po) { res.status(404).json({ error: "أمر الشراء غير موجود" }); return; }
+    if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
     const items = await rawQuery<any>(
       `SELECT id, "itemName", quantity, "unitPrice", "lineTotal",
@@ -749,7 +755,7 @@ purchaseRouter.patch("/vendors/:id", async (req, res) => {
     if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
     params.push(Number(req.params.id), scope.companyId);
     const [row] = await rawQuery<any>(`UPDATE suppliers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`, params);
-    if (!row) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المورد غير موجود");
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
@@ -760,7 +766,7 @@ purchaseRouter.delete("/vendors/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`UPDATE suppliers SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المورد غير موجود");
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
@@ -815,7 +821,7 @@ purchaseRouter.patch("/budget/:id", async (req, res) => {
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Update budget error:");
@@ -827,7 +833,7 @@ purchaseRouter.delete("/budget/:id", async (req, res) => {
     const scope = req.scope!;
     if (!requireRole(scope, ["general_manager", "owner"], res)) return;
     const rows = await rawQuery<any>(`DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
     res.json({ message: "تم حذف الميزانية" });
   } catch (err) {
     handleRouteError(err, res, "Delete budget error:");

@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  NotFoundError,
+  ValidationError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";

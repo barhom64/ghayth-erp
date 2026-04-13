@@ -1,4 +1,10 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -1050,7 +1056,7 @@ router.get("/purchase-orders/:id", async (req, res) => {
        WHERE po.id = $1 AND po."companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!po) { res.status(404).json({ error: "أمر الشراء غير موجود" }); return; }
+    if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
     let lines: any[] = [];
     try {
@@ -1475,7 +1481,7 @@ router.patch("/accounts/:id", async (req, res) => {
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "الحساب غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update account error:"); }
 });
@@ -1485,7 +1491,7 @@ router.delete("/accounts/:id", async (req, res) => {
     const scope = req.scope!;
     if (!requireRole(scope, ["general_manager", "owner"], res)) return;
     const rows = await rawQuery<any>(`DELETE FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (rows.length === 0) { res.status(404).json({ error: "الحساب غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
     res.json({ message: "تم حذف الحساب" });
   } catch (err) { handleRouteError(err, res, "Delete account error:"); }
 });
@@ -1505,7 +1511,7 @@ router.patch("/budget/:id", async (req, res) => {
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update budget error:"); }
 });
@@ -1515,7 +1521,7 @@ router.delete("/budget/:id", async (req, res) => {
     const scope = req.scope!;
     if (!requireRole(scope, ["general_manager", "owner"], res)) return;
     const rows = await rawQuery<any>(`DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
     res.json({ message: "تم حذف الميزانية" });
   } catch (err) { handleRouteError(err, res, "Delete budget error:"); }
 });
@@ -1778,7 +1784,7 @@ router.get("/vendors/:id", async (req, res) => {
        WHERE s.id = $1 AND s."companyId" = ANY($2) AND s."deletedAt" IS NULL`,
       [id, scope.allowedCompanies]
     );
-    if (!vendor) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!vendor) throw new NotFoundError("المورد غير موجود");
     res.json(vendor);
   } catch (err) {
     handleRouteError(err, res, "Get vendor error:");
@@ -2982,7 +2988,7 @@ router.patch("/salary-advances/:id/approve", async (req, res) => {
       `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`,
       [Number(id), scope.companyId]
     );
-    if (!entry) { res.status(404).json({ error: "السلفة غير موجودة" }); return; }
+    if (!entry) throw new NotFoundError("السلفة غير موجودة");
 
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
     if (newStatus === "rejected" && !notes) {
@@ -3018,7 +3024,7 @@ router.patch("/custodies/:id/approve", async (req, res) => {
       `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
       [Number(id), scope.companyId]
     );
-    if (!entry) { res.status(404).json({ error: "العهدة غير موجودة" }); return; }
+    if (!entry) throw new NotFoundError("العهدة غير موجودة");
 
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
     if (newStatus === "rejected" && !notes) {
@@ -3091,7 +3097,7 @@ router.patch("/expenses/:id", async (req, res) => {
       `SELECT id, status FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المصروف غير موجود");
     if (existing.status === "posted") {
       res.status(422).json({ error: "لا يمكن تعديل قيد محاسبي مُقفل (posted)" });
       return;
@@ -3326,7 +3332,7 @@ router.patch("/purchase-orders/:id/approve", async (req, res) => {
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!po) { res.status(404).json({ error: "أمر الشراء غير موجود" }); return; }
+    if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) {

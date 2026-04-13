@@ -1028,7 +1028,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
        WHERE lr.id = $1 AND lr."companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!request) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!request) throw new NotFoundError("الطلب غير موجود");
     if (request.status !== "pending") {
       res.status(400).json({ error: "تم البت في هذا الطلب مسبقاً" }); return;
     }
@@ -1421,7 +1421,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
       `SELECT id FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!leaveReq) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!leaveReq) throw new NotFoundError("الطلب غير موجود");
 
     const stages = await rawQuery<any>(
       `SELECT las.*, e.name AS "decidedByName"
@@ -1581,7 +1581,7 @@ router.get("/payroll/:id/lines", requirePermission("hr:read"), async (req, res) 
       `SELECT id FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
-    if (!run) { res.status(404).json({ error: "سجل الرواتب غير موجود" }); return; }
+    if (!run) throw new NotFoundError("سجل الرواتب غير موجود");
 
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName", e."empNumber"
@@ -2834,7 +2834,7 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
        FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
       [id, scope.companyId]
     );
-    if (!leaveReq) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
+    if (!leaveReq) throw new NotFoundError("طلب الإجازة غير موجود");
     const isOwnRequest = leaveReq.employeeId === scope.employeeId;
     if (!isOwnRequest && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       res.status(403).json({ error: "غير مصرح: حذف طلبات الإجازة مقصور على صاحب الطلب أو HR أو المالك" }); return;
@@ -2890,7 +2890,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "دورة الرواتب غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("دورة الرواتب غير موجودة");
 
     if (status === "posted" && existing.status !== "posted") {
       const period = existing.period;
@@ -3021,7 +3021,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
       [status, Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "دورة الرواتب غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("دورة الرواتب غير موجودة");
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -3037,7 +3037,7 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
     const [exists] = await rawQuery<any>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]
     );
-    if (!exists) { res.status(404).json({ error: "دورة الرواتب غير موجودة" }); return; }
+    if (!exists) throw new NotFoundError("دورة الرواتب غير موجودة");
     if (exists.status === "posted") {
       res.status(400).json({ error: "لا يمكن حذف دورة رواتب تم ترحيلها" }); return;
     }
@@ -3088,7 +3088,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
       `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "التقييم غير موجود" }); return; }
+    if (!row) throw new NotFoundError("التقييم غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch performance error:"); }
 });
@@ -3103,7 +3103,7 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
       `DELETE FROM performance_reviews WHERE id = $1 AND "companyId" = $2 RETURNING id`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "التقييم غير موجود" }); return; }
+    if (!row) throw new NotFoundError("التقييم غير موجود");
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3119,7 +3119,7 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
       `UPDATE employee_violations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المخالفة غير موجودة");
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3145,7 +3145,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
       `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "الخطاب غير موجود" }); return; }
+    if (!row) throw new NotFoundError("الخطاب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3160,7 +3160,7 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
       `DELETE FROM official_letters WHERE id = $1 AND "companyId" = $2 RETURNING id`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "الخطاب غير موجود" }); return; }
+    if (!row) throw new NotFoundError("الخطاب غير موجود");
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3179,7 +3179,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!letter) { res.status(404).json({ error: "الخطاب غير موجود" }); return; }
+    if (!letter) throw new NotFoundError("الخطاب غير موجود");
 
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
     if (newStatus === "rejected" && !notes) {
@@ -3382,7 +3382,7 @@ router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, r
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
       [Number(employeeId), scope.companyId]
     );
-    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const daysCount = days ?? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
     const impact = await computeLeaveImpact(scope.companyId, Number(employeeId), assignment.id, Number(leaveTypeId), startDate, endDate, daysCount);
     res.json(impact);
@@ -3398,7 +3398,7 @@ router.post("/impact-preview/termination", requirePermission("hr:read"), async (
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
       [Number(employeeId), scope.companyId]
     );
-    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const impact = await computeTerminationImpact(scope.companyId, Number(employeeId), assignment.id);
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
@@ -3413,7 +3413,7 @@ router.post("/impact-preview/violation", requirePermission("hr:read"), async (re
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
       [Number(employeeId), scope.companyId]
     );
-    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const impact = await computeViolationImpact(scope.companyId, Number(employeeId), assignment.id, Number(deduction), severity);
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
@@ -3432,7 +3432,7 @@ router.get("/employee-status/:employeeId", requirePermission("hr:read"), async (
        WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active' LIMIT 1`,
       [Number(employeeId), scope.companyId]
     );
-    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    if (!assignment) throw new NotFoundError("الموظف غير موجود");
 
     const { computeEmployeeOperationalStatus } = await import("../lib/impactPreview.js");
     const status = await computeEmployeeOperationalStatus(scope.companyId, Number(employeeId), assignment.id);
@@ -4666,7 +4666,7 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
        WHERE ea."employeeId"=$2 AND ea."companyId"=$1 AND ea.status='active' LIMIT 1`,
       [scope.companyId, employeeId]
     );
-    if (!assignment) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    if (!assignment) throw new NotFoundError("الموظف غير موجود");
 
     const startDate = new Date(assignment.contractStart || assignment.startDate);
     const endDate = terminationDate ? new Date(terminationDate) : new Date();

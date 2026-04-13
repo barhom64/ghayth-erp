@@ -3,7 +3,9 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+// P4.8 — Finance expenses: shared header + status chips from P1.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, Wallet, TrendingDown, PieChart, Calendar, ChevronDown, ChevronUp, Paperclip, ExternalLink, Link2 } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -143,7 +145,7 @@ export default function ExpensesPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (e) => <StatusBadge status={e.status || "draft"} />,
+      render: (e) => <PageStatusBadge status={e.status || "draft"} />,
     },
     {
       key: "createdAt",
@@ -166,17 +168,16 @@ export default function ExpensesPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">المصروفات</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">مصروفات مرتبطة بالميزانية — لحركات النقد الحرة راجع <a href="/finance/vouchers" className="text-primary underline underline-offset-2">السندات</a></p>
-        </div>
+    <PageShell
+      title="المصروفات"
+      subtitle="مصروفات مرتبطة بالميزانية — لحركات النقد الحرة راجع السندات"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }]}
+      actions={
         <Link href="/finance/expenses/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-red-100 rounded-lg"><TrendingDown className="h-5 w-5 text-red-600" /></div>
@@ -347,6 +348,6 @@ export default function ExpensesPage() {
           );
         }}
       />
-    </div>
+    </PageShell>
   );
 }

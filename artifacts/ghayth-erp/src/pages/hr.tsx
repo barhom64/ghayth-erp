@@ -3,6 +3,8 @@ import { useApiQuery, asList } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+// P4.2 — HR hub sweep: shared header from P1.
+import { PageShell } from "@/components/page-shell";
 import {
   Users, Clock, Calendar, DollarSign, GraduationCap, Target,
   Briefcase, Scale, CalendarClock, Network, UserPlus, ChevronLeft,
@@ -91,18 +93,17 @@ export default function HR() {
   const totalAttendanceToday = attendanceResp?.total ?? "—";
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">الموارد البشرية</h1>
-          <p className="text-muted-foreground mt-1 text-sm">نظرة شاملة على أداء وإدارة الموارد البشرية</p>
-        </div>
+    <PageShell
+      title="الموارد البشرية"
+      subtitle="نظرة شاملة على أداء وإدارة الموارد البشرية"
+      breadcrumbs={[{ label: "الموارد البشرية" }]}
+      actions={
         <Button onClick={() => navigate("/employees/create")} className="gap-2">
           <UserPlus className="h-4 w-4" />
           إضافة موظف
         </Button>
-      </div>
-
+      }
+    >
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <KPICard
           title="إجمالي الموظفين"
@@ -232,6 +233,6 @@ export default function HR() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

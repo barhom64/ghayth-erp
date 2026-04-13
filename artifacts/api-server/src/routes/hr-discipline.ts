@@ -8,7 +8,12 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  NotFoundError,
+  ValidationError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import {
   createAuditLog,
   createNotification,

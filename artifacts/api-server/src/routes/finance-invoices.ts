@@ -1,4 +1,10 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -291,7 +297,7 @@ invoicesRouter.post("/invoices/:id/send", async (req, res) => {
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
-    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
     const channels: string[] = [];
     if (invoice.clientEmail) { channels.push("email"); console.log(`[INVOICE-SEND] Email PDF → ${invoice.clientEmail} for ${invoice.ref}`); }
@@ -451,7 +457,7 @@ invoicesRouter.get("/invoices/:id", async (req, res) => {
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
-    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const lines = await rawQuery<any>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id`, [Number(id)]);
     const [payments, journalEntries] = await Promise.all([
       rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC`, [scope.companyId, `PAY-${invoice.ref}%`]),
@@ -477,7 +483,7 @@ invoicesRouter.patch("/invoices/:id", async (req, res) => {
     if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
     params.push(Number(id), scope.companyId);
     const [row] = await rawQuery<any>(`UPDATE invoices SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`, params);
-    if (!row) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Patch invoice error:");
@@ -492,7 +498,7 @@ invoicesRouter.delete("/invoices/:id", async (req, res) => {
       `SELECT id, ref, status, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!inv) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
     if (Number(inv.paidAmount) > 0) {
       res.status(422).json({ error: "لا يمكن حذف فاتورة عليها تحصيلات — قم بعكس التحصيل أولاً" });
       return;
@@ -544,7 +550,7 @@ invoicesRouter.patch("/invoices/:id/approve", async (req, res) => {
     const { id } = req.params;
     const { approved, notes } = req.body as any;
     const [inv] = await rawQuery<any>(`SELECT * FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
-    if (!inv) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
     await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
@@ -625,7 +631,7 @@ invoicesRouter.post("/collection/:invoiceId/action", async (req, res) => {
     const { invoiceId } = req.params;
     const { stage, notes } = req.body as any;
     const [invoice] = await rawQuery<any>(`SELECT id, ref, status, "dueDate", EXTRACT(DAY FROM NOW() - "dueDate"::timestamptz)::int AS "daysOverdue" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(invoiceId), scope.companyId]);
-    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const requestedStage = Number(stage);
     const stageInfo = COLLECTION_STAGES.find((s) => s.stage === requestedStage);
     if (!stageInfo) { res.status(400).json({ error: "مرحلة التحصيل غير معرّفة", validStages: COLLECTION_STAGES.map((s) => s.stage) }); return; }
@@ -649,7 +655,7 @@ invoicesRouter.get("/collection/:invoiceId/history", async (req, res) => {
     const scope = req.scope!;
     const { invoiceId } = req.params;
     const [invoice] = await rawQuery<any>(`SELECT id FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(invoiceId), scope.companyId]);
-    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const history = await rawQuery<any>(`SELECT ics.*, e.name AS "performedByName" FROM invoice_collection_stages ics LEFT JOIN employee_assignments ea ON ea.id = ics."performedBy" LEFT JOIN employees e ON e.id = ea."employeeId" WHERE ics."invoiceId" = $1 ORDER BY ics.id ASC`, [Number(invoiceId)]);
     res.json(history);
   } catch (err) {
@@ -1352,7 +1358,7 @@ invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
       res.status(404).json({ error: "الدفعة المقدمة غير موجودة" });
       return;
     }
-    if (!advance) { res.status(404).json({ error: "الدفعة المقدمة غير موجودة" }); return; }
+    if (!advance) throw new NotFoundError("الدفعة المقدمة غير موجودة");
 
     const remaining = Number(advance.amount) - Number(advance.appliedAmount);
     if (applyAmt > remaining + 0.01) {
@@ -1365,7 +1371,7 @@ invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(invoiceId), scope.companyId]
     );
-    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     if (invoice.clientId !== advance.clientId) {
       res.status(400).json({ error: "العميل في الفاتورة لا يطابق العميل في الدفعة المقدمة" });
       return;

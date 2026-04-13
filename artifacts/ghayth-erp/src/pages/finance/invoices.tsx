@@ -4,7 +4,9 @@ import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+// P4.8 — Finance invoices: shared header + status chips from P1.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, Receipt, DollarSign, AlertTriangle, CheckCircle, Eye, ExternalLink, ChevronDown, ChevronUp, Copy, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
@@ -94,7 +96,7 @@ export default function InvoicesPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (inv) => <StatusBadge status={inv.status} />,
+      render: (inv) => <PageStatusBadge status={inv.status} domain="invoice" />,
     },
     {
       key: "zatca",
@@ -142,14 +144,16 @@ export default function InvoicesPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الفواتير</h1>
+    <PageShell
+      title="الفواتير"
+      subtitle="إدارة فواتير العملاء والمتابعة"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }]}
+      actions={
         <Link href="/finance/invoices/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50"><DollarSign className="w-6 h-6 text-blue-600" /></div>
@@ -258,6 +262,6 @@ export default function InvoicesPage() {
         }}
       />
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة الفاتورة" data={previewItem} fields={previewFields} />
-    </div>
+    </PageShell>
   );
 }
