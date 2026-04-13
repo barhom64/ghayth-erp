@@ -14,6 +14,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -892,10 +893,6 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
     const projectId = Number(req.params.id);
     const project = await assertProjectAccess(projectId, scope, res);
     if (!project) return;
-    if (project.status === "completed") {
-      res.status(400).json({ error: "المشروع مغلق بالفعل" });
-      return;
-    }
 
     const [totals] = await rawQuery<any>(
       `SELECT COALESCE(SUM(amount),0) AS "totalWip"
@@ -961,15 +958,38 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
       }
     }
 
-    await rawExecute(
-      `UPDATE projects SET status='completed', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-      [projectId, scope.companyId]
-    );
+    // Drive the status transition through the lifecycle engine: atomic
+    // state validation + UPDATE + event_log row + audit log + event bus
+    // emission all run together. Replaces the pre-existing manual
+    // pre-check + direct UPDATE + createAuditLog + emitEvent fan-out.
+    try {
+      await applyTransition({
+        entity: "projects",
+        id: projectId,
+        scope: {
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          userId: scope.userId,
+        },
+        action: "project.closed",
+        fromStates: ["active", "in_progress", "planning", "planned", "on_hold", "draft", "blocked"],
+        toState: "completed",
+        after: { totalWip, journalEntryId },
+      });
+    } catch (err) {
+      const mapped = lifecycleErrorResponse(err);
+      if (mapped) {
+        res.status(mapped.status).json(mapped.body);
+        return;
+      }
+      throw err;
+    }
 
     // Cancel all outstanding delivery/milestone obligations for this project
+    // (runs after the transition commits so a failure here doesn't undo the
+    // close — same semantics as before).
     try {
       await cancelObligation(scope.companyId, "project", projectId);
-      // Cancel obligations for all milestones of this project
       const msRows = await rawQuery<any>(
         `SELECT id FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2`,
         [projectId, scope.companyId]
@@ -980,25 +1000,6 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
     } catch (obErr) {
       console.error(`[projects] cancel obligations on close failed for project ${projectId}:`, obErr);
     }
-
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "close",
-      entity: "projects",
-      entityId: projectId,
-      after: { totalWip, journalEntryId },
-    }).catch(console.error);
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "project.closed",
-      entity: "projects",
-      entityId: projectId,
-      details: `إقفال مشروع "${project.name}" — WIP ${totalWip.toFixed(2)} ريال${journalEntryId ? ` (قيد #${journalEntryId})` : ""}`,
-    }).catch(console.error);
 
     res.json({
       message: "تم إقفال المشروع",

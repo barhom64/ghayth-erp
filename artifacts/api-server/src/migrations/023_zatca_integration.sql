@@ -1,6 +1,12 @@
--- Migration 028: ZATCA Integration (kept in src/migrations for reference only)
+-- Migration 023: ZATCA Integration
 -- جداول ربط هيئة الزكاة والضريبة والجمارك
--- NOTE: This is a reference copy; actual migration runs from artifacts/api-server/migrations/028_zatca_integration.sql
+--
+-- NOTE: An earlier comment in this file claimed the "actual" migration lived
+-- at artifacts/api-server/migrations/028_zatca_integration.sql. That is
+-- incorrect — the migration runner only reads src/migrations/ (copied to
+-- dist/migrations/ at build time by build.mjs's copyMigrations step). This
+-- file IS the runtime migration. The old artifacts/api-server/migrations/
+-- directory is dead code kept only for history; see its README_DEPRECATED.md.
 
 -- ZATCA settings per company
 CREATE TABLE IF NOT EXISTS zatca_settings (

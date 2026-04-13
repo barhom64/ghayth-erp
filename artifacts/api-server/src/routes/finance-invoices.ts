@@ -14,6 +14,7 @@ import {
   reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const invoicesRouter = Router();
 invoicesRouter.use(authMiddleware);
@@ -279,6 +280,10 @@ invoicesRouter.post("/invoices/:id/send", async (req, res) => {
     if (!requireRole(scope, FINANCE_ROLES, res)) return;
     const { id } = req.params;
 
+    // Read the joined invoice+client view first — we need the contact info to
+    // decide which delivery channels to log, and the ref/clientName for the
+    // audit trail. The lifecycle engine will re-lock the invoice row FOR
+    // UPDATE inside its transaction so this read is purely for display data.
     const [invoice] = await rawQuery<any>(
       `SELECT i.id, i.ref, i.status, i.total, i."vatAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail"
@@ -287,15 +292,45 @@ invoicesRouter.post("/invoices/:id/send", async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
-    if (invoice.status !== "draft") { res.status(400).json({ error: "الفاتورة مرسلة مسبقاً" }); return; }
-
-    await rawExecute(`UPDATE invoices SET status = 'sent', "sentAt" = NOW() WHERE id = $1`, [Number(id)]);
 
     const channels: string[] = [];
     if (invoice.clientEmail) { channels.push("email"); console.log(`[INVOICE-SEND] Email PDF → ${invoice.clientEmail} for ${invoice.ref}`); }
     if (invoice.clientPhone) { channels.push("whatsapp"); console.log(`[INVOICE-SEND] WhatsApp link → ${invoice.clientPhone} for ${invoice.ref}`); }
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.sent", entity: "invoices", entityId: Number(id), details: JSON.stringify({ ref: invoice.ref, channels, clientName: invoice.clientName }) }).catch(console.error);
+    // Atomic draft→sent transition via the shared lifecycle engine. The
+    // engine writes the event_log row + audit_logs row + bus emission, so
+    // this handler only keeps the channel notification as a side-effect.
+    try {
+      await applyTransition({
+        entity: "invoices",
+        id: Number(id),
+        scope: {
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          userId: scope.userId,
+        },
+        action: "invoice.sent",
+        fromStates: ["draft"],
+        toState: "sent",
+        setExtras: { sentAt: { raw: "NOW()" } },
+        extraWhere: `"deletedAt" IS NULL`,
+        after: { ref: invoice.ref, channels, clientName: invoice.clientName },
+      });
+    } catch (err) {
+      const mapped = lifecycleErrorResponse(err);
+      if (mapped) {
+        // Preserve the pre-existing error surface (400 "الفاتورة مرسلة مسبقاً"
+        // instead of 409) for backwards compat with UI error handling.
+        if (mapped.status === 409) {
+          res.status(400).json({ error: "الفاتورة مرسلة مسبقاً" });
+          return;
+        }
+        res.status(mapped.status).json(mapped.body);
+        return;
+      }
+      throw err;
+    }
+
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_sent", title: `تم إرسال الفاتورة ${invoice.ref}`, body: `تم إرسال الفاتورة للعميل ${invoice.clientName || ""} عبر ${channels.join(" + ") || "النظام"}`, priority: "normal", refType: "invoices", refId: Number(id) }).catch(console.error);
 
     res.json({ message: "تم إرسال الفاتورة بنجاح", status: "sent", channels, ref: invoice.ref });
