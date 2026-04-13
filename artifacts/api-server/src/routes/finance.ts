@@ -4060,16 +4060,35 @@ router.post("/opening-balances", async (req, res) => {
   try {
     const scope = (req as any).scope;
     const { date, lines, description } = req.body;
-    if (!lines?.length) return res.status(400).json({ error: "lines required" });
-    const result = await withTransaction(async (tx) => {
-      const [entry] = await tx<any[]>`
-        INSERT INTO journal_entries ("companyId", description, date, type, status, "createdBy")
-        VALUES (${scope.companyId}, ${description || 'أرصدة افتتاحية'}, ${date || new Date().toISOString().slice(0,10)}, 'opening', 'posted', ${scope.userId})
-        RETURNING *`;
+    if (!lines?.length) {
+      res.status(400).json({ error: "lines required" });
+      return;
+    }
+    const result = await withTransaction(async (client) => {
+      const { rows: entryRows } = await client.query<any>(
+        `INSERT INTO journal_entries ("companyId", description, date, type, status, "createdBy")
+         VALUES ($1, $2, $3, 'opening', 'posted', $4)
+         RETURNING *`,
+        [
+          scope.companyId,
+          description || "أرصدة افتتاحية",
+          date || new Date().toISOString().slice(0, 10),
+          scope.userId,
+        ]
+      );
+      const entry = entryRows[0];
       for (const line of lines) {
-        await tx`
-          INSERT INTO journal_lines ("journalId", "accountId", debit, credit, description)
-          VALUES (${entry.id}, ${line.accountId}, ${line.debit || 0}, ${line.credit || 0}, ${line.description || ''})`;
+        await client.query(
+          `INSERT INTO journal_lines ("journalId", "accountId", debit, credit, description)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            entry.id,
+            line.accountId,
+            line.debit || 0,
+            line.credit || 0,
+            line.description || "",
+          ]
+        );
       }
       return entry;
     });
