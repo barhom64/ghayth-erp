@@ -84,7 +84,7 @@ export default function FieldTrackingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">التتبع الميداني</h1>
+        <h1 className="text-3xl font-bold tracking-tight">التتبع الميداني — GPS</h1>
         <p className="text-sm text-muted-foreground mt-0.5">متابعة مواقع الموظفين الميدانيين</p>
       </div>
 
@@ -109,7 +109,7 @@ export default function FieldTrackingPage() {
           <h4 className="font-semibold mb-3">خريطة التتبع الميداني</h4>
           <AttendanceMap items={items} />
           {items.length === 0 && (
-            <p className="text-center text-gray-400 mt-3 text-sm">لا توجد سجلات حضور بالإحداثيات الجغرافية لعرضها على الخريطة</p>
+            <p className="text-center text-gray-400 mt-3 text-sm">لا توجد سجلات حضور بإحداثيات GPS لعرضها على الخريطة</p>
           )}
         </CardContent>
       </Card>

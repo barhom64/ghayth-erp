@@ -52,7 +52,7 @@ export async function createNotification(params: {
 export async function emitEvent(params: {
   companyId: number;
   branchId?: number;
-  userId: number | null;
+  userId: number;
   action: string;
   entity: string;
   entityId: number;
@@ -77,7 +77,7 @@ export async function emitEvent(params: {
     eventBus.emit(params.action, {
       companyId: params.companyId,
       branchId: params.branchId,
-      userId: params.userId ?? undefined,
+      userId: params.userId,
       entity: params.entity,
       entityId: params.entityId,
       action: params.action,
@@ -215,28 +215,6 @@ export async function createJournalEntry(params: {
 
   await updateAccountBalances(params.companyId, params.lines);
 
-  // Bus emission — closes the dead listener in eventListeners.ts:276 so every
-  // journal entry (from fleet trips, payroll, invoices, manual postings …)
-  // produces one audit_logs row + one event_logs row via the subscriber.
-  eventBus.emit("journal.entry.created", {
-    companyId: params.companyId,
-    branchId: params.branchId,
-    userId: params.createdBy,
-    entity: "journal_entries",
-    entityId: journalId,
-    action: "create",
-    after: {
-      ref: params.ref,
-      description: params.description,
-      type: params.type ?? "manual",
-      sourceType: params.sourceType ?? null,
-      sourceId: params.sourceId ?? null,
-      totalDebit,
-      totalCredit,
-      lineCount: params.lines.length,
-    },
-  });
-
   return journalId;
 }
 
@@ -327,29 +305,12 @@ export async function initiateApprovalChain(params: {
   }
 
   const firstStep = steps[0];
-  // Try the requested role first, then fall back through the management
-  // chain so a request is NEVER created with assignedTo = null (otherwise
-  // it sits in pending forever and the hourly escalation cron can only
-  // ping HR generically without actually assigning an owner).
-  const ROLE_FALLBACK_CHAIN = [
-    firstStep.requiredRole,
-    "branch_manager",
-    "hr_manager",
-    "general_manager",
-    "owner",
-  ].filter((v, i, a) => a.indexOf(v) === i);
-
-  let approver: { id: number } | undefined;
-  let resolvedRole: string = firstStep.requiredRole;
-  for (const role of ROLE_FALLBACK_CHAIN) {
-    const [row] = await rawQuery<any>(
-      `SELECT id FROM employee_assignments
-       WHERE "companyId" = $1 AND role = $2 AND status = 'active'
-       ORDER BY CASE WHEN "branchId" = $3 THEN 0 ELSE 1 END LIMIT 1`,
-      [params.companyId, role, params.branchId]
-    );
-    if (row) { approver = row; resolvedRole = role; break; }
-  }
+  const [approver] = await rawQuery<any>(
+    `SELECT id FROM employee_assignments
+     WHERE "companyId" = $1 AND role = $2 AND status = 'active'
+     ORDER BY CASE WHEN "branchId" = $3 THEN 0 ELSE 1 END LIMIT 1`,
+    [params.companyId, firstStep.requiredRole, params.branchId]
+  );
 
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + (firstStep.timeoutHours ?? 48));
@@ -364,15 +325,9 @@ export async function initiateApprovalChain(params: {
     await createNotification({
       companyId: params.companyId, assignmentId: approver.id,
       type: "approval_required", title: "طلب موافقة جديد",
-      body: `يوجد طلب ${chainTypeLabel(params.chainType)} جديد يتطلب موافقتك${
-        resolvedRole !== firstStep.requiredRole ? " (تم التوجيه بالنيابة)" : ""
-      }`,
+      body: `يوجد طلب ${chainTypeLabel(params.chainType)} جديد يتطلب موافقتك`,
       priority: "high", refType: params.refType, refId: params.refId,
     });
-  } else {
-    console.warn(
-      `[initiateApprovalChain] No approver found for company=${params.companyId} chainType=${params.chainType} ref=${params.refType}#${params.refId}. Request ${requestId} created with assignedTo=null.`
-    );
   }
 
   return { requiresApproval: true, chainId: chain.id, approvalRequestId: requestId, currentStep: 1, totalSteps: steps.length };
@@ -583,38 +538,6 @@ export async function getCfoAssignmentId(companyId: number, branchId: number): P
   );
   if (row?.id) return row.id;
   return getDirectorAssignmentId(companyId, branchId);
-}
-
-/**
- * Resolve the person responsible for legal matters in this company, falling
- * back from legal_manager → general_manager → owner. Returns both the
- * assignmentId (for notifications/inbox) and the employee name (for
- * legal_cases.lawyerName which is a free-text column with no FK).
- *
- * Branch is intentionally ignored: legal cases are company-scoped, and a
- * rental or fleet branch may not have a legal officer on staff.
- */
-export async function getLegalResponsible(
-  companyId: number
-): Promise<{ assignmentId: number; employeeName: string } | null> {
-  const [row] = await rawQuery<any>(
-    `SELECT ea.id, e.name
-       FROM employee_assignments ea
-       JOIN employees e ON e.id = ea."employeeId"
-      WHERE ea."companyId" = $1
-        AND ea.status = 'active'
-        AND ea.role IN ('legal_manager','general_manager','owner')
-      ORDER BY CASE ea.role
-                 WHEN 'legal_manager' THEN 1
-                 WHEN 'general_manager' THEN 2
-                 WHEN 'owner' THEN 3
-                 ELSE 4
-               END
-      LIMIT 1`,
-    [companyId]
-  );
-  if (!row?.id) return null;
-  return { assignmentId: Number(row.id), employeeName: String(row.name || "غير محدد") };
 }
 
 export async function getManagerAssignmentId(companyId: number, branchId: number): Promise<number | null> {

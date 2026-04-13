@@ -4,16 +4,8 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { criticalPathLength } from "../lib/algorithms.js";
-import {
-  createNotification,
-  createAuditLog,
-  createJournalEntry,
-  checkFinancialPeriodOpen,
-  getAccountCodeFromMapping,
-  emitEvent,
-} from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -113,39 +105,6 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
       entity: "projects",
       entityId: insertId,
       after: { name: b.name, clientId: b.clientId, budget: b.budget, status: b.status || 'planning' },
-    }).catch(console.error);
-
-    // Register delivery obligation for the project's endDate
-    if (b.endDate) {
-      try {
-        const endDate = new Date(b.endDate);
-        if (endDate > new Date()) {
-          await registerObligation({
-            companyId: scope.companyId,
-            branchId: scope.branchId ?? null,
-            entityType: "project",
-            entityId: insertId,
-            obligationType: "delivery",
-            title: `تسليم مشروع — ${b.name}`,
-            dueAt: endDate.toISOString(),
-            metadata: { clientId: b.clientId, budget: b.budget },
-            dedupeKey: `project-${insertId}-delivery`,
-            escalationSteps: [
-              { hoursAfterDue: 0, notifyRole: "projects_manager" },
-              { hoursAfterDue: 48, notifyRole: "general_manager" },
-            ],
-          });
-        }
-      } catch (obErr) { console.error("Project delivery obligation failed:", obErr); }
-    }
-
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "project.created",
-      entity: "projects",
-      entityId: insertId,
-      details: `إنشاء مشروع ${b.name}`,
     }).catch(console.error);
 
     res.status(201).json(row);
@@ -554,29 +513,6 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
        VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
       [projectId, scope.companyId, b.title, b.description || null, b.targetDate, b.completedDate || null]
     );
-
-    // Register milestone obligation for its targetDate
-    try {
-      const targetDate = new Date(b.targetDate);
-      if (targetDate > new Date()) {
-        await registerObligation({
-          companyId: scope.companyId,
-          branchId: scope.branchId ?? null,
-          entityType: "project_milestone",
-          entityId: insertId,
-          obligationType: "delivery",
-          title: `معلَم — ${b.title} (${project.name})`,
-          dueAt: targetDate.toISOString(),
-          metadata: { projectId, projectName: project.name },
-          dedupeKey: `milestone-${insertId}`,
-          escalationSteps: [
-            { hoursAfterDue: 0, notifyRole: "projects_manager" },
-            { hoursAfterDue: 48, notifyRole: "general_manager" },
-          ],
-        });
-      }
-    } catch (obErr) { console.error("Milestone obligation failed:", obErr); }
-
     const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1`, [insertId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create milestone error:"); }
@@ -601,12 +537,6 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       params
     );
     if (!rows[0]) { res.status(404).json({ error: "المعلم غير موجود" }); return; }
-
-    // If milestone was marked completed, mark its obligation as met
-    if (b.status === 'completed') {
-      await markObligationMet(scope.companyId, "project_milestone", id, "delivery").catch(console.error);
-    }
-
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update milestone error:"); }
 });
@@ -771,12 +701,11 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
     const project = await assertProjectAccess(projectId, scope, res);
     if (!project) return;
     if (!b.amount || !b.description) { res.status(400).json({ error: "المبلغ والوصف مطلوبان" }); return; }
-    const costDate = b.costDate || new Date().toISOString().split('T')[0];
     const { insertId } = await rawExecute(
       `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [projectId, scope.companyId, b.description, b.amount,
-       b.category || 'other', costDate,
+       b.category || 'other', b.costDate || new Date().toISOString().split('T')[0],
        scope.employeeId || null, b.notes || null]
     );
     // Update project spentAmount
@@ -784,229 +713,9 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3`,
       [b.amount, projectId, scope.companyId]
     );
-
-    // ─── GL POSTING: project cost → WIP ──────────────────────────────────
-    // DR WIP (1350) / CR Cash|AP|Inventory depending on source.
-    // project_costs currently has no `sourceType` column (verified against
-    // migrations 062_phase5 + 063_phase5_schema_fixes), so we infer the
-    // credit account from request body `sourceType` if supplied, otherwise
-    // from the cost `category`, else default to Cash (1100).
-    let journalEntryId: number | null = null;
-    try {
-      const amount = Number(b.amount);
-      if (amount > 0) {
-        const period = await checkFinancialPeriodOpen(scope.companyId, costDate);
-        if (!period.open) {
-          console.warn(
-            `[projects-gl] project cost ${insertId}: financial period "${period.periodName}" is closed — GL posting skipped`
-          );
-          // Stamp a note in the cost row so users see the reason.
-          await rawExecute(
-            `UPDATE project_costs SET notes = COALESCE(notes,'') || $1 WHERE id=$2`,
-            [
-              ` [GL skipped: الفترة المالية "${period.periodName ?? ""}" مغلقة]`,
-              insertId,
-            ]
-          ).catch(() => {});
-        } else {
-          const srcType: string = String(
-            b.sourceType || b.category || "cash"
-          ).toLowerCase();
-          let creditFallback = "1100"; // cash default
-          if (
-            srcType === "ap" ||
-            srcType === "vendor" ||
-            srcType === "supplier" ||
-            srcType === "invoice"
-          )
-            creditFallback = "2100";
-          else if (
-            srcType === "inventory" ||
-            srcType === "material" ||
-            srcType === "materials" ||
-            srcType === "stock"
-          )
-            creditFallback = "1300";
-
-          const debitCode = await getAccountCodeFromMapping(
-            scope.companyId,
-            "project_wip",
-            "debit",
-            "1350"
-          );
-          const creditCode = await getAccountCodeFromMapping(
-            scope.companyId,
-            "project_wip",
-            "credit",
-            creditFallback
-          );
-
-          journalEntryId = await createJournalEntry({
-            companyId: scope.companyId,
-            branchId: scope.branchId,
-            createdBy: (scope as any).activeAssignmentId ?? scope.userId,
-            ref: `PROJ-COST-${insertId}`,
-            description: `تكلفة مشروع "${project.name}" — ${b.description}`,
-            sourceType: "project_cost",
-            sourceId: insertId,
-            operationType: "project_wip",
-            lines: [
-              {
-                accountCode: debitCode,
-                debit: amount,
-                credit: 0,
-                projectId,
-                description: b.description,
-              },
-              {
-                accountCode: creditCode,
-                debit: 0,
-                credit: amount,
-                projectId,
-              },
-            ],
-          });
-        }
-      }
-    } catch (glErr) {
-      console.error(
-        `[projects-gl] journal entry failed for project cost ${insertId}:`,
-        glErr
-      );
-    }
-
     const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1`, [insertId]);
-    res.status(201).json({ ...row, journalEntryId });
+    res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create project cost error:"); }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Project closure — transfers accumulated WIP balance to Project Cost expense
-// and marks the project status='completed'. Must be called once per project
-// after all costs have been recorded. Idempotent: if the project is already
-// completed, returns without posting a duplicate entry.
-// ─────────────────────────────────────────────────────────────────────────────
-router.post("/:id/close", requirePermission("projects:update"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
-    if (project.status === "completed") {
-      res.status(400).json({ error: "المشروع مغلق بالفعل" });
-      return;
-    }
-
-    const [totals] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(amount),0) AS "totalWip"
-         FROM project_costs
-        WHERE "projectId" = $1 AND "companyId" = $2`,
-      [projectId, scope.companyId]
-    );
-    const totalWip = Number(totals?.totalWip || 0);
-
-    let journalEntryId: number | null = null;
-    if (totalWip > 0) {
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        const period = await checkFinancialPeriodOpen(scope.companyId, today);
-        if (!period.open) {
-          console.warn(
-            `[projects-gl] project close ${projectId}: financial period "${period.periodName}" is closed — GL posting skipped`
-          );
-        } else {
-          const debitCode = await getAccountCodeFromMapping(
-            scope.companyId,
-            "project_cost_transfer",
-            "debit",
-            "5225"
-          );
-          const creditCode = await getAccountCodeFromMapping(
-            scope.companyId,
-            "project_cost_transfer",
-            "credit",
-            "1350"
-          );
-          journalEntryId = await createJournalEntry({
-            companyId: scope.companyId,
-            branchId: scope.branchId,
-            createdBy: (scope as any).activeAssignmentId ?? scope.userId,
-            ref: `PROJ-CLOSE-${projectId}`,
-            description: `إقفال مشروع "${project.name}" — تحويل WIP ${totalWip.toFixed(2)} ريال إلى تكلفة المشاريع`,
-            sourceType: "project_closure",
-            sourceId: projectId,
-            operationType: "project_cost_transfer",
-            lines: [
-              {
-                accountCode: debitCode,
-                debit: totalWip,
-                credit: 0,
-                projectId,
-                description: "تحويل WIP إلى تكلفة المشروع",
-              },
-              {
-                accountCode: creditCode,
-                debit: 0,
-                credit: totalWip,
-                projectId,
-              },
-            ],
-          });
-        }
-      } catch (glErr) {
-        console.error(
-          `[projects-gl] WIP→COGS journal entry failed for project ${projectId}:`,
-          glErr
-        );
-      }
-    }
-
-    await rawExecute(
-      `UPDATE projects SET status='completed', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-      [projectId, scope.companyId]
-    );
-
-    // Cancel all outstanding delivery/milestone obligations for this project
-    try {
-      await cancelObligation(scope.companyId, "project", projectId);
-      // Cancel obligations for all milestones of this project
-      const msRows = await rawQuery<any>(
-        `SELECT id FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2`,
-        [projectId, scope.companyId]
-      );
-      for (const m of msRows) {
-        await cancelObligation(scope.companyId, "project_milestone", m.id).catch(() => {});
-      }
-    } catch (obErr) {
-      console.error(`[projects] cancel obligations on close failed for project ${projectId}:`, obErr);
-    }
-
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "close",
-      entity: "projects",
-      entityId: projectId,
-      after: { totalWip, journalEntryId },
-    }).catch(console.error);
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "project.closed",
-      entity: "projects",
-      entityId: projectId,
-      details: `إقفال مشروع "${project.name}" — WIP ${totalWip.toFixed(2)} ريال${journalEntryId ? ` (قيد #${journalEntryId})` : ""}`,
-    }).catch(console.error);
-
-    res.json({
-      message: "تم إقفال المشروع",
-      projectId,
-      totalWip,
-      journalEntryId,
-    });
-  } catch (err) { handleRouteError(err, res, "Close project error:"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

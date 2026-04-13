@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 
 const now = new Date();
 const DRAFT_KEY = "finance_budget_create";
-const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "", date: new Date().toISOString().split("T")[0] };
+const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "" };
 
 export default function BudgetCreate() {
   const [, setLocation] = useLocation();
@@ -42,7 +42,6 @@ export default function BudgetCreate() {
         accountCode: form.accountCode,
         period: form.period,
         amount: Number(form.amount),
-        date: form.date || undefined,
       });
       clearDraft();
       toast({ title: "تم إضافة بند الميزانية بنجاح" });
@@ -61,10 +60,7 @@ export default function BudgetCreate() {
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>التاريخ</Label>
-          <Input className="mt-1" type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-        </div>
+        <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>

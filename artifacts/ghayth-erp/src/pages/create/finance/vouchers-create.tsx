@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, AutoField } from "@/components/create-page-layout";
+import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { AlertCircle, Paperclip } from "lucide-react";
@@ -81,7 +81,6 @@ export default function VouchersCreate() {
     type: "receipt",
     operationType: "receipt",
     description: "",
-    date: new Date().toISOString().split("T")[0],
     amount: "",
     accountCode: "",
     sourceAccountCode: "",
@@ -157,7 +156,6 @@ export default function VouchersCreate() {
         type: form.type,
         operationType: form.operationType,
         amount: Number(form.amount),
-        date: form.date || undefined,
         description: form.description || undefined,
         accountCode: form.accountCode || undefined,
         sourceAccountCode: form.sourceAccountCode || undefined,
@@ -195,10 +193,7 @@ export default function VouchersCreate() {
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <AutoField label="رقم السند" value={autoNumberRef.current} />
-        <div>
-          <Label>التاريخ <span className="text-red-500">*</span></Label>
-          <Input type="date" className="mt-1" value={form.date} onChange={(e) => setField("date", e.target.value)} />
-        </div>
+        <CreationDateField />
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">

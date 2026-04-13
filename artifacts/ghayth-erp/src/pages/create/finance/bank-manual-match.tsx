@@ -4,7 +4,7 @@ import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowRight, Search, Link2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -111,55 +111,34 @@ export default function BankManualMatchPage() {
 
           {jeResults.length > 0 && (
             <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded">
-              <DataTable<any>
-                columns={[
-                  {
-                    key: "ref",
-                    header: "المرجع",
-                    className: "font-mono text-xs text-blue-600",
-                    render: (jl) => jl.jeRef || jl.ref || "-",
-                  },
-                  {
-                    key: "description",
-                    header: "الوصف",
-                    className: "text-xs",
-                    render: (jl) => jl.jeDescription || jl.description || "-",
-                  },
-                  {
-                    key: "date",
-                    header: "التاريخ",
-                    className: "text-xs text-gray-500",
-                    render: (jl) => (jl.jeDate ? formatDateAr(jl.jeDate) : "-"),
-                  },
-                  {
-                    key: "debit",
-                    header: "مدين",
-                    className: "text-xs",
-                    render: (jl) => (jl.debit > 0 ? formatCurrency(Number(jl.debit)) : "-"),
-                  },
-                  {
-                    key: "credit",
-                    header: "دائن",
-                    className: "text-xs",
-                    render: (jl) => (jl.credit > 0 ? formatCurrency(Number(jl.credit)) : "-"),
-                  },
-                  {
-                    key: "actions",
-                    header: "",
-                    render: (jl) => (
-                      <Button size="sm" onClick={() => handleManualMatch(jl.id)} disabled={manualMatchMutation.isPending}>
-                        ربط
-                      </Button>
-                    ),
-                  },
-                ] as DataTableColumn<any>[]}
-                data={jeResults}
-                rowKey={(jl) => jl.id}
-                rowClassName={() => "hover:bg-blue-50"}
-                noToolbar
-                pageSize={0}
-                emptyMessage="لا توجد نتائج"
-              />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>المرجع</TableHead>
+                    <TableHead>الوصف</TableHead>
+                    <TableHead>التاريخ</TableHead>
+                    <TableHead>مدين</TableHead>
+                    <TableHead>دائن</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {jeResults.map((jl: any) => (
+                    <TableRow key={jl.id} className="hover:bg-blue-50">
+                      <TableCell className="font-mono text-xs text-blue-600">{jl.jeRef || jl.ref || "-"}</TableCell>
+                      <TableCell className="text-xs">{jl.jeDescription || jl.description || "-"}</TableCell>
+                      <TableCell className="text-xs text-gray-500">{jl.jeDate ? formatDateAr(jl.jeDate) : "-"}</TableCell>
+                      <TableCell className="text-xs">{jl.debit > 0 ? formatCurrency(Number(jl.debit)) : "-"}</TableCell>
+                      <TableCell className="text-xs">{jl.credit > 0 ? formatCurrency(Number(jl.credit)) : "-"}</TableCell>
+                      <TableCell>
+                        <Button size="sm" onClick={() => handleManualMatch(jl.id)} disabled={manualMatchMutation.isPending}>
+                          ربط
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
 

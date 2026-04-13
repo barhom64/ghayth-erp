@@ -3,10 +3,9 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, createJournalEntry } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
-import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -24,20 +23,10 @@ router.get("/units", async (req, res) => {
       conditions.push(`u."buildingId" = $${params.length}`);
     }
     const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 100));
+    const limit = Math.min(100, Number(req.query.limit) || 100);
     const offset = (page - 1) * limit;
     conditions.push(`u."deletedAt" IS NULL`);
-    const limitIdx = params.length + 1;
-    const offsetIdx = params.length + 2;
-    params.push(limit, offset);
-    const rows = await rawQuery<any>(
-      `SELECT u.* FROM property_units u WHERE ${conditions.join(" AND ")} ORDER BY u."buildingName", u."unitNumber" LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-      params
-    );
-    // Drop the LIMIT/OFFSET params before running the COUNT(*) query so it
-    // still matches the `conditions` WHERE clause.
-    params.pop();
-    params.pop();
+    const rows = await rawQuery<any>(`SELECT u.* FROM property_units u WHERE ${conditions.join(" AND ")} ORDER BY u."buildingName", u."unitNumber" LIMIT ${limit} OFFSET ${offset}`, params);
     const [countRow] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units u WHERE ${conditions.join(" AND ")}`, params);
     res.json({ data: rows, total: Number(countRow?.total || rows.length), page, pageSize: limit });
   } catch (err) { handleRouteError(err, res, "Property units error:"); }
@@ -61,21 +50,6 @@ router.post("/units", async (req, res) => {
        b.hasKitchen || false, b.yearlyRent || null, b.insurancePolicy || null, b.insuranceExpiry || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1`, [insertId]);
-
-    // The GET /units/:id handler renders a timeline straight from audit_logs
-    // where entity='property_units', so without this write the unit would
-    // appear in the UI with an empty history from day one.
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "property_units", entityId: insertId,
-      after: { unitNumber, buildingId: b.buildingId ?? null, type: row?.type, status: row?.status },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "property.unit.created", entity: "property_units", entityId: insertId,
-      details: `وحدة جديدة ${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ''}`,
-    }).catch(console.error);
-
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }
 });
@@ -269,62 +243,15 @@ router.post("/contracts", async (req, res) => {
         const dueDateStr = dueDate.toISOString().split('T')[0];
         const isLast = i === installmentCount - 1;
         const amt = isLast ? totalContractValue - (installmentAmount * (installmentCount - 1)) : installmentAmount;
-        const rounded = Math.round(amt * 100) / 100;
-        // Write to both contract_payment_schedule (legacy) and rent_payments (runtime table the queries read from)
         await rawExecute(
           `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status) VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, insertId, i + 1, dueDateStr, rounded]
-        );
-        await rawExecute(
-          `INSERT INTO rent_payments ("contractId","dueDate",amount,"paidAmount",status,notes) VALUES ($1,$2,$3,0,'pending',$4)`,
-          [insertId, dueDateStr, rounded, `قسط ${i + 1}/${installmentCount}`]
+          [scope.companyId, insertId, i + 1, dueDateStr, Math.round(amt * 100) / 100]
         );
       }
     }
 
-    // Register lifecycle obligations (renewal notice + expiration)
-    try {
-      const renewalNoticeDays = Number(b.renewalNoticeDays || 60);
-      const renewalNoticeDate = new Date(endDate);
-      renewalNoticeDate.setDate(renewalNoticeDate.getDate() - renewalNoticeDays);
-      if (renewalNoticeDate > new Date()) {
-        await registerObligation({
-          companyId: scope.companyId,
-          branchId: scope.branchId ?? null,
-          entityType: "rental_contract",
-          entityId: insertId,
-          obligationType: "renewal",
-          title: `إشعار تجديد عقد ${contractNumber} — ${b.tenantName || ""}`,
-          dueAt: renewalNoticeDate.toISOString(),
-          metadata: { contractNumber, endDate: b.endDate, tenantName: b.tenantName },
-          dedupeKey: `contract-${insertId}-renewal-notice`,
-          escalationSteps: [{ hoursAfterDue: 24, notifyRole: "property_manager" }, { hoursAfterDue: 72, notifyRole: "general_manager" }],
-        });
-      }
-      await registerObligation({
-        companyId: scope.companyId,
-        branchId: scope.branchId ?? null,
-        entityType: "rental_contract",
-        entityId: insertId,
-        obligationType: "document_expiry",
-        title: `انتهاء عقد ${contractNumber} — ${b.tenantName || ""}`,
-        dueAt: endDate.toISOString(),
-        metadata: { contractNumber, unitId: b.unitId },
-        dedupeKey: `contract-${insertId}-expiry`,
-        escalationSteps: [{ hoursAfterDue: 0, notifyRole: "property_manager" }],
-      });
-    } catch (obErr) { console.error("Contract obligation registration failed:", obErr); }
-
     const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [insertId]);
     const schedule = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`, [insertId]);
-
-    // Lifecycle event: lease.created
-    await emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "lease.created", entity: "rental_contracts", entityId: insertId,
-      details: `عقد إيجار جديد — ${b.tenantName || ''} — ${b.startDate} → ${b.endDate}`,
-    }).catch(() => {});
-
     res.status(201).json({ ...row, paymentSchedule: schedule });
   } catch (err) { handleRouteError(err, res, "Create contract error:"); }
 });
@@ -348,12 +275,6 @@ router.patch("/contracts/:id", async (req, res) => {
     addField("depositAmount", b.depositAmount);
     addField("paymentDay", b.paymentDay);
     addField("notes", b.notes);
-    // Status transitions to terminated/renewed/expired must go through dedicated
-    // lifecycle endpoints (/renew, /terminate) so obligations + events fire.
-    if (b.status !== undefined && ["terminated", "renewed", "expired"].includes(b.status)) {
-      validationError(res, `لا يمكن تغيير حالة العقد إلى ${b.status} عبر PATCH`, "status", "استخدم /contracts/:id/renew أو /contracts/:id/terminate");
-      return;
-    }
     addField("status", b.status);
     addField("contractNumber", b.contractNumber);
     addField("ejarNumber", b.ejarNumber);
@@ -399,214 +320,6 @@ router.delete("/contracts/:id", async (req, res) => {
     await rawExecute(`UPDATE rental_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف العقد" });
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
-});
-
-// ────────────────────────────────────────────────────────────────────────────
-// Contract lifecycle endpoints — renew / terminate
-// Status model: active → (renewed | terminated | expired)
-// ────────────────────────────────────────────────────────────────────────────
-
-/** Renew an active contract — extends endDate, generates new installments, resets obligations */
-router.post("/contracts/:id/renew", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body || {};
-    const [contract] = await rawQuery<any>(
-      `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!contract) { res.status(404).json({ error: "العقد غير موجود" }); return; }
-    if (!["active", "expired"].includes(contract.status)) {
-      validationError(res, `لا يمكن تجديد عقد بحالة ${contract.status}`, "status", "يمكن تجديد العقود النشطة أو المنتهية فقط");
-      return;
-    }
-
-    const renewalMonths = Number(b.renewalPeriodMonths || contract.renewalPeriodMonths || 12);
-    const newStartDate = new Date(b.newStartDate || contract.endDate);
-    const newEndDate = new Date(newStartDate);
-    newEndDate.setMonth(newEndDate.getMonth() + renewalMonths);
-
-    const newMonthlyRent = Number(b.monthlyRent || contract.monthlyRent);
-    const newYearlyRent = b.yearlyRent ? Number(b.yearlyRent) : newMonthlyRent * 12;
-    const newTotal = Number(b.totalContractValue || (newMonthlyRent * renewalMonths));
-
-    // Update contract
-    await rawExecute(
-      `UPDATE rental_contracts
-         SET "startDate"=$1,"endDate"=$2,"monthlyRent"=$3,"yearlyRent"=$4,"totalContractValue"=$5,
-             status='active',"updatedAt"=NOW()
-       WHERE id=$6 AND "companyId"=$7`,
-      [newStartDate.toISOString().split("T")[0], newEndDate.toISOString().split("T")[0],
-       newMonthlyRent, newYearlyRent, newTotal, id, scope.companyId]
-    );
-
-    // Generate new payment schedule for the renewal period
-    const freq = contract.paymentFrequency || "monthly";
-    const freqMonths = freq === "quarterly" ? 3 : freq === "semi_annual" ? 6 : freq === "annual" ? 12 : 1;
-    const installmentCount = Math.ceil(renewalMonths / freqMonths);
-    const installmentAmount = Math.round((newTotal / installmentCount) * 100) / 100;
-    const [maxRow] = await rawQuery<any>(
-      `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1`,
-      [id]
-    );
-    const startNum = Number(maxRow?.max || 0);
-    for (let i = 0; i < installmentCount; i++) {
-      const dueDate = new Date(newStartDate);
-      dueDate.setMonth(dueDate.getMonth() + (i * freqMonths));
-      if (contract.paymentDay) dueDate.setDate(Math.min(Number(contract.paymentDay), 28));
-      const isLast = i === installmentCount - 1;
-      const amt = isLast ? newTotal - (installmentAmount * (installmentCount - 1)) : installmentAmount;
-      await rawExecute(
-        `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status)
-         VALUES ($1,$2,$3,$4,$5,'pending')`,
-        [scope.companyId, id, startNum + i + 1, dueDate.toISOString().split("T")[0], Math.round(amt * 100) / 100]
-      );
-    }
-
-    // Cancel old obligations and register new ones for the renewed period
-    await cancelObligation(scope.companyId, "rental_contract", id, "renewal");
-    await cancelObligation(scope.companyId, "rental_contract", id, "document_expiry");
-
-    const renewalNoticeDays = Number(contract.renewalNoticeDays || 60);
-    const renewalNoticeDate = new Date(newEndDate);
-    renewalNoticeDate.setDate(renewalNoticeDate.getDate() - renewalNoticeDays);
-    if (renewalNoticeDate > new Date()) {
-      await registerObligation({
-        companyId: scope.companyId,
-        branchId: scope.branchId ?? null,
-        entityType: "rental_contract",
-        entityId: id,
-        obligationType: "renewal",
-        title: `إشعار تجديد عقد ${contract.contractNumber} — ${contract.tenantName || ""}`,
-        dueAt: renewalNoticeDate.toISOString(),
-        metadata: { contractNumber: contract.contractNumber, endDate: newEndDate.toISOString() },
-        dedupeKey: `contract-${id}-renewal-notice-${newEndDate.toISOString().split("T")[0]}`,
-      });
-    }
-    await registerObligation({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
-      entityType: "rental_contract",
-      entityId: id,
-      obligationType: "document_expiry",
-      title: `انتهاء عقد ${contract.contractNumber} — ${contract.tenantName || ""}`,
-      dueAt: newEndDate.toISOString(),
-      dedupeKey: `contract-${id}-expiry-${newEndDate.toISOString().split("T")[0]}`,
-    });
-
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "property.contract.renewed",
-      entity: "rental_contract",
-      entityId: id,
-      details: `تجديد عقد ${contract.contractNumber} حتى ${newEndDate.toISOString().split("T")[0]}`,
-    });
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "renew", entity: "rental_contracts", entityId: id,
-      before: { endDate: contract.endDate, totalContractValue: contract.totalContractValue },
-      after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
-    }).catch(console.error);
-
-    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [id]);
-    res.json({ ...updated, event: "property.contract.renewed", renewalMonths });
-  } catch (err) { handleRouteError(err, res, "Renew contract error:"); }
-});
-
-/** Terminate an active contract — early termination with optional fee */
-router.post("/contracts/:id/terminate", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body || {};
-    const [contract] = await rawQuery<any>(
-      `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!contract) { res.status(404).json({ error: "العقد غير موجود" }); return; }
-    if (!["active", "draft"].includes(contract.status)) {
-      validationError(res, `لا يمكن إنهاء عقد بحالة ${contract.status}`, "status", "العقد منتهي أو ملغي مسبقاً");
-      return;
-    }
-    if (!b.reason) {
-      validationError(res, "يجب تحديد سبب الإنهاء", "reason", "أدخل سبب إنهاء العقد");
-      return;
-    }
-
-    const terminationDate = b.terminationDate || new Date().toISOString().split("T")[0];
-    const earlyFee = Number(b.earlyTerminationFee ?? contract.earlyTerminationFee ?? 0);
-
-    // Update contract
-    await rawExecute(
-      `UPDATE rental_contracts
-         SET status='terminated',"terminatedAt"=NOW(),"terminationReason"=$1,"updatedAt"=NOW()
-       WHERE id=$2 AND "companyId"=$3`,
-      [b.reason, id, scope.companyId]
-    ).catch(async () => {
-      // If terminatedAt/terminationReason columns don't exist, fall back to status-only
-      await rawExecute(
-        `UPDATE rental_contracts SET status='terminated',"updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-        [id, scope.companyId]
-      );
-    });
-
-    // Cancel remaining pending installments
-    await rawExecute(
-      `UPDATE contract_payment_schedule SET status='cancelled'
-       WHERE "contractId"=$1 AND status='pending' AND "dueDate" > $2`,
-      [id, terminationDate]
-    );
-
-    // Free the unit
-    if (contract.unitId) {
-      await rawExecute(
-        `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-        [contract.unitId, scope.companyId]
-      );
-    }
-
-    // Cancel active obligations
-    await cancelObligation(scope.companyId, "rental_contract", id, "renewal");
-    await cancelObligation(scope.companyId, "rental_contract", id, "document_expiry");
-
-    // Book early termination fee as revenue if applicable
-    let journalEntryId: number | null = null;
-    if (earlyFee > 0) {
-      try {
-        journalEntryId = await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `TERM-${id}-${Date.now()}`,
-          description: `رسوم إنهاء مبكر لعقد ${contract.contractNumber} — ${b.reason}`,
-          lines: [
-            { accountCode: "1200", debit: earlyFee, credit: 0 },
-            { accountCode: "4100", debit: 0, credit: earlyFee },
-          ],
-        });
-      } catch (jeErr) { console.error("Termination fee JE failed:", jeErr); }
-    }
-
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "property.contract.terminated",
-      entity: "rental_contract",
-      entityId: id,
-      details: `إنهاء عقد ${contract.contractNumber}: ${b.reason}`,
-    });
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "terminate", entity: "rental_contracts", entityId: id,
-      before: { status: contract.status },
-      after: { status: "terminated", reason: b.reason, earlyFee, journalEntryId },
-    }).catch(console.error);
-
-    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [id]);
-    res.json({ ...updated, event: "property.contract.terminated", earlyFee, journalEntryId });
-  } catch (err) { handleRouteError(err, res, "Terminate contract error:"); }
 });
 
 router.patch("/tenants/:id", async (req, res) => {
@@ -682,71 +395,43 @@ router.post("/payments/:id/pay", async (req, res) => {
     const { id } = req.params;
     const b = req.body;
     const paidAmount = Number(b.paidAmount ?? b.amount);
-    if (!(paidAmount > 0)) {
-      validationError(res, "مبلغ السداد غير صالح", "paidAmount", "أدخل مبلغاً موجباً");
-      return;
-    }
-
-    // Fetch payment + contract context BEFORE mutating so we can post GL first.
-    const [existing] = await rawQuery<any>(
-      `SELECT rp.*, c."tenantName", u."unitNumber", u."buildingName", u.id AS "unitId"
-         FROM rent_payments rp
-         JOIN rental_contracts c ON c.id = rp."contractId"
-         LEFT JOIN property_units u ON u.id = c."unitId"
-        WHERE rp.id = $1`,
-      [Number(id)]
-    );
-    if (!existing) { res.status(404).json({ error: "القسط غير موجود" }); return; }
-
-    // 1. Post journal entry FIRST. If this fails, the payment update never happens,
-    //    preserving dual-entry invariants (no cash recorded without a GL post).
-    const tenantLabel = existing.tenantName ? ` / ${existing.tenantName}` : "";
-    const unitLabel = existing.unitNumber ? ` / وحدة ${existing.unitNumber}` : "";
-    const buildingLabel = existing.buildingName ? ` / ${existing.buildingName}` : "";
-    const cashAccountCode = b.method === 'cash' ? '1100' : '1110';
-    let journalEntryId: number | null = null;
-    try {
-      journalEntryId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `RENT-${id}`,
-        description: `تحصيل إيجار${tenantLabel}${unitLabel}${buildingLabel}`,
-        sourceType: "rent_payment",
-        sourceId: Number(id),
-        lines: [
-          { accountCode: cashAccountCode, debit: paidAmount, credit: 0 },
-          { accountCode: "4100", debit: 0, credit: paidAmount },
-        ],
-      });
-    } catch (jErr) {
-      console.error("Rent payment journal entry failed:", jErr);
-      res.status(500).json({ error: "فشل قيد تحصيل الإيجار — لم يتم تسجيل السداد", detail: (jErr as Error).message });
-      return;
-    }
-
-    // 2. Journal succeeded — record the cash receipt on the rent_payments row.
     await rawExecute(
-      `UPDATE rent_payments
-          SET "paidAmount" = "paidAmount" + $1,
-              "paidDate"   = $2,
-              method       = $3,
-              status       = CASE WHEN "paidAmount" + $1 >= amount THEN 'paid' ELSE 'partial' END,
-              "journalEntryId" = COALESCE("journalEntryId", $4),
-              "updatedAt"  = NOW()
-        WHERE id = $5`,
-      [paidAmount, b.paidDate || new Date().toISOString().split('T')[0], b.method || 'bank_transfer', journalEntryId, Number(id)]
+      `UPDATE rent_payments SET "paidAmount"="paidAmount"+$1, "paidDate"=$2, method=$3, status=CASE WHEN "paidAmount"+$1 >= amount THEN 'paid' ELSE 'partial' END WHERE id=$4`,
+      [paidAmount, b.paidDate || new Date().toISOString().split('T')[0], b.method || 'bank_transfer', Number(id)]
     );
+
+    // Auto journal entry for rent payment collection
+    if (paidAmount > 0) {
+      try {
+        const [payment] = await rawQuery<any>(
+          `SELECT rp.*, c."tenantName", u."unitNumber", u."buildingName"
+           FROM rent_payments rp
+           JOIN rental_contracts c ON c.id = rp."contractId"
+           LEFT JOIN property_units u ON u.id = c."unitId"
+           WHERE rp.id = $1`,
+          [Number(id)]
+        );
+        if (payment) {
+          const tenantLabel = payment.tenantName ? ` / ${payment.tenantName}` : "";
+          const unitLabel = payment.unitNumber ? ` / وحدة ${payment.unitNumber}` : "";
+          const buildingLabel = payment.buildingName ? ` / ${payment.buildingName}` : "";
+          const cashAccountCode = b.method === 'cash' ? '1100' : '1110';
+          await createJournalEntry({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            createdBy: scope.activeAssignmentId ?? scope.userId,
+            ref: `RENT-${id}`,
+            description: `تحصيل إيجار${tenantLabel}${unitLabel}${buildingLabel}`,
+            lines: [
+              { accountCode: cashAccountCode, debit: paidAmount, credit: 0 },
+              { accountCode: "4100", debit: 0, credit: paidAmount },
+            ],
+          });
+        }
+      } catch (jErr) { console.error("Rent payment journal entry failed:", jErr); }
+    }
 
     const [row] = await rawQuery<any>(`SELECT * FROM rent_payments WHERE id=$1`, [Number(id)]);
-
-    // 3. Emit lifecycle event so listeners/reports pick up the collection.
-    await emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "rent_payment.received", entity: "rent_payments", entityId: Number(id),
-      details: `تحصيل ${paidAmount} — JE ${journalEntryId ?? '-'}`,
-    }).catch(() => {});
-
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Record rent payment error:"); }
 });
@@ -792,35 +477,10 @@ router.post("/late-rent/escalate", async (req, res) => {
       if (targetStage === 'legal_transfer') {
         action = 'تحويل للقسم القانوني';
         try {
-          // Resolve a real responsible person so the auto-created case isn't
-          // orphaned in open/NULL-assignee limbo.
-          const responsible = await getLegalResponsible(cid);
-          const lawyerName = responsible?.employeeName ?? null;
-
-          const { insertId: caseId } = await rawExecute(
-            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
-            [cid, `RENT-${payment.id}-${Date.now()}`, `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`, payment.tenantName, lawyerName, `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`]
+          await rawExecute(
+            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty",status,priority,description) VALUES ($1,$2,$3,'property_rent',$4,'open','high',$5)`,
+            [cid, `RENT-${payment.id}-${Date.now()}`, `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`, payment.tenantName, `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`]
           );
-
-          emitEvent({
-            companyId: cid, userId: scope.userId,
-            action: "legal.case.created", entity: "legal_cases", entityId: Number(caseId),
-            details: `قضية إيجار متأخر — ${payment.tenantName}`,
-          }).catch(console.error);
-
-          if (responsible) {
-            createNotification({
-              companyId: cid,
-              assignmentId: responsible.assignmentId,
-              type: "legal_case_assigned",
-              title: "قضية إيجار متأخر مسندة إليك",
-              body: `تم إنشاء قضية تحصيل إيجار متأخر للمستأجر ${payment.tenantName} — وحدة ${payment.unitNumber}`,
-              priority: "high",
-              refType: "legal_case",
-              refId: Number(caseId),
-              actionUrl: `/legal/cases/${caseId}`,
-            }).catch(console.error);
-          }
         } catch (legalErr) {
           console.error("Failed to create legal case:", legalErr);
         }
@@ -1051,39 +711,6 @@ router.patch("/maintenance-requests/:id/approve", async (req, res) => {
       );
     } catch (e) { console.error("Failed to log approval action:", e); }
 
-    // Audit + event + creator notification. Without these the requester
-    // (tenant-facing officer or reporting staff) has no idea whether their
-    // maintenance request was approved, rejected, or returned for rework.
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: newStatus, entity: "maintenance_requests", entityId: id,
-      before: { status: mr.status }, after: { status: newStatus, notes: notes ?? null },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: `maintenance.${newStatus}`, entity: "maintenance_requests", entityId: id,
-      details: `طلب صيانة ${mr.title || id} — ${newStatus}`,
-    }).catch(console.error);
-
-    if (mr.createdBy) {
-      const titleMap: Record<string, string> = {
-        approved: "تم اعتماد طلب الصيانة",
-        rejected: "تم رفض طلب الصيانة",
-        returned: "تم إرجاع طلب الصيانة للمراجعة",
-      };
-      createNotification({
-        companyId: scope.companyId,
-        assignmentId: Number(mr.createdBy),
-        type: `maintenance_${newStatus}`,
-        title: titleMap[newStatus] || `حالة طلب الصيانة: ${newStatus}`,
-        body: `${mr.title || `طلب #${id}`}${notes ? ` — ${notes}` : ''}`,
-        priority: newStatus === "rejected" ? "high" : "normal",
-        refType: "maintenance_request",
-        refId: id,
-        actionUrl: `/properties/maintenance/${id}`,
-      }).catch(console.error);
-    }
-
     res.json({ id, status: newStatus });
   } catch (err) { handleRouteError(err, res, "خطأ في اعتماد طلب الصيانة"); }
 });
@@ -1281,16 +908,6 @@ router.post("/tenants", async (req, res) => {
        b.monthlyIncome || null, b.previousAddress || null, b.previousLandlord || null, b.previousLandlordPhone || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM tenants WHERE id=$1`, [insertId]);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "tenants", entityId: insertId,
-      after: { name: b.name, phone: b.phone ?? null, tenantType: b.tenantType ?? 'individual' },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "tenant.created", entity: "tenants", entityId: insertId,
-      details: `مستأجر جديد: ${b.name}`,
-    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
@@ -1492,16 +1109,6 @@ router.post("/buildings", async (req, res) => {
        b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1`, [insertId]);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "property_buildings", entityId: insertId,
-      after: { name: b.name, city: b.city ?? null, type: b.type ?? 'residential', ownerId: b.ownerId ?? null },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "property.building.created", entity: "property_buildings", entityId: insertId,
-      details: `مبنى جديد: ${b.name}${b.city ? ` — ${b.city}` : ''}`,
-    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create building error:"); }
 });
@@ -1844,16 +1451,6 @@ router.post("/owners", async (req, res) => {
       [scope.companyId, b.ownerType || 'individual', b.name, b.nationalId || null, b.crNumber || null, b.phone || null, b.email || null, b.iban || null, b.bankName || null, b.address || null, b.city || null, b.authorizationNumber || null, b.authorizationDate || null, b.authorizationExpiry || null, b.notes || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1`, [insertId]);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "property_owners", entityId: insertId,
-      after: { name: b.name, ownerType: b.ownerType ?? 'individual', phone: b.phone ?? null },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "property.owner.created", entity: "property_owners", entityId: insertId,
-      details: `مالك جديد: ${b.name}`,
-    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });
@@ -2056,9 +1653,6 @@ router.post("/deposits", async (req, res) => {
     if (!b.contractId || !b.amount) {
       res.status(400).json({ error: "العقد والمبلغ مطلوبان" }); return;
     }
-    if (Number(b.amount) <= 0) {
-      res.status(400).json({ error: "قيمة الوديعة يجب أن تكون أكبر من صفر" }); return;
-    }
     const { insertId } = await rawExecute(
       `INSERT INTO property_security_deposits
        ("companyId","contractId",amount,"receivedDate",status,notes,"refundAmount","refundDate","refundReason")
@@ -2068,9 +1662,7 @@ router.post("/deposits", async (req, res) => {
        b.notes || null, b.refundAmount || null, b.refundDate || null, b.refundReason || null]
     );
 
-    // Post the GL entry. If it fails, undo the deposit row — we must never
-    // have a 'held' deposit without a corresponding cash/liability posting,
-    // otherwise trial balance is permanently wrong.
+    // Create accounting journal entry
     try {
       await createJournalEntry({
         companyId: scope.companyId, branchId: scope.branchId ?? 0,
@@ -2082,23 +1674,7 @@ router.post("/deposits", async (req, res) => {
           { accountCode: "2300", debit: 0, credit: Number(b.amount) },
         ],
       });
-    } catch (jErr) {
-      console.error("Deposit journal entry failed:", jErr);
-      await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1`, [insertId]).catch(() => {});
-      res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي للوديعة — لم يتم تسجيل الوديعة" });
-      return;
-    }
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "property_security_deposits", entityId: insertId,
-      after: { contractId: b.contractId, amount: b.amount, status: "held" },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "deposit.received", entity: "property_security_deposits", entityId: insertId,
-      details: `وديعة عقد #${b.contractId} بقيمة ${b.amount}`,
-    }).catch(console.error);
+    } catch (jErr) { console.error("Deposit journal entry failed:", jErr); }
 
     const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -2116,15 +1692,11 @@ router.patch("/deposits/:id/refund", async (req, res) => {
     );
     if (!deposit) { res.status(404).json({ error: "الوديعة غير موجودة أو تم إرجاعها" }); return; }
     const refundAmount = Number(b.refundAmount || deposit.amount);
-    if (refundAmount < 0 || refundAmount > Number(deposit.amount)) {
-      res.status(400).json({ error: "قيمة الإرجاع غير صحيحة — يجب أن تكون بين صفر وقيمة الوديعة" });
-      return;
-    }
-
-    // Post the GL entry FIRST so that if it fails, the deposit row stays in
-    // 'held' state. The previous implementation swallowed journal errors and
-    // still flipped the status to 'refunded', leaving cash + deposit liability
-    // permanently out of sync.
+    await rawExecute(
+      `UPDATE property_security_deposits SET status='refunded', "refundAmount"=$1, "refundDate"=$2, "refundReason"=$3 WHERE id=$4`,
+      [refundAmount, b.refundDate || new Date().toISOString().split('T')[0], b.refundReason || null, id]
+    );
+    // Journal entry for refund
     try {
       await createJournalEntry({
         companyId: scope.companyId, branchId: scope.branchId ?? 0,
@@ -2136,29 +1708,7 @@ router.patch("/deposits/:id/refund", async (req, res) => {
           { accountCode: "1100", debit: 0, credit: refundAmount },
         ],
       });
-    } catch (jErr) {
-      console.error("Deposit refund journal entry failed:", jErr);
-      res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي لإرجاع الوديعة — لم يتم تنفيذ الإرجاع" });
-      return;
-    }
-
-    await rawExecute(
-      `UPDATE property_security_deposits SET status='refunded', "refundAmount"=$1, "refundDate"=$2, "refundReason"=$3 WHERE id=$4`,
-      [refundAmount, b.refundDate || new Date().toISOString().split('T')[0], b.refundReason || null, id]
-    );
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "refund", entity: "property_security_deposits", entityId: id,
-      before: { status: "held", amount: deposit.amount },
-      after: { status: "refunded", refundAmount, reason: b.refundReason ?? null },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "deposit.refunded", entity: "property_security_deposits", entityId: id,
-      details: `إرجاع وديعة عقد #${deposit.contractId} بقيمة ${refundAmount}`,
-    }).catch(console.error);
-
+    } catch (jErr) { console.error("Deposit refund journal entry failed:", jErr); }
     const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [id]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Refund deposit error:"); }

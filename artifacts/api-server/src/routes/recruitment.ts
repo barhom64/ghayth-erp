@@ -1,8 +1,6 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -60,76 +58,6 @@ router.patch("/postings/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
-});
-
-// Close a job posting with cascade to open applications + candidate notifications.
-router.post("/postings/:id/close", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const reason = (req.body?.reason as string | undefined)?.trim();
-    if (!reason) {
-      res.status(400).json({ error: "سبب الإغلاق مطلوب", field: "reason" });
-      return;
-    }
-    const updated = await applyTransition({
-      entity: "job_postings",
-      id,
-      scope,
-      action: "recruitment.job.closed",
-      fromStates: ["open", "draft", "paused"],
-      toState: "closed",
-      reason,
-      setExtras: {
-        closedAt: { raw: "NOW()" },
-        closedReason: reason,
-      },
-      after: { closedReason: reason },
-      onApply: async (_row, client) => {
-        // Cascade: withdraw applications still in the pipeline.
-        await client.query(
-          `UPDATE job_applications
-              SET status = 'withdrawn_due_to_job_closure',
-                  notes  = COALESCE(notes || E'\n', '') || $2,
-                  "updatedAt" = NOW()
-            WHERE "postingId" = $1
-              AND status NOT IN ('hired', 'rejected', 'withdrawn', 'withdrawn_due_to_job_closure')`,
-          [id, `تم إغلاق الإعلان الوظيفي: ${reason}`]
-        );
-      },
-    });
-    res.json({ ...updated, event: "recruitment.job.closed" });
-  } catch (err) {
-    const mapped = lifecycleErrorResponse(err);
-    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
-    handleRouteError(err, res, "Close job posting error:");
-  }
-});
-
-// Reopen a previously closed job posting.
-router.post("/postings/:id/reopen", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const updated = await applyTransition({
-      entity: "job_postings",
-      id,
-      scope,
-      action: "recruitment.job.reopened",
-      fromStates: ["closed", "paused"],
-      toState: "open",
-      setExtras: {
-        reopenedAt: { raw: "NOW()" },
-        closedAt: null,
-        closedReason: null,
-      },
-    });
-    res.json({ ...updated, event: "recruitment.job.reopened" });
-  } catch (err) {
-    const mapped = lifecycleErrorResponse(err);
-    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
-    handleRouteError(err, res, "Reopen job posting error:");
-  }
 });
 
 router.delete("/postings/:id", async (req, res) => {

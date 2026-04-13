@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   haversineDistance,
   createNotification,
@@ -15,7 +15,7 @@ import { pushToDLQ } from "../lib/eventBus.js";
 export const attendanceRouter = Router();
 attendanceRouter.use(authMiddleware);
 
-attendanceRouter.post("/check-in", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+attendanceRouter.post("/check-in", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const now = new Date();
@@ -235,7 +235,7 @@ attendanceRouter.post("/check-in", requireAnyPermission("hr:self", "hr:create"),
   }
 });
 
-attendanceRouter.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+attendanceRouter.post("/check-out", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const now = new Date();

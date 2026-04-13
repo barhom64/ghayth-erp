@@ -1,20 +1,15 @@
 import { handleRouteError, validationError } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import {
   emitEvent,
   createAuditLog,
   createJournalEntry,
   initiateApprovalChain,
-  createNotification,
-  updateBudgetUsed,
-  getAccountCodeFromMapping,
-  checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { registerObligation } from "../lib/obligationsEngine.js";
 
 export const purchaseRouter = Router();
 purchaseRouter.use(authMiddleware);
@@ -76,37 +71,12 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;
     if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
-    // The frontend create-form (purchase-orders-create.tsx) sends
-    // `expectedDelivery` + items with `productId`, while the API
-    // historically accepted `expectedDate` + items with `itemName`.
-    // Accept BOTH conventions so the frontend is not silently saving
-    // lines named "بند" and losing the delivery date.
-    const { items, supplierId, notes } = req.body as any;
-    const expectedDate = req.body?.expectedDate ?? req.body?.expectedDelivery ?? null;
+    const { items, supplierId, notes, expectedDate } = req.body as any;
 
     if (!items || !Array.isArray(items) || items.length === 0) { res.status(400).json({ error: "عناصر طلب الشراء مطلوبة" }); return; }
 
     const totalAmount = items.reduce((sum: number, i: any) => sum + Number(i.quantity ?? 1) * Number(i.unitPrice ?? 0), 0);
     if (totalAmount <= 0) { res.status(400).json({ error: "إجمالي الطلب يجب أن يكون أكبر من صفر" }); return; }
-
-    // Resolve product names in bulk for any items that only sent a
-    // productId so purchase_request_items.itemName reflects the actual
-    // product the buyer picked instead of the fallback placeholder.
-    const productIds = Array.from(
-      new Set(
-        items
-          .map((i: any) => Number(i.productId))
-          .filter((id: number) => Number.isFinite(id) && id > 0)
-      )
-    );
-    const productNameById = new Map<number, string>();
-    if (productIds.length > 0) {
-      const productRows = await rawQuery<{ id: number; name: string }>(
-        `SELECT id, name FROM products WHERE id = ANY($1) AND "companyId" = $2`,
-        [productIds, scope.companyId]
-      ).catch(() => [] as { id: number; name: string }[]);
-      for (const p of productRows) productNameById.set(Number(p.id), p.name);
-    }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('pr_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
     const ref = `PR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
@@ -123,14 +93,9 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
       for (const item of items) {
         const base = params.length;
         valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
-        const resolvedName =
-          item.itemName ||
-          item.description ||
-          (item.productId ? productNameById.get(Number(item.productId)) : undefined) ||
-          "بند";
         params.push(
           insertId,
-          resolvedName,
+          item.itemName || item.description || "بند",
           Number(item.quantity ?? 1),
           Number(item.unitPrice ?? 0),
           Number(item.quantity ?? 1) * Number(item.unitPrice ?? 0),
@@ -183,39 +148,6 @@ purchaseRouter.patch("/purchase-requests/:id/approve", async (req, res) => {
     await rawExecute(`UPDATE purchase_requests SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
-    // Bus emission — the dead listeners in eventListeners.ts:193/326
-    // (purchase_request.approved / purchase_request.rejected) now fire.
-    // Approvals were silent on the bus before this patch.
-    if (newStatus === "approved" || newStatus === "rejected") {
-      await emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: newStatus === "approved" ? "purchase_request.approved" : "purchase_request.rejected",
-        entity: "purchase_request",
-        entityId: Number(id),
-        before: { status: pr.status },
-        after: { status: newStatus, notes: notes ?? null },
-      });
-    }
-
-    // Notify the requester about rejection/return so they see the reason
-    // instead of having to poll the PR status page.
-    if ((newStatus === "rejected" || newStatus === "returned") && pr.requestedBy) {
-      await createNotification({
-        companyId: scope.companyId,
-        assignmentId: Number(pr.requestedBy),
-        type: newStatus === "rejected" ? "purchase_request_rejected" : "purchase_request_returned",
-        title: newStatus === "rejected" ? "تم رفض طلب الشراء" : "تم إرجاع طلب الشراء",
-        body: `طلب الشراء ${pr.ref ?? "#" + id} — ${
-          newStatus === "rejected" ? "مرفوض" : "مُرجع للتعديل"
-        }. السبب: ${notes}`,
-        priority: "high",
-        refType: "purchase_request",
-        refId: Number(id),
-      }).catch((e) => console.error("notify PR requester failed:", e));
-    }
-
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
@@ -264,31 +196,6 @@ purchaseRouter.post("/purchase-requests/:id/convert", async (req, res) => {
     }
 
     await rawExecute(`UPDATE purchase_requests SET status = 'converted' WHERE id = $1`, [Number(id)]);
-
-    // Record the PR→PO conversion explicitly so the chain audit/events
-    // can follow "who turned which PR into which PO" without having to
-    // cross-reference timestamps by ref prefix.
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      entity: "purchase_request",
-      entityId: Number(id),
-      action: "purchase_request.converted",
-      before: { status: pr.status },
-      after: { status: "converted", purchaseOrderId: poId, poRef },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "purchase_request.converted",
-      entity: "purchase_request",
-      entityId: Number(id),
-      before: { status: pr.status },
-      after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
-    }).catch(console.error);
-
     res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", purchaseOrderId: poId, poRef, totalAmount });
   } catch (err) {
     handleRouteError(err, res, "Convert purchase request error:");
@@ -389,21 +296,6 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
     await rawExecute(`UPDATE purchase_orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
-    // Emit a lifecycle event so downstream listeners (audit, procurement
-    // notification, vendor confirmation workflow) can react. Without this
-    // the approval silently mutates status and no one is told.
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: `purchase_order.${newStatus}`,
-      entity: "purchase_orders",
-      entityId: Number(id),
-      before: { status: po.status },
-      after: { status: newStatus, notes: notes ?? null },
-      details: `${newStatus === "approved" ? "اعتماد" : newStatus === "rejected" ? "رفض" : "إرجاع"} أمر شراء ${po.ref || id}${notes ? ` — ${notes}` : ""}`,
-    }).catch(console.error);
-
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
@@ -411,287 +303,24 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
   }
 });
 
-/**
- * Record goods receipt (GRN) against a purchase order.
- * Accepts per-line received quantities for partial receipts and posts a
- * GRN journal entry debiting inventory and crediting GRNI (goods-received-
- * not-invoiced liability) which is cleared later when the supplier invoice
- * is matched and approved. Three-way match ties PO → GRN → Invoice.
- */
 purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
   try {
     const scope = req.scope!;
     if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
     const { id } = req.params;
-    const { receivedDate, qualityNotes, lines } = req.body as any;
+    const { receivedDate, qualityNotes } = req.body as any;
 
-    const [po] = await rawQuery<any>(
-      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
-    );
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
     if (!po) { res.status(404).json({ error: "أمر الشراء غير موجود" }); return; }
-    if (!["approved", "partially_received"].includes(po.status)) {
-      res.status(400).json({ error: "يمكن استلام الطلبات المعتمدة فقط" });
-      return;
-    }
+    if (po.status !== "approved") { res.status(400).json({ error: "يمكن استلام الطلبات المعتمدة فقط" }); return; }
 
-    const receiptDate = receivedDate || new Date().toISOString();
-    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, receiptDate);
-    if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن استلام بضاعة في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
-    }
+    await rawExecute(`UPDATE purchase_orders SET status = 'received', "receivedAt" = $1, notes = COALESCE($2, notes) WHERE id = $3`, [receivedDate ?? new Date().toISOString(), qualityNotes ?? null, Number(id)]);
 
-    const poItems = await rawQuery<any>(
-      `SELECT id, "itemName", quantity, "unitPrice", "lineTotal",
-              COALESCE("receivedQty",0) AS "receivedQty",
-              COALESCE("invoicedQty",0) AS "invoicedQty"
-       FROM purchase_order_items WHERE "orderId" = $1`,
-      [Number(id)]
-    );
-    if (poItems.length === 0) {
-      res.status(400).json({ error: "لا توجد بنود في أمر الشراء" });
-      return;
-    }
+    createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref: `GRN-${po.ref}`, description: `استلام ${po.ref}`, lines: [{ accountCode: "1600", debit: Number(po.totalAmount) - Number(po.vatAmount ?? 0), credit: 0 }, { accountCode: "1400", debit: Number(po.vatAmount ?? 0), credit: 0 }, { accountCode: "2100", debit: 0, credit: Number(po.totalAmount) }] }).catch(console.error);
 
-    // If no per-line input, treat as full receipt of remaining quantities
-    const poItemMap = new Map<number, any>(poItems.map((it: any) => [Number(it.id), it]));
-    const inputLines: Array<{ poItemId: number; receivedQty: number; notes?: string }> = [];
-    if (Array.isArray(lines) && lines.length > 0) {
-      for (const l of lines) {
-        const poItemId = Number(l.poItemId);
-        const qty = Number(l.receivedQty ?? 0);
-        const item = poItemMap.get(poItemId);
-        if (!item) { res.status(400).json({ error: `بند غير موجود في أمر الشراء: ${poItemId}` }); return; }
-        const remaining = Number(item.quantity) - Number(item.receivedQty);
-        if (qty <= 0) continue;
-        if (qty > remaining + 0.0001) {
-          res.status(400).json({ error: `الكمية المستلمة (${qty}) تتجاوز المتبقي (${remaining}) للبند ${item.itemName}` });
-          return;
-        }
-        inputLines.push({ poItemId, receivedQty: qty, notes: l.notes });
-      }
-    } else {
-      for (const item of poItems) {
-        const remaining = Number(item.quantity) - Number(item.receivedQty);
-        if (remaining > 0) inputLines.push({ poItemId: Number(item.id), receivedQty: remaining });
-      }
-    }
-
-    if (inputLines.length === 0) {
-      res.status(400).json({ error: "لا توجد كميات للاستلام" });
-      return;
-    }
-
-    // Compute totals for this GRN
-    let subtotal = 0;
-    for (const l of inputLines) {
-      const item = poItemMap.get(l.poItemId)!;
-      subtotal += l.receivedQty * Number(item.unitPrice);
-    }
-    subtotal = Math.round(subtotal * 100) / 100;
-    const poSubtotal = Number(po.totalAmount) - Number(po.vatAmount ?? 0);
-    const vatRatio = poSubtotal > 0 ? Number(po.vatAmount ?? 0) / poSubtotal : 0;
-    const vatAmount = Math.round(subtotal * vatRatio * 100) / 100;
-    const grnTotal = Math.round((subtotal + vatAmount) * 100) / 100;
-
-    // Create GRN header
-    const [grnSeq] = await rawQuery<any>(
-      `SELECT COALESCE(MAX(id),0)+1 AS seq FROM goods_receipts WHERE "companyId" = $1`,
-      [scope.companyId]
-    );
-    const grnRef = `GRN-${new Date().getFullYear()}-${String(grnSeq?.seq ?? Date.now()).padStart(5, "0")}`;
-
-    const { insertId: grnId } = await rawExecute(
-      `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, scope.branchId, Number(id), grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
-    );
-
-    // Insert GRN lines + update PO items cumulative receivedQty
-    for (const l of inputLines) {
-      const item = poItemMap.get(l.poItemId)!;
-      const lineTotal = Math.round(l.receivedQty * Number(item.unitPrice) * 100) / 100;
-      await rawExecute(
-        `INSERT INTO goods_receipt_items ("grnId","poItemId","itemName","receivedQty","unitPrice","lineTotal",notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [grnId, l.poItemId, item.itemName, l.receivedQty, Number(item.unitPrice), lineTotal, l.notes ?? null]
-      );
-      await rawExecute(
-        `UPDATE purchase_order_items SET "receivedQty" = COALESCE("receivedQty",0) + $1 WHERE id = $2`,
-        [l.receivedQty, l.poItemId]
-      );
-    }
-
-    // Post GRN journal: DR inventory (ex-VAT) + DR VAT receivable, CR GRNI
-    const [invAccount, vatAccount, grniAccount] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "inventory_receipt", "debit", "1250"),
-      getAccountCodeFromMapping(scope.companyId, "purchase_grn_vat", "debit", "1180"),
-      getAccountCodeFromMapping(scope.companyId, "purchase_grni", "credit", "2115"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
-      journalId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: grnRef,
-        description: `استلام بضاعة ${grnRef} - أمر ${po.ref}`,
-        lines: [
-          { accountCode: invAccount, debit: subtotal, credit: 0 },
-          ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0 }] : []),
-          { accountCode: grniAccount, debit: 0, credit: grnTotal },
-        ],
-      });
-      if (journalId) {
-        await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2`, [journalId, grnId]);
-      }
-    } catch (journalErr) {
-      console.error("GRN journal error:", journalErr);
-    }
-
-    // Update PO header status — partial vs fully received
-    const remainingItems = await rawQuery<any>(
-      `SELECT SUM(quantity - COALESCE("receivedQty",0)) AS remaining
-         FROM purchase_order_items WHERE "orderId" = $1`,
-      [Number(id)]
-    );
-    const totalRemaining = Number(remainingItems[0]?.remaining ?? 0);
-    const newStatus = totalRemaining <= 0.0001 ? "received" : "partially_received";
-    await rawExecute(
-      `UPDATE purchase_orders SET status = $1, "receivedAt" = $2 WHERE id = $3`,
-      [newStatus, receiptDate, Number(id)]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "purchase_order.received",
-      entity: "goods_receipts",
-      entityId: grnId,
-      details: JSON.stringify({ grnRef, poRef: po.ref, subtotal, vatAmount, grnTotal, newStatus }),
-    }).catch(console.error);
-
-    // Register obligation to collect + match the vendor invoice (GRNI liability
-    // sits on the books until this is done). Default window: 30 days from receipt.
-    try {
-      const matchDueDate = new Date(receiptDate);
-      matchDueDate.setDate(matchDueDate.getDate() + 30);
-      await registerObligation({
-        companyId: scope.companyId,
-        branchId: scope.branchId ?? null,
-        entityType: "goods_receipt",
-        entityId: grnId,
-        obligationType: "follow_up",
-        title: `مطابقة فاتورة المورد — ${grnRef} / ${po.ref || ""}`,
-        dueAt: matchDueDate.toISOString(),
-        metadata: { grnRef, poRef: po.ref, subtotal, vatAmount, total: grnTotal, vendorId: po.vendorId ?? null },
-        dedupeKey: `grn-${grnId}-invoice-match`,
-        escalationSteps: [
-          { hoursAfterDue: 24, notifyRole: "finance_manager" },
-          { hoursAfterDue: 120, notifyRole: "general_manager" },
-        ],
-      });
-    } catch (obErr) { console.error("GRN invoice-match obligation failed:", obErr); }
-
-    // Consume budget on receipt so reports reflect committed spend. We
-    // consume against the inventory account that was just debited so the
-    // budgeted line matches the GL line.
-    if (subtotal > 0) {
-      updateBudgetUsed({
-        companyId: scope.companyId,
-        accountCode: invAccount,
-        amount: subtotal,
-      }).catch(console.error);
-    }
-
-    res.json({
-      message: "تم تسجيل استلام البضاعة",
-      grnId,
-      grnRef,
-      journalId,
-      status: newStatus,
-      subtotal,
-      vatAmount,
-      total: grnTotal,
-    });
+    res.json({ message: "تم تسجيل استلام البضاعة", status: "received" });
   } catch (err) {
-    handleRouteError(err, res, "GRN receive error:");
-  }
-});
-
-/**
- * List GRNs for a purchase order (for three-way match UI & audit).
- */
-purchaseRouter.get("/purchase-orders/:id/receipts", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const poId = Number(req.params.id);
-    const rows = await rawQuery<any>(
-      `SELECT gr.id, gr.ref, gr."receivedAt", gr."journalId", gr.notes,
-              COALESCE(SUM(gri."lineTotal"),0) AS "total",
-              json_agg(json_build_object(
-                'id', gri.id, 'poItemId', gri."poItemId",
-                'itemName', gri."itemName", 'receivedQty', gri."receivedQty",
-                'unitPrice', gri."unitPrice", 'lineTotal', gri."lineTotal"
-              )) AS items
-       FROM goods_receipts gr
-       LEFT JOIN goods_receipt_items gri ON gri."grnId" = gr.id
-       WHERE gr."poId" = $1 AND gr."companyId" = $2 AND gr."deletedAt" IS NULL
-       GROUP BY gr.id
-       ORDER BY gr."receivedAt" DESC`,
-      [poId, scope.companyId]
-    );
-    res.json({ data: rows });
-  } catch (err) {
-    handleRouteError(err, res, "List GRNs error:");
-  }
-});
-
-/**
- * Three-way match preview for a PO: shows per-line PO qty vs received vs
- * invoiced so an accountant can see what is safe to invoice.
- */
-purchaseRouter.get("/purchase-orders/:id/match", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const poId = Number(req.params.id);
-    const [po] = await rawQuery<any>(
-      `SELECT id, ref, status, "totalAmount", "vatAmount", "supplierId"
-         FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
-      [poId, scope.companyId]
-    );
-    if (!po) { res.status(404).json({ error: "أمر الشراء غير موجود" }); return; }
-
-    const items = await rawQuery<any>(
-      `SELECT id, "itemName", quantity, "unitPrice", "lineTotal",
-              COALESCE("receivedQty",0) AS "receivedQty",
-              COALESCE("invoicedQty",0) AS "invoicedQty"
-         FROM purchase_order_items WHERE "orderId" = $1 ORDER BY id`,
-      [poId]
-    );
-
-    let canInvoiceTotal = 0;
-    const lines = items.map((it: any) => {
-      const canInvoiceQty = Math.max(0, Number(it.receivedQty) - Number(it.invoicedQty));
-      const canInvoiceAmount = Math.round(canInvoiceQty * Number(it.unitPrice) * 100) / 100;
-      canInvoiceTotal += canInvoiceAmount;
-      return {
-        ...it,
-        remainingQty: Number(it.quantity) - Number(it.receivedQty),
-        canInvoiceQty,
-        canInvoiceAmount,
-      };
-    });
-
-    res.json({
-      po,
-      lines,
-      canInvoiceTotal: Math.round(canInvoiceTotal * 100) / 100,
-    });
-  } catch (err) {
-    handleRouteError(err, res, "Three-way match error:");
+    handleRouteError(err, res, "خطأ غير متوقع");
   }
 });
 
@@ -831,232 +460,5 @@ purchaseRouter.delete("/budget/:id", async (req, res) => {
     res.json({ message: "تم حذف الميزانية" });
   } catch (err) {
     handleRouteError(err, res, "Delete budget error:");
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PAYMENT RUN — batch settlement of supplier invoices
-// Lets finance select multiple approved/matched POs and post a single payment
-// run that clears AP for all selected vendors in one batch with a single bank
-// outflow per run (or per vendor, depending on settings).
-//   Per PO:  DR 2100 AP  /  CR 1100 Cash
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Preview pending payables eligible for a payment run.
- * Returns all POs in status 'invoice_matched' with an outstanding balance,
- * optionally filtered by due date on or before a cutoff.
- */
-purchaseRouter.get("/payment-run/pending", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    const { cutoffDate, supplierId } = req.query as any;
-    const params: any[] = [scope.companyId];
-    let where = `po."companyId" = $1 AND po.status = 'invoice_matched'`;
-    if (supplierId) { params.push(Number(supplierId)); where += ` AND po."supplierId" = $${params.length}`; }
-    if (cutoffDate) { params.push(cutoffDate); where += ` AND COALESCE(po."expectedDelivery", po."createdAt") <= $${params.length}`; }
-
-    const rows = await rawQuery<any>(
-      `SELECT po.id, po.ref, po."totalAmount", po."createdAt", po."expectedDelivery",
-              po."supplierId", s.name AS "supplierName", s."bankAccount"
-         FROM purchase_orders po
-         LEFT JOIN suppliers s ON s.id = po."supplierId"
-        WHERE ${where}
-        ORDER BY po."expectedDelivery" ASC NULLS LAST, po."createdAt" ASC`,
-      params
-    );
-    const totalDue = rows.reduce((sum: number, r: any) => sum + Number(r.totalAmount), 0);
-    const byVendor = new Map<number, { supplierId: number; supplierName: string; amount: number; count: number }>();
-    for (const r of rows) {
-      const sid = Number(r.supplierId);
-      const cur = byVendor.get(sid) ?? { supplierId: sid, supplierName: r.supplierName, amount: 0, count: 0 };
-      cur.amount += Number(r.totalAmount);
-      cur.count += 1;
-      byVendor.set(sid, cur);
-    }
-    res.json({
-      data: rows,
-      totalDue: Math.round(totalDue * 100) / 100,
-      byVendor: Array.from(byVendor.values()),
-    });
-  } catch (err) {
-    handleRouteError(err, res, "Payment run pending error:");
-  }
-});
-
-/**
- * Execute a payment run — post AP clearance journal entries for each selected
- * PO and mark them paid. All GL postings happen in one transaction so partial
- * failures roll back.
- */
-purchaseRouter.post("/payment-run/execute", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = req.body as any;
-
-    if (!Array.isArray(poIds) || poIds.length === 0) {
-      res.status(400).json({ error: "يجب اختيار أوامر شراء واحد على الأقل للدفع" });
-      return;
-    }
-    const payDate = paymentDate || new Date().toISOString().slice(0, 10);
-    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, payDate);
-    if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن تنفيذ دفعات في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
-    }
-
-    const poIdNums = poIds.map((x: any) => Number(x)).filter((n: number) => !Number.isNaN(n));
-    const pos = await rawQuery<any>(
-      `SELECT id, ref, "totalAmount", "supplierId", "branchId", status
-         FROM purchase_orders
-        WHERE id = ANY($1) AND "companyId" = $2`,
-      [poIdNums, scope.companyId]
-    );
-    if (pos.length !== poIdNums.length) {
-      res.status(404).json({ error: "بعض أوامر الشراء غير موجودة" });
-      return;
-    }
-    const invalid = pos.filter((p: any) => p.status !== "invoice_matched");
-    if (invalid.length > 0) {
-      res.status(400).json({ error: `بعض الأوامر ليست في حالة قابلة للدفع: ${invalid.map((p: any) => p.ref).join(", ")}` });
-      return;
-    }
-
-    const totalPayment = Math.round(pos.reduce((sum: number, p: any) => sum + Number(p.totalAmount), 0) * 100) / 100;
-
-    const [apAccount, cashAccount] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
-    ]);
-
-    // Persist a payment_runs header row (create table if missing)
-    let runId: number | null = null;
-    const runRef = reference || `PR-${Date.now()}`;
-    await withTransaction(async (client: any) => {
-      try {
-        const ins = await client.query(
-          `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed') RETURNING id`,
-          [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId]
-        );
-        runId = ins.rows[0].id;
-      } catch (e: any) {
-        if (e?.code === "42P01") {
-          await client.query(
-            `CREATE TABLE IF NOT EXISTS payment_runs (
-               id SERIAL PRIMARY KEY,
-               "companyId" INTEGER NOT NULL,
-               "branchId" INTEGER,
-               ref TEXT NOT NULL,
-               "paymentDate" DATE NOT NULL,
-               method TEXT,
-               "bankAccount" TEXT,
-               "totalAmount" NUMERIC(18,2) NOT NULL,
-               "poCount" INTEGER NOT NULL,
-               status TEXT NOT NULL DEFAULT 'executed',
-               "journalId" INTEGER,
-               "createdBy" INTEGER,
-               "createdAt" TIMESTAMP DEFAULT NOW()
-             );
-             CREATE TABLE IF NOT EXISTS payment_run_items (
-               id SERIAL PRIMARY KEY,
-               "runId" INTEGER NOT NULL REFERENCES payment_runs(id) ON DELETE CASCADE,
-               "poId" INTEGER NOT NULL,
-               "supplierId" INTEGER,
-               amount NUMERIC(18,2) NOT NULL,
-               "journalId" INTEGER
-             )`
-          );
-          const ins2 = await client.query(
-            `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed') RETURNING id`,
-            [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId]
-          );
-          runId = ins2.rows[0].id;
-        } else {
-          throw e;
-        }
-      }
-
-      for (const po of pos) {
-        await client.query(
-          `INSERT INTO payment_run_items ("runId","poId","supplierId",amount) VALUES ($1,$2,$3,$4)`,
-          [runId, po.id, po.supplierId, Number(po.totalAmount)]
-        );
-        await client.query(
-          `UPDATE purchase_orders SET status = 'paid', "paidAt" = $1 WHERE id = $2`,
-          [payDate, po.id]
-        ).catch(async () => {
-          // paidAt column may not exist — fall back to status only
-          await client.query(`UPDATE purchase_orders SET status = 'paid' WHERE id = $1`, [po.id]);
-        });
-      }
-    });
-
-    // Post a single aggregated journal entry for the whole run, with one AP
-    // debit per PO so per-vendor subledger still reconciles.
-    let journalId: number | null = null;
-    try {
-      const lines: any[] = [];
-      for (const po of pos) {
-        lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0 });
-      }
-      lines.push({ accountCode: cashAccount, debit: 0, credit: totalPayment });
-
-      journalId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: runRef,
-        description: `دفعة مجمّعة ${runRef}: ${pos.length} أمر شراء بإجمالي ${totalPayment}`,
-        lines,
-      });
-      if (journalId && runId) {
-        await rawExecute(`UPDATE payment_runs SET "journalId" = $1 WHERE id = $2`, [journalId, runId]);
-      }
-    } catch (je) {
-      console.error("Payment run JE error:", je);
-    }
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "payment_run.executed",
-      entity: "payment_runs",
-      entityId: runId ?? 0,
-      details: JSON.stringify({ runRef, poCount: pos.length, totalPayment, journalId }),
-    }).catch(console.error);
-
-    res.status(201).json({
-      runId,
-      runRef,
-      paymentDate: payDate,
-      method,
-      poCount: pos.length,
-      totalPayment,
-      journalId,
-    });
-  } catch (err) {
-    handleRouteError(err, res, "Payment run execute error:");
-  }
-});
-
-purchaseRouter.get("/payment-run", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    let rows: any[] = [];
-    try {
-      rows = await rawQuery<any>(
-        `SELECT id, ref, "paymentDate", method, "totalAmount", "poCount", status, "journalId", "createdAt"
-           FROM payment_runs WHERE "companyId" = $1 ORDER BY "paymentDate" DESC, id DESC`,
-        [scope.companyId]
-      );
-    } catch { /* table not created yet */ }
-    res.json({ data: rows });
-  } catch (err) {
-    handleRouteError(err, res, "List payment runs error:");
   }
 });

@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getAssignmentIdByRole, createAuditLog, emitEvent } from "./businessHelpers.js";
+import { createNotification, getAssignmentIdByRole, createAuditLog } from "./businessHelpers.js";
 
 async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
   await rawExecute(
@@ -130,10 +130,11 @@ async function propagateDomainStatus(
   const handler = DOMAIN_RECORD_HANDLERS[refTable];
   if (!handler) return;
 
-  // IMPORTANT: we no longer swallow handler errors. Callers MUST run this
-  // before committing the workflow status change so a handler failure keeps
-  // the workflow in 'pending' instead of orphaning the domain record.
-  await handler(refId, outcome, approvedByAssignmentId);
+  try {
+    await handler(refId, outcome, approvedByAssignmentId);
+  } catch (err) {
+    console.error(`[WorkflowEngine] propagateDomainStatus error for ${refTable}/${refId}:`, err);
+  }
 }
 
 export type WorkflowAction = "submit" | "approve" | "reject" | "refer" | "escalate" | "return";
@@ -314,27 +315,6 @@ export async function submitWorkflow(params: SubmitParams) {
         currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, firstStep.requiredRole);
       } catch { /* no assignee found */ }
     }
-    // Final fallback: any active HR/GM/owner in the company. Never leave a
-    // submitted workflow with NULL currentAssignee — that makes it invisible
-    // to every inbox and no escalation job will route it.
-    if (!currentAssignee) {
-      try {
-        const [fallback] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments
-           WHERE "companyId" = $1 AND status = 'active'
-             AND role IN ('hr_manager','general_manager','owner')
-           ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 WHEN 'owner' THEN 3 ELSE 4 END
-           LIMIT 1`,
-          [companyId]
-        );
-        if (fallback?.id) currentAssignee = fallback.id;
-      } catch { /* ignore */ }
-    }
-  }
-  if (firstStep && !currentAssignee) {
-    throw new Error(
-      "لا يوجد مسؤول معتمد لاستلام الطلب — الرجاء تعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات"
-    );
   }
 
   const { insertId } = await rawExecute(
@@ -525,21 +505,6 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         try {
           newAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, nextStep.requiredRole);
         } catch { newAssignee = null; }
-        // Never advance to a step with NULL assignee — fall back to any active
-        // HR/GM/owner so the request stays actionable somewhere.
-        if (!newAssignee) {
-          try {
-            const [fallback] = await rawQuery<any>(
-              `SELECT id FROM employee_assignments
-               WHERE "companyId" = $1 AND status = 'active'
-                 AND role IN ('hr_manager','general_manager','owner')
-               ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 WHEN 'owner' THEN 3 ELSE 4 END
-               LIMIT 1`,
-              [companyId]
-            );
-            if (fallback?.id) newAssignee = fallback.id;
-          } catch { /* ignore */ }
-        }
 
         const [sla] = await rawQuery<any>(
           `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
@@ -569,26 +534,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         message = `تمت الموافقة - انتقل للخطوة التالية: ${nextStep.stepName}`;
       } else {
         newStatus = "approved";
-        // CRITICAL: propagate to the linked domain BEFORE flipping workflow
-        // status to 'approved'. If the domain handler throws (GL imbalance,
-        // constraint violation, etc.) the workflow stays pending and the
-        // actor can retry — instead of being stuck with a green workflow on
-        // top of a stale domain row.
-        try {
-          await propagateDomainStatus(instance.refTable, instance.refId, "approved", actionBy);
-        } catch (err) {
-          console.error(
-            `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on approve:`,
-            err
-          );
-          const msg = err instanceof Error ? err.message : String(err);
-          throw new Error(`تعذّر تحديث السجل الأساسي بعد الموافقة: ${msg}`);
-        }
         await rawExecute(
           `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW(),
            "slaStatus" = 'normal', "updatedAt" = NOW() WHERE id = $1`,
           [instanceId]
         );
+        // Propagate final approval to the linked domain record
+        propagateDomainStatus(instance.refTable, instance.refId, "approved", actionBy).catch(console.error);
         if (instance.submittedBy) {
           createNotification({
             companyId, assignmentId: instance.submittedBy,
@@ -609,22 +561,12 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
 
     case "reject": {
       newStatus = "rejected";
-      // Propagate rejection to the linked domain first so a handler failure
-      // keeps the workflow pending and the rejection can be retried.
-      try {
-        await propagateDomainStatus(instance.refTable, instance.refId, "rejected");
-      } catch (err) {
-        console.error(
-          `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on reject:`,
-          err
-        );
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`تعذّر تحديث السجل الأساسي بعد الرفض: ${msg}`);
-      }
       await rawExecute(
         `UPDATE workflow_instances SET status = 'rejected', "completedAt" = NOW(), "updatedAt" = NOW() WHERE id = $1`,
         [instanceId]
       );
+      // Propagate rejection to the linked domain record
+      propagateDomainStatus(instance.refTable, instance.refId, "rejected").catch(console.error);
       if (instance.submittedBy) {
         createNotification({
           companyId, assignmentId: instance.submittedBy,
@@ -644,20 +586,12 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
 
     case "return": {
       newStatus = "returned";
-      try {
-        await propagateDomainStatus(instance.refTable, instance.refId, "returned");
-      } catch (err) {
-        console.error(
-          `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on return:`,
-          err
-        );
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`تعذّر تحديث السجل الأساسي بعد الإرجاع: ${msg}`);
-      }
       await rawExecute(
         `UPDATE workflow_instances SET status = 'returned', "updatedAt" = NOW() WHERE id = $1`,
         [instanceId]
       );
+      // Propagate return to the linked domain record
+      propagateDomainStatus(instance.refTable, instance.refId, "returned").catch(console.error);
       if (instance.submittedBy) {
         createNotification({
           companyId, assignmentId: instance.submittedBy,
@@ -739,31 +673,6 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
      WHERE id = (SELECT id FROM workflow_step_actions WHERE "instanceId" = $2 ORDER BY id DESC LIMIT 1)`,
     [JSON.stringify(afterData), instanceId]
   );
-
-  // Compliance trail: every decision (not just overrides) must land in
-  // audit_logs and event_logs so reporting + listeners can see it.
-  createAuditLog({
-    companyId,
-    branchId: branchId ?? instance.branchId ?? undefined,
-    userId: actionBy,
-    action: `workflow_${action}`,
-    entity: "workflow_instance",
-    entityId: instanceId,
-    before: beforeData,
-    after: { ...afterData, refTable: instance.refTable, refId: instance.refId },
-    reason: notes ?? undefined,
-  }).catch(console.error);
-
-  emitEvent({
-    companyId,
-    userId: actionBy,
-    action: `workflow.${action}`,
-    entity: "workflow_instance",
-    entityId: instanceId,
-    details: `${instance.requestTypeLabel || instance.requestType}: ${action} → ${newStatus}`,
-    before: beforeData,
-    after: afterData,
-  }).catch(console.error);
 
   return { status: newStatus, stepOrder: newStepOrder, assignee: newAssignee, message, actualImpact, isOverride };
 }
