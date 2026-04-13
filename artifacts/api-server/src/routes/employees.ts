@@ -729,8 +729,83 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!employee) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
-    await rawExecute(`UPDATE employee_assignments SET status = 'terminated' WHERE id = $1`, [employee.assignmentId]);
-    await rawExecute(`UPDATE employees SET status = 'terminated' WHERE id = $1`, [Number(id)]);
+
+    // Terminating a single employee used to only flip two status
+    // columns — leaving a long tail of orphaned work behind: active
+    // contracts still probated, pending leave requests still in the
+    // manager's inbox, tasks still assigned to the ex-employee, and
+    // pending approval_requests stuck forever. Close the loop across
+    // every dependent row in a transaction so HR doesn't have to chase
+    // them manually after the fact.
+    await withTransaction(async (tx) => {
+      await tx.query(
+        `UPDATE employee_assignments SET status = 'terminated' WHERE id = $1`,
+        [employee.assignmentId]
+      );
+      await tx.query(
+        `UPDATE employees SET status = 'terminated' WHERE id = $1`,
+        [Number(id)]
+      );
+
+      // 1. Deactivate contracts tied to this employee / assignment so
+      //    probation cron stops alerting on ghosts.
+      await tx.query(
+        `UPDATE employee_contracts
+           SET status = 'terminated', "probationStatus" = 'ended'
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated'`,
+        [Number(id), scope.companyId]
+      );
+
+      // 2. Cancel pending leave requests + their approval stages so
+      //    the leave escalation cron stops firing reminders.
+      await tx.query(
+        `UPDATE hr_leave_requests
+           SET status = 'cancelled'
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending'`,
+        [Number(id), scope.companyId]
+      );
+      await tx.query(
+        `UPDATE leave_approval_stages
+           SET status = 'cancelled'
+         WHERE "leaveRequestId" IN (
+           SELECT id FROM hr_leave_requests
+           WHERE "employeeId" = $1 AND "companyId" = $2
+         ) AND status = 'pending'`,
+        [Number(id), scope.companyId]
+      );
+
+      // 3. Cancel open tasks assigned to the terminated assignment so
+      //    they don't rot in someone's calendar forever. Manager can
+      //    re-open / reassign after the fact.
+      await tx.query(
+        `UPDATE tasks
+           SET status = 'cancelled', notes = COALESCE(notes || E'\n', '') || 'ألغي تلقائياً: إنهاء خدمة الموظف'
+         WHERE "assignedTo" = $1 AND status IN ('pending', 'in_progress')`,
+        [employee.assignmentId]
+      );
+
+      // 4. Cancel pending approval_requests routed to this user so
+      //    the approval queue doesn't get stuck. The caller can re-
+      //    route via the escalation chain on the next cron tick.
+      await tx.query(
+        `UPDATE approval_requests
+           SET status = 'cancelled', "decidedAt" = NOW()
+         WHERE "assignedTo" = $1 AND status = 'pending'`,
+        [employee.assignmentId]
+      );
+    });
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "employee.terminated",
+      entity: "employees",
+      entityId: Number(id),
+      before: { status: "active" },
+      after: { status: "terminated", reason: reason || null, assignmentId: employee.assignmentId },
+    }).catch(console.error);
+
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employees", entityId: Number(id),
