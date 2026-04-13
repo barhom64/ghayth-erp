@@ -1,5 +1,5 @@
 import { eventBus, type EventPayload } from "./eventBus.js";
-import { pool } from "./rawdb.js";
+import { pool, rawQuery, rawExecute } from "./rawdb.js";
 import { createNotification, getManagerAssignmentId } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
 
@@ -377,6 +377,90 @@ export function registerEventListeners() {
   eventBus.on("hr.memo.cancelled", async (payload) => {
     await logEvent("hr.memo.cancelled", payload);
     await logAudit("hr.memo.cancelled", { ...payload, action: "cancel", entity: "hr_inquiry_memo" });
+  });
+
+  // Official letters — when a letter is approved, queue it for delivery
+  // and mark it as sent. Without this subscriber the approval route stops
+  // at status='approved' and the letter never reaches the recipient.
+  eventBus.on("hr.letter.approved", async (payload) => {
+    await logEvent("hr.letter.approved", payload);
+    await logAudit("hr.letter.approved", { ...payload, action: "approve", entity: "official_letter" });
+
+    try {
+      const letterId = Number(payload.entityId);
+      if (!letterId || !payload.companyId) return;
+
+      const [letter] = await rawQuery<any>(
+        `SELECT ol.*, e.name AS "employeeName", e.email AS "employeeEmail", e.phone AS "employeePhone"
+         FROM official_letters ol
+         LEFT JOIN employees e ON e.id = ol."employeeId"
+         WHERE ol.id = $1 AND ol."companyId" = $2`,
+        [letterId, payload.companyId]
+      );
+
+      if (!letter) return;
+      if (letter.sentAt) return; // already dispatched
+
+      const subject = letter.subject || `خطاب رسمي #${letterId}`;
+      const body = letter.content || subject;
+
+      if (letter.employeeEmail) {
+        await rawExecute(
+          `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
+           VALUES ($1,$2,$3,$4,$5,'pending',NOW(),'official_letter',$6)`,
+          [payload.companyId, letter.employeeEmail, letter.employeeName ?? "", subject, body, letterId]
+        );
+      }
+
+      // Best-effort WhatsApp copy if we have a phone and the queue exists.
+      if (letter.employeePhone) {
+        try {
+          await rawExecute(
+            `INSERT INTO whatsapp_queue ("companyId","toPhone",message,status,"createdAt","refType","refId")
+             VALUES ($1,$2,$3,'pending',NOW(),'official_letter',$4)`,
+            [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`, letterId]
+          );
+        } catch {
+          /* whatsapp_queue may not exist in every deployment — ignore */
+        }
+      }
+
+      // Mark the letter as dispatched so we never double-queue it.
+      await rawExecute(
+        `UPDATE official_letters SET "sentAt" = NOW() WHERE id = $1 AND "sentAt" IS NULL`,
+        [letterId]
+      );
+
+      // Notify HR management that the letter went out.
+      if (payload.branchId) {
+        const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+        if (managerId) {
+          await createNotification({
+            companyId: payload.companyId,
+            assignmentId: managerId,
+            type: "hr",
+            title: "تم إرسال خطاب رسمي",
+            body: `تم إرسال الخطاب: ${subject}`,
+            priority: "normal",
+            refType: "official_letter",
+            refId: letterId,
+            actionUrl: `/hr/letters/${letterId}`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[hr.letter.approved] dispatch failed:", err);
+    }
+  });
+
+  eventBus.on("hr.letter.rejected", async (payload) => {
+    await logEvent("hr.letter.rejected", payload);
+    await logAudit("hr.letter.rejected", { ...payload, action: "reject", entity: "official_letter" });
+  });
+
+  eventBus.on("hr.letter.returned", async (payload) => {
+    await logEvent("hr.letter.returned", payload);
+    await logAudit("hr.letter.returned", { ...payload, action: "return", entity: "official_letter" });
   });
 
   eventBus.on("hr.discipline.regulation.create", async (payload) => {

@@ -4,6 +4,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { loadBalanceAssign } from "../lib/algorithms.js";
+import { emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -273,6 +274,26 @@ router.patch("/:id", async (req, res) => {
     );
 
     if (rows.length === 0) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
+
+    // Close the loop on status transitions so subscribers fire.
+    if (status === "completed") {
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "task.completed",
+        entity: "tasks",
+        entityId: Number(req.params.id),
+        before: { status: "in_progress" },
+        after: {
+          status: "completed",
+          completedAt: rows[0]?.completedAt ?? new Date().toISOString(),
+          assignedTo: rows[0]?.assignedTo ?? null,
+          title: rows[0]?.title ?? null,
+        },
+      }).catch(console.error);
+    }
+
     res.json(rows[0]);
   } catch (err) {
     console.error("Update task error:", err);

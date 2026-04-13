@@ -3,7 +3,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { slaDeadlineForPriority, haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { loadBalanceAssign } from "../lib/algorithms.js";
@@ -266,8 +266,52 @@ router.patch("/tickets/:id", async (req, res) => {
         console.log(`[SUPPORT] Agent ${ticket.assigneeId} resolved ticket in ${resolutionTimeHours.toFixed(1)}h`);
       }
 
-      surveyQueued = true;
-      console.log(`[SURVEY] Ticket ${ticket.ref} resolved in ${resolutionTimeHours.toFixed(1)}h — queuing satisfaction survey in 24h for client ${ticket.clientId}`);
+      // Actually queue the satisfaction survey (used to just be a console.log).
+      // A scheduledAt in the future lets the email_queue_worker deliver it
+      // when it becomes due; until then it sits in 'pending'.
+      if (ticket.clientId) {
+        try {
+          const [client] = await rawQuery<any>(
+            `SELECT id, name, email FROM clients WHERE id = $1 AND "companyId" = $2`,
+            [ticket.clientId, scope.companyId]
+          );
+          if (client?.email) {
+            const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            await rawExecute(
+              `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"scheduledAt","createdAt","refType","refId")
+               VALUES ($1,$2,$3,$4,$5,'pending',$6,NOW(),'support_ticket',$7)`,
+              [
+                scope.companyId,
+                client.email,
+                client.name ?? "",
+                `استبيان رضا العميل - التذكرة ${ticket.ref}`,
+                `مرحباً ${client.name ?? ""},\n\nتم حل تذكرتكم رقم ${ticket.ref}.\nنرجو تقييم تجربتكم معنا من خلال الرابط المرفق.\n\nشكراً لثقتكم.`,
+                scheduledAt.toISOString(),
+                ticketId,
+              ]
+            );
+            surveyQueued = true;
+          }
+        } catch (e) {
+          console.error("[SURVEY] Failed to queue satisfaction survey:", e);
+        }
+      }
+
+      // Emit the lifecycle event so the audit trail + subscribers fire.
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "support.ticket.resolved",
+        entity: "support_tickets",
+        entityId: ticketId,
+        before: { status: ticket.status, resolvedAt: ticket.resolvedAt ?? null },
+        after: {
+          status: "resolved",
+          resolvedAt: new Date().toISOString(),
+          resolutionTimeHours: Number(resolutionTimeHours.toFixed(2)),
+        },
+      }).catch(console.error);
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1`, [ticketId]);

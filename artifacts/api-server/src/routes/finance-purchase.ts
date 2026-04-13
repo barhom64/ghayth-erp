@@ -312,6 +312,20 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
     await rawExecute(`UPDATE purchase_orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
+    // Emit a lifecycle event so downstream listeners (audit, procurement
+    // notification, vendor confirmation workflow) can react. Without this
+    // the approval silently mutates status and no one is told.
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: `purchase_order.${newStatus}`,
+      entity: "purchase_orders",
+      entityId: Number(id),
+      before: { status: po.status },
+      after: { status: newStatus, notes: notes ?? null },
+    }).catch(console.error);
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
@@ -333,6 +347,17 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
     await rawExecute(`UPDATE purchase_orders SET status = 'received', "receivedAt" = $1, notes = COALESCE($2, notes) WHERE id = $3`, [receivedDate ?? new Date().toISOString(), qualityNotes ?? null, Number(id)]);
 
     createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref: `GRN-${po.ref}`, description: `استلام ${po.ref}`, lines: [{ accountCode: "1600", debit: Number(po.totalAmount) - Number(po.vatAmount ?? 0), credit: 0 }, { accountCode: "1400", debit: Number(po.vatAmount ?? 0), credit: 0 }, { accountCode: "2100", debit: 0, credit: Number(po.totalAmount) }] }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "purchase_order.received",
+      entity: "purchase_orders",
+      entityId: Number(id),
+      before: { status: po.status, receivedAt: po.receivedAt ?? null },
+      after: { status: "received", receivedAt: receivedDate ?? new Date().toISOString(), qualityNotes: qualityNotes ?? null },
+    }).catch(console.error);
 
     res.json({ message: "تم تسجيل استلام البضاعة", status: "received" });
   } catch (err) {

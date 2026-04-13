@@ -2863,10 +2863,19 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return;
     }
 
-    await rawExecute(
-      `UPDATE official_letters SET status = $1 WHERE id = $2`,
-      [newStatus, Number(id)]
-    );
+    if (newStatus === "approved") {
+      await rawExecute(
+        `UPDATE official_letters
+           SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
+         WHERE id = $2`,
+        [newStatus, Number(id), scope.userId]
+      );
+    } else {
+      await rawExecute(
+        `UPDATE official_letters SET status = $1 WHERE id = $2`,
+        [newStatus, Number(id)]
+      );
+    }
 
     try {
       await rawExecute(
@@ -2874,6 +2883,30 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
         [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
       );
     } catch (e) { console.error("Failed to log approval action:", e); }
+
+    // Close the loop: emit a lifecycle event so the letter actually gets
+    // dispatched (email_queue). Without this the route used to stop at
+    // status='approved' and the letter never left the building.
+    await emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: newStatus === "approved"
+        ? "hr.letter.approved"
+        : newStatus === "rejected"
+          ? "hr.letter.rejected"
+          : "hr.letter.returned",
+      entity: "official_letter",
+      entityId: Number(id),
+      before: { status: letter.status },
+      after: {
+        status: newStatus,
+        subject: letter.subject,
+        type: letter.type,
+        employeeId: letter.employeeId,
+        notes: notes ?? null,
+      },
+    });
 
     res.json({ id: Number(id), status: newStatus });
   } catch (err) { handleRouteError(err, res, "خطأ في اعتماد الخطاب"); }

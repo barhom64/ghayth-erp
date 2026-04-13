@@ -327,12 +327,29 @@ export async function initiateApprovalChain(params: {
   }
 
   const firstStep = steps[0];
-  const [approver] = await rawQuery<any>(
-    `SELECT id FROM employee_assignments
-     WHERE "companyId" = $1 AND role = $2 AND status = 'active'
-     ORDER BY CASE WHEN "branchId" = $3 THEN 0 ELSE 1 END LIMIT 1`,
-    [params.companyId, firstStep.requiredRole, params.branchId]
-  );
+  // Try the requested role first, then fall back through the management
+  // chain so a request is NEVER created with assignedTo = null (otherwise
+  // it sits in pending forever and the hourly escalation cron can only
+  // ping HR generically without actually assigning an owner).
+  const ROLE_FALLBACK_CHAIN = [
+    firstStep.requiredRole,
+    "branch_manager",
+    "hr_manager",
+    "general_manager",
+    "owner",
+  ].filter((v, i, a) => a.indexOf(v) === i);
+
+  let approver: { id: number } | undefined;
+  let resolvedRole: string = firstStep.requiredRole;
+  for (const role of ROLE_FALLBACK_CHAIN) {
+    const [row] = await rawQuery<any>(
+      `SELECT id FROM employee_assignments
+       WHERE "companyId" = $1 AND role = $2 AND status = 'active'
+       ORDER BY CASE WHEN "branchId" = $3 THEN 0 ELSE 1 END LIMIT 1`,
+      [params.companyId, role, params.branchId]
+    );
+    if (row) { approver = row; resolvedRole = role; break; }
+  }
 
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + (firstStep.timeoutHours ?? 48));
@@ -347,9 +364,15 @@ export async function initiateApprovalChain(params: {
     await createNotification({
       companyId: params.companyId, assignmentId: approver.id,
       type: "approval_required", title: "طلب موافقة جديد",
-      body: `يوجد طلب ${chainTypeLabel(params.chainType)} جديد يتطلب موافقتك`,
+      body: `يوجد طلب ${chainTypeLabel(params.chainType)} جديد يتطلب موافقتك${
+        resolvedRole !== firstStep.requiredRole ? " (تم التوجيه بالنيابة)" : ""
+      }`,
       priority: "high", refType: params.refType, refId: params.refId,
     });
+  } else {
+    console.warn(
+      `[initiateApprovalChain] No approver found for company=${params.companyId} chainType=${params.chainType} ref=${params.refType}#${params.refId}. Request ${requestId} created with assignedTo=null.`
+    );
   }
 
   return { requiresApproval: true, chainId: chain.id, approvalRequestId: requestId, currentStep: 1, totalSteps: steps.length };
