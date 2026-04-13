@@ -11,6 +11,7 @@ import {
   getLegalResponsible,
   haversineDistance,
   emitEvent,
+  createAuditLog,
 } from "./businessHelpers.js";
 import { broadcastAlert } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
@@ -769,11 +770,46 @@ async function hourlyApprovalEscalation(): Promise<string> {
 
       if (shouldAutoApprove) {
         const { processApprovalStep } = await import("./businessHelpers.js");
-        await processApprovalStep({
+        const result = await processApprovalStep({
           companyId: req.companyId, branchId: req.branchId,
           refType: req.refType, refId: req.refId,
           approved: true, decidedBy: 0,
         });
+        // Propagate the approval onto the underlying domain record. The HR
+        // route handler does this itself; the cron path must mirror the same
+        // logic, otherwise an auto-approved request leaves the domain record
+        // stuck in its original state forever.
+        if (result.status === "approved") {
+          const entityUpdateMap: Record<string, { table: string; column: string }> = {
+            purchase_order: { table: "purchase_orders", column: "status" },
+            official_letter: { table: "official_letters", column: "status" },
+          };
+          const target = entityUpdateMap[req.refType];
+          if (target) {
+            await rawExecute(
+              `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
+              [req.refId]
+            ).catch((e) => console.error("[hourly_escalation] domain update failed:", e));
+          }
+          const journalRefTypes = ["expense", "salary_advance", "custody"];
+          if (journalRefTypes.includes(req.refType)) {
+            await rawExecute(
+              `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
+              [req.refId]
+            ).catch((e) => console.error("[hourly_escalation] journal update failed:", e));
+          }
+          // Audit + event so the auto-approval is visible in reports.
+          createAuditLog({
+            companyId: req.companyId, branchId: req.branchId, userId: 0,
+            action: "auto_approved", entity: req.refType, entityId: req.refId,
+            reason: "Auto-approved on timeout by hourly escalation cron",
+          }).catch(console.error);
+          emitEvent({
+            companyId: req.companyId, userId: 0,
+            action: `${req.refType}.auto_approved`, entity: req.refType, entityId: req.refId,
+            details: `Auto-approved on timeout after ${Math.round(hoursSinceCreation)}h`,
+          }).catch(console.error);
+        }
         autoApprovals++;
       } else {
         const [hrAssignment] = await rawQuery<any>(

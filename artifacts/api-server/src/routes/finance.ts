@@ -3533,52 +3533,11 @@ router.patch("/expenses/:id/approve", async (req, res) => {
   }
 });
 
-router.patch("/custodies/:id/approve", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    const { id } = req.params;
-    const { approved, notes } = req.body as any;
-
-    const [cust] = await rawQuery<any>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
-      [Number(id), scope.companyId]
-    );
-    if (!cust) { res.status(404).json({ error: "العهدة غير موجودة" }); return; }
-
-    const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
-    if ((newStatus === "rejected" || newStatus === "returned") && !notes) {
-      res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return;
-    }
-
-    await rawExecute(
-      `UPDATE journal_entries SET status = $1 WHERE id = $2`,
-      [newStatus, Number(id)]
-    );
-
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('custody',$1,$2,$3,$4,$5)`,
-        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error("Failed to log approval action:", e); }
-
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: newStatus,
-      entity: "custodies",
-      entityId: Number(id),
-      after: { ref: cust.ref, status: newStatus, notes },
-    }).catch(console.error);
-
-    const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
-    res.json({ message: labels[newStatus] || newStatus, status: newStatus });
-  } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
-  }
-});
+// NOTE: the authoritative PATCH /custodies/:id/approve handler lives earlier
+// in this file (~line 3046). A second copy used to live here but was dead code
+// — Express routes on first-match, so only the earlier handler ever ran. The
+// live handler already covers GL reversal, notifications, audit, and events
+// on approve/reject/return, so this duplicate was removed to avoid drift.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUBSIDIARY LEDGER — دفتر الأستاذ المساعد
