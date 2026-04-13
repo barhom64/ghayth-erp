@@ -892,8 +892,18 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       const newIdx = PHASE_ORDER.indexOf(phase);
       if (currentIdx >= newIdx) continue;
 
+      // Also flip the invoice status to 'overdue' when appropriate — reports,
+      // collection stages and dashboards key off invoices.status, not off
+      // overduePhase, so leaving status='sent' made overdue invoices
+      // invisible in half the UI.
       await rawExecute(
-        `UPDATE invoices SET "overduePhase" = $1 WHERE id = $2`,
+        `UPDATE invoices
+            SET "overduePhase" = $1,
+                status = CASE
+                  WHEN status IN ('sent','partial') THEN 'overdue'
+                  ELSE status
+                END
+          WHERE id = $2`,
         [phase, inv.id]
       ).catch(() => {});
 
@@ -974,11 +984,15 @@ async function dailyInventoryCheck(): Promise<string> {
 
 async function dailyPropertyCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  let actions = 0;
+  let alerted = 0;
+  let expired = 0;
+  let renewalNotices = 0;
   for (const company of companies) {
+    // 1. Alert expiring contracts (≤30 days)
     const expiring = await rawQuery<any>(
       `SELECT rc.id, rc."tenantName", rc."endDate",
-              (rc."endDate"::date - CURRENT_DATE) AS "daysLeft"
+              (rc."endDate"::date - CURRENT_DATE) AS "daysLeft",
+              rc."autoRenewal", rc."renewalNoticeDays", rc."renewalNoticeSentAt"
        FROM rental_contracts rc
        WHERE rc."companyId" = $1 AND rc.status = 'active'
          AND rc."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
@@ -992,10 +1006,71 @@ async function dailyPropertyCheck(): Promise<string> {
         Number(c.daysLeft) <= 7 ? "critical" : "warning",
         "rental_contract", c.id
       );
-      actions++;
+      alerted++;
+    }
+
+    // 2. Send renewal notice at renewalNoticeDays (default 60) before endDate — only once
+    const needsNotice = await rawQuery<any>(
+      `SELECT rc.id, rc."tenantName", rc."endDate"
+       FROM rental_contracts rc
+       WHERE rc."companyId" = $1 AND rc.status = 'active'
+         AND rc."renewalNoticeSentAt" IS NULL
+         AND rc."endDate" <= CURRENT_DATE + (COALESCE(rc."renewalNoticeDays",60) || ' days')::interval
+         AND rc."endDate" > CURRENT_DATE`,
+      [company.id]
+    );
+    for (const c of needsNotice) {
+      await broadcastAlert(
+        company.id, "rental_contract_renewal_notice",
+        `تنبيه تجديد عقد: ${c.tenantName}`,
+        `يقترب موعد انتهاء العقد (${c.endDate}) — اتخذ قرار التجديد أو الإنهاء`,
+        "warning", "rental_contract", c.id
+      );
+      await rawExecute(
+        `UPDATE rental_contracts SET "renewalNoticeSentAt"=NOW() WHERE id=$1`, [c.id]
+      ).catch(() => {});
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "lease.renewal_notice", entity: "rental_contracts", entityId: Number(c.id),
+          details: `تنبيه تجديد — ينتهي ${c.endDate}`,
+        });
+      } catch {}
+      renewalNotices++;
+    }
+
+    // 3. Auto-expire contracts whose endDate has passed — mark expired, free the unit, cancel pending rent_payments
+    const expiredContracts = await rawQuery<any>(
+      `SELECT id, "unitId", "tenantName" FROM rental_contracts
+       WHERE "companyId" = $1 AND status = 'active' AND "endDate" < CURRENT_DATE`,
+      [company.id]
+    );
+    for (const c of expiredContracts) {
+      await rawExecute(
+        `UPDATE rental_contracts SET status='expired', "closedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1`,
+        [c.id]
+      );
+      if (c.unitId) {
+        await rawExecute(
+          `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND status='rented'`,
+          [c.unitId]
+        );
+      }
+      await rawExecute(
+        `UPDATE rent_payments SET status='cancelled', "updatedAt"=NOW() WHERE "contractId"=$1 AND status IN ('pending','partial')`,
+        [c.id]
+      ).catch(() => {});
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "lease.expired", entity: "rental_contracts", entityId: Number(c.id),
+          details: `انتهاء تلقائي — ${c.tenantName ?? ''}`,
+        });
+      } catch {}
+      expired++;
     }
   }
-  return `Property check: ${actions} expiring contracts alerted`;
+  return `Property check: ${alerted} expiring alerts, ${renewalNotices} renewal notices, ${expired} auto-expired`;
 }
 
 async function dailyLegalCheck(): Promise<string> {
@@ -2200,6 +2275,53 @@ async function weeklyDataCleanup(): Promise<string> {
       `DELETE FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'`
     ).catch(() => ({ affectedRows: 0 }));
     cleaned += archivedLogs;
+  } catch {}
+
+  // Orphaned workflow_instances: delete instances whose refTable row no longer exists.
+  // Only handle the known refTables — safer than a generic EXISTS loop.
+  try {
+    const orphanRefTables = [
+      "hr_leave_requests",
+      "purchase_requests",
+      "official_letters",
+      "journal_entries",
+    ];
+    for (const tbl of orphanRefTables) {
+      const { affectedRows } = await rawExecute(
+        `DELETE FROM workflow_instances wi
+           WHERE wi."refTable" = $1
+             AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = wi."refId")`,
+        [tbl]
+      ).catch(() => ({ affectedRows: 0 }));
+      cleaned += affectedRows;
+    }
+  } catch {}
+
+  // Mark orphaned approval_requests as cancelled when their referenced entity was hard-deleted.
+  // approval_requests uses refType+refId (not a workflow FK).
+  try {
+    const orphanRefTypes: Record<string, string> = {
+      leave: "hr_leave_requests",
+      purchase_request: "purchase_requests",
+      official_letter: "official_letters",
+      journal_entry: "journal_entries",
+      expense: "expenses",
+      salary_advance: "salary_advances",
+      custody: "custody_records",
+      invoice: "invoices",
+      purchase_order: "purchase_orders",
+    };
+    for (const [refType, tbl] of Object.entries(orphanRefTypes)) {
+      const { affectedRows } = await rawExecute(
+        `UPDATE approval_requests ar
+            SET status = 'cancelled'
+          WHERE ar."refType" = $1
+            AND ar.status IN ('pending','in_progress')
+            AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = ar."refId")`,
+        [refType]
+      ).catch(() => ({ affectedRows: 0 }));
+      cleaned += affectedRows;
+    }
   } catch {}
 
   return `Data cleanup: ${cleaned} records cleaned`;

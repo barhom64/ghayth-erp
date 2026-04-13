@@ -315,6 +315,27 @@ export async function submitWorkflow(params: SubmitParams) {
         currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, firstStep.requiredRole);
       } catch { /* no assignee found */ }
     }
+    // Final fallback: any active HR/GM/owner in the company. Never leave a
+    // submitted workflow with NULL currentAssignee — that makes it invisible
+    // to every inbox and no escalation job will route it.
+    if (!currentAssignee) {
+      try {
+        const [fallback] = await rawQuery<any>(
+          `SELECT id FROM employee_assignments
+           WHERE "companyId" = $1 AND status = 'active'
+             AND role IN ('hr_manager','general_manager','owner')
+           ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 WHEN 'owner' THEN 3 ELSE 4 END
+           LIMIT 1`,
+          [companyId]
+        );
+        if (fallback?.id) currentAssignee = fallback.id;
+      } catch { /* ignore */ }
+    }
+  }
+  if (firstStep && !currentAssignee) {
+    throw new Error(
+      "لا يوجد مسؤول معتمد لاستلام الطلب — الرجاء تعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات"
+    );
   }
 
   const { insertId } = await rawExecute(
@@ -505,6 +526,21 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         try {
           newAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, nextStep.requiredRole);
         } catch { newAssignee = null; }
+        // Never advance to a step with NULL assignee — fall back to any active
+        // HR/GM/owner so the request stays actionable somewhere.
+        if (!newAssignee) {
+          try {
+            const [fallback] = await rawQuery<any>(
+              `SELECT id FROM employee_assignments
+               WHERE "companyId" = $1 AND status = 'active'
+                 AND role IN ('hr_manager','general_manager','owner')
+               ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 WHEN 'owner' THEN 3 ELSE 4 END
+               LIMIT 1`,
+              [companyId]
+            );
+            if (fallback?.id) newAssignee = fallback.id;
+          } catch { /* ignore */ }
+        }
 
         const [sla] = await rawQuery<any>(
           `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
