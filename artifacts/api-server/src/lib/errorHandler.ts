@@ -1,3 +1,104 @@
+/**
+ * Typed errors — P0.3 of the unification plan (docs/UNIFICATION_PLAN.md).
+ *
+ * Before this module, routes threw anonymous `Error` instances (or Postgres
+ * errors) and `classifyDbError` guessed how to present them. Anything that
+ * didn't match one of the hardcoded regex arms fell through to "حدث خطأ غير
+ * متوقع" — a generic message users could not act on and engineers could not
+ * trace.
+ *
+ * The five classes below give route handlers a vocabulary for explicit
+ * failures: "I know why this is failing and I want the client to know too."
+ * `handleRouteError` recognises them before it falls back to the DB-error
+ * classifier, so a thrown `ConflictError("المورد مكرر")` lands as
+ *   { error: "المورد مكرر", code: "CONFLICT", status: 409 }
+ * without going through any pattern-matching.
+ *
+ * Adoption is opt-in — every existing call site still works. Routes migrated
+ * to the unified pattern (per the plan) replace their custom error plumbing
+ * with one of these classes.
+ */
+
+export interface TypedErrorOptions {
+  /** Form field that the error is attached to, when applicable. */
+  field?: string;
+  /** Short guidance for the user on how to recover. */
+  fix?: string;
+  /** Structured extras for logs / telemetry. */
+  meta?: Record<string, unknown>;
+  /** Underlying cause (for server logs — never serialised to clients). */
+  cause?: unknown;
+}
+
+export abstract class TypedError extends Error {
+  public abstract readonly status: number;
+  public abstract readonly code: string;
+  public readonly field?: string;
+  public readonly fix?: string;
+  public readonly meta?: Record<string, unknown>;
+
+  constructor(message: string, options: TypedErrorOptions = {}) {
+    super(message);
+    this.name = new.target.name;
+    this.field = options.field;
+    this.fix = options.fix;
+    this.meta = options.meta;
+    if (options.cause !== undefined) {
+      (this as any).cause = options.cause;
+    }
+  }
+
+  /** Shape sent back to clients. Never leaks `cause`. */
+  public toResponse(): { error: string; code: string; field?: string; fix?: string; meta?: Record<string, unknown> } {
+    return {
+      error: this.message,
+      code: this.code,
+      ...(this.field ? { field: this.field } : {}),
+      ...(this.fix ? { fix: this.fix } : {}),
+      ...(this.meta ? { meta: this.meta } : {}),
+    };
+  }
+}
+
+/** 422 — user input failed validation. `field` points at the offending form field. */
+export class ValidationError extends TypedError {
+  public readonly status = 422;
+  public readonly code = "VALIDATION_ERROR";
+}
+
+/** 404 — the requested resource was not found (or soft-deleted / out of scope). */
+export class NotFoundError extends TypedError {
+  public readonly status = 404;
+  public readonly code = "NOT_FOUND";
+}
+
+/** 409 — the requested change conflicts with current state (wrong status, duplicate, race). */
+export class ConflictError extends TypedError {
+  public readonly status = 409;
+  public readonly code = "CONFLICT";
+}
+
+/** 403 — the caller is authenticated but lacks the permission / scope for this action. */
+export class ForbiddenError extends TypedError {
+  public readonly status = 403;
+  public readonly code = "FORBIDDEN";
+}
+
+/**
+ * 502 — an external integration (ZATCA, Absher, payment gateway, email, …) failed.
+ * Distinct from DB errors so the client can show "the third-party provider is
+ * unavailable" instead of suggesting the user retry their own input.
+ */
+export class IntegrationError extends TypedError {
+  public readonly status = 502;
+  public readonly code = "INTEGRATION_ERROR";
+}
+
+/** True when `err` is one of our typed error classes. */
+export function isTypedError(err: unknown): err is TypedError {
+  return err instanceof TypedError;
+}
+
 export function classifyDbError(err: unknown): { status: number; message: string } {
   const e = err as any;
   const msg = e?.message ?? String(err);
@@ -84,6 +185,22 @@ export function validationError(
 }
 
 export function handleRouteError(err: unknown, res: any, logContext: string): void {
+  // Typed errors win — the route handler has already said exactly what the
+  // client should see, so we skip DB error classification entirely.
+  if (isTypedError(err)) {
+    // Log with structured context so the underlying cause (if any) is still
+    // visible to the operator even though we never ship it to the client.
+    const underlying = (err as any).cause;
+    if (underlying !== undefined) {
+      console.error(`[ERROR] ${logContext}:`, err.message, err.code, err.meta ?? "", underlying);
+    } else {
+      console.error(`[ERROR] ${logContext}:`, err.message, err.code, err.meta ?? "");
+    }
+    if (res.headersSent) return;
+    res.status(err.status).json(err.toResponse());
+    return;
+  }
+
   console.error(`[ERROR] ${logContext}:`, err);
   const { status, message } = classifyDbError(err);
   if (res.headersSent) return;
