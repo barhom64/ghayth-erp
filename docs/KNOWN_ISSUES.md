@@ -32,12 +32,10 @@ _If a new detail view is added, follow the pattern in `lib/lifecycleEngine.ts`'s
 
 ## Phase 4 — Unified RBAC
 
-The permissions system works but the catalogue is spread across migrations.
-
-- [ ] **Central catalogue.** Introduce `artifacts/api-server/src/lib/rbacCatalog.ts` that lists every permission once, along with the default role bindings. Migrations should read from it instead of hand-writing role-permission rows.
-- [ ] **Permission linter.** Fail CI if `requirePermission("x")` is used in a route where `x` does not exist in the catalogue.
-- [ ] **OR semantics, where needed.** Today `requirePermission(a, b)` means AND. Add `requireAnyPermission(a, b)` for the few cases that need OR (notably cross-role dashboards).
-- [ ] **Audit mismatches.** Grep the routes for permissions not seeded for `owner` and reconcile.
+- [x] **Central catalogue.** `artifacts/api-server/src/lib/rbacCatalog.ts` exports the full `PERMISSIONS` list, `ROLE_PERMISSIONS` default bindings, and helpers `isKnownPermission` / `getRolePermissions`.
+- [x] **Permission linter.** `pnpm --filter @workspace/api-server lint:permissions` (`scripts/lintPermissions.mjs`) scans every file under `src/routes/` for `requirePermission` / `requireAnyPermission` calls and fails if any argument is not in the catalogue. Wildcards (`*`, `hr:*`) are skipped.
+- [x] **OR semantics.** `requireAnyPermission(...)` landed in `middlewares/permissionMiddleware.ts` alongside the existing AND-semantics `requirePermission`.
+- [x] **Audit mismatches.** Migration `068_rbac_catalog_seed.sql` backfills the role bindings missing from 026/027/066 (documents:*, hr:approve, hr:discipline:approve, audit:read, reports:read, branch_manager read-only surface).
 
 ## Phase 5 — Security review of dynamic SQL
 
