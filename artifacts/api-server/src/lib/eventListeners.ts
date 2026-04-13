@@ -253,7 +253,28 @@ export function registerEventListeners() {
 
   eventBus.on("support.ticket.resolved", async (payload) => {
     await logEvent("support.ticket.resolved", payload);
-    await logAudit("support.ticket.resolved", { ...payload, action: "update" });
+    await logAudit("support.ticket.resolved", { ...payload, action: "resolve", entity: "support_tickets" });
+  });
+
+  // Phase C — Support domain audit. Every lifecycle transition on a
+  // ticket now has a dedicated event and a listener behind it so the
+  // support inbox audit trail sees every status change, assignment,
+  // and deletion. Was previously only firing on the resolve path.
+  eventBus.on("support.ticket.status_changed", async (payload) => {
+    await logEvent("support.ticket.status_changed", payload);
+    await logAudit("support.ticket.status_changed", { ...payload, action: "status_change", entity: "support_tickets" });
+  });
+  eventBus.on("support.ticket.closed", async (payload) => {
+    await logEvent("support.ticket.closed", payload);
+    await logAudit("support.ticket.closed", { ...payload, action: "close", entity: "support_tickets" });
+  });
+  eventBus.on("support.ticket.assigned", async (payload) => {
+    await logEvent("support.ticket.assigned", payload);
+    await logAudit("support.ticket.assigned", { ...payload, action: "assign", entity: "support_tickets" });
+  });
+  eventBus.on("support.ticket.deleted", async (payload) => {
+    await logEvent("support.ticket.deleted", payload);
+    await logAudit("support.ticket.deleted", { ...payload, action: "delete", entity: "support_tickets" });
   });
 
   eventBus.on("fleet.trip.started", async (payload) => {

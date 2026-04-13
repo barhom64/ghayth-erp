@@ -49,12 +49,50 @@ router.get("/tickets", async (req, res) => {
 });
 
 router.post("/tickets", async (req, res) => {
+  // Phase C — Support domain audit, mirror of the HR Step 1 treatment.
+  // Adds input validation the old handler lacked, a pre-check on the
+  // client FK so a stale clientId produces a clean field-tagged error
+  // instead of a deep 23503, and the canonical `support.ticket.created`
+  // event (the listener at eventListeners.ts:245 had existed since P1.6
+  // but nobody was emitting the event from the create handler).
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    const title = (b.title ?? b.subject ?? "").toString().trim();
+    if (!title) {
+      throw new ValidationError("عنوان التذكرة مطلوب", {
+        field: "title",
+        fix: "أدخل عنواناً موجزاً يصف المشكلة.",
+      });
+    }
+    if (!b.description || !String(b.description).trim()) {
+      throw new ValidationError("وصف التذكرة مطلوب", {
+        field: "description",
+        fix: "اكتب وصفاً تفصيلياً للمشكلة حتى يقدر الفني على متابعتها.",
+      });
+    }
+
+    // Pre-check: clientId must resolve to an active client in this
+    // company. Without this guard a stale id used to fail with a deep
+    // 23503 whose detail string the classifier generalized to
+    // "مرجع غير صالح" — now we reject early with field="clientId".
+    if (b.clientId) {
+      const [client] = await rawQuery<{ id: number }>(
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [Number(b.clientId), scope.companyId]
+      );
+      if (!client) {
+        throw new ValidationError("العميل المحدد غير موجود", {
+          field: "clientId",
+          fix: "اختر عميلاً من قائمة العملاء الحاليين.",
+        });
+      }
+    }
+
     const ref = `TKT-${Date.now().toString(36).toUpperCase()}`;
 
-    const aiDetectedPriority = detectPriority(`${b.title || ''} ${b.description || ''}`);
+    const aiDetectedPriority = detectPriority(`${title} ${b.description || ''}`);
     const priority = b.priority || aiDetectedPriority;
     const slaResponseHours = priority === 'critical' ? 1 : priority === 'high' ? 2 : priority === 'medium' ? 4 : 8;
     const slaResolutionDeadline = b.slaDeadline || slaDeadlineForPriority(priority).toISOString();
@@ -97,7 +135,7 @@ router.post("/tickets", async (req, res) => {
 
     const { insertId } = await rawExecute(
       `INSERT INTO support_tickets ("companyId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, ref, b.title || b.subject, b.description, b.category, priority, 'open', b.clientId, assigneeId, slaResolutionDeadline]
+      [scope.companyId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1`, [insertId]);
 
@@ -112,7 +150,7 @@ router.post("/tickets", async (req, res) => {
           assignmentId: assigneeAssignment.id,
           type: "support_ticket",
           title: "تذكرة دعم جديدة مسندة إليك",
-          body: `تذكرة ${ref}: ${b.title || 'بدون عنوان'} — الأولوية: ${priority} — SLA رد: ${slaResponseHours}h`,
+          body: `تذكرة ${ref}: ${title} — الأولوية: ${priority} — SLA رد: ${slaResponseHours}h`,
           priority: priority === 'critical' ? 'high' : 'normal',
           refType: "support_tickets",
           refId: insertId,
@@ -127,7 +165,27 @@ router.post("/tickets", async (req, res) => {
       action: "create",
       entity: "support_tickets",
       entityId: insertId,
-      after: { ref, title: b.title, priority, aiDetectedPriority, category: b.category, clientId: b.clientId },
+      after: { ref, title, priority, aiDetectedPriority, category: b.category, clientId: b.clientId },
+    }).catch(console.error);
+
+    // Canonical creation event — mirrors employee.created in HR so the
+    // support inbox audit trail finally sees every new ticket the same
+    // way audit_logs sees it.
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "support.ticket.created",
+      entity: "support_tickets",
+      entityId: insertId,
+      details: JSON.stringify({
+        ref,
+        title,
+        priority,
+        aiDetectedPriority,
+        assigneeId,
+        clientId: b.clientId ?? null,
+      }),
     }).catch(console.error);
 
     res.status(201).json({
@@ -245,7 +303,30 @@ router.post("/tickets/:id/field-visit", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Field visit error:"); }
 });
 
+// State machine for support tickets — the allowed transitions from each
+// state. A status change outside this map is rejected as a ConflictError
+// so the UI can never land the ticket in an illegal mid-state (e.g.
+// "closed → open" or "resolved → pending_customer"). This is the
+// "لا يوجد UPDATE status مباشر" requirement from the architect,
+// implemented as an allowlist guard inline so we don't need to thread
+// applyTransition through a table with custom columns.
+const TICKET_TRANSITIONS: Record<string, readonly string[]> = {
+  open:              ["in_progress", "pending_customer", "field_visit", "resolved", "closed"],
+  in_progress:       ["pending_customer", "field_visit", "resolved", "closed", "open"],
+  pending_customer:  ["in_progress", "field_visit", "resolved", "closed"],
+  field_visit:       ["in_progress", "resolved", "closed"],
+  resolved:          ["closed", "in_progress"],   // reopen via in_progress
+  closed:            [],                           // terminal
+};
+
 router.patch("/tickets/:id", async (req, res) => {
+  // Phase C — Support ticket update audit.
+  //   - state-machine guard on status changes (ConflictError on illegal
+  //     transitions instead of silent UPDATE)
+  //   - emits a separate event for each lifecycle transition (was
+  //     emitting only on resolve) so audit_logs sees every state change
+  //   - emits support.ticket.assigned when assignee changes
+  //   - emits support.ticket.updated on any non-status field change
   try {
     const scope = req.scope!;
     const ticketId = Number(req.params.id);
@@ -254,6 +335,29 @@ router.patch("/tickets/:id", async (req, res) => {
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
 
     const b = req.body;
+
+    // State transition guard — if the caller is changing status, the
+    // requested value must be in the allowlist for the current state.
+    if (b.status !== undefined && b.status !== ticket.status) {
+      const allowed = TICKET_TRANSITIONS[ticket.status] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل التذكرة من "${ticket.status}" إلى "${b.status}"`,
+          {
+            field: "status",
+            fix: allowed.length > 0
+              ? `الحالات المسموحة من الحالة الحالية: ${allowed.join("، ")}`
+              : "هذه التذكرة وصلت لحالة نهائية ولا تقبل تغييراً إضافياً.",
+            meta: {
+              currentStatus: ticket.status,
+              requestedStatus: b.status,
+              allowedNext: allowed,
+            },
+          }
+        );
+      }
+    }
+
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); if (b.status === 'resolved') sets.push(`"resolvedAt"=NOW()`); }
@@ -261,6 +365,45 @@ router.patch("/tickets/:id", async (req, res) => {
     if (b.priority !== undefined) { params.push(b.priority); sets.push(`priority=$${params.length}`); }
     params.push(ticketId);
     await rawExecute(`UPDATE support_tickets SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+
+    // Emit a specific event per lifecycle transition so audit_logs +
+    // downstream listeners (notification engine, rules engine, BI) see
+    // every state change. Was previously only emitting on resolved,
+    // meaning "closed" and "field_visit" and reopens were all invisible.
+    if (b.status !== undefined && b.status !== ticket.status) {
+      const closedStatuses = ["closed"];
+      const action = closedStatuses.includes(b.status)
+        ? "support.ticket.closed"
+        : b.status === "resolved"
+        ? "support.ticket.resolved"
+        : "support.ticket.status_changed";
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action,
+        entity: "support_tickets",
+        entityId: ticketId,
+        before: { status: ticket.status },
+        after: { status: b.status },
+        details: JSON.stringify({ from: ticket.status, to: b.status }),
+      }).catch(console.error);
+    }
+
+    // Assignee change emits its own event so the new agent's inbox sees
+    // it and the audit trail can track re-assignment history.
+    if (b.assigneeId !== undefined && b.assigneeId !== ticket.assigneeId) {
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "support.ticket.assigned",
+        entity: "support_tickets",
+        entityId: ticketId,
+        before: { assigneeId: ticket.assigneeId },
+        after: { assigneeId: b.assigneeId },
+      }).catch(console.error);
+    }
 
     let surveyQueued = false;
     if (b.status === 'resolved') {
@@ -328,9 +471,21 @@ router.delete("/tickets/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id, ref, status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التذكرة غير موجودة");
     await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "support.ticket.deleted",
+      entity: "support_tickets",
+      entityId: id,
+      before: { status: existing.status, ref: existing.ref },
+      after: { status: "deleted" },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف التذكرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
 });
