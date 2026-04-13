@@ -3,7 +3,9 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createJournalEntry } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -148,6 +150,102 @@ router.delete("/contracts/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
 });
 
+// ---------------------------------------------------------------------------
+// Lifecycle endpoints: renew and terminate
+// ---------------------------------------------------------------------------
+
+router.post("/contracts/:id/renew", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { newEndDate, newValue, notes } = req.body ?? {};
+    if (!newEndDate) {
+      validationError(res, "تاريخ نهاية التجديد مطلوب", "newEndDate", "حدد تاريخ النهاية الجديد");
+      return;
+    }
+    const [current] = await rawQuery<any>(
+      `SELECT id, "endDate", value, "renewalCount" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!current) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (new Date(newEndDate) <= new Date(current.endDate)) {
+      validationError(res, "تاريخ نهاية التجديد يجب أن يكون بعد تاريخ النهاية الحالي", "newEndDate", "اختر تاريخاً لاحقاً لتاريخ النهاية الحالي");
+      return;
+    }
+
+    const setExtras: Record<string, any> = {
+      endDate: newEndDate,
+      renewedAt: { raw: "NOW()" },
+      renewalCount: { raw: `COALESCE("renewalCount", 0) + 1` },
+    };
+    if (newValue !== undefined && newValue !== null) {
+      setExtras.value = newValue;
+    }
+    if (notes) {
+      setExtras.notes = notes;
+    }
+
+    const updated = await applyTransition({
+      entity: "legal_contracts",
+      id,
+      scope,
+      action: "legal.contract.renewed",
+      fromStates: ["active", "draft", "expired"],
+      toState: "active",
+      reason: notes ?? null,
+      setExtras,
+      extraWhere: `"deletedAt" IS NULL`,
+      after: {
+        endDate: newEndDate,
+        value: newValue ?? current.value,
+        renewalCount: (current.renewalCount ?? 0) + 1,
+      },
+    });
+    res.json({ ...updated, event: "legal.contract.renewed" });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Renew contract error:");
+  }
+});
+
+router.post("/contracts/:id/terminate", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { reason, effectiveDate } = req.body ?? {};
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      validationError(res, "سبب إنهاء العقد مطلوب", "reason", "اكتب سبب الإنهاء");
+      return;
+    }
+
+    const updated = await applyTransition({
+      entity: "legal_contracts",
+      id,
+      scope,
+      action: "legal.contract.terminated",
+      fromStates: ["active", "draft"],
+      toState: "terminated",
+      reason,
+      setExtras: {
+        terminationDate: effectiveDate ?? { raw: "NOW()" },
+        terminationReason: reason,
+        endDate: effectiveDate ?? { raw: "CURRENT_DATE" },
+      },
+      extraWhere: `"deletedAt" IS NULL`,
+      after: {
+        terminationReason: reason,
+        terminationDate: effectiveDate ?? new Date().toISOString(),
+      },
+    });
+    res.json({ ...updated, event: "legal.contract.terminated" });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Terminate contract error:");
+  }
+});
+
 router.get("/cases", async (req, res) => {
   try {
     const scope = req.scope!;
@@ -165,16 +263,45 @@ router.post("/cases", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    // Always resolve a responsible lawyer: if caller didn't supply one, fall back
+    // to legal_manager → general_manager → owner so the case never lands in
+    // open-with-NULL-assignee limbo.
+    let lawyerName: string | null = b.lawyerName || null;
+    const responsible = await getLegalResponsible(scope.companyId);
+    if (!lawyerName && responsible) lawyerName = responsible.employeeName;
+
     const { insertId } = await rawExecute(
       `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, b.lawyerName, b.status || 'open', b.priority || 'medium', b.description]
+      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description]
     );
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_cases", entityId: insertId,
-      after: { title: b.title, caseType: b.caseType, status: 'open', priority: b.priority || 'medium' },
+      after: { title: b.title, caseType: b.caseType, status: 'open', priority: b.priority || 'medium', lawyerName },
     }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "legal.case.created", entity: "legal_cases", entityId: insertId,
+      details: `قضية جديدة: ${b.title || b.caseNumber || ''}`,
+    }).catch(console.error);
+
+    // Notify the responsible lawyer so the case appears in their inbox.
+    if (responsible) {
+      createNotification({
+        companyId: scope.companyId,
+        assignmentId: responsible.assignmentId,
+        type: "legal_case_assigned",
+        title: "قضية قانونية جديدة مسندة إليك",
+        body: `تم إسناد القضية "${b.title || b.caseNumber || insertId}" إليك — الرجاء المتابعة`,
+        priority: b.priority === 'high' ? 'high' : 'normal',
+        refType: "legal_case",
+        refId: insertId,
+        actionUrl: `/legal/cases/${insertId}`,
+      }).catch(console.error);
+    }
 
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -230,6 +357,33 @@ router.patch("/cases/:id", async (req, res) => {
       before: { status: existing.status }, after: { status: b.status || existing.status },
     }).catch(console.error);
 
+    // Lifecycle events + closure notification so no case ends silently.
+    if (b.status !== undefined && b.status !== existing.status) {
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: `legal.case.${b.status}`, entity: "legal_cases", entityId: id,
+        details: `القضية #${id} انتقلت من ${existing.status} إلى ${b.status}`,
+        before: { status: existing.status }, after: { status: b.status },
+      }).catch(console.error);
+
+      if (b.status === 'closed') {
+        const responsible = await getLegalResponsible(scope.companyId);
+        if (responsible) {
+          createNotification({
+            companyId: scope.companyId,
+            assignmentId: responsible.assignmentId,
+            type: "legal_case_closed",
+            title: "قضية قانونية مغلقة",
+            body: `تم إغلاق القضية "${existing.title || existing.caseNumber || id}"`,
+            priority: "normal",
+            refType: "legal_case",
+            refId: id,
+            actionUrl: `/legal/cases/${id}`,
+          }).catch(console.error);
+        }
+      }
+    }
+
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
     res.json({ ...row, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Update case error:"); }
@@ -244,6 +398,54 @@ router.delete("/cases/:id", async (req, res) => {
     await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف القضية بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete case error:"); }
+});
+
+/** Close a legal case — cancels all outstanding obligations and emits event */
+router.post("/cases/:id/close", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body || {};
+    const [lc] = await rawQuery<any>(
+      `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!lc) { res.status(404).json({ error: "القضية غير موجودة" }); return; }
+    if (lc.status === "closed") {
+      validationError(res, "القضية مغلقة بالفعل", "status", "لا حاجة لإغلاق قضية مغلقة");
+      return;
+    }
+    if (!b.closureReason) {
+      validationError(res, "سبب الإغلاق مطلوب", "closureReason", "أدخل سبب إغلاق القضية");
+      return;
+    }
+
+    await rawExecute(
+      `UPDATE legal_cases SET status='closed', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+
+    // Cancel all open obligations tied to this case
+    await cancelObligation(scope.companyId, "legal_case", id);
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "legal.case.closed",
+      entity: "legal_cases",
+      entityId: id,
+      details: `إغلاق قضية ${lc.title}: ${b.closureReason}`,
+    });
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "close", entity: "legal_cases", entityId: id,
+      before: { status: lc.status },
+      after: { status: "closed", reason: b.closureReason, outcome: b.outcome },
+    }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
+    res.json({ ...updated, event: "legal.case.closed" });
+  } catch (err) { handleRouteError(err, res, "Close case error:"); }
 });
 
 router.get("/cases/:caseId/sessions", async (req, res) => {
@@ -306,6 +508,45 @@ router.post("/cases/:caseId/sessions", async (req, res) => {
       await rawExecute(`UPDATE legal_cases SET status='in_progress', "updatedAt"=NOW() WHERE id=$1`, [caseId]);
     }
 
+    // Register obligation for this hearing
+    try {
+      const sessionDate = new Date(b.sessionDate);
+      if (sessionDate > new Date()) {
+        await registerObligation({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          entityType: "legal_case",
+          entityId: caseId,
+          obligationType: "hearing",
+          title: `جلسة قضائية — ${legalCase.title} (${legalCase.caseNumber || `#${caseId}`})`,
+          dueAt: sessionDate.toISOString(),
+          metadata: { sessionId: insertId, court: legalCase.court, location: b.location, judge: b.judge },
+          dedupeKey: `legal-session-${insertId}`,
+          escalationSteps: [
+            { hoursAfterDue: 0, notifyRole: "lawyer" },
+            { hoursAfterDue: 24, notifyRole: "legal_manager" },
+          ],
+        });
+      }
+      // If a next session date is set, register it too
+      if (b.nextSessionDate) {
+        const nextDate = new Date(b.nextSessionDate);
+        if (nextDate > new Date()) {
+          await registerObligation({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            entityType: "legal_case",
+            entityId: caseId,
+            obligationType: "hearing",
+            title: `جلسة قادمة — ${legalCase.title}`,
+            dueAt: nextDate.toISOString(),
+            metadata: { court: legalCase.court, priorSessionId: insertId },
+            dedupeKey: `legal-case-${caseId}-next-${b.nextSessionDate}`,
+          });
+        }
+      }
+    } catch (obErr) { console.error("Legal session obligation failed:", obErr); }
+
     let invoiceId: number | null = null;
     let invoiceError: string | null = null;
     let journalEntryId: number | null = null;
@@ -326,9 +567,15 @@ router.post("/cases/:caseId/sessions", async (req, res) => {
         invoiceError = "فشل إنشاء فاتورة الأتعاب";
       }
 
-      // Auto journal entry for legal fees
+      // Auto journal entry for legal fees. Pull account codes from
+      // accounting_mappings so orgs with non-default CoA don't silently post
+      // to phantom accounts. Falls back to the historical default codes if
+      // no mapping exists so existing deployments keep working.
       try {
         const totalWithVat = billingAmount + vatAmount;
+        const feeExpenseCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "debit", "5400");
+        const vatReceivableCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "credit", "1400");
+        const apCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee_payable", "credit", "2100");
         journalEntryId = await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
@@ -336,9 +583,9 @@ router.post("/cases/:caseId/sessions", async (req, res) => {
           ref: `LEGAL-FEE-${insertId}`,
           description: `أتعاب قانونية / ${legalCase.title} / جلسة ${b.sessionDate} / ${billingAmount.toLocaleString()} ريال`,
           lines: [
-            { accountCode: "5400", debit: billingAmount, credit: 0 },
-            { accountCode: "1400", debit: vatAmount, credit: 0 },
-            { accountCode: "2100", debit: 0, credit: totalWithVat },
+            { accountCode: feeExpenseCode, debit: billingAmount, credit: 0 },
+            { accountCode: vatReceivableCode, debit: vatAmount, credit: 0 },
+            { accountCode: apCode, debit: 0, credit: totalWithVat },
           ],
         });
       } catch (jErr) { console.error("Legal fee journal entry failed:", jErr); }
@@ -419,6 +666,57 @@ router.post("/cases/:caseId/judgments", async (req, res) => {
     if (b.amount && Number(b.amount) > 0) {
       await rawExecute(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2`, [Number(b.amount), caseId]).catch(console.error);
     }
+
+    // Register appeal deadline obligation (30 days after judgment by default)
+    try {
+      const judgmentDate = new Date(b.judgmentDate);
+      const appealDeadline = new Date(judgmentDate);
+      appealDeadline.setDate(appealDeadline.getDate() + Number(b.appealWindowDays || 30));
+      await registerObligation({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        entityType: "legal_case",
+        entityId: caseId,
+        obligationType: "approval",
+        title: `مهلة الاستئناف — ${lc.title} (${lc.caseNumber || `#${caseId}`})`,
+        dueAt: appealDeadline.toISOString(),
+        metadata: { judgmentId: insertId, judgmentDate: b.judgmentDate, verdict: b.verdict, amount: b.amount },
+        dedupeKey: `legal-judgment-${insertId}-appeal`,
+        escalationSteps: [
+          { hoursAfterDue: 0, notifyRole: "legal_manager" },
+          { hoursAfterDue: 24, notifyRole: "general_manager" },
+        ],
+      });
+
+      // Register payment obligation if judgment has a payment dueDate
+      if (b.dueDate && Number(b.amount) > 0) {
+        await registerObligation({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          entityType: "legal_case",
+          entityId: caseId,
+          obligationType: "payment",
+          title: `تنفيذ حكم — ${lc.title} (${Number(b.amount).toLocaleString()} ريال)`,
+          dueAt: new Date(b.dueDate).toISOString(),
+          metadata: { judgmentId: insertId, amount: b.amount },
+          dedupeKey: `legal-judgment-${insertId}-payment`,
+          escalationSteps: [
+            { hoursAfterDue: 0, notifyRole: "finance_manager" },
+            { hoursAfterDue: 72, notifyRole: "general_manager" },
+          ],
+        });
+      }
+
+      await emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "legal.case.judgment",
+        entity: "legal_judgments",
+        entityId: insertId,
+        details: `حكم بقضية ${lc.title}: ${b.verdict || ""} — ${b.amount || 0} ريال`,
+      });
+    } catch (obErr) { console.error("Legal judgment obligation failed:", obErr); }
+
     const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [insertId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create judgment error:"); }
@@ -439,6 +737,17 @@ router.patch("/cases/:caseId/judgments/:id", async (req, res) => {
     params.push(id); params.push(caseId);
     await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "caseId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [id]);
+
+    // Mark payment obligation met if fully paid
+    if (row && Number(row.paidAmount || 0) >= Number(row.amount || 0) && Number(row.amount || 0) > 0) {
+      await markObligationMet(
+        (req.scope as any).companyId,
+        "legal_case",
+        caseId,
+        "payment"
+      ).catch(console.error);
+    }
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update judgment error:"); }
 });

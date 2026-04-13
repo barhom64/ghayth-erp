@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatNumber } from "@/lib/formatters";
 import {
@@ -61,10 +61,21 @@ function SlaDelaysTab({ from, to, departmentId }: { from: string; to: string; de
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
 
-  const { data } = useApiQuery<any>(["bi-sla-delays", from, to, departmentId], `/bi/operations/sla-delays${qs}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-sla-delays", from, to, departmentId], `/bi/operations/sla-delays${qs}`);
   const rows = data?.data || [];
   const chartRef = useRef<HTMLDivElement>(null);
   const exportChart = useChartExport();
+
+  const slaColumns: DataTableColumn<any>[] = [
+    { key: "department", header: "القسم", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.department}</span> },
+    { key: "total", header: "الإجمالي", sortable: true, render: (r: any) => formatNumber(Number(r.total)) },
+    { key: "delayed", header: "المتأخر", sortable: true, render: (r: any) => <span className="text-red-600 font-bold">{formatNumber(Number(r.delayed))}</span> },
+    { key: "delayPct", header: "نسبة التأخر", sortable: true, render: (r: any) => (
+      <Badge variant={Number(r.delayPct) > 20 ? "destructive" : "secondary"}>
+        {r.delayPct}%
+      </Badge>
+    ) },
+  ];
 
   return (
     <div className="space-y-4">
@@ -94,30 +105,17 @@ function SlaDelaysTab({ from, to, departmentId }: { from: string; to: string; de
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>القسم</TableHead>
-                    <TableHead>الإجمالي</TableHead>
-                    <TableHead>المتأخر</TableHead>
-                    <TableHead>نسبة التأخر</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((r: any, i: number) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{r.department}</TableCell>
-                      <TableCell>{formatNumber(Number(r.total))}</TableCell>
-                      <TableCell className="text-red-600 font-bold">{formatNumber(Number(r.delayed))}</TableCell>
-                      <TableCell>
-                        <Badge variant={Number(r.delayPct) > 20 ? "destructive" : "secondary"}>
-                          {r.delayPct}%
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <DataTable
+                columns={slaColumns}
+                data={rows}
+                isLoading={isLoading}
+                isError={isError}
+                error={error}
+                onRetry={refetch}
+                rowKey={(r: any, i: number) => r.department ?? i}
+                pageSize={0}
+                noToolbar
+              />
             </div>
           )}
         </CardContent>
@@ -132,8 +130,17 @@ function RejectionRateTab({ from, to }: { from: string; to: string }) {
   if (to) params.set("to", to);
   const qs = params.toString() ? `?${params.toString()}` : "";
 
-  const { data } = useApiQuery<any>(["bi-rejection-rate", from, to], `/bi/operations/rejection-rate${qs}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-rejection-rate", from, to], `/bi/operations/rejection-rate${qs}`);
   const rows = data?.data || [];
+
+  const rejectionColumns: DataTableColumn<any>[] = [
+    { key: "type", header: "النوع", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.type}</span> },
+    { key: "total", header: "الإجمالي", sortable: true, render: (r: any) => formatNumber(Number(r.total)) },
+    { key: "rejected", header: "المرفوض", sortable: true, render: (r: any) => <span className="text-red-600">{formatNumber(Number(r.rejected))}</span> },
+    { key: "rejectionPct", header: "نسبة الرفض", sortable: true, render: (r: any) => (
+      <Badge variant={Number(r.rejectionPct) > 15 ? "destructive" : "secondary"}>{r.rejectionPct}%</Badge>
+    ) },
+  ];
 
   return (
     <Card className="border-0 shadow-sm">
@@ -153,26 +160,17 @@ function RejectionRateTab({ from, to }: { from: string; to: string }) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>النوع</TableHead>
-                  <TableHead>الإجمالي</TableHead>
-                  <TableHead>المرفوض</TableHead>
-                  <TableHead>نسبة الرفض</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r: any, i: number) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{r.type}</TableCell>
-                    <TableCell>{formatNumber(Number(r.total))}</TableCell>
-                    <TableCell className="text-red-600">{formatNumber(Number(r.rejected))}</TableCell>
-                    <TableCell><Badge variant={Number(r.rejectionPct) > 15 ? "destructive" : "secondary"}>{r.rejectionPct}%</Badge></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              columns={rejectionColumns}
+              data={rows}
+              isLoading={isLoading}
+              isError={isError}
+              error={error}
+              onRetry={refetch}
+              rowKey={(r: any, i: number) => r.type ?? i}
+              pageSize={0}
+              noToolbar
+            />
           </div>
         )}
       </CardContent>
@@ -186,9 +184,21 @@ function BottleneckTab({ from, to, departmentId }: { from: string; to: string; d
   if (to) params.set("to", to);
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
-  const { data } = useApiQuery<any>(["bi-bottleneck", from, to, departmentId], `/bi/operations/bottleneck${qs}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-bottleneck", from, to, departmentId], `/bi/operations/bottleneck${qs}`);
   const departmentDelay = data?.departmentDelay || [];
   const approvalBottleneck = data?.approvalBottleneck || [];
+
+  const departmentDelayColumns: DataTableColumn<any>[] = [
+    { key: "department", header: "القسم", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.department}</span> },
+    { key: "avgHours", header: "متوسط الساعات", sortable: true, render: (r: any) => `${r.avgHours} ساعة` },
+    { key: "overdueCount", header: "المتأخر", sortable: true, render: (r: any) => <span className="text-red-600 font-bold">{formatNumber(Number(r.overdueCount))}</span> },
+  ];
+
+  const approvalBottleneckColumns: DataTableColumn<any>[] = [
+    { key: "department", header: "القسم", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.department}</span> },
+    { key: "pendingApprovals", header: "الموافقات المعلقة", sortable: true, render: (r: any) => <span className="text-amber-600 font-bold">{formatNumber(Number(r.pendingApprovals))}</span> },
+    { key: "avgWaitHours", header: "متوسط وقت الانتظار", sortable: true, render: (r: any) => `${r.avgWaitHours} ساعة` },
+  ];
 
   return (
     <div className="space-y-6">
@@ -211,24 +221,17 @@ function BottleneckTab({ from, to, departmentId }: { from: string; to: string; d
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>القسم</TableHead>
-                    <TableHead>متوسط الساعات</TableHead>
-                    <TableHead>المتأخر</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {departmentDelay.map((r: any, i: number) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{r.department}</TableCell>
-                      <TableCell>{r.avgHours} ساعة</TableCell>
-                      <TableCell className="text-red-600 font-bold">{formatNumber(Number(r.overdueCount))}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <DataTable
+                columns={departmentDelayColumns}
+                data={departmentDelay}
+                isLoading={isLoading}
+                isError={isError}
+                error={error}
+                onRetry={refetch}
+                rowKey={(r: any, i: number) => r.department ?? i}
+                pageSize={0}
+                noToolbar
+              />
             </div>
           )}
         </CardContent>
@@ -238,24 +241,17 @@ function BottleneckTab({ from, to, departmentId }: { from: string; to: string; d
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="w-5 h-5 text-blue-500" /> اختناقات الموافقات</CardTitle></CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>القسم</TableHead>
-                  <TableHead>الموافقات المعلقة</TableHead>
-                  <TableHead>متوسط وقت الانتظار</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {approvalBottleneck.map((r: any, i: number) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{r.department}</TableCell>
-                    <TableCell className="text-amber-600 font-bold">{formatNumber(Number(r.pendingApprovals))}</TableCell>
-                    <TableCell>{r.avgWaitHours} ساعة</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              columns={approvalBottleneckColumns}
+              data={approvalBottleneck}
+              isLoading={isLoading}
+              isError={isError}
+              error={error}
+              onRetry={refetch}
+              rowKey={(r: any, i: number) => r.department ?? i}
+              pageSize={0}
+              noToolbar
+            />
           </CardContent>
         </Card>
       )}
@@ -270,8 +266,26 @@ function ProductivityTab({ from, to, departmentId }: { from: string; to: string;
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
 
-  const { data } = useApiQuery<any>(["bi-productivity", from, to, departmentId], `/bi/operations/employee-productivity${qs}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-productivity", from, to, departmentId], `/bi/operations/employee-productivity${qs}`);
   const rows = data?.data || [];
+
+  const productivityColumns: DataTableColumn<any>[] = [
+    { key: "name", header: "الموظف", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.name}</span> },
+    { key: "department", header: "القسم", sortable: true, searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.department}</span> },
+    { key: "completedTasks", header: "مكتملة", sortable: true, render: (r: any) => <span className="text-green-600 font-bold">{formatNumber(Number(r.completedTasks))}</span> },
+    { key: "totalTasks", header: "الإجمالي", sortable: true, render: (r: any) => formatNumber(Number(r.totalTasks)) },
+    { key: "completionRate", header: "نسبة الإنجاز", sortable: true, render: (r: any) => (
+      <Badge variant={Number(r.completionRate) >= 80 ? "default" : Number(r.completionRate) >= 50 ? "secondary" : "destructive"}>
+        {r.completionRate}%
+      </Badge>
+    ) },
+    { key: "workedHours", header: "ساعات العمل", sortable: true, render: (r: any) => Number(r.workedHours) > 0 ? `${r.workedHours} س` : "—" },
+    { key: "productivityRate", header: "الإنتاجية", sortable: true, render: (r: any) => (
+      <Badge variant={Number(r.productivityRate) > 0 ? "default" : "secondary"}>
+        {Number(r.productivityRate) > 0 ? `${r.productivityRate} مهمة/ساعة` : "—"}
+      </Badge>
+    ) },
+  ];
 
   return (
     <Card className="border-0 shadow-sm">
@@ -294,40 +308,16 @@ function ProductivityTab({ from, to, departmentId }: { from: string; to: string;
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>الموظف</TableHead>
-                  <TableHead>القسم</TableHead>
-                  <TableHead>مكتملة</TableHead>
-                  <TableHead>الإجمالي</TableHead>
-                  <TableHead>نسبة الإنجاز</TableHead>
-                  <TableHead>ساعات العمل</TableHead>
-                  <TableHead>الإنتاجية</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r: any, i: number) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.department}</TableCell>
-                    <TableCell className="text-green-600 font-bold">{formatNumber(Number(r.completedTasks))}</TableCell>
-                    <TableCell>{formatNumber(Number(r.totalTasks))}</TableCell>
-                    <TableCell>
-                      <Badge variant={Number(r.completionRate) >= 80 ? "default" : Number(r.completionRate) >= 50 ? "secondary" : "destructive"}>
-                        {r.completionRate}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{Number(r.workedHours) > 0 ? `${r.workedHours} س` : "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant={Number(r.productivityRate) > 0 ? "default" : "secondary"}>
-                        {Number(r.productivityRate) > 0 ? `${r.productivityRate} مهمة/ساعة` : "—"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              columns={productivityColumns}
+              data={rows}
+              isLoading={isLoading}
+              isError={isError}
+              error={error}
+              onRetry={refetch}
+              rowKey={(r: any, i: number) => r.name ?? i}
+              noToolbar
+            />
           </div>
         )}
       </CardContent>
@@ -341,8 +331,14 @@ function CompletionTimeTab({ from, to, departmentId }: { from: string; to: strin
   if (to) params.set("to", to);
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
-  const { data } = useApiQuery<any>(["bi-avg-completion", from, to, departmentId], `/bi/operations/avg-completion-time${qs}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-avg-completion", from, to, departmentId], `/bi/operations/avg-completion-time${qs}`);
   const rows = data?.data || [];
+
+  const completionColumns: DataTableColumn<any>[] = [
+    { key: "type", header: "نوع الطلب", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.type}</span> },
+    { key: "avgHours", header: "متوسط الإنجاز (ساعة)", sortable: true, render: (r: any) => `${r.avgHours} ساعة` },
+    { key: "total", header: "العدد", sortable: true, render: (r: any) => formatNumber(Number(r.total)) },
+  ];
 
   return (
     <Card className="border-0 shadow-sm">
@@ -363,24 +359,17 @@ function CompletionTimeTab({ from, to, departmentId }: { from: string; to: strin
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>نوع الطلب</TableHead>
-                  <TableHead>متوسط الإنجاز (ساعة)</TableHead>
-                  <TableHead>العدد</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r: any, i: number) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{r.type}</TableCell>
-                    <TableCell>{r.avgHours} ساعة</TableCell>
-                    <TableCell>{formatNumber(Number(r.total))}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              columns={completionColumns}
+              data={rows}
+              isLoading={isLoading}
+              isError={isError}
+              error={error}
+              onRetry={refetch}
+              rowKey={(r: any, i: number) => r.type ?? i}
+              pageSize={0}
+              noToolbar
+            />
           </div>
         )}
       </CardContent>
@@ -506,7 +495,7 @@ export default function BiOperationsPage() {
 
       <Tabs defaultValue="sla" dir="rtl">
         <TabsList className="grid w-full grid-cols-6 print:hidden">
-          <TabsTrigger value="sla">تأخر SLA</TabsTrigger>
+          <TabsTrigger value="sla">تأخر مستوى الخدمة</TabsTrigger>
           <TabsTrigger value="rejection">نسبة الرفض</TabsTrigger>
           <TabsTrigger value="bottleneck">الاختناقات</TabsTrigger>
           <TabsTrigger value="productivity">الإنتاجية</TabsTrigger>

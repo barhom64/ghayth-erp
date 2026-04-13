@@ -157,7 +157,7 @@ export default function Evaluation360UpwardPage() {
           </Select>
           {managerCandidates.length === 0 && (
             <p className="text-xs text-amber-600 mt-1">
-              يجب أن يُضيف HR مشرفاً بدور "مدير" ضمن المقيِّمين قبل إرسال تقييم عكسي
+              يجب أن يُضيف قسم الموارد البشرية مشرفاً بدور "مدير" ضمن المقيِّمين قبل إرسال تقييم عكسي
             </p>
           )}
         </CardContent>

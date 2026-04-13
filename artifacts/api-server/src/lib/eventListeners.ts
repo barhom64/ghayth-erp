@@ -175,6 +175,14 @@ export function registerEventListeners() {
     }
   });
 
+  // Return-to-work closure (emitted by the daily leave_return_to_work_closure
+  // cron when an approved leave's endDate has passed). Without this subscriber
+  // the completion transition would leave no row in audit_logs.
+  eventBus.on("leave.completed", async (payload) => {
+    await logEvent("leave.completed", payload);
+    await logAudit("leave.completed", { ...payload, action: "complete" });
+  });
+
   eventBus.on("attendance.checkin", async (payload) => {
     await logEvent("attendance.checkin", payload);
     await logAudit("attendance.checkin", { ...payload, action: "create" });

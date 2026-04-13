@@ -28,7 +28,7 @@ export default function IntercompanyConsolidationCreatePage() {
         </Link>
         <div>
           <h2 className="text-2xl font-bold">القوائم المالية الموحدة</h2>
-          <p className="text-sm text-gray-500 mt-1">عرض القوائم المالية الموحدة (Consolidation) وحذف المعاملات البينية</p>
+          <p className="text-sm text-gray-500 mt-1">عرض القوائم المالية الموحدة وحذف المعاملات البينية</p>
         </div>
       </div>
 
@@ -57,7 +57,7 @@ export default function IntercompanyConsolidationCreatePage() {
               </div>
 
               <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm">
-                <span className="font-semibold">مطلوب حذفه (Elimination): </span>
+                <span className="font-semibold">مطلوب حذفه من التوحيد: </span>
                 <span className="font-mono font-bold text-yellow-800">{formatCurrency(consolidation.intercompanyElimination ?? 0)}</span>
                 <span className="text-yellow-700 mr-2">— مجموع المعاملات البينية التي تُحذف عند التوحيد</span>
               </div>

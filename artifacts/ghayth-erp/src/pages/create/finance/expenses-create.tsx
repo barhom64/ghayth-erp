@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { CostCenterSelect, ProjectSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 
 const OPERATION_TYPES = [
@@ -185,6 +186,7 @@ export default function ExpensesCreate() {
     sourceAccountCode: "",
     amount: "",
     description: "",
+    date: new Date().toISOString().split("T")[0],
     period: new Date().toISOString().slice(0, 7),
     operationType: "expense",
     expenseType: "operational",
@@ -263,6 +265,7 @@ export default function ExpensesCreate() {
         sourceAccountCode: form.sourceAccountCode || undefined,
         amount: Number(form.amount),
         description: form.description,
+        date: form.date || undefined,
         period: form.period || undefined,
         operationType: form.operationType,
         expenseType: form.expenseType,
@@ -325,7 +328,10 @@ export default function ExpensesCreate() {
       )}
       <div data-form>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <CreationDateField />
+          <div>
+            <Label>التاريخ <span className="text-red-500">*</span></Label>
+            <Input className="mt-1" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+          </div>
           <div>
             <Label>الفترة المالية</Label>
             <Input className="mt-1" type="month" value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} />
@@ -445,29 +451,16 @@ export default function ExpensesCreate() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>مركز التكلفة <span className="text-red-500">*</span></Label>
-              <Select value={form.costCenter || "_none"} onValueChange={(v) => setForm({ ...form, costCenter: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">اختر مركز التكلفة</SelectItem>
-                  {branches.map((b: any) => <SelectItem key={`br-${b.id}`} value={`فرع-${b.name}`}>فرع: {b.name}</SelectItem>)}
-                  {departments.map((d: any) => <SelectItem key={`dp-${d.id}`} value={`قسم-${d.name}`}>قسم: {d.name}</SelectItem>)}
-                  {projects.map((p: any) => <SelectItem key={`pj-${p.id}`} value={`مشروع-${p.name || p.title}`}>مشروع: {p.name || p.title}</SelectItem>)}
-                  <SelectItem value="عام">عام</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>المشروع المرتبط</Label>
-              <Select value={form.projectId || "_none"} onValueChange={(v) => setForm({ ...form, projectId: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">بدون مشروع</SelectItem>
-                  {projects.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.name || p.title || `مشروع #${p.id}`}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <CostCenterSelect
+              value={form.costCenter}
+              onChange={(v) => setForm({ ...form, costCenter: v })}
+              required
+            />
+            <ProjectSelect
+              value={form.projectId}
+              onChange={(v) => setForm({ ...form, projectId: v })}
+              label="المشروع المرتبط"
+            />
             <div>
               <Label>نوع الجهة المرتبطة</Label>
               <Select value={form.relatedEntityType || "_none"} onValueChange={(v) => setForm({ ...form, relatedEntityType: v === "_none" ? "" : v })}>
@@ -729,7 +722,7 @@ export default function ExpensesCreate() {
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
               <span className="text-green-600">🏛</span>
-              ربط مع هيئة الزكاة والضريبة والجمارك (ZATCA)
+              ربط مع هيئة الزكاة والضريبة والجمارك
             </h3>
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <div
@@ -771,7 +764,7 @@ export default function ExpensesCreate() {
               )}
               <div className="md:col-span-3 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-md">
                 <span className="text-green-600 text-xs mt-0.5">✓</span>
-                <p className="text-xs text-green-700">سيتم ربط هذا المصروف مع منظومة الفوترة الإلكترونية ZATCA وتوليد كود QR متوافق عند الإرسال للهيئة.</p>
+                <p className="text-xs text-green-700">سيتم ربط هذا المصروف مع منظومة الفوترة الإلكترونية لهيئة الزكاة والضريبة وتوليد رمز استجابة سريعة متوافق عند الإرسال للهيئة.</p>
               </div>
             </div>
           )}

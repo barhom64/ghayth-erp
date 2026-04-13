@@ -93,7 +93,7 @@ const ENTITY_LABELS: Record<string, string> = {
   warehouse_product: "منتج مخزون",
   warehouse_movement: "حركة مخزون",
   crm_opportunity: "فرصة",
-  crm_activity: "نشاط CRM",
+  crm_activity: "نشاط علاقات العملاء",
   company: "شركة",
   branch: "فرع",
   communication: "اتصال",

@@ -5,9 +5,248 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { eventBus } from "../lib/eventBus.js";
+import {
+  createJournalEntry,
+  checkFinancialPeriodOpen,
+  getAccountCodeFromMapping,
+} from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Weighted-average cost maintenance helper.
+// The canonical weighted-average cost for a product is stored on
+// warehouse_products.costPrice (and mirrored in lastWaCost). There is no
+// separate avgCost column. See `POST /movements` for the in-route logic that
+// already maintains this; this helper exists so callers outside the movement
+// route (e.g. inventory-count approval, transfers-in from other modules) can
+// keep the weighted-average in sync without duplicating math.
+// ─────────────────────────────────────────────────────────────────────────────
+async function updateWeightedAverageCost(
+  productId: number,
+  qty: number,
+  unitCost: number,
+  direction: "in" | "out"
+): Promise<void> {
+  try {
+    const [product] = await rawQuery<any>(
+      `SELECT "currentStock", "costPrice" FROM warehouse_products WHERE id=$1`,
+      [productId]
+    );
+    if (!product) return;
+    const prevQty = Math.max(0, Number(product.currentStock ?? 0));
+    const prevCost = Number(product.costPrice ?? 0);
+    const movQty = Math.abs(Number(qty));
+    const movCost = Number(unitCost ?? 0);
+    if (direction === "in") {
+      const newTotalValue = prevQty * prevCost + movQty * movCost;
+      const newTotalQty = prevQty + movQty;
+      const newWa =
+        newTotalQty > 0
+          ? Math.round((newTotalValue / newTotalQty) * 10000) / 10000
+          : movCost;
+      await rawExecute(
+        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
+        [newWa, productId]
+      );
+    } else {
+      // "out": weighted-average stays the same; just refresh lastWaCost snapshot
+      await rawExecute(
+        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
+        [productId]
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[warehouse] updateWeightedAverageCost failed for product ${productId}:`,
+      err
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GL posting helper for stock movements. Fire-and-forget from the caller:
+// the underlying stock movement MUST NOT be rolled back if GL posting fails
+// (matches the pattern used in hr/fleet/properties modules). Respects
+// financial period close — if the period is closed the GL posting is
+// skipped and a warning is appended to the movement's notes column.
+// ─────────────────────────────────────────────────────────────────────────────
+type InventoryGlTrigger =
+  | "receipt"
+  | "issue"
+  | "transfer"
+  | "variance_in"
+  | "variance_out";
+
+async function postInventoryMovementGl(params: {
+  companyId: number;
+  branchId: number;
+  createdBy: number;
+  movementId: number;
+  productId: number;
+  productName?: string;
+  trigger: InventoryGlTrigger;
+  quantity: number;
+  unitCost: number;
+  reference?: string | null;
+  date?: string;
+}): Promise<number | null> {
+  try {
+    const totalValue =
+      Math.round(Math.abs(params.quantity) * Math.abs(params.unitCost) * 100) /
+      100;
+    // Transfers are internal — no GL impact.
+    if (params.trigger === "transfer") return null;
+    if (totalValue <= 0) {
+      // Nothing to post (e.g. receipt with zero cost)
+      return null;
+    }
+
+    const today = (params.date ?? new Date().toISOString().slice(0, 10))
+      .toString()
+      .slice(0, 10);
+    const period = await checkFinancialPeriodOpen(params.companyId, today);
+    if (!period.open) {
+      try {
+        await rawExecute(
+          `UPDATE warehouse_movements
+             SET notes = COALESCE(notes,'') || $1
+           WHERE id = $2`,
+          [
+            ` [GL skipped: الفترة المالية "${period.periodName ?? ""}" مغلقة]`,
+            params.movementId,
+          ]
+        );
+      } catch (noteErr) {
+        console.warn(
+          "[warehouse-gl] failed to append closed-period note:",
+          noteErr
+        );
+      }
+      return null;
+    }
+
+    const ref =
+      params.reference && params.reference.length > 0
+        ? `${params.reference}-JE-${params.movementId}`
+        : `INV-MV-${params.movementId}`;
+    const productLabel = params.productName ? ` — ${params.productName}` : "";
+
+    let lines: {
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+    }[] = [];
+    let description = "";
+    let operationType: string | undefined;
+
+    if (params.trigger === "receipt") {
+      // DR Inventory 1300 / CR GRNI 2115 (was 2110 in spec but 2110 is taken)
+      const drCode = await getAccountCodeFromMapping(
+        params.companyId,
+        "inventory_receipt",
+        "debit",
+        "1300"
+      );
+      const crCode = await getAccountCodeFromMapping(
+        params.companyId,
+        "inventory_receipt",
+        "credit",
+        "2115"
+      );
+      description = `استلام مخزون${productLabel} — ${totalValue.toFixed(2)} ريال`;
+      lines = [
+        { accountCode: drCode, debit: totalValue, credit: 0 },
+        { accountCode: crCode, debit: 0, credit: totalValue },
+      ];
+      operationType = "inventory_receipt";
+    } else if (params.trigger === "issue") {
+      // DR COGS 5110 / CR Inventory 1300
+      const drCode = await getAccountCodeFromMapping(
+        params.companyId,
+        "inventory_issue_cogs",
+        "debit",
+        "5110"
+      );
+      const crCode = await getAccountCodeFromMapping(
+        params.companyId,
+        "inventory_issue_cogs",
+        "credit",
+        "1300"
+      );
+      description = `صرف مخزون${productLabel} — تكلفة ${totalValue.toFixed(2)} ريال`;
+      lines = [
+        { accountCode: drCode, debit: totalValue, credit: 0 },
+        { accountCode: crCode, debit: 0, credit: totalValue },
+      ];
+      operationType = "inventory_issue_cogs";
+    } else if (params.trigger === "variance_in") {
+      // Variance surplus: DR Inventory / CR Variance (gain side)
+      const drCode = await getAccountCodeFromMapping(
+        params.companyId,
+        "inventory_variance",
+        "debit",
+        "1300"
+      );
+      const crCode = await getAccountCodeFromMapping(
+        params.companyId,
+        "inventory_variance",
+        "credit",
+        "5150"
+      );
+      description = `فائض جرد${productLabel} — ${totalValue.toFixed(2)} ريال`;
+      lines = [
+        { accountCode: drCode, debit: totalValue, credit: 0 },
+        { accountCode: crCode, debit: 0, credit: totalValue },
+      ];
+      operationType = "inventory_variance";
+    } else if (params.trigger === "variance_out") {
+      // Variance shortage: DR Variance (expense) / CR Inventory
+      const drCode = await getAccountCodeFromMapping(
+        params.companyId,
+        "inventory_variance",
+        "debit",
+        "5150"
+      );
+      const crCode = await getAccountCodeFromMapping(
+        params.companyId,
+        "inventory_variance",
+        "credit",
+        "1300"
+      );
+      description = `عجز جرد${productLabel} — ${totalValue.toFixed(2)} ريال`;
+      lines = [
+        { accountCode: drCode, debit: totalValue, credit: 0 },
+        { accountCode: crCode, debit: 0, credit: totalValue },
+      ];
+      operationType = "inventory_variance";
+    }
+
+    if (lines.length === 0) return null;
+
+    const journalId = await createJournalEntry({
+      companyId: params.companyId,
+      branchId: params.branchId,
+      createdBy: params.createdBy,
+      ref,
+      description,
+      sourceType: "warehouse_movement",
+      sourceId: params.movementId,
+      operationType,
+      lines,
+    });
+    return journalId;
+  } catch (glErr) {
+    console.error(
+      `[warehouse-gl] journal entry failed for movement ${params.movementId}:`,
+      glErr
+    );
+    return null;
+  }
+}
 
 router.get("/products", requirePermission("warehouse:read"), async (req, res) => {
   try {
@@ -118,6 +357,8 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
     let unitCost = b.unitCost || 0;
     let insertId = 0;
     let updatedProduct: any = null;
+    let preMovementAvgCost = 0;
+    let productRef: any = null;
 
     await withTransaction(async (client) => {
       const prodRes = await client.query(
@@ -126,6 +367,13 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       );
       const product = prodRes.rows[0];
       if (!product) throw Object.assign(new Error("المنتج غير موجود"), { status: 404 });
+      productRef = product;
+      // Snapshot weighted-average cost BEFORE the movement runs so that
+      // "out"/issue postings use the pre-movement WA rather than the
+      // freshly-recomputed figure.
+      const preCost = Number(product.costPrice ?? 0);
+      const preLastWa = Number(product.lastWaCost ?? 0);
+      preMovementAvgCost = preCost > 0 ? preCost : preLastWa;
 
       if (b.type === 'out' || b.type === 'transfer_out') {
         const batchRes = await client.query(
@@ -202,7 +450,96 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       updatedProduct = updatedProdRes.rows[0] ?? null;
     });
 
+    // ─── GL POSTING ────────────────────────────────────────────────────────
+    // Wrapped in try/catch inside postInventoryMovementGl — a failing journal
+    // entry must NEVER roll back the already-committed stock movement. This
+    // mirrors the pattern used by fleet/properties/hr.
+    let journalEntryId: number | null = null;
+    try {
+      const mvType = String(b.type || "");
+      const qty = Math.abs(Number(b.quantity));
+      const productName = productRef?.name ?? undefined;
+      const productCost = productRef ? Number(productRef.costPrice ?? 0) : 0;
+      if (mvType === "in" || mvType === "return") {
+        const unitCostIn = Number(b.unitCost ?? 0);
+        if (unitCostIn > 0) {
+          journalEntryId = await postInventoryMovementGl({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            createdBy: (scope as any).activeAssignmentId ?? scope.userId,
+            movementId: insertId,
+            productId: Number(b.productId),
+            productName,
+            trigger: "receipt",
+            quantity: qty,
+            unitCost: unitCostIn,
+            reference: b.reference ?? null,
+          });
+        } else {
+          console.warn(
+            `[warehouse-gl] receipt movement ${insertId} has no unitCost — GL posting skipped`
+          );
+        }
+      } else if (mvType === "out") {
+        // Use pre-movement weighted-average cost; fall back to product.cost
+        // (costPrice) if avg is missing.
+        let issueCost = preMovementAvgCost;
+        if (!(issueCost > 0)) {
+          issueCost = productCost;
+          if (issueCost > 0) {
+            console.warn(
+              `[warehouse-gl] issue movement ${insertId}: using product.costPrice fallback (${issueCost}) — weighted-average unavailable`
+            );
+          }
+        }
+        if (issueCost > 0) {
+          journalEntryId = await postInventoryMovementGl({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            createdBy: (scope as any).activeAssignmentId ?? scope.userId,
+            movementId: insertId,
+            productId: Number(b.productId),
+            productName,
+            trigger: "issue",
+            quantity: qty,
+            unitCost: issueCost,
+            reference: b.reference ?? null,
+          });
+        } else {
+          console.warn(
+            `[warehouse-gl] issue movement ${insertId} has no unit cost (WA or fallback) — GL posting skipped`
+          );
+        }
+      }
+      // transfer_in / transfer_out: internal movement, no GL impact
+    } catch (glOuterErr) {
+      console.error(
+        `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`,
+        glOuterErr
+      );
+    }
+
     const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1`, [insertId]);
+    if (row) (row as any).journalEntryId = journalEntryId;
+
+    // Bus emission — closes the dead listener in eventListeners.ts:261 so the
+    // rules engine + audit trail see every stock movement, not just products.
+    eventBus.emit("warehouse.movement.created", {
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "warehouse_movements",
+      entityId: insertId,
+      action: "create",
+      after: {
+        productId: row?.productId,
+        type: row?.type,
+        quantity: row?.quantity,
+        unitCost: row?.unitCost,
+        reference: row?.reference,
+      },
+    });
+
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
       try {
@@ -555,17 +892,53 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
       if (variance !== 0) {
         const movType = variance > 0 ? 'in' : 'out';
         const qty = Math.abs(variance);
+        // Snapshot avg cost BEFORE applying the adjustment so the GL
+        // entry uses the pre-adjustment weighted-average.
+        const [prodBefore] = await rawQuery<any>(
+          `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1`,
+          [item.productId]
+        );
+        const preCost = prodBefore
+          ? Number(prodBefore.costPrice ?? 0) || Number(prodBefore.lastWaCost ?? 0)
+          : 0;
         await rawExecute(
           `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2`,
           [variance, item.productId]
         );
-        await rawExecute(
+        const movRes = await rawQuery<any>(
           `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy")
-           VALUES ($1,$2,$3,$4,0,'INV-COUNT-' || $5,$6,$7)`,
-          [scope.companyId, item.productId, movType, qty, countId,
+           VALUES ($1,$2,$3,$4,$5,'INV-COUNT-' || $6,$7,$8) RETURNING id`,
+          [scope.companyId, item.productId, movType, qty, preCost, countId,
            variance > 0 ? `فائض جرد — ${qty} وحدة` : `عجز جرد — ${qty} وحدة`,
            scope.userId]
         );
+        const movementId = movRes[0]?.id;
+        // GL posting for variance (non-blocking).
+        if (preCost > 0 && movementId) {
+          try {
+            await postInventoryMovementGl({
+              companyId: scope.companyId,
+              branchId: scope.branchId,
+              createdBy: (scope as any).activeAssignmentId ?? scope.userId,
+              movementId,
+              productId: Number(item.productId),
+              productName: prodBefore?.name ?? undefined,
+              trigger: variance > 0 ? "variance_in" : "variance_out",
+              quantity: qty,
+              unitCost: preCost,
+              reference: `INV-COUNT-${countId}`,
+            });
+          } catch (glErr) {
+            console.error(
+              `[warehouse-gl] inventory count variance GL failed for count ${countId}, product ${item.productId}:`,
+              glErr
+            );
+          }
+        } else if (preCost <= 0) {
+          console.warn(
+            `[warehouse-gl] inventory count variance for product ${item.productId}: no unit cost — GL posting skipped`
+          );
+        }
       }
     }
 

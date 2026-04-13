@@ -307,7 +307,7 @@ export default function DocumentsTemplates() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">محتوى القالب (HTML)</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">محتوى القالب</CardTitle></CardHeader>
               <CardContent>
                 <Textarea
                   className="mt-1 font-mono text-sm min-h-[300px]"

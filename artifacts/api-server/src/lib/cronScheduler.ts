@@ -8,13 +8,19 @@ import {
   getManagerAssignmentId,
   getDirectorAssignmentId,
   getCfoAssignmentId,
+  getLegalResponsible,
   haversineDistance,
+  emitEvent,
+  createAuditLog,
 } from "./businessHelpers.js";
 import { broadcastAlert } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
 import { eventBus } from "./eventBus.js";
+import { decryptSecret } from "./secrets.js";
+import { processDueRecurringJournals } from "../routes/finance-recurring.js";
+import { scanObligations } from "./obligationsEngine.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -269,11 +275,22 @@ async function fleetStatusCheck(): Promise<string> {
         `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — تم تعليق حالتها`,
         "warning", "fleet_vehicle", v.id
       );
+      // Persist the preventive-due event in event_logs so audit trail shows
+      // the transition, then trigger the in-memory listener that auto-creates
+      // the maintenance work order + assigns the fleet manager.
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "fleet.preventive.due", entity: "fleet_vehicles", entityId: Number(v.id),
+          details: `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — حالة needs_service`,
+        });
+      } catch {}
       eventBus.emit("fleet.vehicle.breakdown", {
         companyId: company.id,
         entityId: v.id,
         plateNumber: v.plateNumber,
         description: `صيانة متأخرة — تجاوزت موعد الصيانة المحدد`,
+        source: "preventive_due",
       });
       actions++;
     }
@@ -406,6 +423,25 @@ async function leaveEscalationCheck(): Promise<string> {
           }).catch(console.error);
         }
       }
+      // Emit the canonical leave.approved event so downstream listeners
+      // (audit trail, calendar, reporting) see auto-approvals the same way
+      // they see manual approvals. Without this, cron-approved leaves were
+      // invisible to every listener that keyed on leave.approved.
+      emitEvent({
+        companyId: stage.companyId,
+        userId: null,
+        action: "leave.approved",
+        entity: "hr_leave_requests",
+        entityId: stage.leaveRequestId,
+        details: JSON.stringify({
+          autoApproved: true,
+          reason: "timeout",
+          days: stage.days,
+          startDate: stage.startDate,
+          endDate: stage.endDate,
+          leaveTypeId: stage.leaveTypeId,
+        }),
+      }).catch(console.error);
       autoApprovals++;
     } else if (hoursSinceCreation >= 24 && !stage.escalatedAt) {
       const [hrAssignment] = await rawQuery<any>(
@@ -448,6 +484,178 @@ async function leaveEscalationCheck(): Promise<string> {
   }
 
   return `Leave escalation: ${reminders} reminders, ${warnings} warnings, ${escalations} escalations, ${autoApprovals} auto-approvals`;
+}
+
+/**
+ * Return-to-work closure: approved leaves whose endDate has passed but whose
+ * status has not been transitioned to `completed` leave stale `on_leave`
+ * attendance rows behind and keep the employee in a pseudo-on-leave state
+ * forever. This job closes those requests, emits a single `leave.completed`
+ * event per request and notifies both the employee and their manager.
+ *
+ * Runs daily at 00:05 local time (after midnight rollover).
+ */
+async function leaveReturnToWorkClosure(): Promise<string> {
+  let closed = 0;
+  const ended = await rawQuery<any>(
+    `SELECT lr.id, lr."companyId", lr."employeeId", lr."startDate", lr."endDate",
+            lr."leaveTypeId", lt.name AS "leaveTypeName"
+       FROM hr_leave_requests lr
+       JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+      WHERE lr.status = 'approved'
+        AND lr."endDate" < CURRENT_DATE
+      ORDER BY lr."endDate" ASC
+      LIMIT 500`
+  );
+
+  for (const lv of ended) {
+    try {
+      await rawExecute(
+        `UPDATE hr_leave_requests SET status = 'completed', "updatedAt" = NOW() WHERE id = $1`,
+        [lv.id]
+      );
+
+      // Ensure approval_requests is closed — avoid orphan pending rows.
+      await rawExecute(
+        `UPDATE approval_requests SET status = 'completed', "decidedAt" = NOW()
+         WHERE "refType" = 'leave_request' AND "refId" = $1 AND status NOT IN ('completed','rejected')`,
+        [lv.id]
+      ).catch(() => {});
+
+      // Find active employee assignment so we can notify the employee.
+      const [asn] = await rawQuery<any>(
+        `SELECT id, "branchId" FROM employee_assignments
+          WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [lv.employeeId, lv.companyId]
+      );
+
+      if (asn) {
+        createNotification({
+          companyId: lv.companyId,
+          assignmentId: asn.id,
+          type: "leave_completed",
+          title: "انتهاء فترة الإجازة — مرحباً بعودتك",
+          body: `انتهت إجازة ${lv.leaveTypeName} (${lv.startDate} → ${lv.endDate}). يمكنك الآن تسجيل الحضور.`,
+          priority: "normal",
+          refType: "leave_request",
+          refId: lv.id,
+        }).catch(console.error);
+
+        // Also nudge the direct manager so staffing dashboards update.
+        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch(() => null);
+        if (managerAssignmentId) {
+          createNotification({
+            companyId: lv.companyId,
+            assignmentId: managerAssignmentId,
+            type: "leave_completed",
+            title: "موظف عاد من إجازته",
+            body: `عاد الموظف من إجازة ${lv.leaveTypeName} المنتهية ${lv.endDate}.`,
+            priority: "low",
+            refType: "leave_request",
+            refId: lv.id,
+          }).catch(console.error);
+        }
+      }
+
+      emitEvent({
+        companyId: lv.companyId,
+        userId: null,
+        action: "leave.completed",
+        entity: "hr_leave_requests",
+        entityId: lv.id,
+        details: JSON.stringify({ leaveTypeId: lv.leaveTypeId, endDate: lv.endDate }),
+      }).catch(console.error);
+
+      closed++;
+    } catch (err) {
+      console.error(`[leaveReturnToWorkClosure] failed to close leave ${lv.id}:`, err);
+    }
+  }
+
+  return `Return-to-work closure: ${closed} leaves closed`;
+}
+
+/**
+ * Inquiry-memo auto-escalation: memos that sit in `pending_employee` for more
+ * than 72 hours without a justification are auto-advanced to `pending_manager`
+ * with a recorded "employee declined to respond" note, so the memo chain is
+ * never stranded waiting on an unresponsive employee.
+ */
+async function inquiryMemoEscalation(): Promise<string> {
+  let advanced = 0;
+  const stuck = await rawQuery<any>(
+    `SELECT m.id, m."companyId", m."assignmentId", m."branchId", m."memoNumber"
+       FROM hr_inquiry_memos m
+      WHERE m.status = 'pending_employee'
+        AND m."createdAt" < NOW() - INTERVAL '72 hours'
+      ORDER BY m."createdAt" ASC
+      LIMIT 200`
+  );
+
+  for (const memo of stuck) {
+    try {
+      await rawExecute(
+        `UPDATE hr_inquiry_memos
+            SET status = 'pending_manager',
+                "employeeDeclined" = TRUE,
+                "employeeSignedAt" = NOW(),
+                "updatedAt" = NOW()
+          WHERE id = $1`,
+        [memo.id]
+      );
+
+      await rawExecute(
+        `INSERT INTO hr_inquiry_memo_events ("memoId","companyId","actorRole",action,note,"createdAt")
+         VALUES ($1,$2,'system','auto_declined','تجاوز مهلة 72 ساعة للرد — اعتُبر رفضاً ضمنياً',NOW())`,
+        [memo.id, memo.companyId]
+      ).catch(() => {});
+
+      // Tell the employee why their memo moved on — otherwise the auto-decline
+      // is silent from the employee's perspective and they may later dispute
+      // an imposed penalty without ever seeing the 72h window close.
+      if (memo.assignmentId) {
+        createNotification({
+          companyId: memo.companyId,
+          assignmentId: memo.assignmentId,
+          type: "inquiry_memo",
+          title: "تجاوز مهلة الرد على محضر الاستفسار",
+          body: `انقضت مهلة 72 ساعة على المحضر ${memo.memoNumber} دون رد، وقد اعتُبر عدم الرد رفضاً ضمنياً.`,
+          priority: "high",
+          refType: "hr_inquiry_memo",
+          refId: memo.id,
+        }).catch(console.error);
+      }
+
+      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch(() => null);
+      if (managerAssignmentId) {
+        createNotification({
+          companyId: memo.companyId,
+          assignmentId: managerAssignmentId,
+          type: "inquiry_memo",
+          title: "محضر استفسار بانتظار توصيتك (تلقائي)",
+          body: `المحضر ${memo.memoNumber} تم تمريره تلقائياً لأن الموظف لم يرد خلال 72 ساعة.`,
+          priority: "high",
+          refType: "hr_inquiry_memo",
+          refId: memo.id,
+        }).catch(console.error);
+      }
+
+      emitEvent({
+        companyId: memo.companyId,
+        userId: null,
+        action: "hr.memo.auto_escalated",
+        entity: "hr_inquiry_memos",
+        entityId: memo.id,
+        details: JSON.stringify({ reason: "employee_no_response_72h" }),
+      }).catch(console.error);
+
+      advanced++;
+    } catch (err) {
+      console.error(`[inquiryMemoEscalation] failed memo ${memo.id}:`, err);
+    }
+  }
+
+  return `Inquiry memo escalation: ${advanced} memos advanced to pending_manager`;
 }
 
 async function reconcileAttendance(): Promise<string> {
@@ -581,11 +789,46 @@ async function hourlyApprovalEscalation(): Promise<string> {
 
       if (shouldAutoApprove) {
         const { processApprovalStep } = await import("./businessHelpers.js");
-        await processApprovalStep({
+        const result = await processApprovalStep({
           companyId: req.companyId, branchId: req.branchId,
           refType: req.refType, refId: req.refId,
           approved: true, decidedBy: 0,
         });
+        // Propagate the approval onto the underlying domain record. The HR
+        // route handler does this itself; the cron path must mirror the same
+        // logic, otherwise an auto-approved request leaves the domain record
+        // stuck in its original state forever.
+        if (result.status === "approved") {
+          const entityUpdateMap: Record<string, { table: string; column: string }> = {
+            purchase_order: { table: "purchase_orders", column: "status" },
+            official_letter: { table: "official_letters", column: "status" },
+          };
+          const target = entityUpdateMap[req.refType];
+          if (target) {
+            await rawExecute(
+              `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
+              [req.refId]
+            ).catch((e) => console.error("[hourly_escalation] domain update failed:", e));
+          }
+          const journalRefTypes = ["expense", "salary_advance", "custody"];
+          if (journalRefTypes.includes(req.refType)) {
+            await rawExecute(
+              `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
+              [req.refId]
+            ).catch((e) => console.error("[hourly_escalation] journal update failed:", e));
+          }
+          // Audit + event so the auto-approval is visible in reports.
+          createAuditLog({
+            companyId: req.companyId, branchId: req.branchId, userId: 0,
+            action: "auto_approved", entity: req.refType, entityId: req.refId,
+            reason: "Auto-approved on timeout by hourly escalation cron",
+          }).catch(console.error);
+          emitEvent({
+            companyId: req.companyId, userId: 0,
+            action: `${req.refType}.auto_approved`, entity: req.refType, entityId: req.refId,
+            details: `Auto-approved on timeout after ${Math.round(hoursSinceCreation)}h`,
+          }).catch(console.error);
+        }
         autoApprovals++;
       } else {
         const [hrAssignment] = await rawQuery<any>(
@@ -607,11 +850,14 @@ async function hourlyApprovalEscalation(): Promise<string> {
 }
 
 async function dailyDeductionCheck(): Promise<string> {
+  // lazy import لتفادي cycles مع businessHelpers
+  const { ensureInquiryMemoForViolation } = await import("./disciplineEngine.js");
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let deductions = 0;
+  let memos = 0;
   for (const company of companies) {
     const absentees = await rawQuery<any>(
-      `SELECT a."assignmentId", ea."employeeId", e.name
+      `SELECT a."assignmentId", ea."employeeId", ea."branchId", e.name, a.date
        FROM attendance a
        JOIN employee_assignments ea ON ea.id = a."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
@@ -624,6 +870,7 @@ async function dailyDeductionCheck(): Promise<string> {
       [company.id]
     );
     for (const a of absentees) {
+      // 1) خصم غياب في قيد الرواتب
       await rawExecute(
         `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, reason, date, "createdAt")
          SELECT $1, $2, 'absence', 0, $3, CURRENT_DATE, NOW()
@@ -634,9 +881,49 @@ async function dailyDeductionCheck(): Promise<string> {
         [company.id, a.employeeId, `خصم غياب تلقائي — ${a.name}`]
       ).catch(() => {});
       deductions++;
+
+      // 2) تسجيل مخالفة + فتح محضر استفسار (idempotent) بموجب لائحة الانضباط
+      try {
+        const period = new Date().toISOString().slice(0, 7);
+        const { rows: existingViolation } = await pool.query(
+          `SELECT id FROM employee_violations
+            WHERE "companyId" = $1 AND "assignmentId" = $2 AND type = 'absence'
+              AND period = $3 AND "deletedAt" IS NULL LIMIT 1`,
+          [company.id, a.assignmentId, period]
+        );
+        let violationId: number;
+        if (existingViolation.length) {
+          violationId = existingViolation[0].id;
+        } else {
+          const { rows: vrows } = await pool.query(
+            `INSERT INTO employee_violations
+               ("companyId","assignmentId",type,description,severity,deduction,period,source)
+             VALUES ($1,$2,'absence',$3,'high',0,$4,'auto')
+             RETURNING id`,
+            [company.id, a.assignmentId, `غياب عن العمل بتاريخ ${a.date}`, period]
+          );
+          violationId = vrows[0].id;
+        }
+
+        const result = await ensureInquiryMemoForViolation({
+          companyId: company.id,
+          branchId: a.branchId,
+          assignmentId: a.assignmentId,
+          employeeId: a.employeeId,
+          violationId,
+          incidentType: "absence",
+          incidentDate: String(a.date).slice(0, 10),
+          incidentDescription: `غياب يوم ${a.date} دون إذن كتابي`,
+          source: "auto",
+          createdBy: null,
+        });
+        if (result.created) memos++;
+      } catch (err) {
+        console.error("absence memo error:", err);
+      }
     }
   }
-  return `Processed ${deductions} absence deductions`;
+  return `Processed ${deductions} absence deductions, ${memos} new inquiry memos`;
 }
 
 async function dailyInvoiceOverdueEscalation(): Promise<string> {
@@ -672,8 +959,18 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       const newIdx = PHASE_ORDER.indexOf(phase);
       if (currentIdx >= newIdx) continue;
 
+      // Also flip the invoice status to 'overdue' when appropriate — reports,
+      // collection stages and dashboards key off invoices.status, not off
+      // overduePhase, so leaving status='sent' made overdue invoices
+      // invisible in half the UI.
       await rawExecute(
-        `UPDATE invoices SET "overduePhase" = $1 WHERE id = $2`,
+        `UPDATE invoices
+            SET "overduePhase" = $1,
+                status = CASE
+                  WHEN status IN ('sent','partial') THEN 'overdue'
+                  ELSE status
+                END
+          WHERE id = $2`,
         [phase, inv.id]
       ).catch(() => {});
 
@@ -754,11 +1051,15 @@ async function dailyInventoryCheck(): Promise<string> {
 
 async function dailyPropertyCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  let actions = 0;
+  let alerted = 0;
+  let expired = 0;
+  let renewalNotices = 0;
   for (const company of companies) {
+    // 1. Alert expiring contracts (≤30 days)
     const expiring = await rawQuery<any>(
       `SELECT rc.id, rc."tenantName", rc."endDate",
-              (rc."endDate"::date - CURRENT_DATE) AS "daysLeft"
+              (rc."endDate"::date - CURRENT_DATE) AS "daysLeft",
+              rc."autoRenewal", rc."renewalNoticeDays", rc."renewalNoticeSentAt"
        FROM rental_contracts rc
        WHERE rc."companyId" = $1 AND rc.status = 'active'
          AND rc."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
@@ -772,30 +1073,102 @@ async function dailyPropertyCheck(): Promise<string> {
         Number(c.daysLeft) <= 7 ? "critical" : "warning",
         "rental_contract", c.id
       );
-      actions++;
+      alerted++;
+    }
+
+    // 2. Send renewal notice at renewalNoticeDays (default 60) before endDate — only once
+    const needsNotice = await rawQuery<any>(
+      `SELECT rc.id, rc."tenantName", rc."endDate"
+       FROM rental_contracts rc
+       WHERE rc."companyId" = $1 AND rc.status = 'active'
+         AND rc."renewalNoticeSentAt" IS NULL
+         AND rc."endDate" <= CURRENT_DATE + (COALESCE(rc."renewalNoticeDays",60) || ' days')::interval
+         AND rc."endDate" > CURRENT_DATE`,
+      [company.id]
+    );
+    for (const c of needsNotice) {
+      await broadcastAlert(
+        company.id, "rental_contract_renewal_notice",
+        `تنبيه تجديد عقد: ${c.tenantName}`,
+        `يقترب موعد انتهاء العقد (${c.endDate}) — اتخذ قرار التجديد أو الإنهاء`,
+        "warning", "rental_contract", c.id
+      );
+      await rawExecute(
+        `UPDATE rental_contracts SET "renewalNoticeSentAt"=NOW() WHERE id=$1`, [c.id]
+      ).catch(() => {});
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "lease.renewal_notice", entity: "rental_contracts", entityId: Number(c.id),
+          details: `تنبيه تجديد — ينتهي ${c.endDate}`,
+        });
+      } catch {}
+      renewalNotices++;
+    }
+
+    // 3. Auto-expire contracts whose endDate has passed — mark expired, free the unit, cancel pending rent_payments
+    const expiredContracts = await rawQuery<any>(
+      `SELECT id, "unitId", "tenantName" FROM rental_contracts
+       WHERE "companyId" = $1 AND status = 'active' AND "endDate" < CURRENT_DATE`,
+      [company.id]
+    );
+    for (const c of expiredContracts) {
+      await rawExecute(
+        `UPDATE rental_contracts SET status='expired', "closedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1`,
+        [c.id]
+      );
+      if (c.unitId) {
+        await rawExecute(
+          `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND status='rented'`,
+          [c.unitId]
+        );
+      }
+      await rawExecute(
+        `UPDATE rent_payments SET status='cancelled', "updatedAt"=NOW() WHERE "contractId"=$1 AND status IN ('pending','partial')`,
+        [c.id]
+      ).catch(() => {});
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: "lease.expired", entity: "rental_contracts", entityId: Number(c.id),
+          details: `انتهاء تلقائي — ${c.tenantName ?? ''}`,
+        });
+      } catch {}
+      expired++;
     }
   }
-  return `Property check: ${actions} expiring contracts alerted`;
+  return `Property check: ${alerted} expiring alerts, ${renewalNotices} renewal notices, ${expired} auto-expired`;
 }
 
 async function dailyLegalCheck(): Promise<string> {
+  // Upcoming hearings are stored on legal_sessions.nextSessionDate — the
+  // parent legal_cases.nextHearingDate is never populated, so the old query
+  // returned zero rows. Join to sessions and pick the soonest future session
+  // per case.
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const cases = await rawQuery<any>(
-      `SELECT id, title, "nextHearingDate"
-       FROM legal_cases
-       WHERE "companyId" = $1 AND status = 'open'
-         AND "nextHearingDate" IS NOT NULL
-         AND "nextHearingDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
+    const upcoming = await rawQuery<any>(
+      `SELECT DISTINCT ON (lc.id)
+              lc.id, lc.title, lc."lawyerName", lc.priority,
+              ls."nextSessionDate" AS "hearingDate"
+         FROM legal_cases lc
+         JOIN legal_sessions ls ON ls."caseId" = lc.id
+        WHERE lc."companyId" = $1
+          AND lc.status IN ('open','in_progress')
+          AND lc."deletedAt" IS NULL
+          AND ls."nextSessionDate" IS NOT NULL
+          AND ls."nextSessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+        ORDER BY lc.id, ls."nextSessionDate" ASC`,
       [company.id]
     );
-    for (const c of cases) {
+    for (const c of upcoming) {
       await broadcastAlert(
         company.id, "legal_hearing",
         `جلسة قضائية قريبة: ${c.title}`,
-        `موعد الجلسة: ${c.nextHearingDate}`,
-        "warning", "legal_case", c.id
+        `موعد الجلسة: ${c.hearingDate}${c.lawyerName ? ` — المحامي ${c.lawyerName}` : ''}`,
+        c.priority === 'high' ? "critical" : "warning",
+        "legal_case", c.id
       );
       actions++;
     }
@@ -879,34 +1252,108 @@ async function dailySlaGeneral(): Promise<string> {
 }
 
 async function monthlyRentPenalties(): Promise<string> {
+  // Runs DAILY — full escalation ladder (alert → notification → field_visit →
+  // escalation → penalty_applied → legal_transfer). Each phase is idempotent
+  // (keyed on late_rent_actions.phase) and only fires once per payment.
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let penalties = 0;
+  let legalHandoffs = 0;
   for (const company of companies) {
     const overduePayments = await rawQuery<any>(
-      `SELECT rp.id, rp."dueDate", rp.amount, c.id AS "contractId", c."tenantName"
-       FROM rent_payments rp JOIN rental_contracts c ON c.id = rp."contractId"
-       WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
-         AND rp."dueDate" < CURRENT_DATE - INTERVAL '30 days'`,
+      `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId", c."tenantName", c."tenantPhone", c."unitId"
+         FROM rent_payments rp
+         JOIN rental_contracts c ON c.id = rp."contractId"
+        WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
+          AND rp."dueDate" < CURRENT_DATE`,
       [company.id]
     );
     for (const p of overduePayments) {
       const lateDays = Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000);
+      let targetStage: string | null = null;
+      if (lateDays >= 90) targetStage = 'legal_transfer';
+      else if (lateDays >= 60) targetStage = 'penalty_applied';
+      else if (lateDays >= 30) targetStage = 'escalation';
+      else if (lateDays >= 14) targetStage = 'field_visit';
+      else if (lateDays >= 7) targetStage = 'notification';
+      else if (lateDays >= 3) targetStage = 'alert';
+      if (!targetStage) continue;
+
       const existing = await rawQuery<any>(
-        `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = 'penalty_applied' LIMIT 1`,
-        [p.id]
+        `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = $2 LIMIT 1`,
+        [p.id, targetStage]
       );
       if (existing.length > 0) continue;
 
-      const lateFee = Number(p.amount) * 0.02;
-      await rawExecute(`UPDATE rent_payments SET amount = amount + $1 WHERE id = $2`, [lateFee, p.id]);
+      let actionLabel = targetStage;
+      if (targetStage === 'penalty_applied') {
+        const lateFee = Math.round(Number(p.amount) * 0.02 * 100) / 100;
+        await rawExecute(`UPDATE rent_payments SET amount = amount + $1, "updatedAt"=NOW() WHERE id = $2`, [lateFee, p.id]);
+        actionLabel = `غرامة تأخير ${lateFee}`;
+        penalties++;
+      } else if (targetStage === 'legal_transfer') {
+        try {
+          const responsible = await getLegalResponsible(company.id);
+          const lawyerName = responsible?.employeeName ?? null;
+
+          const { insertId: caseId } = await rawExecute(
+            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description)
+             VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
+            [
+              company.id,
+              `RENT-${p.id}-${Date.now()}`,
+              `تحصيل إيجار — ${p.tenantName}`,
+              p.tenantName,
+              lawyerName,
+              `إيجار متأخر ${lateDays} يوم — مبلغ ${p.amount} ريال`,
+            ]
+          );
+          legalHandoffs++;
+
+          // Notify the responsible lawyer + emit a lifecycle event so the
+          // auto-created case isn't orphaned in open/NULL-assignee limbo.
+          if (responsible) {
+            await createNotification({
+              companyId: company.id,
+              assignmentId: responsible.assignmentId,
+              type: "legal_case_assigned",
+              title: "قضية إيجار متأخر (تلقائية)",
+              body: `تم إنشاء قضية تحصيل إيجار متأخر — ${p.tenantName} — مبلغ ${p.amount} ريال`,
+              priority: "high",
+              refType: "legal_case",
+              refId: Number(caseId),
+              actionUrl: `/legal/cases/${caseId}`,
+            });
+          }
+          await emitEvent({
+            companyId: company.id, userId: null,
+            action: "legal.case.created", entity: "legal_cases", entityId: Number(caseId),
+            details: `قضية إيجار متأخر — ${p.tenantName}`,
+          });
+        } catch (err) {
+          console.error("[monthlyRentPenalties] legal_cases insert failed:", err);
+        }
+        actionLabel = 'تحويل للقسم القانوني';
+      } else if (targetStage === 'alert') actionLabel = 'تنبيه بالتأخر';
+      else if (targetStage === 'notification') actionLabel = 'إشعار رسمي';
+      else if (targetStage === 'field_visit') actionLabel = 'زيارة ميدانية';
+      else if (targetStage === 'escalation') actionLabel = 'تصعيد لإدارة الأملاك';
+
       await rawExecute(
-        `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes) VALUES ($1,$2,'penalty_applied','غرامة تأخير تلقائية',NOW(),$3)`,
-        [p.contractId, p.id, `تأخر ${lateDays} يوم — غرامة ${lateFee} ريال`]
+        `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
+         VALUES ($1,$2,$3,$4,NOW(),$5)`,
+        [p.contractId, p.id, targetStage, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
       ).catch(() => {});
-      penalties++;
+
+      try {
+        await emitEvent({
+          companyId: company.id, userId: null,
+          action: `rent.late.${targetStage}`, entity: "rent_payments", entityId: Number(p.id),
+          details: `تأخر ${lateDays} يوم — ${actionLabel}`,
+        });
+      } catch {}
     }
   }
-  return `Monthly rent penalties: ${penalties}`;
+  return `Rent escalation: ${penalties} penalties, ${legalHandoffs} legal handoffs`;
 }
 
 async function monthlyPayrollPrep(): Promise<string> {
@@ -1234,6 +1681,50 @@ async function probationAlertCheck(): Promise<string> {
     alerted++;
   }
   return `Probation alerts: ${alerted}`;
+}
+
+/**
+ * Letters approved more than 30 minutes ago but never dispatched (sentAt NULL)
+ * mean the in-memory `hr.letter.approved` listener fired while the queue was
+ * down, or the server restarted before the listener consumed it. This job
+ * re-emits the event through the persistent bus so the listener runs again.
+ */
+async function retryStuckOfficialLetters(): Promise<string> {
+  let retried = 0;
+  const stuck = await rawQuery<any>(
+    `SELECT id, "companyId", "branchId", subject, type, "employeeId", status, "approvedAt"
+       FROM official_letters
+      WHERE status = 'approved'
+        AND "sentAt" IS NULL
+        AND "approvedAt" IS NOT NULL
+        AND "approvedAt" < NOW() - INTERVAL '30 minutes'
+      ORDER BY "approvedAt" ASC
+      LIMIT 50`
+  );
+  for (const letter of stuck) {
+    try {
+      await emitEvent({
+        companyId: letter.companyId,
+        branchId: letter.branchId ?? undefined,
+        userId: null,
+        action: "hr.letter.approved",
+        entity: "official_letter",
+        entityId: Number(letter.id),
+        details: `إعادة محاولة إرسال الخطاب #${letter.id}`,
+        after: {
+          status: "approved",
+          subject: letter.subject,
+          type: letter.type,
+          employeeId: letter.employeeId,
+          retry: true,
+        },
+      });
+      retried++;
+    } catch (err) {
+      console.error("[retryStuckOfficialLetters] emit failed:", err);
+    }
+  }
+  return `Stuck official letters retried: ${retried}`;
 }
 
 async function processEmailQueue(): Promise<string> {
@@ -1982,7 +2473,295 @@ async function weeklyDataCleanup(): Promise<string> {
     cleaned += archivedLogs;
   } catch {}
 
+  // Orphaned workflow_instances: delete instances whose refTable row no longer exists.
+  // Only handle the known refTables — safer than a generic EXISTS loop.
+  try {
+    const orphanRefTables = [
+      "hr_leave_requests",
+      "purchase_requests",
+      "official_letters",
+      "journal_entries",
+    ];
+    for (const tbl of orphanRefTables) {
+      const { affectedRows } = await rawExecute(
+        `DELETE FROM workflow_instances wi
+           WHERE wi."refTable" = $1
+             AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = wi."refId")`,
+        [tbl]
+      ).catch(() => ({ affectedRows: 0 }));
+      cleaned += affectedRows;
+    }
+  } catch {}
+
+  // Mark orphaned approval_requests as cancelled when their referenced entity was hard-deleted.
+  // approval_requests uses refType+refId (not a workflow FK).
+  try {
+    const orphanRefTypes: Record<string, string> = {
+      leave: "hr_leave_requests",
+      purchase_request: "purchase_requests",
+      official_letter: "official_letters",
+      journal_entry: "journal_entries",
+      expense: "expenses",
+      salary_advance: "salary_advances",
+      custody: "custody_records",
+      invoice: "invoices",
+      purchase_order: "purchase_orders",
+    };
+    for (const [refType, tbl] of Object.entries(orphanRefTypes)) {
+      const { affectedRows } = await rawExecute(
+        `UPDATE approval_requests ar
+            SET status = 'cancelled'
+          WHERE ar."refType" = $1
+            AND ar.status IN ('pending','in_progress')
+            AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = ar."refId")`,
+        [refType]
+      ).catch(() => ({ affectedRows: 0 }));
+      cleaned += affectedRows;
+    }
+  } catch {}
+
   return `Data cleanup: ${cleaned} records cleaned`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OBLIGATIONS SCANNER (Track C.2) — يرقّي الالتزامات المتأخرة وتصعيداتها
+// ─────────────────────────────────────────────────────────────────────────────
+async function hourlyObligationsScan(): Promise<string> {
+  const r = await scanObligations();
+  return `Obligations scan: breached=${r.breachedCount}, L1=${r.escalatedL1}, L2=${r.escalatedL2}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DUNNING AUTO-SEND (Track C.3) — يرسل خطابات التحصيل حسب المرحلة تلقائياً
+// ─────────────────────────────────────────────────────────────────────────────
+async function dailyDunningAutoSend(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(
+    `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+  );
+  let totalSent = 0;
+  let totalSkipped = 0;
+
+  for (const c of companies) {
+    try {
+      // Ensure dunning tables exist
+      await rawExecute(`
+        CREATE TABLE IF NOT EXISTS dunning_letters (
+          id SERIAL PRIMARY KEY,
+          "companyId" INTEGER NOT NULL,
+          "invoiceId" INTEGER NOT NULL,
+          "clientId" INTEGER,
+          stage INTEGER NOT NULL,
+          "daysPastDue" INTEGER NOT NULL,
+          "outstandingAmount" NUMERIC(18,2) NOT NULL,
+          "letterContent" TEXT,
+          "sentAt" TIMESTAMP DEFAULT NOW(),
+          "sentBy" INTEGER,
+          "sentVia" VARCHAR(16) DEFAULT 'manual',
+          status VARCHAR(16) DEFAULT 'sent'
+        )
+      `);
+      await rawExecute(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningStage" INTEGER DEFAULT 0`);
+      await rawExecute(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningAt" TIMESTAMP`);
+
+      // Find overdue invoices needing dunning
+      const today = new Date().toISOString().slice(0, 10);
+      const rows = await rawQuery<any>(
+        `SELECT i.id, i."invoiceNumber", i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
+                i."clientId", COALESCE(i."lastDunningStage",0) AS "lastStage", i."lastDunningAt",
+                GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
+         FROM invoices i
+         WHERE i."companyId"=$2
+           AND i.status NOT IN ('paid','cancelled')
+           AND COALESCE(i."deletedAt",NULL) IS NULL
+           AND i."dueDate" IS NOT NULL
+           AND i."dueDate"::date < $1::date
+           AND (i.total - COALESCE(i."paidAmount",0)) > 0
+         LIMIT 500`,
+        [today, c.id]
+      );
+
+      for (const r of rows) {
+        const days = Number(r.daysPastDue);
+        let stage: number;
+        if (days <= 14) stage = 1;
+        else if (days <= 30) stage = 2;
+        else if (days <= 60) stage = 3;
+        else if (days <= 90) stage = 4;
+        else stage = 5;
+
+        // Skip if already at this stage within last 24h or already past this stage
+        if (Number(r.lastStage) >= stage && r.lastDunningAt) {
+          const hoursSince = (Date.now() - new Date(r.lastDunningAt).getTime()) / 36e5;
+          if (hoursSince < 24) { totalSkipped++; continue; }
+        }
+
+        const outstanding = Math.round((Number(r.total) - Number(r.paidAmount)) * 100) / 100;
+        await rawExecute(
+          `INSERT INTO dunning_letters ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","sentVia")
+           VALUES ($1,$2,$3,$4,$5,$6,'auto')`,
+          [c.id, r.id, r.clientId, stage, days, outstanding]
+        );
+        await rawExecute(
+          `UPDATE invoices SET "lastDunningStage"=$1, "lastDunningAt"=NOW() WHERE id=$2`,
+          [stage, r.id]
+        );
+        totalSent++;
+      }
+    } catch (err) {
+      console.error(`Dunning auto-send error for company ${c.id}:`, err);
+    }
+  }
+  return `Dunning auto-send: sent=${totalSent}, skipped=${totalSkipped}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONTHLY BAD DEBT PROVISION REMINDER (Track C.3)
+// ─────────────────────────────────────────────────────────────────────────────
+async function monthlyBadDebtReminder(): Promise<string> {
+  const companies = await rawQuery<{ id: number; name: string }>(
+    `SELECT id, name FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+  );
+  let notified = 0;
+  for (const c of companies) {
+    try {
+      const [cfoRow] = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+         JOIN user_roles ur ON ur."userId" = ea."employeeId"
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         LIMIT 1`,
+        [c.id]
+      ).catch(() => [] as any);
+      const cfoId = cfoRow?.id;
+      if (!cfoId) continue;
+      await createNotification({
+        companyId: c.id,
+        assignmentId: cfoId,
+        type: "bad_debt_reminder",
+        title: "تذكير: احتساب مخصص الديون المشكوك فيها",
+        body: `تم دخول شهر جديد — يرجى مراجعة قائمة تقادم الذمم واحتساب مخصص الديون المشكوك في تحصيلها عبر /finance/bad-debt/post`,
+        priority: "medium",
+      });
+      notified++;
+    } catch (err) {
+      console.error(`Bad debt reminder error for company ${c.id}:`, err);
+    }
+  }
+  return `Bad debt reminders sent: ${notified}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONTHLY FX REVALUATION REMINDER (Track C.3)
+// ─────────────────────────────────────────────────────────────────────────────
+async function monthlyFxRevaluationReminder(): Promise<string> {
+  const companies = await rawQuery<{ id: number; name: string }>(
+    `SELECT id, name FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+  );
+  let notified = 0;
+  for (const c of companies) {
+    try {
+      // Only remind if company has foreign-currency exposure
+      const [fxExposure] = await rawQuery<any>(
+        `SELECT COUNT(*)::int AS n FROM invoices
+         WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled')`,
+        [c.id]
+      ).catch(() => [{ n: 0 }]);
+      if (!fxExposure || fxExposure.n === 0) continue;
+
+      const [cfoRow] = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+         JOIN user_roles ur ON ur."userId" = ea."employeeId"
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         LIMIT 1`,
+        [c.id]
+      ).catch(() => [] as any);
+      const cfoId = cfoRow?.id;
+      if (!cfoId) continue;
+      await createNotification({
+        companyId: c.id,
+        assignmentId: cfoId,
+        type: "fx_revaluation_reminder",
+        title: "تذكير: إعادة تقييم العملات الأجنبية",
+        body: `يوجد ${fxExposure.n} فاتورة بعملة أجنبية مفتوحة — يرجى ترحيل إعادة التقييم الشهرية عبر /finance/fx/revaluation/post`,
+        priority: "medium",
+      });
+      notified++;
+    } catch (err) {
+      console.error(`FX reminder error for company ${c.id}:`, err);
+    }
+  }
+  return `FX revaluation reminders sent: ${notified}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DAILY BUDGET VARIANCE ALERT (Track C.3)
+// ─────────────────────────────────────────────────────────────────────────────
+async function dailyBudgetVarianceAlert(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(
+    `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+  );
+  const period = new Date().toISOString().slice(0, 7);
+  let alerted = 0;
+
+  for (const c of companies) {
+    try {
+      const [y, m] = period.split("-").map(Number);
+      const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
+      const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+
+      // Find budgets near or over limit
+      const overBudget = await rawQuery<any>(
+        `SELECT b."accountCode", coa.name AS "accountName", b.amount AS "budgetAmount",
+                COALESCE((
+                  SELECT SUM(jl.debit - jl.credit)
+                  FROM journal_lines jl
+                  JOIN journal_entries je ON je.id = jl."journalId"
+                  WHERE je."companyId" = b."companyId" AND je."deletedAt" IS NULL
+                    AND jl."accountCode" = b."accountCode"
+                    AND je."createdAt"::date BETWEEN $2::date AND $3::date
+                ), 0) AS "actualAmount"
+         FROM budgets b
+         LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
+         WHERE b."companyId"=$1 AND b.period=$4 AND b.amount > 0`,
+        [c.id, periodStart, periodEnd, period]
+      );
+
+      const overages = overBudget.filter((r: any) => {
+        const actual = Number(r.actualAmount);
+        const budget = Number(r.budgetAmount);
+        return budget > 0 && actual > budget * 0.9;
+      });
+
+      if (overages.length === 0) continue;
+
+      const [cfoRow] = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+         JOIN user_roles ur ON ur."userId" = ea."employeeId"
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         LIMIT 1`,
+        [c.id]
+      ).catch(() => [] as any);
+      const cfoId = cfoRow?.id;
+      if (!cfoId) continue;
+
+      const summary = overages
+        .slice(0, 5)
+        .map((r: any) => `• ${r.accountName ?? r.accountCode}: ${Math.round((Number(r.actualAmount) / Number(r.budgetAmount)) * 100)}%`)
+        .join("\n");
+
+      await createNotification({
+        companyId: c.id,
+        assignmentId: cfoId,
+        type: "budget_variance_alert",
+        title: `تنبيه: ${overages.length} حساب قارب أو تجاوز الميزانية`,
+        body: summary + (overages.length > 5 ? `\n... و${overages.length - 5} حساب آخر` : ""),
+        priority: overages.some((r: any) => Number(r.actualAmount) > Number(r.budgetAmount)) ? "high" : "medium",
+      });
+      alerted++;
+    } catch (err) {
+      console.error(`Budget variance alert error for company ${c.id}:`, err);
+    }
+  }
+  return `Budget variance alerts sent: ${alerted}`;
 }
 
 const JOB_DEFINITIONS: CronJobDef[] = [
@@ -1991,6 +2770,8 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
   { name: "leave_escalation_check", description: "تصعيد طلبات الإجازة", schedule: "0 7 * * *", handler: leaveEscalationCheck },
+  { name: "leave_return_to_work_closure", description: "إغلاق الإجازات المنتهية وتنبيه العودة للعمل", schedule: "5 0 * * *", handler: leaveReturnToWorkClosure },
+  { name: "inquiry_memo_escalation", description: "تصعيد محاضر الاستفسار المعلقة 72 ساعة", schedule: "0 */6 * * *", handler: inquiryMemoEscalation },
   { name: "daily_attendance_reconciliation", description: "مطابقة الحضور والغياب", schedule: "0 11 * * *", handler: reconcileAttendance },
   { name: "hourly_sla_escalation", description: "تصعيد SLA كل ساعة", schedule: "0 * * * *", handler: hourlySlaEscalation },
   { name: "hourly_approval_escalation", description: "تصعيد الموافقات كل ساعة", schedule: "0 * * * *", handler: hourlyApprovalEscalation },
@@ -2003,7 +2784,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_project_check", description: "فحص تأخر المشاريع", schedule: "0 9 * * *", handler: dailyProjectCheck },
   { name: "daily_crm_check", description: "فحص متابعات CRM", schedule: "0 10 * * *", handler: dailyCrmCheck },
   { name: "daily_sla_general", description: "فحص SLA العام", schedule: "0 11 * * *", handler: dailySlaGeneral },
-  { name: "monthly_rent_penalties", description: "غرامات الإيجارات المتأخرة", schedule: "0 6 1 * *", handler: monthlyRentPenalties },
+  { name: "monthly_rent_penalties", description: "تصعيد الإيجارات المتأخرة (6 مراحل)", schedule: "0 7 * * *", handler: monthlyRentPenalties },
   { name: "monthly_payroll_prep", description: "تذكير الرواتب يوم 25", schedule: "0 8 25 * *", handler: monthlyPayrollPrep },
   { name: "monthly_closing_prep", description: "تذكير الإقفال يوم 28", schedule: "0 8 28 * *", handler: monthlyClosingPrep },
   { name: "weekly_hr_report", description: "تقرير HR الأسبوعي", schedule: "0 8 * * 0", handler: weeklyHrReport },
@@ -2031,6 +2812,13 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_vendor_contract_expiry", description: "تنبيه انتهاء عقود الموردين (90/30 يوم)", schedule: "0 7 * * 1", handler: vendorContractExpiryAlerts },
   { name: "daily_system_health_report", description: "تقرير صحة النظام اليومي للمدير التقني", schedule: "0 6 * * *", handler: dailySystemHealthReport },
   { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
+  { name: "retry_stuck_official_letters", description: "إعادة محاولة إرسال الخطابات المعتمدة العالقة", schedule: "*/15 * * * *", handler: retryStuckOfficialLetters },
+  { name: "daily_recurring_journals", description: "تنفيذ القيود المحاسبية الدورية المستحقة", schedule: "0 1 * * *", handler: processDueRecurringJournals },
+  { name: "hourly_obligations_scan", description: "فحص الالتزامات — ترقية المتأخرات وتصعيد المهام", schedule: "15 * * * *", handler: hourlyObligationsScan },
+  { name: "daily_dunning_auto_send", description: "إرسال تلقائي لخطابات التحصيل حسب المرحلة", schedule: "0 9 * * *", handler: dailyDunningAutoSend },
+  { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
+  { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
+  { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
 ];
 
 export async function seedCronJobs(): Promise<void> {

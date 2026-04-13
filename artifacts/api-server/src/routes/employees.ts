@@ -12,6 +12,50 @@ import {
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
+import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+
+// Register document expiry obligations for an employee.
+// Called on create/update — idempotent via dedupeKey.
+async function registerEmployeeExpiryObligations(
+  companyId: number,
+  branchId: number | null,
+  empId: number,
+  empName: string,
+  docs: {
+    iqamaExpiry?: string | null;
+    passportExpiry?: string | null;
+    workPermitExpiry?: string | null;
+    visaExpiry?: string | null;
+  }
+): Promise<void> {
+  const entries: Array<{ field: keyof typeof docs; label: string; code: string }> = [
+    { field: "iqamaExpiry", label: "إقامة", code: "iqama" },
+    { field: "passportExpiry", label: "جواز سفر", code: "passport" },
+    { field: "workPermitExpiry", label: "رخصة عمل", code: "work_permit" },
+    { field: "visaExpiry", label: "تأشيرة", code: "visa" },
+  ];
+  for (const { field, label, code } of entries) {
+    const dueStr = docs[field];
+    if (!dueStr) continue;
+    const dueDate = new Date(dueStr);
+    if (isNaN(dueDate.getTime())) continue;
+    await registerObligation({
+      companyId,
+      branchId,
+      entityType: "employee",
+      entityId: empId,
+      obligationType: "document_expiry",
+      title: `انتهاء ${label} — ${empName}`,
+      dueAt: dueDate.toISOString(),
+      metadata: { docType: code, expiryDate: dueStr },
+      dedupeKey: `employee-${empId}-${code}-${dueStr}`,
+      escalationSteps: [
+        { hoursAfterDue: 0, notifyRole: "hr_manager" },
+        { hoursAfterDue: 72, notifyRole: "general_manager" },
+      ],
+    }).catch((e) => console.error(`Failed to register ${code} obligation for emp ${empId}:`, e));
+  }
+}
 
 const router = Router();
 router.use(authMiddleware);
@@ -384,6 +428,15 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       details: JSON.stringify({ empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary, onboardingTasks: 4, probationDays: Number(probationDays) }),
     });
 
+    // ── Step 10b: Register expiry obligations (iqama/passport/work permit/visa) ──
+    await registerEmployeeExpiryObligations(
+      scope.companyId,
+      targetBranchId ?? null,
+      empId,
+      name,
+      { iqamaExpiry, passportExpiry, workPermitExpiry, visaExpiry }
+    );
+
     // ── Step 11: Audit log ──
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -654,6 +707,27 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       await rawExecute(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length}`, empVals);
     }
 
+    // If any expiry field was changed, refresh obligations. Old obligations with
+    // different dedupeKey remain until scanner marks them met/breached; the new
+    // dedupeKey (which includes the date) ensures no duplicates.
+    if ([iqamaExpiry, passportExpiry, workPermitExpiry, visaExpiry].some((v) => v !== undefined)) {
+      const [empRow] = await rawQuery<any>(
+        `SELECT name, "iqamaExpiry", "passportExpiry", "workPermitExpiry", "visaExpiry" FROM employees WHERE id=$1`,
+        [Number(id)]
+      );
+      if (empRow) {
+        await registerEmployeeExpiryObligations(
+          scope.companyId, scope.branchId ?? null, Number(id), empRow.name,
+          {
+            iqamaExpiry: empRow.iqamaExpiry,
+            passportExpiry: empRow.passportExpiry,
+            workPermitExpiry: empRow.workPermitExpiry,
+            visaExpiry: empRow.visaExpiry,
+          }
+        );
+      }
+    }
+
     const { jobTitleId: bodyJobTitleId, managerId: bodyManagerId } = req.body as any;
     if (jobTitle || role || salary !== undefined || branchId || departmentId || bodyJobTitleId !== undefined || bodyManagerId !== undefined) {
       const fields: string[] = [];
@@ -729,8 +803,83 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!employee) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
-    await rawExecute(`UPDATE employee_assignments SET status = 'terminated' WHERE id = $1`, [employee.assignmentId]);
-    await rawExecute(`UPDATE employees SET status = 'terminated' WHERE id = $1`, [Number(id)]);
+
+    // Terminating a single employee used to only flip two status
+    // columns — leaving a long tail of orphaned work behind: active
+    // contracts still probated, pending leave requests still in the
+    // manager's inbox, tasks still assigned to the ex-employee, and
+    // pending approval_requests stuck forever. Close the loop across
+    // every dependent row in a transaction so HR doesn't have to chase
+    // them manually after the fact.
+    await withTransaction(async (tx) => {
+      await tx.query(
+        `UPDATE employee_assignments SET status = 'terminated' WHERE id = $1`,
+        [employee.assignmentId]
+      );
+      await tx.query(
+        `UPDATE employees SET status = 'terminated' WHERE id = $1`,
+        [Number(id)]
+      );
+
+      // 1. Deactivate contracts tied to this employee / assignment so
+      //    probation cron stops alerting on ghosts.
+      await tx.query(
+        `UPDATE employee_contracts
+           SET status = 'terminated', "probationStatus" = 'ended'
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated'`,
+        [Number(id), scope.companyId]
+      );
+
+      // 2. Cancel pending leave requests + their approval stages so
+      //    the leave escalation cron stops firing reminders.
+      await tx.query(
+        `UPDATE hr_leave_requests
+           SET status = 'cancelled'
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending'`,
+        [Number(id), scope.companyId]
+      );
+      await tx.query(
+        `UPDATE leave_approval_stages
+           SET status = 'cancelled'
+         WHERE "leaveRequestId" IN (
+           SELECT id FROM hr_leave_requests
+           WHERE "employeeId" = $1 AND "companyId" = $2
+         ) AND status = 'pending'`,
+        [Number(id), scope.companyId]
+      );
+
+      // 3. Cancel open tasks assigned to the terminated assignment so
+      //    they don't rot in someone's calendar forever. Manager can
+      //    re-open / reassign after the fact.
+      await tx.query(
+        `UPDATE tasks
+           SET status = 'cancelled', notes = COALESCE(notes || E'\n', '') || 'ألغي تلقائياً: إنهاء خدمة الموظف'
+         WHERE "assignedTo" = $1 AND status IN ('pending', 'in_progress')`,
+        [employee.assignmentId]
+      );
+
+      // 4. Cancel pending approval_requests routed to this user so
+      //    the approval queue doesn't get stuck. The caller can re-
+      //    route via the escalation chain on the next cron tick.
+      await tx.query(
+        `UPDATE approval_requests
+           SET status = 'cancelled', "decidedAt" = NOW()
+         WHERE "assignedTo" = $1 AND status = 'pending'`,
+        [employee.assignmentId]
+      );
+    });
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "employee.terminated",
+      entity: "employees",
+      entityId: Number(id),
+      before: { status: "active" },
+      after: { status: "terminated", reason: reason || null, assignmentId: employee.assignmentId },
+    }).catch(console.error);
+
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employees", entityId: Number(id),
@@ -741,5 +890,42 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
     handleRouteError(err, res, "Delete employee error:");
   }
 });
+
+/**
+ * Seed obligations for all existing employees with future expiry dates.
+ * Safe to re-run — dedupeKey prevents duplicates.
+ */
+router.post("/obligations/seed", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const emps = await rawQuery<any>(
+      `SELECT e.id, e.name, e."iqamaExpiry", e."passportExpiry", e."workPermitExpiry", e."visaExpiry"
+       FROM employees e
+       JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
+       WHERE ea."companyId"=$1 AND e.status='active'
+         AND (e."iqamaExpiry" IS NOT NULL OR e."passportExpiry" IS NOT NULL
+              OR e."workPermitExpiry" IS NOT NULL OR e."visaExpiry" IS NOT NULL)`,
+      [scope.companyId]
+    );
+    let registered = 0;
+    for (const e of emps) {
+      const before = registered;
+      await registerEmployeeExpiryObligations(
+        scope.companyId, scope.branchId ?? null, e.id, e.name,
+        {
+          iqamaExpiry: e.iqamaExpiry,
+          passportExpiry: e.passportExpiry,
+          workPermitExpiry: e.workPermitExpiry,
+          visaExpiry: e.visaExpiry,
+        }
+      );
+      registered = before + 1;
+    }
+    res.json({ scannedEmployees: emps.length, employeesProcessed: registered });
+  } catch (err) { handleRouteError(err, res, "Seed HR obligations error:"); }
+});
+
+// Quiet unused import warnings for helpers referenced conditionally
+void cancelObligation;
 
 export default router;

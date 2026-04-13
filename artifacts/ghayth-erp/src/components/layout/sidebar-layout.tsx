@@ -88,7 +88,7 @@ const allNavSections: NavSection[] = [
         { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, subKey: "attendance", children: [
           { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3 },
           { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin },
-          { label: "تسجيل حضور QR", path: "/hr/attendance/qr-scanner", icon: QrCode },
+          { label: "تسجيل حضور بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode },
         ]},
         { label: "الإجازات وإدارتها", path: "/hr/leaves", icon: Calendar, subKey: "leaves", children: [
           { label: "إدارة الإجازات", path: "/hr/leaves/management", icon: ClipboardList },
@@ -133,6 +133,9 @@ const allNavSections: NavSection[] = [
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
         { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
+        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
+        { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
+        { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
@@ -142,7 +145,7 @@ const allNavSections: NavSection[] = [
         { label: "العملاء", path: "/clients", icon: Building2 },
         { label: "الفرص التجارية", path: "/crm", icon: Target },
         { label: "قمع المبيعات", path: "/crm/pipeline", icon: TrendingUp },
-        { label: "أنشطة CRM", path: "/crm/activities", icon: Activity },
+        { label: "أنشطة علاقات العملاء", path: "/crm/activities", icon: Activity },
       ]},
     ],
   },
@@ -614,15 +617,15 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       { label: "إدارة الإجازات", icon: ClipboardList, link: "/hr/leaves/management" },
     ],
     "/hr/attendance": [
-      { label: "تسجيل حضور QR", icon: QrCode, link: "/hr/attendance/qr-scanner" },
+      { label: "تسجيل حضور بالرمز المصوّر", icon: QrCode, link: "/hr/attendance/qr-scanner" },
       { label: "تقارير الحضور", icon: BarChart3, link: "/hr/attendance/reports" },
     ],
     "/hr/attendance/reports": [
-      { label: "تسجيل حضور QR", icon: QrCode, link: "/hr/attendance/qr-scanner" },
+      { label: "تسجيل حضور بالرمز المصوّر", icon: QrCode, link: "/hr/attendance/qr-scanner" },
       { label: "تتبع ميداني", icon: MapPin, link: "/hr/attendance/field-tracking" },
     ],
     "/hr/attendance/field-tracking": [
-      { label: "تسجيل حضور QR", icon: QrCode, link: "/hr/attendance/qr-scanner" },
+      { label: "تسجيل حضور بالرمز المصوّر", icon: QrCode, link: "/hr/attendance/qr-scanner" },
       { label: "تقارير الحضور", icon: BarChart3, link: "/hr/attendance/reports" },
     ],
     "/hr/attendance/qr-scanner": [
@@ -659,9 +662,21 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "/hr/violations": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
       { label: "إدارة المخالفات", icon: ClipboardList, link: "/hr/violations/management" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+      { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
     ],
     "/hr/violations/management": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
+      { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+    ],
+    "/hr/discipline/memos": [
+      { label: "محضر جديد", icon: Plus, link: "/hr/discipline/memos" },
+      { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
+      { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
+    ],
+    "/hr/discipline/regulation": [
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
     ],
     "/hr/shifts": [

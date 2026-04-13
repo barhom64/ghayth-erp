@@ -6,11 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, GitBranch, TrendingUp, TrendingDown, Layers, BookOpen, ChevronDown, ChevronRight, CheckCircle, Search, Edit2, Trash2, Printer, Download } from "lucide-react";
-import { formatCurrency, formatNumber } from "@/lib/formatters";
+import { Plus, GitBranch, TrendingUp, TrendingDown, Layers, BookOpen, ChevronDown, ChevronRight, CheckCircle, Search, Edit2, Trash2, Printer } from "lucide-react";
+import { formatCurrency, formatNumber, formatDateAr } from "@/lib/formatters";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
 
 const typeMap: Record<string, string> = {
@@ -170,6 +170,87 @@ export default function AccountsPage() {
 
   const sortedFlat = [...filtered].sort((a: any, b: any) => (a.code || "").localeCompare(b.code || ""));
 
+  const flatColumns: DataTableColumn<any>[] = [
+    {
+      key: "code",
+      header: "الرمز",
+      sortable: true,
+      render: (acc) => <span className="font-mono text-blue-600 text-xs">{acc.code}</span>,
+    },
+    {
+      key: "createdAt",
+      header: "التاريخ",
+      sortable: true,
+      render: (acc) => <span className="text-gray-500 text-xs">{acc.createdAt ? formatDateAr(acc.createdAt) : "-"}</span>,
+    },
+    {
+      key: "name",
+      header: "الاسم",
+      sortable: true,
+      render: (acc) => (
+        <div>
+          <Link href={`/finance/ledger/${acc.code}`}>
+            <span className="font-medium hover:text-blue-600 cursor-pointer">{acc.name}</span>
+          </Link>
+          {acc.nameEn && <div className="text-xs text-gray-400">{acc.nameEn}</div>}
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "النوع",
+      sortable: true,
+      render: (acc) => <Badge className={`${typeColors[acc.type] || ""} text-xs`}>{typeMap[acc.type] || acc.type}</Badge>,
+    },
+    { key: "level", header: "المستوى", sortable: true, align: "center" },
+    {
+      key: "allowPosting",
+      header: "يقبل حركة",
+      align: "center",
+      render: (acc) => acc.allowPosting ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" /> : <span className="text-gray-300">-</span>,
+    },
+    {
+      key: "isAnalytical",
+      header: "تحليلي",
+      align: "center",
+      render: (acc) => acc.isAnalytical ? <CheckCircle className="h-4 w-4 text-indigo-500 mx-auto" /> : <span className="text-gray-300">-</span>,
+    },
+    {
+      key: "isActive",
+      header: "الحالة",
+      sortable: true,
+      render: (acc) => acc.isActive !== false ? (
+        <Badge className="bg-green-50 text-green-700 text-xs">نشط</Badge>
+      ) : (
+        <Badge className="bg-red-50 text-red-700 text-xs">موقوف</Badge>
+      ),
+    },
+    {
+      key: "currentBalance",
+      header: "الرصيد",
+      sortable: true,
+      render: (acc) => (
+        <span className={`font-semibold text-sm ${Number(acc.currentBalance || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+          {formatCurrency(Number(acc.currentBalance || 0))}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (acc) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => handleOpenEdit(acc)} className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600">
+            <Edit2 className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => setDeleteAccount(acc)} className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   const handleOpenEdit = (acc: any) => {
     navigate(`/finance/accounts/${acc.id}/edit`);
   };
@@ -297,52 +378,14 @@ export default function AccountsPage() {
               <div>{tree.map((node: any) => <AccountNode key={node.code || node.id} node={node} level={0} highlightIds={highlightIds} onEdit={handleOpenEdit} onDelete={setDeleteAccount} />)}</div>
             </>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="p-3 text-start text-xs text-gray-500">الرمز</th>
-                  <th className="p-3 text-start text-xs text-gray-500">الاسم</th>
-                  <th className="p-3 text-start text-xs text-gray-500">النوع</th>
-                  <th className="p-3 text-start text-xs text-gray-500">المستوى</th>
-                  <th className="p-3 text-start text-xs text-gray-500">يقبل حركة</th>
-                  <th className="p-3 text-start text-xs text-gray-500">تحليلي</th>
-                  <th className="p-3 text-start text-xs text-gray-500">الحالة</th>
-                  <th className="p-3 text-start text-xs text-gray-500">الرصيد</th>
-                  <th className="p-3 text-start text-xs text-gray-500">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedFlat.map((acc: any) => (
-                  <tr key={acc.id || acc.code} className="border-b hover:bg-gray-50 group">
-                    <td className="p-3 font-mono text-blue-600 text-xs">{acc.code}</td>
-                    <td className="p-3 font-medium">
-                      <Link href={`/finance/ledger/${acc.code}`}>
-                        <span className="hover:text-blue-600 cursor-pointer">{acc.name}</span>
-                      </Link>
-                      {acc.nameEn && <div className="text-xs text-gray-400">{acc.nameEn}</div>}
-                    </td>
-                    <td className="p-3"><Badge className={`${typeColors[acc.type] || ""} text-xs`}>{typeMap[acc.type] || acc.type}</Badge></td>
-                    <td className="p-3 text-center text-gray-600">{acc.level}</td>
-                    <td className="p-3 text-center">{acc.allowPosting ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" /> : "-"}</td>
-                    <td className="p-3 text-center">{acc.isAnalytical ? <CheckCircle className="h-4 w-4 text-indigo-500 mx-auto" /> : "-"}</td>
-                    <td className="p-3">{acc.isActive !== false ? <Badge className="bg-green-50 text-green-700 text-xs">نشط</Badge> : <Badge className="bg-red-50 text-red-700 text-xs">موقوف</Badge>}</td>
-                    <td className={`p-3 font-semibold text-sm ${Number(acc.currentBalance || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {formatCurrency(Number(acc.currentBalance || 0))}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleOpenEdit(acc)} className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600">
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={() => setDeleteAccount(acc)} className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="p-3">
+              <DataTable
+                columns={flatColumns}
+                data={sortedFlat}
+                noToolbar
+                emptyMessage="لا توجد حسابات"
+              />
+            </div>
           )}
         </CardContent>
       </Card>

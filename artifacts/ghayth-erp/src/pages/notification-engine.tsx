@@ -516,7 +516,7 @@ function WebhooksTab() {
         method: "POST",
         body: JSON.stringify({ name: newName, url: newUrl, secret: newSecret || null, events }),
       });
-      toast({ title: "تم إنشاء الـ Webhook" });
+      toast({ title: "تم إنشاء خطاف الاستدعاء" });
       qc.invalidateQueries({ queryKey: ["notif-webhooks"] });
       setShowNew(false);
       setNewName("");
@@ -553,13 +553,13 @@ function WebhooksTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">الـ Webhooks الصادرة</h3>
+        <h3 className="text-lg font-semibold">خطافات الاستدعاء الصادرة</h3>
         <Button size="sm" onClick={() => setShowNew(!showNew)}>
-          <Plus className="h-4 w-4 ml-1" /> Webhook جديد
+          <Plus className="h-4 w-4 ml-1" /> خطاف استدعاء جديد
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        إرسال إشعارات الأحداث لأنظمة خارجية (Slack, Teams, أنظمة أخرى) عبر HTTP POST.
+        إرسال إشعارات الأحداث لأنظمة خارجية (سلاك، تيمز، أنظمة أخرى) عبر طلبات استدعاء شبكية.
       </p>
 
       {showNew && (
@@ -571,13 +571,13 @@ function WebhooksTab() {
                 <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="ربط سلاك" />
               </div>
               <div>
-                <Label>URL</Label>
+                <Label>الرابط</Label>
                 <Input value={newUrl} onChange={(e) => setNewUrl(e.target.value)} placeholder="https://hooks.slack.com/..." dir="ltr" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Secret (HMAC-SHA256)</Label>
+                <Label>المفتاح السري (تشفير HMAC-SHA256)</Label>
                 <Input value={newSecret} onChange={(e) => setNewSecret(e.target.value)} type="password" dir="ltr" />
               </div>
               <div>
@@ -594,7 +594,7 @@ function WebhooksTab() {
       )}
 
       {webhooks.length === 0 && !showNew && (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">لا توجد Webhooks مسجلة</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-muted-foreground">لا توجد خطافات استدعاء مسجلة</CardContent></Card>
       )}
 
       {webhooks.map((wh: Record<string, unknown>) => {
@@ -913,7 +913,7 @@ export default function NotificationEnginePage() {
             <ArrowRight className="h-4 w-4" /> التصعيد
           </TabsTrigger>
           <TabsTrigger value="webhooks" className="gap-1">
-            <Webhook className="h-4 w-4" /> Webhooks
+            <Webhook className="h-4 w-4" /> خطافات الاستدعاء
           </TabsTrigger>
           <TabsTrigger value="stats" className="gap-1">
             <BarChart3 className="h-4 w-4" /> التوصيل
