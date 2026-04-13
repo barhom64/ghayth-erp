@@ -52,7 +52,7 @@ export async function createNotification(params: {
 export async function emitEvent(params: {
   companyId: number;
   branchId?: number;
-  userId: number;
+  userId: number | null;
   action: string;
   entity: string;
   entityId: number;
@@ -77,7 +77,7 @@ export async function emitEvent(params: {
     eventBus.emit(params.action, {
       companyId: params.companyId,
       branchId: params.branchId,
-      userId: params.userId,
+      userId: params.userId ?? undefined,
       entity: params.entity,
       entityId: params.entityId,
       action: params.action,

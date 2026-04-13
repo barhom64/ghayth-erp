@@ -459,6 +459,15 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
       }
     }).catch(console.error);
 
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "hr.memo.justified",
+      entity: "hr_inquiry_memos",
+      entityId: id,
+      details: JSON.stringify({ declined: !!declined }),
+    }).catch(console.error);
+
     res.json({ ok: true, status: "pending_manager" });
   } catch (err) {
     handleRouteError(err, res, "Justify memo error:");
