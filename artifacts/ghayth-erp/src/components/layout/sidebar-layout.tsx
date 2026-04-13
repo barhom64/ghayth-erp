@@ -659,9 +659,21 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "/hr/violations": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
       { label: "إدارة المخالفات", icon: ClipboardList, link: "/hr/violations/management" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+      { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
     ],
     "/hr/violations/management": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
+      { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+    ],
+    "/hr/discipline/memos": [
+      { label: "محضر جديد", icon: Plus, link: "/hr/discipline/memos" },
+      { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
+      { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
+    ],
+    "/hr/discipline/regulation": [
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
     ],
     "/hr/shifts": [
