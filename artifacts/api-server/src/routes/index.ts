@@ -72,6 +72,9 @@ import { vendorsRouter } from "./finance-vendors.js";
 import { attendanceRouter } from "./hr-attendance.js";
 import disciplineRouter from "./hr-discipline.js";
 import digitalSignatureRouter from "./digital-signature.js";
+import { eventsRouter } from "./events.js";
+import { execDashboardRouter } from "./execDashboard.js";
+import { obligationsRouter } from "./obligations.js";
 
 const router: IRouter = Router();
 
@@ -180,5 +183,8 @@ router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", notificationEngineRouter);
 router.use("/gov-integrations", govIntegrationsRouter);
 router.use("/digital-signature", digitalSignatureRouter);
+router.use("/events", eventsRouter);
+router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
+router.use("/obligations", obligationsRouter);
 
 export default router;
