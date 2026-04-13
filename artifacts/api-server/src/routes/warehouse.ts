@@ -5,6 +5,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { eventBus } from "../lib/eventBus.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -203,6 +204,25 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
     });
 
     const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1`, [insertId]);
+
+    // Bus emission — closes the dead listener in eventListeners.ts:261 so the
+    // rules engine + audit trail see every stock movement, not just products.
+    eventBus.emit("warehouse.movement.created", {
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "warehouse_movements",
+      entityId: insertId,
+      action: "create",
+      after: {
+        productId: row?.productId,
+        type: row?.type,
+        quantity: row?.quantity,
+        unitCost: row?.unitCost,
+        reference: row?.reference,
+      },
+    });
+
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
       try {

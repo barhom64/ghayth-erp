@@ -437,6 +437,26 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       after: { vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm, cost: totalEstimatedCost },
     }).catch(console.error);
 
+    // Emit on the event bus so eventListeners.ts can write an audit_logs row
+    // and any future rule / analytics subscriber gets the notification. Before
+    // this we only wrote an audit row manually — the listener was dead.
+    eventBus.emit("fleet.trip.started", {
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "fleet_trips",
+      entityId: insertId,
+      action: "create",
+      after: {
+        vehicleId: selectedVehicleId,
+        driverId: selectedDriverId,
+        distance: estimatedDistanceKm,
+        cost: totalEstimatedCost,
+        fromLocation: b.fromLocation,
+        toLocation: b.toLocation,
+      },
+    });
+
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1`, [insertId]);
     res.status(201).json({
       ...row,
@@ -509,6 +529,27 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
     } catch (evtErr) {
       console.error("Event log creation failed for trip", tripId, evtErr);
     }
+
+    // Bus emission — closes the fleet.trip.started → fleet.trip.completed
+    // pair so rules engine + audit-log subscribers see the full lifecycle.
+    eventBus.emit("fleet.trip.completed", {
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "fleet_trips",
+      entityId: tripId,
+      action: "update",
+      before: { status: trip.status, distance: trip.distance, cost: trip.cost },
+      after: {
+        status: "completed",
+        distance: actualDistanceKm,
+        cost: totalCost,
+        fuelCost: actualFuelCost,
+        driverFare,
+        depreciation,
+        journalEntryId,
+      },
+    });
 
     const [updated] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1`, [tripId]);
     res.json({

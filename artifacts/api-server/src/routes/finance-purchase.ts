@@ -148,6 +148,22 @@ purchaseRouter.patch("/purchase-requests/:id/approve", async (req, res) => {
     await rawExecute(`UPDATE purchase_requests SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
+    // Bus emission — the dead listeners in eventListeners.ts:193/326
+    // (purchase_request.approved / purchase_request.rejected) now fire.
+    // Approvals were silent on the bus before this patch.
+    if (newStatus === "approved" || newStatus === "rejected") {
+      await emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: newStatus === "approved" ? "purchase_request.approved" : "purchase_request.rejected",
+        entity: "purchase_request",
+        entityId: Number(id),
+        before: { status: pr.status },
+        after: { status: newStatus, notes: notes ?? null },
+      });
+    }
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {

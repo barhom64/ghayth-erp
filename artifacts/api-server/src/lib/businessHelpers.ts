@@ -215,6 +215,28 @@ export async function createJournalEntry(params: {
 
   await updateAccountBalances(params.companyId, params.lines);
 
+  // Bus emission — closes the dead listener in eventListeners.ts:276 so every
+  // journal entry (from fleet trips, payroll, invoices, manual postings …)
+  // produces one audit_logs row + one event_logs row via the subscriber.
+  eventBus.emit("journal.entry.created", {
+    companyId: params.companyId,
+    branchId: params.branchId,
+    userId: params.createdBy,
+    entity: "journal_entries",
+    entityId: journalId,
+    action: "create",
+    after: {
+      ref: params.ref,
+      description: params.description,
+      type: params.type ?? "manual",
+      sourceType: params.sourceType ?? null,
+      sourceId: params.sourceId ?? null,
+      totalDebit,
+      totalCredit,
+      lineCount: params.lines.length,
+    },
+  });
+
   return journalId;
 }
 
