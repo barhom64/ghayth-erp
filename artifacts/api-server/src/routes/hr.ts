@@ -1,4 +1,11 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  validationError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+  ForbiddenError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -2723,13 +2730,24 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
  * Use when leave is no longer needed (e.g. employee returned early, emergency).
  */
 router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async (req, res) => {
+  // P3.2 pilot — this endpoint is the unification plan's reference
+  // implementation for how a cancel handler should look after adoption:
+  //   - structured errors via the P0.3 TypedError hierarchy
+  //   - one thrown error per failure reason, no `res.status().json()` calls
+  //   - handleRouteError translates the TypedError to the exact
+  //     { error, code, field?, fix? } shape the frontend's
+  //     PageErrorBoundary + useApiMutation(.onFieldError) expect
+  // Leaves approve/reject untouched for now — they need a separate
+  // multi-stage refactor that's tracked under P3.x follow-ups.
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body || {};
     if (!b.reason) {
-      validationError(res, "سبب الإلغاء مطلوب", "reason", "أدخل سبب إلغاء الإجازة");
-      return;
+      throw new ValidationError("سبب الإلغاء مطلوب", {
+        field: "reason",
+        fix: "أدخل سبب إلغاء الإجازة",
+      });
     }
     const [request] = await rawQuery<any>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
@@ -2738,15 +2756,25 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
        WHERE lr.id = $1 AND lr."companyId" = $2`,
       [id, scope.companyId]
     );
-    if (!request) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
+    if (!request) {
+      throw new NotFoundError("طلب الإجازة غير موجود");
+    }
     const isOwn = request.employeeId === scope.employeeId;
     if (!isOwn && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: إلغاء الإجازة مقصور على صاحب الطلب أو HR أو المالك" });
-      return;
+      throw new ForbiddenError(
+        "إلغاء الإجازة مقصور على صاحب الطلب أو HR أو المالك",
+        { fix: "اطلب من مدير الموارد البشرية تنفيذ الإلغاء." },
+      );
     }
     if (!["approved", "pending"].includes(request.status)) {
-      validationError(res, `لا يمكن إلغاء إجازة بحالة ${request.status}`, "status", "الإجازة مُلغاة أو مرفوضة مسبقاً");
-      return;
+      throw new ConflictError(
+        `لا يمكن إلغاء إجازة بحالة ${request.status}`,
+        {
+          field: "status",
+          fix: "الإجازة مُلغاة أو مرفوضة أو مكتملة مسبقاً.",
+          meta: { currentStatus: request.status },
+        },
+      );
     }
 
     // Restore balance if was approved (used → 0, or reduce used by days)
