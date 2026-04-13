@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
+// Phase A — HR 360° evaluation on unified primitives.
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -108,19 +110,18 @@ export default function Evaluation360Page() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">التقييم الذكي 360°</h1>
-          <p className="text-sm text-gray-500 mt-1">تقييم شامل يجمع بيانات النظام وتقييم المدير والزملاء والتقييم العكسي السري</p>
-        </div>
+    <PageShell
+      title="التقييم الذكي 360°"
+      subtitle="تقييم شامل يجمع بيانات النظام وتقييم المدير والزملاء والتقييم العكسي السري"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
         <Link href="/hr/evaluation-360/create">
           <Button>
             <Plus className="w-4 h-4 me-1" />بدء دورة تقييم
           </Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -205,6 +206,6 @@ export default function Evaluation360Page() {
         ))}
       </div>
 
-    </div>
+    </PageShell>
   );
 }

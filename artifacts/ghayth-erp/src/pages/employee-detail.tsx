@@ -1,14 +1,21 @@
 import { useState, useEffect } from "react";
 import DOMPurify from "dompurify";
-import { useApiQuery, asList, apiFetch } from "@/lib/api";
+import { useApiQuery, asList, apiFetch, ApiError } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+// Phase A.1 — employee detail page on PageShell with a friendly
+// not-found state. Replaces the bare "الموظف غير موجود" text
+// (regression the programmer reported on /employees/734) with a
+// proper error card that links back to the list and the hub.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
+import { Link } from "wouter";
 import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
+  ArrowLeft, Home,
   FileText, TrendingUp, Award, History, Activity, CheckCircle2,
   XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X
 } from "lucide-react";
@@ -229,7 +236,7 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
 export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const [, params] = useRoute("/employees/:id");
   const id = propId || params?.id || "";
-  const { data: employee, isLoading } = useApiQuery<any>(["employee", id], `/employees/${id}`, !!id);
+  const { data: employee, isLoading, isError, error } = useApiQuery<any>(["employee", id], `/employees/${id}`, !!id);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
@@ -283,19 +290,78 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   };
 
   if (isLoading) {
+    // Loading state stays inside PageShell so the sidebar + breadcrumbs
+    // remain rendered — no jarring layout shift when the data arrives.
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
+      <PageShell
+        title="جارٍ تحميل بيانات الموظف..."
+        breadcrumbs={[
+          { href: "/hr", label: "الموارد البشرية" },
+          { href: "/employees", label: "الموظفون" },
+        ]}
+        loading
+      >
         <div className="grid gap-6 md:grid-cols-2">
           <Skeleton className="h-64" />
           <Skeleton className="h-64" />
         </div>
-      </div>
+      </PageShell>
     );
   }
 
-  if (!employee) {
-    return <div className="text-center py-12">الموظف غير موجود</div>;
+  // Friendly 404 — replaces the bare "الموظف غير موجود" text with a
+  // proper fallback card that explains what happened and offers both
+  // Back (to the list) and Home routes. This is the specific
+  // regression the programmer reported on /employees/734.
+  if (isError || !employee) {
+    const is404 = error instanceof ApiError && error.status === 404;
+    const headline = is404 ? "الموظف غير موجود" : "تعذّر تحميل بيانات الموظف";
+    const body = is404
+      ? `لا يوجد موظف بالرقم ${id} في قاعدة البيانات. قد يكون محذوفاً أو الرقم غير صحيح.`
+      : (error instanceof Error ? error.message : "حدث خطأ أثناء الاتصال بالخادم.");
+
+    return (
+      <PageShell
+        title={headline}
+        breadcrumbs={[
+          { href: "/hr", label: "الموارد البشرية" },
+          { href: "/employees", label: "الموظفون" },
+        ]}
+      >
+        <Card className="max-w-2xl mx-auto">
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 rounded-full bg-amber-50 p-2">
+                <AlertTriangle className="h-6 w-6 text-amber-500" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <h2 className="text-lg font-semibold text-gray-900">{headline}</h2>
+                <p className="text-sm text-gray-600">{body}</p>
+                {is404 && (
+                  <p className="text-xs text-gray-500">
+                    المعرّف المطلوب: <code className="bg-gray-100 px-1 rounded">{id}</code>
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <Link href="/employees">
+                <Button variant="default" size="sm">
+                  <ArrowLeft className="h-4 w-4 ms-1" />
+                  قائمة الموظفين
+                </Button>
+              </Link>
+              <Link href="/hr">
+                <Button variant="outline" size="sm">
+                  <Home className="h-4 w-4 ms-1" />
+                  الموارد البشرية
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
   }
 
   const tasks: any[] = employee.tasks || [];
@@ -311,12 +377,15 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const pendingTasks = tasks.filter(t => t.status !== "completed" && t.status !== "cancelled").length;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{employee.name}</h1>
-          <p className="text-sm text-muted-foreground">{employee.empNumber} · {employee.jobTitle} · {employee.branchName}</p>
-        </div>
+    <PageShell
+      title={employee.name}
+      subtitle={`${employee.empNumber || "—"} · ${employee.jobTitle || "—"} · ${employee.branchName || "—"}`}
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { href: "/employees", label: "الموظفون" },
+      ]}
+      resetKey={id}
+      actions={
         <div className="flex items-center gap-2 flex-wrap">
           <OperationalStatusBar employeeId={id} />
           <div className="relative">
@@ -346,8 +415,8 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             )}
           </div>
         </div>
-      </div>
-
+      }
+    >
       <div className="flex gap-1 border-b overflow-x-auto pb-px">
         {TABS.map((tab) => {
           const count = tab.key === "tasks" ? tasks.length
@@ -456,7 +525,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                         <p className="text-xs text-gray-400">الصافي</p>
                         <p className="font-bold text-green-700">{formatCurrency(Number(latest.netSalary || 0))}</p>
                       </div>
-                      <StatusBadge status={latest.status} />
+                      <PageStatusBadge status={latest.status} />
                     </div>
                   );
                 })()}
@@ -611,7 +680,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                   <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50">
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-sm">{formatDateAr(a.date)}</span>
-                      <StatusBadge status={a.status} />
+                      <PageStatusBadge status={a.status} domain="attendance" />
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span>دخول: {a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</span>
@@ -656,7 +725,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                         </p>
                         {l.reason && <p className="text-xs text-muted-foreground mt-1">{l.reason}</p>}
                       </div>
-                      <StatusBadge status={l.status} />
+                      <PageStatusBadge status={l.status} domain="leave" />
                     </div>
                   ))}
                 </div>
@@ -700,7 +769,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                         <td className="p-3 text-orange-600">{formatCurrency(Number(p.gosi || 0))}</td>
                         <td className="p-3 text-red-600">{formatCurrency(Number(p.lateDeduction || 0))}</td>
                         <td className="p-3 font-bold text-green-700">{formatCurrency(Number(p.netSalary || 0))}</td>
-                        <td className="p-3"><StatusBadge status={p.status} /></td>
+                        <td className="p-3"><PageStatusBadge status={p.status} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -746,7 +815,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                       {t.projectName && <p className="text-xs text-muted-foreground">{t.projectName}</p>}
                     </div>
                     <div className="flex items-center gap-2">
-                      <StatusBadge status={t.status} />
+                      <PageStatusBadge status={t.status} />
                       <PriorityBadge priority={t.priority} />
                       {t.dueDate && (
                         <span className="text-xs text-muted-foreground">
@@ -779,7 +848,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                       <p className="text-xs text-muted-foreground">{t.courseType || "-"}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <StatusBadge status={t.status} />
+                      <PageStatusBadge status={t.status} />
                       {t.completedAt && (
                         <span className="text-xs text-muted-foreground">
                           {formatDateAr(t.completedAt)}
@@ -839,7 +908,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
           <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(printHtml) }} />
         </PrintPreviewModal>
       )}
-    </div>
+    </PageShell>
   );
 }
 

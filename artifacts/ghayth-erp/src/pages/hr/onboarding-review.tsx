@@ -4,7 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { UserPlus, CheckCircle, Clock, ClipboardCheck, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
-import { StatusBadge } from "@/components/ui/status-badge";
+// Phase A — HR onboarding review on unified primitives.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 
 export default function OnboardingReviewPage() {
   const { data } = useApiQuery<any>(["employees"], "/employees?limit=200");
@@ -59,12 +61,11 @@ export default function OnboardingReviewPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">مراجعة التعيين والتأهيل</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">متابعة إجراءات التعيين وتأهيل الموظفين الجدد</p>
-      </div>
-
+    <PageShell
+      title="مراجعة التعيين والتأهيل"
+      subtitle="متابعة إجراءات التعيين وتأهيل الموظفين الجدد"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -129,6 +130,6 @@ export default function OnboardingReviewPage() {
           </tbody>
         </table>
       </CardContent></Card>
-    </div>
+    </PageShell>
   );
 }

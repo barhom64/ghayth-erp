@@ -3,7 +3,9 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+// Phase A — HR training on unified primitives.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, GraduationCap, Users, BookOpen, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -69,7 +71,7 @@ export default function TrainingPage() {
   const enrollmentColumns: DataTableColumn<any>[] = [
     { key: "employeeName", header: "الموظف", sortable: true, render: (e) => <span className="font-medium">{e.employeeName || "-"}</span> },
     { key: "programTitle", header: "البرنامج", sortable: true, render: (e) => e.programTitle || "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (e) => <StatusBadge status={e.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (e) => <PageStatusBadge status={e.status} /> },
     { key: "score", header: "الدرجة", sortable: true, render: (e) => e.score ?? "-" },
     {
       key: "actions",
@@ -87,17 +89,16 @@ export default function TrainingPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">برامج التدريب</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">إدارة برامج التدريب وتسجيلات الموظفين</p>
-        </div>
+    <PageShell
+      title="برامج التدريب"
+      subtitle="إدارة برامج التدريب وتسجيلات الموظفين"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
         <Link href="/hr/training/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة برنامج</Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -141,7 +142,7 @@ export default function TrainingPage() {
                       <span className="font-semibold">{t.title}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <StatusBadge status={t.status} />
+                      <PageStatusBadge status={t.status} />
                       <RowActions
                         canEdit={canManage}
                         onEdit={() => programActions.startEdit(t.id, { title: t.title, trainer: t.trainer || "", location: t.location || "", capacity: t.capacity || t.maxParticipants || 0, status: t.status || "planned" })}
@@ -211,6 +212,6 @@ export default function TrainingPage() {
           />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

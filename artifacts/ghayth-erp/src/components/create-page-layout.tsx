@@ -1,18 +1,49 @@
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatDateAr } from "@/lib/formatters";
+// Phase A — CreatePageLayout now delegates to PageShell so every one of
+// the 56+ create pages in the app automatically picks up the unified
+// header + breadcrumbs + error boundary without touching the call sites.
+// This is the single-point leverage move: update one component, every
+// create page looks consistent.
+import { PageShell } from "@/components/page-shell";
 
 interface CreatePageLayoutProps {
   title: string;
   backPath: string;
+  /**
+   * Optional label for the back link shown in the breadcrumbs. Defaults to
+   * "رجوع" — most call sites are fine with the default because the title
+   * on the parent page already tells the user where they came from.
+   */
+  backLabel?: string;
+  /**
+   * Optional subtitle shown under the page title. Create pages that don't
+   * need one (most) leave it blank and the header renders title alone.
+   */
+  subtitle?: string;
+  /**
+   * Optional extra breadcrumbs between Home and the back link. Useful for
+   * deeper create flows like /create/hr/employee where the parent is
+   * "الموارد البشرية → الموظفون → إضافة موظف".
+   */
+  breadcrumbs?: Array<{ href?: string; label: string }>;
   children: React.ReactNode;
   isDirty?: boolean;
 }
 
-export function CreatePageLayout({ title, backPath, children, isDirty = false }: CreatePageLayoutProps) {
+export function CreatePageLayout({
+  title,
+  backPath,
+  backLabel,
+  subtitle,
+  breadcrumbs,
+  children,
+  isDirty = false,
+}: CreatePageLayoutProps) {
   const [, setLocation] = useLocation();
   useUnsavedChanges(isDirty);
 
@@ -24,21 +55,30 @@ export function CreatePageLayout({ title, backPath, children, isDirty = false }:
     setLocation(backPath);
   };
 
+  const allCrumbs = [
+    ...(breadcrumbs ?? []),
+    { href: backPath, label: backLabel ?? "رجوع" },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={handleBack}>
-          <ArrowRight className="h-5 w-5" />
+    <PageShell
+      title={title}
+      subtitle={subtitle}
+      breadcrumbs={allCrumbs}
+      actions={
+        <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1">
+          <ArrowRight className="h-4 w-4" />
+          رجوع
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-      </div>
+      }
+    >
       <Card>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent>{children}</CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
 

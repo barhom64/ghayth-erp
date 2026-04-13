@@ -4,23 +4,47 @@ import { Link, useLocation } from "wouter";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Plus, Eye, ExternalLink, Users, UserCheck, UserX, Briefcase, ChevronDown, ChevronUp, Shield, Link2 } from "lucide-react";
+import {
+  Plus,
+  Eye,
+  ExternalLink,
+  Users,
+  UserCheck,
+  UserX,
+  Briefcase,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+  Link2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROLES } from "@/lib/constants";
-import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import {
+  useInlineActions,
+  RowActions,
+  InlineEditForm,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
+import {
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+} from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
-
-const EMP_STATUS_OPTIONS = [
-  { value: "active", label: "نشط" },
-  { value: "inactive", label: "غير نشط" },
-];
+// Phase A.1 — HR reference domain. This page is the pattern every other
+// HR list page will follow: PageShell wraps the body, PageStatusBadge
+// replaces the legacy StatusBadge, column presets handle the obvious
+// columns, and actions live in a flex row with no nested interactive
+// elements (fixes the "<button> inside <button>" DOM warning).
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
+import { textColumn, actionsColumn } from "@/components/data-table-presets";
 
 type OperationalStatus = {
   status: string;
@@ -44,7 +68,7 @@ function OperationalStatusBadge({ status }: { status: OperationalStatus | undefi
 
 export default function Employees() {
   const [, setLocation] = useLocation();
-  const { roleLevel, hasPermission, permissions, scopeQueryString } = useAppContext();
+  const { roleLevel, permissions, scopeQueryString } = useAppContext();
   const canWrite = roleLevel >= 50;
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
@@ -57,8 +81,6 @@ export default function Employees() {
     ["employees", filters.search, String(page), scopeQueryString],
     `/employees?search=${encodeURIComponent(filters.search)}&page=${page}&limit=${pageSize}${scopeSuffix}`
   );
-  const { data: branchesResp } = useApiQuery<any>(["settings-branches"], "/settings/branches");
-  const branchOptions = (branchesResp?.data || []).map((b: any) => ({ value: String(b.id), label: b.name }));
   const employees = employeesResponse?.data;
   const total = employeesResponse?.total || 0;
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("employee");
@@ -106,9 +128,17 @@ export default function Employees() {
       key: "name",
       header: "الاسم",
       sortable: true,
-      render: (e) => <span className="font-medium">{e.name}</span>,
+      searchable: true,
+      render: (e) => (
+        <Link
+          href={`/employees/${e.id}`}
+          className="font-medium text-primary hover:underline"
+        >
+          {e.name}
+        </Link>
+      ),
     },
-    { key: "jobTitle", header: "المسمى الوظيفي", sortable: true, render: (e) => e.jobTitle },
+    textColumn("jobTitle", "المسمى الوظيفي"),
     {
       key: "phone",
       header: "رقم الجوال",
@@ -132,7 +162,7 @@ export default function Employees() {
       key: "status",
       header: "حالة الحساب",
       sortable: true,
-      render: (e) => <StatusBadge status={e.status} />,
+      render: (e) => <PageStatusBadge status={e.status} />,
     },
     {
       key: "iqama",
@@ -149,12 +179,23 @@ export default function Employees() {
         </div>
       ),
     },
-    {
-      key: "actions",
-      header: "الإجراءات",
-      render: (employee) => (
-        <div className="flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
-          <Button variant="ghost" size="icon" onClick={() => setPreviewItem(employee)}>
+    actionsColumn<any>(
+      (employee) => (
+        // A stopPropagation-wrapped flex row, NOT wrapped in another button.
+        // Every child is a discrete interactive element; nothing is nested
+        // inside another interactive element. This is what fixes the
+        // "validateDOMNesting: <button> cannot appear as descendant of <button>"
+        // warning the programmer reported on this page.
+        <div
+          className="flex items-center gap-1"
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setPreviewItem(employee)}
+            title="معاينة سريعة"
+          >
             <Eye className="h-4 w-4 text-muted-foreground" />
           </Button>
           <Link href={`/employees/${employee.id}`}>
@@ -164,18 +205,35 @@ export default function Employees() {
           </Link>
           <RowActions
             canEdit={canManage}
-            onEdit={() => startEdit(employee.id, { name: employee.name, jobTitle: employee.jobTitle, phone: employee.phone || "", role: employee.role, status: employee.status })}
+            onEdit={() =>
+              startEdit(employee.id, {
+                name: employee.name,
+                jobTitle: employee.jobTitle,
+                phone: employee.phone || "",
+                role: employee.role,
+                status: employee.status,
+              })
+            }
             onDelete={() => startDelete(employee.id)}
           />
-          <button
-            onClick={() => setExpandedId(expandedId === employee.id ? null : employee.id)}
-            className="text-gray-400 hover:text-gray-600 p-1"
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              setExpandedId(expandedId === employee.id ? null : employee.id)
+            }
+            title={expandedId === employee.id ? "طي التفاصيل" : "عرض التفاصيل"}
           >
-            {expandedId === employee.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
+            {expandedId === employee.id ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </Button>
         </div>
       ),
-    },
+      { header: "الإجراءات", width: "160px" },
+    ),
   ];
 
   const previewFields: PreviewField[] = [
@@ -189,19 +247,58 @@ export default function Employees() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">إدارة الموظفين</h1>
-        {(canWrite || canManage) && (
+    <PageShell
+      title="إدارة الموظفين"
+      subtitle="قائمة الموظفين والمسميات الوظيفية والحسابات"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
+        (canWrite || canManage) ? (
           <Link href="/employees/create">
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
               إضافة موظف
             </Button>
           </Link>
-        )}
-      </div>
-
+        ) : null
+      }
+      filters={
+        <div className="flex-1 flex flex-col gap-3 w-full">
+          <AdvancedFilters
+            config={{
+              searchPlaceholder: "بحث بالاسم أو الرقم الوظيفي...",
+              statuses: [
+                { value: "active", label: "نشط" },
+                { value: "inactive", label: "غير نشط" },
+              ],
+              showDateRange: true,
+            }}
+            values={filters}
+            onChange={setFilters}
+            onExportCSV={() =>
+              exportToCSV(
+                filtered || [],
+                [
+                  { key: "empNumber", label: "الرقم الوظيفي" },
+                  { key: "name", label: "الاسم" },
+                  { key: "jobTitle", label: "المسمى" },
+                  { key: "departmentName", label: "القسم" },
+                  { key: "branchName", label: "الفرع" },
+                  { key: "phone", label: "الجوال" },
+                  { key: "status", label: "الحالة" },
+                ],
+                "الموظفين",
+              )
+            }
+            resultCount={filtered?.length}
+          />
+          <TagFilterSelect
+            tagsList={tagsList}
+            selectedTag={selectedTag}
+            onSelect={setSelectedTag}
+          />
+        </div>
+      }
+    >
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {[
           { label: "إجمالي الموظفين", value: total, icon: Users, color: "text-blue-600 bg-blue-50" },
@@ -221,32 +318,6 @@ export default function Employees() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <AdvancedFilters
-          config={{
-            searchPlaceholder: "بحث بالاسم أو الرقم الوظيفي...",
-            statuses: [
-              { value: "active", label: "نشط" },
-              { value: "inactive", label: "غير نشط" },
-            ],
-            showDateRange: true,
-          }}
-          values={filters}
-          onChange={setFilters}
-          onExportCSV={() => exportToCSV(filtered || [], [
-            { key: "empNumber", label: "الرقم الوظيفي" },
-            { key: "name", label: "الاسم" },
-            { key: "jobTitle", label: "المسمى" },
-            { key: "departmentName", label: "القسم" },
-            { key: "branchName", label: "الفرع" },
-            { key: "phone", label: "الجوال" },
-            { key: "status", label: "الحالة" },
-          ], "الموظفين")}
-          resultCount={filtered?.length}
-        />
-        <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
       </div>
 
       <DataTable
@@ -287,6 +358,6 @@ export default function Employees() {
         }}
       />
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة الموظف" data={previewItem} fields={previewFields} />
-    </div>
+    </PageShell>
   );
 }

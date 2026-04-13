@@ -4,7 +4,9 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+// Phase A — HR payroll list on unified primitives.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, DollarSign, Users, TrendingUp, FileText, Eye } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
@@ -89,7 +91,7 @@ export default function PayrollPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (p) => <StatusBadge status={p.status} />,
+      render: (p) => <PageStatusBadge status={p.status} />,
     },
     {
       key: "createdAt",
@@ -110,7 +112,19 @@ export default function PayrollPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="مسيرات الرواتب"
+      subtitle="إدارة دورات الرواتب الشهرية والسنوية"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
+        <div className="flex gap-2">
+          <ExportButton endpoint="/export/excel/payroll" filename="payroll.xlsx" type="excel" label="تصدير Excel" />
+          <Link href="/hr/payroll/create">
+            <Button size="sm"><Plus className="h-4 w-4 me-1" />تشغيل مسير رواتب</Button>
+          </Link>
+        </div>
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -125,19 +139,6 @@ export default function PayrollPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">مسيرات الرواتب</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">إدارة دورات الرواتب الشهرية والسنوية</p>
-        </div>
-        <div className="flex gap-2">
-          <ExportButton endpoint="/export/excel/payroll" filename="payroll.xlsx" type="excel" label="تصدير Excel" />
-          <Link href="/hr/payroll/create">
-            <Button size="sm"><Plus className="h-4 w-4 me-1" />تشغيل مسير رواتب</Button>
-          </Link>
-        </div>
       </div>
 
       <AdvancedFilters
@@ -181,6 +182,6 @@ export default function PayrollPage() {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

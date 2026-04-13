@@ -2,6 +2,8 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+// Phase A — HR recruitment on unified primitives.
+import { PageShell } from "@/components/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Briefcase, Users, UserCheck, FileText } from "lucide-react";
@@ -148,12 +150,11 @@ export default function RecruitmentPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">التوظيف والاستقطاب</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">إدارة الوظائف المفتوحة وطلبات التوظيف</p>
-      </div>
-
+    <PageShell
+      title="التوظيف والاستقطاب"
+      subtitle="إدارة الوظائف المفتوحة وطلبات التوظيف"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -274,6 +275,6 @@ export default function RecruitmentPage() {
           />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

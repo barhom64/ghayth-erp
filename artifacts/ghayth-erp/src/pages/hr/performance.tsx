@@ -2,7 +2,9 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+// Phase A — HR performance on unified primitives.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, Star, Target, TrendingUp, Users, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -82,22 +84,21 @@ export default function PerformancePage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (p) => <StatusBadge status={p.status || "draft"} />,
+      render: (p) => <PageStatusBadge status={p.status || "draft"} />,
     },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">تقييمات الأداء</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">متابعة تقييمات أداء الموظفين ونتائجهم</p>
-        </div>
+    <PageShell
+      title="تقييمات الأداء"
+      subtitle="متابعة تقييمات أداء الموظفين ونتائجهم"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
         <Link href="/hr/performance/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />تقييم جديد</Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -137,6 +138,6 @@ export default function PerformancePage() {
         emptyMessage="لا توجد تقييمات"
         pageSize={20}
       />
-    </div>
+    </PageShell>
   );
 }

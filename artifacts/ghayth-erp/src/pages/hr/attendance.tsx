@@ -4,7 +4,9 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+// Phase A — HR attendance page on unified primitives.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -171,7 +173,7 @@ export default function AttendancePage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (a) => <StatusBadge status={a.status} />,
+      render: (a) => <PageStatusBadge status={a.status} domain="attendance" />,
     },
     {
       key: "expand",
@@ -193,12 +195,13 @@ export default function AttendancePage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">الحضور والانصراف</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">تسجيل ومتابعة حضور وانصراف الموظفين</p>
-        </div>
+    <PageShell
+      title="الحضور والانصراف"
+      subtitle="تسجيل ومتابعة حضور وانصراف الموظفين"
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+      ]}
+      actions={
         <ExportButton
           endpoint="/export/excel/attendance"
           filename="attendance.xlsx"
@@ -206,8 +209,8 @@ export default function AttendancePage() {
           label="تصدير Excel"
           params={{ startDate: `${month}-01`, endDate: new Date(parseInt(month.split("-")[0]), parseInt(month.split("-")[1]), 0).toISOString().slice(0, 10) }}
         />
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -304,6 +307,6 @@ export default function AttendancePage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

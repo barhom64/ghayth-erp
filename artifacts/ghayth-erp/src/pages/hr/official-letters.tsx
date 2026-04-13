@@ -3,7 +3,9 @@ import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+// Phase A — HR official letters on unified primitives.
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,7 +55,7 @@ export default function OfficialLettersPage() {
     { key: "type", header: "النوع", sortable: true, render: (l) => typeMap[l.type] || l.type },
     { key: "employeeName", header: "الموظف", sortable: true, className: "text-gray-500", render: (l) => l.employeeName || "-" },
     { key: "createdAt", header: "التاريخ", sortable: true, className: "text-gray-500", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (l) => <StatusBadge status={l.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status} /> },
     {
       key: "actions",
       header: "إجراءات",
@@ -102,17 +104,16 @@ export default function OfficialLettersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">الخطابات الرسمية</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">إصدار ومتابعة الخطابات الرسمية للموظفين</p>
-        </div>
+    <PageShell
+      title="الخطابات الرسمية"
+      subtitle="إصدار ومتابعة الخطابات الرسمية للموظفين"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
         <Button size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "خطاب جديد"}
         </Button>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "إجمالي الخطابات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
@@ -224,6 +225,6 @@ export default function OfficialLettersPage() {
           </div>
         </PrintPreviewModal>
       )}
-    </div>
+    </PageShell>
   );
 }

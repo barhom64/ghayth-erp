@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
+// Phase A — HR discipline memos on unified primitives.
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -217,14 +219,11 @@ export default function DisciplineMemosPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">محاضر الاستفسار</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            سير العمل الثلاثي: الموظف → المدير المباشر → المدير العام
-          </p>
-        </div>
+    <PageShell
+      title="محاضر الاستفسار"
+      subtitle="سير العمل الثلاثي: الموظف → المدير المباشر → المدير العام"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
         <div className="flex gap-2">
           <Link href="/hr/discipline/regulation">
             <Button variant="outline">
@@ -237,8 +236,8 @@ export default function DisciplineMemosPage() {
             محضر جديد
           </Button>
         </div>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           {
@@ -383,6 +382,6 @@ export default function DisciplineMemosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }
