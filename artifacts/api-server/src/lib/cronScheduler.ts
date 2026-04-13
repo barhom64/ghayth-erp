@@ -607,11 +607,14 @@ async function hourlyApprovalEscalation(): Promise<string> {
 }
 
 async function dailyDeductionCheck(): Promise<string> {
+  // lazy import لتفادي cycles مع businessHelpers
+  const { ensureInquiryMemoForViolation } = await import("./disciplineEngine.js");
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let deductions = 0;
+  let memos = 0;
   for (const company of companies) {
     const absentees = await rawQuery<any>(
-      `SELECT a."assignmentId", ea."employeeId", e.name
+      `SELECT a."assignmentId", ea."employeeId", ea."branchId", e.name, a.date
        FROM attendance a
        JOIN employee_assignments ea ON ea.id = a."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
@@ -624,6 +627,7 @@ async function dailyDeductionCheck(): Promise<string> {
       [company.id]
     );
     for (const a of absentees) {
+      // 1) خصم غياب في قيد الرواتب
       await rawExecute(
         `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, reason, date, "createdAt")
          SELECT $1, $2, 'absence', 0, $3, CURRENT_DATE, NOW()
@@ -634,9 +638,49 @@ async function dailyDeductionCheck(): Promise<string> {
         [company.id, a.employeeId, `خصم غياب تلقائي — ${a.name}`]
       ).catch(() => {});
       deductions++;
+
+      // 2) تسجيل مخالفة + فتح محضر استفسار (idempotent) بموجب لائحة الانضباط
+      try {
+        const period = new Date().toISOString().slice(0, 7);
+        const { rows: existingViolation } = await pool.query(
+          `SELECT id FROM employee_violations
+            WHERE "companyId" = $1 AND "assignmentId" = $2 AND type = 'absence'
+              AND period = $3 AND "deletedAt" IS NULL LIMIT 1`,
+          [company.id, a.assignmentId, period]
+        );
+        let violationId: number;
+        if (existingViolation.length) {
+          violationId = existingViolation[0].id;
+        } else {
+          const { rows: vrows } = await pool.query(
+            `INSERT INTO employee_violations
+               ("companyId","assignmentId",type,description,severity,deduction,period,source)
+             VALUES ($1,$2,'absence',$3,'high',0,$4,'auto')
+             RETURNING id`,
+            [company.id, a.assignmentId, `غياب عن العمل بتاريخ ${a.date}`, period]
+          );
+          violationId = vrows[0].id;
+        }
+
+        const result = await ensureInquiryMemoForViolation({
+          companyId: company.id,
+          branchId: a.branchId,
+          assignmentId: a.assignmentId,
+          employeeId: a.employeeId,
+          violationId,
+          incidentType: "absence",
+          incidentDate: String(a.date).slice(0, 10),
+          incidentDescription: `غياب يوم ${a.date} دون إذن كتابي`,
+          source: "auto",
+          createdBy: null,
+        });
+        if (result.created) memos++;
+      } catch (err) {
+        console.error("absence memo error:", err);
+      }
     }
   }
-  return `Processed ${deductions} absence deductions`;
+  return `Processed ${deductions} absence deductions, ${memos} new inquiry memos`;
 }
 
 async function dailyInvoiceOverdueEscalation(): Promise<string> {
