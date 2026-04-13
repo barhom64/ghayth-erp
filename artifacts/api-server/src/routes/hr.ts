@@ -2,7 +2,7 @@ import { handleRouteError, validationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import rateLimit from "express-rate-limit";
 import {
   haversineDistance,
@@ -40,7 +40,7 @@ const checkInLimiter = rateLimit({
 // ATTENDANCE – check-in and dedicated check-out endpoints
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (req, res) => {
+router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const now = new Date();
@@ -340,7 +340,7 @@ router.post("/check-in", checkInLimiter, requirePermission("hr:create"), async (
   }
 });
 
-router.post("/check-out", requirePermission("hr:create"), async (req, res) => {
+router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const now = new Date();
@@ -689,7 +689,7 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
   }
 });
 
-router.post("/leave-requests", requirePermission("hr:create"), async (req, res) => {
+router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = req.body as any;
