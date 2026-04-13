@@ -49,13 +49,13 @@ _If a new detail view is added, follow the pattern in `lib/lifecycleEngine.ts`'s
 
 Five pages exceed ~1200 lines and have become unreviewable.
 
-- [ ] `src/pages/settings.tsx`
-- [ ] `src/pages/admin/*` (users + roles + logs overlap)
-- [ ] `src/pages/my-space.tsx`
-- [ ] `src/pages/governance.tsx`
-- [ ] `src/pages/bi.tsx`
+- [x] `src/pages/settings.tsx` — 2106 → 323 lines, 11 tabs extracted under `src/pages/settings/*-tab.tsx`.
+- [x] `src/pages/admin.tsx` — 1266 → 56 lines, 7 tabs extracted under `src/pages/admin/*-tab.tsx`.
+- [x] `src/pages/my-space.tsx` — 1278 → 141 lines, 12 sections/cards extracted under `src/pages/my-space/`.
+- [x] `src/pages/governance.tsx` — 874 → 46 lines, 7 tabs extracted under `src/pages/governance/`.
+- [x] `src/pages/bi.tsx` — 965 → 44 lines, 13 tabs extracted under `src/pages/bi/`.
 
-Target: extract each tab into its own file under `src/pages/<module>/` and keep the parent as a thin tabs shell. Acceptance: no single page file > 600 lines.
+Acceptance met: every parent page file is now well under the 600-line target (largest is settings at 323).
 
 ## Phase 7 — Smoke tests for critical paths
 
@@ -82,17 +82,17 @@ Each module in `docs/MODULES.md` should get a `docs/blueprints/<module>.md` file
 5. The frontend entry points.
 6. The known open issues (cross-ref into this file).
 
-- [ ] HR · Discipline (closest to complete already — use as the template).
-- [ ] HR · Attendance
-- [ ] HR · Payroll
-- [ ] Finance · Invoices
-- [ ] Finance · ZATCA
-- [ ] Fleet
-- [ ] Properties / Ejar
-- [ ] CRM / Clients
-- [ ] Legal
-- [ ] Umrah
-- [ ] Governance / Workflows / Rules
+- [x] HR · Discipline — `docs/blueprints/hr-discipline.md`
+- [x] HR · Attendance — `docs/blueprints/hr-attendance.md`
+- [x] HR · Payroll — `docs/blueprints/hr-payroll.md`
+- [x] Finance · Invoices — `docs/blueprints/finance-invoices.md`
+- [x] Finance · ZATCA — `docs/blueprints/finance-zatca.md`
+- [x] Fleet — `docs/blueprints/fleet.md`
+- [x] Properties / Ejar — `docs/blueprints/properties-ejar.md`
+- [x] CRM / Clients — `docs/blueprints/crm-clients.md`
+- [x] Legal — `docs/blueprints/legal.md`
+- [x] Umrah — `docs/blueprints/umrah.md`
+- [x] Governance / Workflows / Rules — `docs/blueprints/governance-workflows-rules.md`
 
 ---
 
