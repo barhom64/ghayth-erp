@@ -380,6 +380,60 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
   } catch (err) { handleRouteError(err, res, "Delete opportunity error:"); }
 });
 
+// Related deals for a given opportunity: other opportunities that share the
+// same clientId or contact name / phone / email. Used by the lead / opportunity
+// detail page instead of fetching the full list client-side.
+router.get("/opportunities/:id/related", requirePermission("crm:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [base] = await rawQuery<any>(
+      `SELECT id, "clientId", "contactName", "contactPhone", "contactEmail"
+         FROM crm_opportunities
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!base) { res.status(404).json({ error: "الفرصة غير موجودة" }); return; }
+
+    const conds: string[] = [];
+    const params: any[] = [scope.companyId, id];
+    if (base.clientId) {
+      params.push(base.clientId);
+      conds.push(`"clientId" = $${params.length}`);
+    }
+    if (base.contactName) {
+      params.push(base.contactName);
+      conds.push(`"contactName" = $${params.length}`);
+    }
+    if (base.contactPhone) {
+      params.push(base.contactPhone);
+      conds.push(`"contactPhone" = $${params.length}`);
+    }
+    if (base.contactEmail) {
+      params.push(base.contactEmail);
+      conds.push(`"contactEmail" = $${params.length}`);
+    }
+    if (conds.length === 0) {
+      res.json({ data: [], total: 0 });
+      return;
+    }
+
+    const rows = await rawQuery<any>(
+      `SELECT o.*, cl.name AS "clientName"
+         FROM crm_opportunities o
+         LEFT JOIN clients cl ON cl.id = o."clientId"
+        WHERE o."companyId" = $1
+          AND o.id <> $2
+          AND o."deletedAt" IS NULL
+          AND (${conds.join(" OR ")})
+        ORDER BY o."createdAt" DESC
+        LIMIT 50`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Related opportunities error:"); }
+});
+
 router.get("/opportunities/:id/activities", requirePermission("crm:read"), async (req, res) => {
   try {
     const rows = await rawQuery<any>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC`, [Number(req.params.id)]);

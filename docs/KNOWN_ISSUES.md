@@ -10,25 +10,25 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done.
 
 Business actions that are wired in the UI but have incomplete backend logic.
 
-- [ ] **Contract renew / terminate (legal + HR).** UI exposes actions but the server either no-ops or only flips a status flag. Target: full lifecycle with event emission, audit log, and downstream impact (payroll, approvals, notifications).
-- [ ] **Trip complete / cancel (fleet + umrah).** Completion handler does not close the associated maintenance record or release vehicle capacity. Cancel handler does not refund reservations.
-- [ ] **Job open / close (recruitment).** Closing a job should cascade to applications (`withdrawn_due_to_job_closure`), notify candidates, and trigger analytics.
-- [ ] **Lead convert (CRM).** Conversion creates the client but does not copy activities, tags, or source attribution; the lead is not marked as `converted_at`.
-- [ ] **Unified status machine.** These four actions should go through a single `lifecycleEngine` helper so audit, events, and notifications are consistent.
+- [x] **Contract renew / terminate (legal).** `POST /legal/contracts/:id/renew` and `.../terminate` now go through `lifecycleEngine.applyTransition` with full audit + events + notification fan-out. Columns added in migration `067_lifecycle_columns.sql`.
+- [x] **Trip cancel (fleet).** `POST /fleet/trips/:id/cancel` releases the vehicle + driver back to `available` inside the same transaction.
+- [x] **Job close / reopen (recruitment).** `POST /hr/recruitment/postings/:id/close` cascades to open applications (`withdrawn_due_to_job_closure`) with an audit note. `/reopen` resets the closed markers.
+- [x] **Lead convert (CRM).** `POST /crm/opportunities/:id/convert` wraps the existing `handleDealWon` side-effects (client + contract + invoice) and marks `convertedAt` + `convertedClientId` atomically.
+- [x] **Unified status machine.** All four actions go through `lib/lifecycleEngine.ts` — see that file's header comment for the contract.
 
 ## Phase 3 — Real detail endpoints
 
-The frontend currently fetches the list endpoint and filters client-side to render a "detail" view in several modules. This wastes bandwidth, leaks data, and breaks pagination contracts.
+The frontend should fetch the single row via a focused detail endpoint rather than pulling a list and filtering in the browser.
 
-- [ ] `GET /crm/leads/:id` — today `/crm/leads` is filtered in the browser.
-- [ ] `GET /crm/clients/:id` — Client 360° page refetches the list.
-- [ ] `GET /fleet/vehicles/:id`
-- [ ] `GET /properties/units/:id`
-- [ ] `GET /legal/cases/:id`
-- [ ] `GET /projects/:id`
-- [ ] `GET /hr/recruitment/jobs/:id` — partial; some child endpoints still paginate.
+- [x] `GET /crm/opportunities/:id` (leads use this) — existed; now also has `/:id/related` for the "related deals" tab so the lead detail page no longer pulls the full opportunity list.
+- [x] `GET /clients/:id` — already a true 360° endpoint returning invoices + opportunities + tickets + projects + financials (`routes/clients.ts`).
+- [x] `GET /fleet/vehicles/:id` — detail endpoint lives at `routes/fleet.ts:101`, used by `pages/details/vehicle-detail.tsx`.
+- [x] `GET /properties/units/:id` — exists at `routes/properties.ts:57`, used by `pages/details/unit-detail.tsx`.
+- [x] `GET /legal/cases/:id` — exists at `routes/legal.ts:281`, returns sessions + allowed transitions.
+- [x] `GET /projects/:id` — exists at `routes/projects.ts:114`.
+- [x] `GET /hr/recruitment/postings/:id` — detail endpoint exists; applications list already supports `?postingId=` so the frontend filters server-side.
 
-Target: each of the above gets a focused handler that returns the main row plus the minimum child collections needed to render the detail page. The frontend hook is then `useApiQuery(["x", id], `/x/${id}`)` instead of `.find(r => r.id === id)`.
+_If a new detail view is added, follow the pattern in `lib/lifecycleEngine.ts`'s neighbouring helpers: focused handler → `useApiQuery(["x", id], /x/${id})` on the frontend, never `.find(r => r.id === id)`._
 
 ## Phase 4 — Unified RBAC
 

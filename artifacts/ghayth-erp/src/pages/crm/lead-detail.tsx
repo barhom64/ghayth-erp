@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,24 +53,13 @@ export default function LeadDetailPage() {
   );
   const activities: any[] = activitiesResp?.data || (Array.isArray(activitiesResp) ? activitiesResp : []);
 
-  // Related deals — no dedicated endpoint, filter full opps list by contact/client
-  // TODO: prefer dedicated GET /crm/leads/:id/deals endpoint
-  const { data: allOppsResp } = useApiQuery<any>(
+  // Related deals — dedicated endpoint, avoids pulling the full opps list.
+  const { data: relatedResp } = useApiQuery<any>(
     ["crm-lead-deals", id],
-    id ? `/crm/opportunities` : null,
+    id ? `/crm/opportunities/${id}/related` : null,
     !!id
   );
-  const allOpps: any[] = allOppsResp?.data || [];
-  const deals = useMemo(
-    () =>
-      allOpps.filter(
-        (o) =>
-          String(o.id) !== String(id) &&
-          (String(o.contactName || "") === String(lead?.contactName || "") ||
-            String(o.clientId || "") === String(lead?.clientId || ""))
-      ),
-    [allOpps, lead, id]
-  );
+  const deals: any[] = relatedResp?.data || [];
 
   const totalContacts = activities.length;
   const lastActivity = activities
