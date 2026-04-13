@@ -60,6 +60,21 @@ router.post("/units", async (req, res) => {
        b.hasKitchen || false, b.yearlyRent || null, b.insurancePolicy || null, b.insuranceExpiry || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1`, [insertId]);
+
+    // The GET /units/:id handler renders a timeline straight from audit_logs
+    // where entity='property_units', so without this write the unit would
+    // appear in the UI with an empty history from day one.
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "property_units", entityId: insertId,
+      after: { unitNumber, buildingId: b.buildingId ?? null, type: row?.type, status: row?.status },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "property.unit.created", entity: "property_units", entityId: insertId,
+      details: `وحدة جديدة ${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ''}`,
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }
 });
@@ -1132,6 +1147,16 @@ router.post("/tenants", async (req, res) => {
        b.monthlyIncome || null, b.previousAddress || null, b.previousLandlord || null, b.previousLandlordPhone || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM tenants WHERE id=$1`, [insertId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "tenants", entityId: insertId,
+      after: { name: b.name, phone: b.phone ?? null, tenantType: b.tenantType ?? 'individual' },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "tenant.created", entity: "tenants", entityId: insertId,
+      details: `مستأجر جديد: ${b.name}`,
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
@@ -1333,6 +1358,16 @@ router.post("/buildings", async (req, res) => {
        b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1`, [insertId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "property_buildings", entityId: insertId,
+      after: { name: b.name, city: b.city ?? null, type: b.type ?? 'residential', ownerId: b.ownerId ?? null },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "property.building.created", entity: "property_buildings", entityId: insertId,
+      details: `مبنى جديد: ${b.name}${b.city ? ` — ${b.city}` : ''}`,
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create building error:"); }
 });
@@ -1675,6 +1710,16 @@ router.post("/owners", async (req, res) => {
       [scope.companyId, b.ownerType || 'individual', b.name, b.nationalId || null, b.crNumber || null, b.phone || null, b.email || null, b.iban || null, b.bankName || null, b.address || null, b.city || null, b.authorizationNumber || null, b.authorizationDate || null, b.authorizationExpiry || null, b.notes || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1`, [insertId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "property_owners", entityId: insertId,
+      after: { name: b.name, ownerType: b.ownerType ?? 'individual', phone: b.phone ?? null },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "property.owner.created", entity: "property_owners", entityId: insertId,
+      details: `مالك جديد: ${b.name}`,
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });

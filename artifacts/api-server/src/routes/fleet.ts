@@ -51,6 +51,16 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
       [scope.companyId, b.plateNumber, b.make, b.model, b.year, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1`, [insertId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_vehicles", entityId: insertId,
+      after: { plateNumber: b.plateNumber, make: b.make, model: b.model, year: b.year, status: 'available' },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.vehicle.created", entity: "fleet_vehicles", entityId: insertId,
+      details: `مركبة جديدة: ${b.plateNumber}${b.make ? ` — ${b.make}` : ''}${b.model ? ` ${b.model}` : ''}`,
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });
@@ -92,6 +102,11 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
       entity: "fleet_drivers",
       entityId: insertId,
       after: { name: b.name, phone: b.phone, licenseNumber: b.licenseNumber, employeeId: b.employeeId },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.driver.created", entity: "fleet_drivers", entityId: insertId,
+      details: `سائق جديد: ${b.name}`,
     }).catch(console.error);
 
     res.status(201).json(row);
