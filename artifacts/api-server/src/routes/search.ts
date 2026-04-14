@@ -60,6 +60,7 @@ router.get("/", async (req, res) => {
                 'project' AS type
          FROM projects
          WHERE "companyId" = $1
+           AND "deletedAt" IS NULL
            AND name ILIKE $2
          LIMIT 10`,
         [scope.companyId, pattern]

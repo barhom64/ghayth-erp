@@ -259,7 +259,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
 router.get("/:id", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    let detailWhere = `p.id=$1 AND p."companyId"=$2`;
+    let detailWhere = `p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`;
     const detailParams: any[] = [Number(req.params.id), scope.companyId];
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager") {
@@ -553,7 +553,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
     const tasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1`, [projectId]);
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
     const progressPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
-    await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2`, [progressPct, projectId]);
+    await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`, [progressPct, projectId]);
 
     res.json({ message: 'تم إكمال المرحلة', phase, milestoneInvoiceCreated, progressPct });
   } catch (err) { handleRouteError(err, res, "Complete phase error:"); }
@@ -797,9 +797,9 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       const allTasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1`, [task.projectId]);
       const doneTasks = allTasks.filter((t: any) => t.status === 'done').length;
       const progressPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
-      await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2`, [progressPct, task.projectId]);
+      await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`, [progressPct, task.projectId]);
 
-      const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1`, [task.projectId]);
+      const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "deletedAt" IS NULL`, [task.projectId]);
 
       const budget = Number(project?.budget) || 0;
       const spentAmount = Number(project?.spentAmount) || 0;
@@ -825,9 +825,9 @@ router.get("/stats/summary", requirePermission("projects:read"), async (req, res
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [projects] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active, COUNT(*) FILTER (WHERE status='completed') as completed FROM projects WHERE "companyId"=$1`, [cid]);
-    const [budget] = await rawQuery<any>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1`, [cid]);
-    const [slipping] = await rawQuery<any>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND status='active' AND "endDate" < CURRENT_DATE`, [cid]);
+    const [projects] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active, COUNT(*) FILTER (WHERE status='completed') as completed FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [budget] = await rawQuery<any>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [slipping] = await rawQuery<any>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' AND "endDate" < CURRENT_DATE`, [cid]);
     res.json({
       totalProjects: Number(projects.total), activeProjects: Number(projects.active),
       completedProjects: Number(projects.completed), totalBudget: Number(budget.totalBudget),
@@ -1145,7 +1145,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
     );
     // Update project spentAmount
     await rawExecute(
-      `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3`,
+      `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [b.amount, projectId, scope.companyId]
     );
 

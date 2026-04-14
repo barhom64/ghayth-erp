@@ -75,7 +75,7 @@ router.get("/overview", async (req, res) => {
          (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1) AS employees,
          (SELECT COUNT(*) FROM clients WHERE "companyId" = $1) AS clients,
          (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS invoices,
-         (SELECT COUNT(*) FROM projects WHERE "companyId" = $1) AS projects,
+         (SELECT COUNT(*) FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS projects,
          (SELECT COUNT(*) FROM fleet_vehicles WHERE "companyId" = $1) AS vehicles,
          (SELECT COUNT(*) FROM support_tickets WHERE "companyId" = $1 AND status = 'open') AS "openTickets",
          (SELECT COALESCE(SUM("paidAmount"), 0) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "paidAmount" > 0) AS "totalRevenue"`,
@@ -711,7 +711,7 @@ router.get("/ceo-dashboard", async (req, res) => {
       `SELECT
          COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS "overdueProjects",
          COUNT(*) AS "totalProjects"
-       FROM projects WHERE "companyId" = $1`,
+       FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
     ).catch(() => [{}]);
 

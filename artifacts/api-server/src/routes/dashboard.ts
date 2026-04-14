@@ -186,7 +186,7 @@ router.get("/summary", async (req, res) => {
     let projects = { active: 0, total: 0 };
     try {
       const [p] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='in_progress') AS active FROM projects WHERE ${noBranchWhere}`,
+        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='in_progress') AS active FROM projects WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
       projects = { total: Number(p?.total ?? 0), active: Number(p?.active ?? 0) };
