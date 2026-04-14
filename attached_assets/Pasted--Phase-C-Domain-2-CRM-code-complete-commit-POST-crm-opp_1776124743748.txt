@@ -1,0 +1,106 @@
+## ✅ Phase C Domain 2 — CRM code-complete
+
+### ما أنجز في هذا الـ commit
+
+**POST /crm/opportunities** — 8 validation points جديدة:
+1. `title` required (was accepted blank)
+2. Contact-or-client rule (one must exist)
+3. `stage` enum check (6 legal values) + `meta.allowedStages`
+4. Reject creating directly in `closed_won` / `closed_lost` → ConflictError
+5. `value` numeric + ≥ 0
+6. `probability` 0..100
+7. `clientId` FK pre-check
+8. `assignedTo` FK pre-check
+
+**PATCH /crm/opportunities/:id** — State machine + guards:
+- **`CRM_TRANSITIONS` allowlist** (6 stages, 12 legal edges)
+- Illegal transition → ConflictError بـ `meta.allowedNext`
+- `closed_won` via PATCH يعطي `console.warn` يوجّه للـ `/convert` canonical path
+- نفس `value` / `probability` / FK pre-checks مثل CREATE
+- **Audit diff على 14 عمود** بدل `{stage, status}` فقط
+- **`crm.opportunity.updated` event جديد** للتعديلات غير-lifecycle (لتفادي تكرار `stage_changed`)
+
+**eventListeners.ts** — listener جديد لـ `crm.opportunity.updated`
+
+### State Machine الجديد (CRM)
+```
+lead        → qualified | closed_lost
+qualified   → proposal | negotiation | closed_lost
+proposal    → negotiation | closed_won | closed_lost
+negotiation → proposal | closed_won | closed_lost
+closed_won  → (terminal)
+closed_lost → qualified  (reopen path)
+```
+
+### التحقق
+- ✅ Typecheck 11/11
+- ✅ Lint 73 ملف / 56 صلاحية / 2971 SQL
+- ✅ Tests 110/110
+- ✅ Force-pushed `86b248e` → `80601fe`
+
+### حالة Phase C
+```
+[x] Domain 1 — Support   (code-complete, pending verification)
+[x] Domain 2 — CRM       (code-complete, pending verification) ← هذا
+[ ] Domain 3 — Fleet
+[ ] Domain 4 — Property
+[ ] Domain 5 — Projects
+[ ] Domain 6 — Legal
+[ ] Domain 7 — Finance
+[ ] Domain 8 — Warehouse
+```
+
+### 📋 test plan للمبرمج — Support + CRM معاً
+
+```
+آخر commit على main: 80601fe
+
+=== SUPPORT (Phase C.1) ===
+CREATE (POST /support/tickets):
+1. بدون title → 422 field=title
+2. بدون description → 422 field=description
+3. clientId=99999 → 422 field=clientId
+4. Happy path → 201 + event support.ticket.created
+
+UPDATE (PATCH /support/tickets/:id):
+5. status: open → closed (السكب مسموح) → 200 + event
+6. status: closed → open (terminal) → 409 meta.allowedNext=[]
+7. status: resolved → pending_customer → 409 CONFLICT
+8. status: in_progress → resolved → 200 + event resolved
+9. تغيير assigneeId → 200 + event assigned
+
+DELETE:
+10. حذف تذكرة → 200 + event deleted
+
+=== CRM (Phase C.2) ===
+CREATE (POST /crm/opportunities):
+11. بدون title → 422 field=title
+12. بدون clientId + بدون contactName/Phone → 422 field=clientId
+13. stage="foo" → 422 field=stage meta.allowedStages
+14. stage="closed_won" مباشرة → 409 field=stage
+    meta.allowedFirstStages
+15. value=-50 → 422 field=value
+16. probability=150 → 422 field=probability
+17. clientId=99999 → 422 field=clientId
+18. assignedTo=99999 → 422 field=assignedTo
+19. Happy path → 201 + event crm.opportunity.created
+
+UPDATE (PATCH /crm/opportunities/:id):
+20. stage: lead → negotiation → 409 CONFLICT
+    meta.allowedNext=[qualified, closed_lost]
+21. stage: qualified → proposal → 200 + event stage_changed
+22. stage: closed_won → lead → 409 meta.allowedNext=[]
+23. PATCH title فقط (بدون stage) → 200 + event
+    crm.opportunity.updated (NOT stage_changed)
+24. PATCH بـ value=-10 → 422 field=value
+
+EVENT LOG VERIFICATION لكل سيناريو:
+SELECT action, COUNT(*) FROM event_logs
+ WHERE "entityId" = <id> GROUP BY action;
+→ كل event مرة واحدة فقط (dedup)
+
+إذا كل شيء يعمل، أكمل لـ Domain 3 (Fleet).
+إذا أي سيناريو يفشل، أرسل server log + curl response.
+```
+
+Phase C.2 code-complete. ما أعتبر Support أو CRM "جاهزاً نهائياً" حتى تؤكد الاختبارات الفعلية من المبرمج — الـ commits على main بانتظار التحقق. هل أنتقل لـ Domain 3 (Fleet) الآن أم أنتظر نتائج الاختبار أولاً؟

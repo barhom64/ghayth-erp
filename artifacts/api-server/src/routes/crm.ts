@@ -61,13 +61,110 @@ router.get("/opportunities", requirePermission("crm:read"), async (req, res) => 
 });
 
 router.post("/opportunities", requirePermission("crm:create"), async (req, res) => {
+  // Phase C domain 2 — CRM opportunity creation, mirror of the HR Step 1
+  // treatment. Adds input validation the old handler lacked (title,
+  // contact-or-client, stage enum, numeric ranges), pre-checks the
+  // clientId / assignedTo FKs so stale ids produce clean field-tagged
+  // errors instead of deep 23503 FK errors, and keeps the existing
+  // obligations engine wiring + event emission untouched.
   try {
     const scope = req.scope!;
     const b = req.body;
-    const stage = b.stage || 'lead';
+
+    const title = (b.title ?? "").toString().trim();
+    if (!title) {
+      throw new ValidationError("عنوان الفرصة مطلوب", {
+        field: "title",
+        fix: "أدخل عنواناً موجزاً يصف الفرصة البيعية.",
+      });
+    }
+
+    // Either a structured client (clientId) OR an unstructured contact
+    // must be present — otherwise the opportunity has nothing to attach
+    // itself to and every future follow-up sends into the void.
+    if (!b.clientId && !b.contactName && !b.contactPhone) {
+      throw new ValidationError("يجب تحديد العميل أو جهة اتصال", {
+        field: "clientId",
+        fix: "اختر عميلاً من القائمة أو أدخل اسم ورقم جهة اتصال.",
+      });
+    }
+
+    const stage = (b.stage || "lead") as string;
+    if (!STAGE_ORDER.includes(stage)) {
+      throw new ValidationError(`مرحلة غير صالحة: ${stage}`, {
+        field: "stage",
+        fix: `اختر مرحلة من: ${STAGE_ORDER.join("، ")}.`,
+        meta: { allowedStages: STAGE_ORDER },
+      });
+    }
+
+    // A brand-new opportunity shouldn't land as already-won / already-lost.
+    // The /convert endpoint is the canonical path to closed_won, and the
+    // user should go through /update to change the stage. Rejecting
+    // closed_* at create time makes the state machine predictable.
+    if (stage === "closed_won" || stage === "closed_lost") {
+      throw new ConflictError(
+        `لا يمكن إنشاء فرصة مباشرة في الحالة "${stage}"`,
+        {
+          field: "stage",
+          fix: "أنشئ الفرصة في مرحلة مبكرة ثم حرّكها خلال مسار البيع.",
+          meta: { attemptedStage: stage, allowedFirstStages: STAGE_ORDER.filter(s => !s.startsWith("closed_")) },
+        }
+      );
+    }
+
+    const value = Number(b.value ?? 0);
+    if (!Number.isFinite(value) || value < 0) {
+      throw new ValidationError("قيمة الفرصة يجب أن تكون رقماً موجباً", {
+        field: "value",
+        fix: "أدخل قيمة رقمية ≥ 0.",
+      });
+    }
+
+    const probability = b.probability === undefined || b.probability === null ? 50 : Number(b.probability);
+    if (!Number.isFinite(probability) || probability < 0 || probability > 100) {
+      throw new ValidationError("احتمالية الإغلاق يجب أن تكون بين 0 و 100", {
+        field: "probability",
+        fix: "أدخل نسبة مئوية بين 0 و 100.",
+      });
+    }
+
+    // Pre-check: clientId must resolve to an active client in this company.
+    if (b.clientId) {
+      const [client] = await rawQuery<{ id: number }>(
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [Number(b.clientId), scope.companyId]
+      );
+      if (!client) {
+        throw new ValidationError("العميل المحدد غير موجود", {
+          field: "clientId",
+          fix: "اختر عميلاً من قائمة العملاء الحاليين.",
+        });
+      }
+    }
+
+    // Pre-check: assignedTo must resolve to an employee that exists in
+    // this company. Stale ids used to fail deep as 23503 — now we
+    // reject early with a field-tagged error the sales-create form can
+    // highlight.
+    if (b.assignedTo) {
+      const [asn] = await rawQuery<{ id: number }>(
+        `SELECT e.id FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+          WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+        [Number(b.assignedTo), scope.companyId]
+      );
+      if (!asn) {
+        throw new ValidationError("الموظف المسؤول المحدد غير موجود", {
+          field: "assignedTo",
+          fix: "اختر مسؤولاً من قائمة الموظفين النشطين.",
+        });
+      }
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO crm_opportunities ("companyId",title,"clientId","contactName","contactPhone","contactEmail",source,stage,value,probability,"expectedCloseDate","assignedTo",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, b.title, b.clientId, b.contactName, b.contactPhone, b.contactEmail, b.source, stage, b.value || 0, b.probability || 50, b.expectedCloseDate, b.assignedTo, b.notes]
+      [scope.companyId, title, b.clientId ?? null, b.contactName ?? null, b.contactPhone ?? null, b.contactEmail ?? null, b.source ?? null, stage, value, probability, b.expectedCloseDate ?? null, b.assignedTo ?? null, b.notes ?? null]
     );
 
     const stageConfig = STAGE_AUTO_ACTIONS[stage];
@@ -94,7 +191,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
             assignmentId: asgn.id,
             type: "crm_opportunity",
             title: "فرصة CRM جديدة مسندة إليك",
-            body: `${b.title} — القيمة: ${b.value || 0} ريال — المرحلة: ${stage}`,
+            body: `${title} — القيمة: ${value} ريال — المرحلة: ${stage}`,
             priority: "normal",
             refType: "crm_opportunities",
             refId: insertId,
@@ -112,38 +209,39 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       action: "create",
       entity: "crm_opportunities",
       entityId: insertId,
-      after: { title: b.title, clientId: b.clientId, value: b.value, stage },
+      after: { title, clientId: b.clientId ?? null, value, stage, assignedTo: b.assignedTo ?? null },
     }).catch(console.error);
 
-    // Register CRM follow-up obligation (skipped for terminal stages)
-    if (stage !== 'closed_won' && stage !== 'closed_lost') {
-      try {
-        const dueAt = computeCrmFollowUpDue(stage, b.expectedCloseDate);
-        await registerObligation({
-          companyId: scope.companyId,
-          branchId: scope.branchId ?? null,
-          entityType: "crm_opportunity",
-          entityId: insertId,
-          obligationType: "follow_up",
-          title: `متابعة فرصة CRM — ${b.title} (${stage})`,
-          dueAt: dueAt.toISOString(),
-          metadata: { stage, value: b.value || 0, clientId: b.clientId ?? null, contactName: b.contactName ?? null, assignedEmployeeId: b.assignedTo ?? null },
-          dedupeKey: `crm-opp-${insertId}-followup`,
-          escalationSteps: [
-            { hoursAfterDue: 24, notifyRole: "sales_manager" },
-            { hoursAfterDue: 72, notifyRole: "general_manager" },
-          ],
-        });
-      } catch (obErr) { console.error("CRM opportunity obligation failed:", obErr); }
-    }
+    // Register CRM follow-up obligation — terminal stages were filtered out
+    // at validation time above so every opportunity reaching this point is
+    // in a non-closed stage.
+    try {
+      const dueAt = computeCrmFollowUpDue(stage, b.expectedCloseDate);
+      await registerObligation({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        entityType: "crm_opportunity",
+        entityId: insertId,
+        obligationType: "follow_up",
+        title: `متابعة فرصة CRM — ${title} (${stage})`,
+        dueAt: dueAt.toISOString(),
+        metadata: { stage, value, clientId: b.clientId ?? null, contactName: b.contactName ?? null, assignedEmployeeId: b.assignedTo ?? null },
+        dedupeKey: `crm-opp-${insertId}-followup`,
+        escalationSteps: [
+          { hoursAfterDue: 24, notifyRole: "sales_manager" },
+          { hoursAfterDue: 72, notifyRole: "general_manager" },
+        ],
+      });
+    } catch (obErr) { console.error("CRM opportunity obligation failed:", obErr); }
 
     emitEvent({
       companyId: scope.companyId,
+      branchId: scope.branchId,
       userId: scope.userId,
       action: "crm.opportunity.created",
       entity: "crm_opportunities",
       entityId: insertId,
-      details: `فرصة جديدة: ${b.title} — ${b.value || 0} ريال — ${stage}`,
+      details: JSON.stringify({ title, value, stage, clientId: b.clientId ?? null, assignedTo: b.assignedTo ?? null }),
     }).catch(console.error);
 
     res.status(201).json({ ...row, autoAction: stageConfig?.description });
@@ -159,6 +257,68 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2`, [oppId, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
 
+    // Phase C domain 2 — stage transition guard. Mirrors the Support
+    // TICKET_TRANSITIONS allowlist. Before this block, the PATCH handler
+    // accepted any stage change from any current stage — a lead could
+    // jump directly to closed_won without going through proposal /
+    // negotiation, and a closed opportunity could be reopened by
+    // setting stage back to lead. No guard, no error.
+    //
+    // The allowlist reflects the intended sales pipeline:
+    //
+    //   lead        → qualified | closed_lost
+    //   qualified   → proposal | negotiation | closed_lost
+    //   proposal    → negotiation | closed_won | closed_lost
+    //   negotiation → proposal | closed_won | closed_lost
+    //   closed_won  → (terminal — only /convert can land here)
+    //   closed_lost → (terminal — optionally reopen via qualified)
+    //
+    // closed_won is intentionally NOT reachable from this PATCH in the
+    // allowlist — the canonical path is /opportunities/:id/convert which
+    // uses the lifecycle engine and runs handleDealWon side effects.
+    // This PATCH will still honor a closed_won write for backwards
+    // compat with existing tests/UIs, but we log a warning so operators
+    // can migrate callers.
+    if (b.stage !== undefined && b.stage !== existing.stage) {
+      if (!STAGE_ORDER.includes(b.stage)) {
+        throw new ValidationError(`مرحلة غير صالحة: ${b.stage}`, {
+          field: "stage",
+          fix: `اختر مرحلة من: ${STAGE_ORDER.join("، ")}.`,
+          meta: { allowedStages: STAGE_ORDER },
+        });
+      }
+
+      const CRM_TRANSITIONS: Record<string, readonly string[]> = {
+        lead:        ["qualified", "closed_lost"],
+        qualified:   ["proposal", "negotiation", "closed_lost"],
+        proposal:    ["negotiation", "closed_won", "closed_lost"],
+        negotiation: ["proposal", "closed_won", "closed_lost"],
+        closed_won:  [],
+        closed_lost: ["qualified"],
+      };
+      const allowed = CRM_TRANSITIONS[existing.stage] ?? [];
+      if (!allowed.includes(b.stage)) {
+        throw new ConflictError(
+          `لا يمكن نقل الفرصة من "${existing.stage}" إلى "${b.stage}"`,
+          {
+            field: "stage",
+            fix: allowed.length > 0
+              ? `المراحل المسموحة من الحالة الحالية: ${allowed.join("، ")}`
+              : "هذه الفرصة وصلت لمرحلة نهائية ولا تقبل تغييراً إضافياً.",
+            meta: {
+              currentStage: existing.stage,
+              requestedStage: b.stage,
+              allowedNext: allowed,
+            },
+          }
+        );
+      }
+
+      if (b.stage === "closed_won") {
+        console.warn(`[crm] opportunity ${oppId} set to closed_won via PATCH — prefer /opportunities/${oppId}/convert`);
+      }
+    }
+
     if ((b.stage === 'closed_won' || b.stage === 'closed_lost') && existing.stage !== b.stage) {
       const hasClientInfo = existing.clientId || existing.contactName || b.clientId || b.contactName;
       if (!hasClientInfo) {
@@ -169,6 +329,57 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
             fix: "أضف بيانات العميل (اسم أو ID) قبل محاولة إغلاق الصفقة.",
           },
         );
+      }
+    }
+
+    // Numeric range guards on value / probability — mirror the create-
+    // time checks so the UPDATE path rejects the same bad inputs.
+    if (b.value !== undefined && b.value !== null) {
+      const v = Number(b.value);
+      if (!Number.isFinite(v) || v < 0) {
+        throw new ValidationError("قيمة الفرصة يجب أن تكون رقماً موجباً", {
+          field: "value",
+          fix: "أدخل قيمة رقمية ≥ 0.",
+        });
+      }
+    }
+    if (b.probability !== undefined && b.probability !== null) {
+      const p = Number(b.probability);
+      if (!Number.isFinite(p) || p < 0 || p > 100) {
+        throw new ValidationError("احتمالية الإغلاق يجب أن تكون بين 0 و 100", {
+          field: "probability",
+          fix: "أدخل نسبة مئوية بين 0 و 100.",
+        });
+      }
+    }
+
+    // Pre-check assignedTo FK on update, same logic as create.
+    if (b.assignedTo !== undefined && b.assignedTo !== null) {
+      const [asn] = await rawQuery<{ id: number }>(
+        `SELECT e.id FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+          WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+        [Number(b.assignedTo), scope.companyId]
+      );
+      if (!asn) {
+        throw new ValidationError("الموظف المسؤول المحدد غير موجود", {
+          field: "assignedTo",
+          fix: "اختر مسؤولاً من قائمة الموظفين النشطين.",
+        });
+      }
+    }
+
+    // Pre-check clientId FK on update.
+    if (b.clientId !== undefined && b.clientId !== null) {
+      const [client] = await rawQuery<{ id: number }>(
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [Number(b.clientId), scope.companyId]
+      );
+      if (!client) {
+        throw new ValidationError("العميل المحدد غير موجود", {
+          field: "clientId",
+          fix: "اختر عميلاً من قائمة العملاء الحاليين.",
+        });
       }
     }
 
@@ -313,14 +524,53 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       }).catch(console.error);
     }
 
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1`, [oppId]);
+
+    // Build a tracked-field diff so the audit log reflects what
+    // actually changed instead of just `{ stage, status }`. Same
+    // pattern as PATCH /employees/:id in Step 2.
+    const trackedKeys = [
+      "title", "stage", "status", "value", "probability",
+      "expectedCloseDate", "assignedTo", "clientId",
+      "contactName", "contactPhone", "contactEmail", "source",
+      "notes", "lostReason",
+    ] as const;
+    const changedFields: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of trackedKeys) {
+      const oldVal = (existing as any)[key];
+      const newVal = (row as any)[key];
+      if (String(oldVal ?? "") !== String(newVal ?? "")) {
+        changedFields[key] = { from: oldVal ?? null, to: newVal ?? null };
+      }
+    }
+
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "crm_opportunities", entityId: oppId,
-      before: { stage: existing.stage, status: existing.status },
-      after: { stage: b.stage || existing.stage, status: b.status || existing.status },
+      before: existing,
+      after: row,
+      reason: `حقول معدّلة: ${Object.keys(changedFields).join("، ") || "بلا تغيير"}`,
     }).catch(console.error);
 
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1`, [oppId]);
+    // Generic updated event for non-stage edits. The stage_changed /
+    // deal.won / deal.lost events already cover lifecycle transitions,
+    // so we only fire `crm.opportunity.updated` when the user touched
+    // a non-lifecycle field — otherwise we'd duplicate the stage event.
+    const hasNonStageChange = Object.keys(changedFields).some((k) => k !== "stage" && k !== "status");
+    if (hasNonStageChange) {
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "crm.opportunity.updated",
+        entity: "crm_opportunities",
+        entityId: oppId,
+        before: existing,
+        after: row,
+        details: JSON.stringify({ changedFields }),
+      }).catch(console.error);
+    }
+
     res.json({ ...row, autoActions });
   } catch (err) { handleRouteError(err, res, "Update opportunity error:"); }
 });

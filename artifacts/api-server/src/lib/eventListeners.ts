@@ -218,6 +218,15 @@ export function registerEventListeners() {
     await logAudit("crm.opportunity.lost", { ...payload, action: "update" });
   });
 
+  // Phase C domain 2 — CRM audit. Generic opportunity.updated event
+  // covering non-lifecycle edits (title change, contact swap, value
+  // tweak, re-assignment without stage change). Complements the
+  // existing `stage_changed` / `won` / `lost` / `converted` events.
+  eventBus.on("crm.opportunity.updated", async (payload) => {
+    await logEvent("crm.opportunity.updated", payload);
+    await logAudit("crm.opportunity.updated", { ...payload, action: "update", entity: "crm_opportunities" });
+  });
+
   eventBus.on("task.created", async (payload) => {
     await logEvent("task.created", payload);
     await logAudit("task.created", { ...payload, action: "create" });
