@@ -829,7 +829,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
 
     // Verify all 12 periods are closed, unless force=true
     const closedPeriods = await rawQuery<any>(
-      `SELECT to_char("startDate", 'YYYY-MM') AS period FROM financial_periods WHERE "companyId" = $1 AND status = 'closed' AND EXTRACT(YEAR FROM "startDate") = $2`,
+      `SELECT to_char("startDate", 'YYYY-MM') AS period FROM financial_periods WHERE "companyId" = $1 AND status = 'closed' AND "deletedAt" IS NULL AND EXTRACT(YEAR FROM "startDate") = $2`,
       [scope.companyId, year]
     );
     const closedSet = new Set(closedPeriods.map((p: any) => p.period));
@@ -874,7 +874,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
         const startDate = `${p}-01`;
         const endDate = new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0).toISOString().split("T")[0];
         const [existing] = await rawQuery<any>(
-          `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 LIMIT 1`,
+          `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
           [scope.companyId, p]
         );
         if (existing) {
@@ -911,7 +911,8 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
          SET "yearEndClosed" = TRUE,
              "yearEndClosedAt" = NOW(),
              "yearEndClosingJournalId" = $1
-       WHERE "companyId" = $2 AND EXTRACT(YEAR FROM "startDate") = $3`,
+       WHERE "companyId" = $2 AND EXTRACT(YEAR FROM "startDate") = $3
+         AND "deletedAt" IS NULL`,
       [journalId, scope.companyId, year]
     );
 

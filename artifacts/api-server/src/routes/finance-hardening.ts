@@ -38,7 +38,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", async (req, res) => {
        FROM financial_periods fp
        LEFT JOIN employee_assignments ea ON ea.id = fp."closedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE fp."companyId" = $1
+       WHERE fp."companyId" = $1 AND fp."deletedAt" IS NULL
        ORDER BY fp."startDate" DESC`,
       [scope.companyId]
     );
@@ -101,7 +101,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => 
     // journals. The business rule lives here (not in applyTransition) so we
     // can surface a ConflictError with structured `pendingCount` meta.
     const [period] = await rawQuery<any>(
-      `SELECT id, name, "startDate", "endDate" FROM financial_periods WHERE id=$1 AND "companyId"=$2`,
+      `SELECT id, name, "startDate", "endDate" FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [periodId, scope.companyId]
     );
     if (!period) throw new NotFoundError("الفترة غير موجودة");
@@ -138,6 +138,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => 
       fromStates: ["open"],
       toState: "closed",
       reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL`,
       setExtras: {
         closedAt: { raw: "NOW()" },
         closedBy: scope.activeAssignmentId,
@@ -175,7 +176,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) =>
     // Fetch only the name for the success message; the engine does the
     // state check and row update.
     const [period] = await rawQuery<any>(
-      `SELECT name FROM financial_periods WHERE id=$1 AND "companyId"=$2`,
+      `SELECT name FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [periodId, scope.companyId]
     );
     if (!period) throw new NotFoundError("الفترة غير موجودة");
@@ -188,6 +189,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) =>
       fromStates: ["closed"],
       toState: "open",
       reason,
+      extraWhere: `"deletedAt" IS NULL`,
       setExtras: {
         reopenedAt: { raw: "NOW()" },
         reopenedBy: scope.activeAssignmentId,
@@ -547,7 +549,7 @@ financeHardeningRouter.get("/bank-guarantees", async (req, res) => {
                 ELSE 'active'
               END AS "alertStatus"
        FROM bank_guarantees bg
-       WHERE bg."companyId"=$1
+       WHERE bg."companyId"=$1 AND bg."deletedAt" IS NULL
        ORDER BY bg."expiryDate" ASC`,
       [scope.companyId]
     );
@@ -630,7 +632,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", async (req, res) => {
     }
     params.push(Number(id), scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE bank_guarantees SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE bank_guarantees SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("الضمان غير موجود");
@@ -666,7 +668,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", async (req, res) => {
     const guaranteeId = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(
-      `SELECT id, ref, bank, status, amount FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`,
+      `SELECT id, ref, bank, status, amount FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [guaranteeId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الضمان غير موجود");
@@ -683,8 +685,12 @@ financeHardeningRouter.delete("/bank-guarantees/:id", async (req, res) => {
       );
     }
 
+    // Phase 9: bank_guarantees now has a deletedAt column, so DELETE is a
+    // soft-delete. Hard-deleting would orphan any paired journal entries
+    // that referenced the guarantee by id.
     const [row] = await rawQuery<any>(
-      `DELETE FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 RETURNING id`,
+      `UPDATE bank_guarantees SET "deletedAt" = NOW(), "updatedAt" = NOW()
+       WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING id`,
       [guaranteeId, scope.companyId]
     );
     if (!row) throw new NotFoundError("الضمان غير موجود");
@@ -704,7 +710,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", async (req, res) => {
       action: "delete",
       entity: "bank_guarantees",
       entityId: guaranteeId,
-      after: { ref: existing.ref, bank: existing.bank, amount: Number(existing.amount), hardDelete: true },
+      after: { ref: existing.ref, bank: existing.bank, amount: Number(existing.amount), softDelete: true },
     }).catch((err) => console.error("[audit] bank_guarantee.deleted:", err));
 
     res.json({ success: true });
@@ -739,7 +745,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", async (req, res) => {
     }
 
     const [existing] = await rawQuery<any>(
-      `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`,
+      `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [guaranteeId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الضمان غير موجود");
@@ -759,6 +765,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", async (req, res) => {
       fromStates: ["active"],
       toState: "cancelled",
       reason,
+      extraWhere: `"deletedAt" IS NULL`,
       setExtras: {
         notes: combinedNotes,
       },
@@ -785,7 +792,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", async (req, res) => 
     const { notes } = req.body as any;
 
     const [existing] = await rawQuery<any>(
-      `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`,
+      `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [guaranteeId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الضمان غير موجود");
@@ -803,6 +810,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", async (req, res) => 
       fromStates: ["active"],
       toState: "released",
       reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL`,
       setExtras: {
         notes: combinedNotes,
       },
@@ -835,7 +843,7 @@ financeHardeningRouter.get("/intercompany", async (req, res) => {
        FROM intercompany_transactions ic
        LEFT JOIN companies fc ON fc.id=ic."fromCompanyId"
        LEFT JOIN companies tc ON tc.id=ic."toCompanyId"
-       WHERE ic."fromCompanyId"=$1 OR ic."toCompanyId"=$1
+       WHERE (ic."fromCompanyId"=$1 OR ic."toCompanyId"=$1) AND ic."deletedAt" IS NULL
        ORDER BY ic."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
@@ -959,7 +967,8 @@ financeHardeningRouter.get("/intercompany/consolidation", async (req, res) => {
 
     const intercompanyTotal = await rawQuery<any>(
       `SELECT SUM(amount) AS total FROM intercompany_transactions
-       WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1)) AND status='posted'`,
+       WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1))
+         AND status='posted' AND "deletedAt" IS NULL`,
       [companies]
     );
 
@@ -1000,7 +1009,7 @@ financeHardeningRouter.get("/projects", async (req, res) => {
        FROM projects p
        LEFT JOIN journal_entries je ON je."projectId"=p.id AND je."deletedAt" IS NULL
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
-       WHERE p."companyId"=$1
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
        GROUP BY p.id
        ORDER BY p."createdAt" DESC`,
       [scope.companyId]
@@ -1057,7 +1066,7 @@ financeHardeningRouter.post("/projects", async (req, res) => {
 financeHardeningRouter.get("/projects/:id/costs", async (req, res) => {
   try {
     const scope = req.scope!;
-    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!project) throw new NotFoundError("المشروع غير موجود");
 
     const costs = await rawQuery<any>(

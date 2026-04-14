@@ -658,6 +658,7 @@ export async function checkFinancialPeriodOpen(
   const rows = await rawQuery<any>(
     `SELECT name FROM financial_periods
      WHERE "companyId" = $1 AND status = 'closed'
+       AND "deletedAt" IS NULL
        AND "startDate" <= $2 AND "endDate" >= $2
      LIMIT 1`,
     [companyId, date]

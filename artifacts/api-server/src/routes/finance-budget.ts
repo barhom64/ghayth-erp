@@ -237,6 +237,11 @@ async function ensureBudgetApprovalTable() {
   // Use rawQuery for DDL: rawExecute would append `RETURNING id` to the
   // CREATE TABLE statement and produce a SQL syntax error. rawQuery
   // passes the statement through verbatim.
+  //
+  // Phase 9 added updatedAt + deletedAt columns. The CREATE TABLE below
+  // includes them so fresh sandboxes created via this helper match the
+  // schema produced by migration 074. Existing installs that already
+  // have the table get the columns via that migration.
   await rawQuery(`
     CREATE TABLE IF NOT EXISTS budget_approval_requests (
       id SERIAL PRIMARY KEY,
@@ -255,6 +260,8 @@ async function ensureBudgetApprovalTable() {
       reason TEXT,
       "requestedBy" INTEGER NOT NULL,
       "requestedAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW(),
+      "deletedAt" TIMESTAMP,
       "decidedBy" INTEGER,
       "decidedAt" TIMESTAMP,
       "decisionNotes" TEXT
@@ -346,7 +353,7 @@ budgetRouter.get("/budget/approval-requests", async (req, res) => {
       `SELECT ar.*, coa.name AS "accountName"
        FROM budget_approval_requests ar
        LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId"
-       WHERE ar."companyId"=$1 AND ar.status=$2
+       WHERE ar."companyId"=$1 AND ar.status=$2 AND ar."deletedAt" IS NULL
        ORDER BY ar."requestedAt" DESC LIMIT 200`,
       [scope.companyId, status]
     );
@@ -372,7 +379,7 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
     // Fetch approval level + context to drive business rules that sit
     // outside the lifecycle engine (approval-level role check + reporting).
     const [request] = await rawQuery<any>(
-      `SELECT id, "approvalLevel", "accountCode", period FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2`,
+      `SELECT id, "approvalLevel", "accountCode", period FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [requestId, scope.companyId]
     );
     if (!request) throw new NotFoundError("طلب الاعتماد غير موجود");
@@ -394,8 +401,9 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
 
     // Central lifecycle engine: rejects "already decided" via fromStates and
     // writes the decision atomically along with decidedBy/decidedAt/notes.
-    // `skipUpdatedAt` because budget_approval_requests was seeded without
-    // an updatedAt column (only decidedAt tracks the mutation timestamp).
+    // Phase 9 added the `updatedAt` and `deletedAt` columns to this table,
+    // so the engine can now manage the updatedAt clock and we can filter
+    // out soft-deleted rows from state transitions.
     const updated = await applyTransition<any>({
       entity: "budget_approval_requests",
       id: requestId,
@@ -404,7 +412,7 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
       fromStates: ["pending"],
       toState: decision,
       reason: notes ?? undefined,
-      skipUpdatedAt: true,
+      extraWhere: `"deletedAt" IS NULL`,
       setExtras: {
         decisionNotes: notes ?? null,
         decidedBy: scope.activeAssignmentId,
