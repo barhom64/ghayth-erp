@@ -76,8 +76,15 @@ export interface ApplyTransitionOptions {
   action: string;
   /** Allowed source states for this transition. Leave empty for "any". */
   fromStates?: string[];
-  /** Target state to write into the `status` column. Leave undefined to keep the current state. */
+  /** Target state to write into the status column. Leave undefined to keep the current state. */
   toState?: string;
+  /**
+   * Name of the column that holds the lifecycle status. Defaults to `"status"`.
+   * Override for tables where the lifecycle status lives elsewhere — e.g.
+   * `journal_entries` uses `"approvalStatus"` for the manual-journal approval
+   * workflow while `"status"` carries the posting state.
+   */
+  statusColumn?: string;
   /** Optional reason, stored on the audit log row. */
   reason?: string;
   /** Extra column assignments to apply in the same UPDATE, keyed by column name. Use `{ raw: "NOW()" }` for raw SQL fragments. */
@@ -121,6 +128,7 @@ export async function applyTransition<TRow = any>(
     action,
     fromStates,
     toState,
+    statusColumn,
     reason,
     setExtras,
     extraWhere,
@@ -130,6 +138,8 @@ export async function applyTransition<TRow = any>(
   } = opts;
 
   const tableId = quoteIdent(entity);
+  const statusCol = statusColumn ?? "status";
+  const statusColId = quoteIdent(statusCol);
 
   const { updated, existingStatus } = await withTransaction(async (client) => {
     // 1. Lock the row and validate state.
@@ -144,12 +154,12 @@ export async function applyTransition<TRow = any>(
     }
 
     if (fromStates && fromStates.length > 0) {
-      const currentStatus = existing.status as string | null | undefined;
+      const currentStatus = existing[statusCol] as string | null | undefined;
       if (!currentStatus || !fromStates.includes(currentStatus)) {
         throw new LifecycleError(
           `لا يمكن تنفيذ العملية من الحالة الحالية (${currentStatus ?? "غير محددة"})`,
           409,
-          "status"
+          statusCol
         );
       }
     }
@@ -159,7 +169,7 @@ export async function applyTransition<TRow = any>(
     const params: any[] = [];
     if (toState !== undefined) {
       params.push(toState);
-      sets.push(`status = $${params.length}`);
+      sets.push(`${statusColId} = $${params.length}`);
     }
     if (setExtras) {
       for (const [col, val] of Object.entries(setExtras)) {
@@ -208,15 +218,16 @@ export async function applyTransition<TRow = any>(
         entity,
         String(id),
         JSON.stringify({
-          fromStatus: existing.status ?? null,
-          toStatus: toState ?? existing.status ?? null,
+          statusColumn: statusCol,
+          fromStatus: existing[statusCol] ?? null,
+          toStatus: toState ?? existing[statusCol] ?? null,
           reason: reason ?? null,
           after: after ?? null,
         }),
       ]
     );
 
-    return { updated: updatedRow, existingStatus: existing.status ?? null };
+    return { updated: updatedRow, existingStatus: existing[statusCol] ?? null };
   });
 
   // --- After commit ------------------------------------------------------
@@ -231,8 +242,8 @@ export async function applyTransition<TRow = any>(
     action,
     entity,
     entityId: id,
-    before: { status: existingStatus },
-    after: { status: toState ?? existingStatus, ...(after ?? {}) },
+    before: { [statusCol]: existingStatus },
+    after: { [statusCol]: toState ?? existingStatus, ...(after ?? {}) },
     reason,
   }).catch((err) => console.error("lifecycleEngine audit error:", err));
 
@@ -243,8 +254,8 @@ export async function applyTransition<TRow = any>(
     userId: scope.userId,
     entity,
     entityId: id,
-    before: { status: existingStatus },
-    after: { status: toState ?? existingStatus, ...(after ?? {}) },
+    before: { [statusCol]: existingStatus },
+    after: { [statusCol]: toState ?? existingStatus, ...(after ?? {}) },
     reason,
   } as any);
 

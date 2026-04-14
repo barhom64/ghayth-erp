@@ -7,6 +7,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import {
   emitEvent,
   createAuditLog,
@@ -684,12 +685,14 @@ custodiesRouter.patch("/custodies/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { id } = req.params;
+    const custodyId = Number(req.params.id);
     const { approved, notes } = req.body as any;
 
+    // Fetch ref for the success message + approval_actions audit row.
+    // The engine validates state on the journal_entries row directly.
     const [cust] = await rawQuery<any>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
-      [Number(id), scope.companyId]
+      `SELECT ref FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
+      [custodyId, scope.companyId]
     );
     if (!cust) throw new NotFoundError("العهدة غير موجودة");
 
@@ -706,31 +709,47 @@ custodiesRouter.patch("/custodies/:id/approve", async (req, res) => {
       );
     }
 
-    await rawExecute(
-      `UPDATE journal_entries SET status = $1 WHERE id = $2`,
-      [newStatus, Number(id)]
-    );
+    // Central lifecycle engine: custody approval goes through the shared
+    // `status` column on journal_entries. fromStates=['pending_approval']
+    // ensures the same record can't be decided twice. The onApply hook
+    // writes the approval_actions audit row inside the same transaction
+    // so the approval trail and the state flip are atomic.
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: custodyId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `custody.${newStatus}`,
+      // custodies typically sit in 'pending_approval' until the approver
+      // acts. `draft` is included as a fallback for custodies that were
+      // created through the bulk-approval chain but never transitioned
+      // through the initiator step.
+      fromStates: ["pending_approval", "draft"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+           VALUES ('custody',$1,$2,$3,$4,$5)`,
+          [custodyId, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+      after: { ref: cust.ref, notes: notes ?? null, decision: newStatus },
+    });
 
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('custody',$1,$2,$3,$4,$5)`,
-        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error("Failed to log approval action:", e); }
-
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: newStatus,
-      entity: "custodies",
-      entityId: Number(id),
-      after: { ref: cust.ref, status: newStatus, notes },
-    }).catch(console.error);
-
-    const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
-    res.json({ message: labels[newStatus] || newStatus, status: newStatus });
+    const labels: Record<string, string> = {
+      approved: "تمت الموافقة",
+      rejected: "تم الرفض",
+      returned: "تم الإرجاع",
+    };
+    res.json({
+      message: labels[newStatus] || newStatus,
+      status: updated.status,
+      event: `custody.${newStatus}`,
+    });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Approve custody error:");
   }
 });

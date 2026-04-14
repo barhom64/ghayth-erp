@@ -12,6 +12,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { assertRole } from "../lib/roleGuards.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
@@ -233,7 +234,10 @@ budgetRouter.delete("/budget/:id", async (req, res) => {
 // which is then routed to CFO or GM by approval_level.
 
 async function ensureBudgetApprovalTable() {
-  await rawExecute(`
+  // Use rawQuery for DDL: rawExecute would append `RETURNING id` to the
+  // CREATE TABLE statement and produce a SQL syntax error. rawQuery
+  // passes the statement through verbatim.
+  await rawQuery(`
     CREATE TABLE IF NOT EXISTS budget_approval_requests (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
@@ -355,7 +359,7 @@ budgetRouter.get("/budget/approval-requests", async (req, res) => {
 budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const requestId = Number(req.params.id);
     const { decision, notes } = req.body as any; // decision: 'approved' | 'rejected'
     if (!["approved", "rejected"].includes(decision)) {
       throw new ValidationError("القرار يجب أن يكون approved أو rejected", {
@@ -365,23 +369,16 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
     }
     await ensureBudgetApprovalTable();
 
+    // Fetch approval level + context to drive business rules that sit
+    // outside the lifecycle engine (approval-level role check + reporting).
     const [request] = await rawQuery<any>(
-      `SELECT * FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
+      `SELECT id, "approvalLevel", "accountCode", period FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2`,
+      [requestId, scope.companyId]
     );
     if (!request) throw new NotFoundError("طلب الاعتماد غير موجود");
-    if (request.status !== "pending") {
-      throw new ConflictError(
-        `الطلب تم البت فيه مسبقاً (${request.status})`,
-        {
-          field: "status",
-          fix: "لا يمكن إعادة البت في طلب اعتماد سبق الفصل فيه",
-          meta: { currentStatus: request.status },
-        },
-      );
-    }
 
-    // Approval level authorization
+    // Approval level authorization — cfo-tier requests can be signed by
+    // finance/director/owner, gm-tier only by director/owner.
     const needed = request.approvalLevel === "cfo"
       ? ["finance", "director", "owner"]
       : ["director", "owner"];
@@ -395,33 +392,39 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
       );
     }
 
-    const [updated] = await rawQuery<any>(
-      `UPDATE budget_approval_requests
-         SET status=$1, "decisionNotes"=$2, "decidedBy"=$3, "decidedAt"=NOW()
-       WHERE id=$4 RETURNING *`,
-      [decision, notes ?? null, scope.activeAssignmentId, id]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
+    // Central lifecycle engine: rejects "already decided" via fromStates and
+    // writes the decision atomically along with decidedBy/decidedAt/notes.
+    // `skipUpdatedAt` because budget_approval_requests was seeded without
+    // an updatedAt column (only decidedAt tracks the mutation timestamp).
+    const updated = await applyTransition<any>({
+      entity: "budget_approval_requests",
+      id: requestId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
       action: `budget.approval_${decision}`,
-      entity: "budget_approval_requests",
-      entityId: id,
-      details: JSON.stringify({ accountCode: request.accountCode, period: request.period, level: request.approvalLevel }),
-    }).catch((err) => pushToDLQ("event", { action: `budget.approval_${decision}`, entityId: id }, err, scope.companyId));
+      fromStates: ["pending"],
+      toState: decision,
+      reason: notes ?? undefined,
+      skipUpdatedAt: true,
+      setExtras: {
+        decisionNotes: notes ?? null,
+        decidedBy: scope.activeAssignmentId,
+        decidedAt: { raw: "NOW()" },
+      },
+      after: {
+        accountCode: request.accountCode,
+        period: request.period,
+        level: request.approvalLevel,
+      },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: decision,
-      entity: "budget_approval_requests",
-      entityId: id,
-      after: { decision, notes: notes ?? null, level: request.approvalLevel },
-    }).catch((err) => console.error(`[audit] budget.approval_${decision}:`, err));
-
-    res.json({ data: updated, message: decision === "approved" ? "تم اعتماد الطلب" : "تم رفض الطلب" });
+    res.json({
+      data: updated,
+      message: decision === "approved" ? "تم اعتماد الطلب" : "تم رفض الطلب",
+      event: `budget.approval_${decision}`,
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Decide budget approval error:");
   }
 });

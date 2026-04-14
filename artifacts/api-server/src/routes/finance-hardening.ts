@@ -16,6 +16,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { assertRole } from "../lib/roleGuards.js";
 import { pushToDLQ } from "../lib/eventBus.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
@@ -93,21 +94,17 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => 
   try {
     const scope = req.scope!;
     assertRole(scope, CFO_ROLES);
-    const { id } = req.params;
+    const periodId = Number(req.params.id);
     const { notes } = req.body as any;
 
+    // Pre-flight: refuse close when the period still has unposted manual
+    // journals. The business rule lives here (not in applyTransition) so we
+    // can surface a ConflictError with structured `pendingCount` meta.
     const [period] = await rawQuery<any>(
-      `SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      `SELECT id, name, "startDate", "endDate" FROM financial_periods WHERE id=$1 AND "companyId"=$2`,
+      [periodId, scope.companyId]
     );
     if (!period) throw new NotFoundError("الفترة غير موجودة");
-    if (period.status === "closed") {
-      throw new ConflictError("الفترة مُقفلة مسبقاً", {
-        field: "status",
-        fix: "لا يمكن إقفال فترة مُقفلة بالفعل",
-        meta: { currentStatus: period.status },
-      });
-    }
 
     const pendingJournals = await rawQuery<any>(
       `SELECT id FROM journal_entries
@@ -129,29 +126,35 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => 
       );
     }
 
-    await rawExecute(
-      `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, notes=COALESCE($2,notes), "updatedAt"=NOW()
-       WHERE id=$3`,
-      [scope.activeAssignmentId, notes ?? null, Number(id)]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "fiscal_period.closed",
+    // Central lifecycle engine: validates fromStates=['open'], writes
+    // status='closed' + audit trail + event_logs + eventBus emission
+    // atomically. Any attempt to close an already-closed period is rejected
+    // by the engine's fromStates check, not by a hand-written guard.
+    const updated = await applyTransition<any>({
       entity: "financial_periods",
-      entityId: Number(id),
-      after: JSON.stringify({ name: period.name, notes }),
-    }).catch((err) => pushToDLQ("event", { action: "fiscal_period.closed", entityId: Number(id) }, err, scope.companyId));
+      id: periodId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "fiscal_period.closed",
+      fromStates: ["open"],
+      toState: "closed",
+      reason: notes ?? undefined,
+      setExtras: {
+        closedAt: { raw: "NOW()" },
+        closedBy: scope.activeAssignmentId,
+        ...(notes ? { notes } : {}),
+      },
+      after: { name: period.name, notes: notes ?? null },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "fiscal_period.close", entity: "financial_periods", entityId: Number(id),
-      after: { status: "closed", notes },
-    }).catch(console.error);
-
-    res.json({ message: `تم إقفال الفترة المالية "${period.name}" بنجاح`, periodId: Number(id), status: "closed" });
+    res.json({
+      message: `تم إقفال الفترة المالية "${period.name}" بنجاح`,
+      periodId,
+      status: updated.status,
+      event: "fiscal_period.closed",
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Close fiscal period error:");
   }
 });
@@ -160,7 +163,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) =>
   try {
     const scope = req.scope!;
     assertRole(scope, ["general_manager", "owner"]);
-    const { id } = req.params;
+    const periodId = Number(req.params.id);
     const { reason } = req.body as any;
     if (!reason) {
       throw new ValidationError("سبب فتح الفترة مطلوب", {
@@ -169,42 +172,39 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) =>
       });
     }
 
+    // Fetch only the name for the success message; the engine does the
+    // state check and row update.
     const [period] = await rawQuery<any>(
-      `SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      `SELECT name FROM financial_periods WHERE id=$1 AND "companyId"=$2`,
+      [periodId, scope.companyId]
     );
     if (!period) throw new NotFoundError("الفترة غير موجودة");
-    if (period.status !== "closed") {
-      throw new ConflictError("الفترة غير مُقفلة", {
-        field: "status",
-        fix: "لا يمكن إعادة فتح فترة غير مُقفلة",
-        meta: { currentStatus: period.status },
-      });
-    }
 
-    await rawExecute(
-      `UPDATE financial_periods SET status='open', "reopenedAt"=NOW(), "reopenedBy"=$1, "reopenReason"=$2, "updatedAt"=NOW()
-       WHERE id=$3`,
-      [scope.activeAssignmentId, reason, Number(id)]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "fiscal_period.reopened",
+    const updated = await applyTransition<any>({
       entity: "financial_periods",
-      entityId: Number(id),
-      details: JSON.stringify({ name: period.name, reason }),
-    }).catch((err) => pushToDLQ("event", { action: "fiscal_period.reopened", entityId: Number(id) }, err, scope.companyId));
+      id: periodId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "fiscal_period.reopened",
+      fromStates: ["closed"],
+      toState: "open",
+      reason,
+      setExtras: {
+        reopenedAt: { raw: "NOW()" },
+        reopenedBy: scope.activeAssignmentId,
+        reopenReason: reason,
+      },
+      after: { name: period.name, reason },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "fiscal_period.reopen", entity: "financial_periods", entityId: Number(id),
-      after: { status: "open", reason },
-    }).catch(console.error);
-
-    res.json({ message: `تم إعادة فتح الفترة المالية "${period.name}"`, reason });
+    res.json({
+      message: `تم إعادة فتح الفترة المالية "${period.name}"`,
+      reason,
+      status: updated.status,
+      event: "fiscal_period.reopened",
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Reopen fiscal period error:");
   }
 });
@@ -314,45 +314,52 @@ financeHardeningRouter.get("/journal-manual", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// JOURNAL MANUAL APPROVAL WORKFLOW — fully wired to lifecycleEngine
+//
+//   draft → pending_review → approved → posted
+//                         \→ rejected  (terminal)
+//
+// Every transition goes through `applyTransition` with statusColumn set to
+// "approvalStatus" so the lifecycle engine validates the source state,
+// writes the UPDATE, records the event_logs row, fires the audit log, and
+// emits on the in-process event bus — all atomically. Hand-rolled UPDATEs
+// for approvalStatus are no longer permitted on this entity.
+// ─────────────────────────────────────────────────────────────────────────────
+
 financeHardeningRouter.patch("/journal-manual/:id/submit", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { id } = req.params;
-    const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
+    const journalId = Number(req.params.id);
+
+    // Fetch ref only for the success message; engine does state validation.
+    const [je] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+      [journalId, scope.companyId]
+    );
     if (!je) throw new NotFoundError("القيد غير موجود");
-    if (je.approvalStatus !== "draft") {
-      throw new ConflictError(
-        `لا يمكن إرسال قيد بحالة "${je.approvalStatus}"`,
-        {
-          field: "approvalStatus",
-          fix: "فقط القيود في حالة draft يمكن إرسالها للمراجعة",
-          meta: { currentStatus: je.approvalStatus, expected: "draft" },
-        },
-      );
-    }
-    await rawExecute(`UPDATE journal_entries SET "approvalStatus"='pending_review', "updatedAt"=NOW() WHERE id=$1`, [Number(id)]);
 
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: journalId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
       action: "journal.submitted_for_review",
-      entity: "journal_entries",
-      entityId: Number(id),
-      after: JSON.stringify({ ref: je.ref }),
-    }).catch((err) => pushToDLQ("event", { action: "journal.submitted_for_review", entityId: Number(id) }, err, scope.companyId));
+      statusColumn: "approvalStatus",
+      fromStates: ["draft"],
+      toState: "pending_review",
+      extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
+      after: { ref: je.ref },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "submit",
-      entity: "journal_entries",
-      entityId: Number(id),
-      after: { from: "draft", to: "pending_review", ref: je.ref },
-    }).catch((err) => console.error("[audit] journal.submitted_for_review:", err));
-
-    res.json({ message: "تم إرسال القيد للمراجعة", approvalStatus: "pending_review" });
+    res.json({
+      message: "تم إرسال القيد للمراجعة",
+      approvalStatus: updated.approvalStatus,
+      event: "journal.submitted_for_review",
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Submit manual journal error:");
   }
 });
@@ -361,17 +368,17 @@ financeHardeningRouter.patch("/journal-manual/:id/review", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { id } = req.params;
+    const journalId = Number(req.params.id);
     const { approved, notes } = req.body as any;
-    const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
+
+    // Fetch createdBy for the "cannot review your own entry" business rule
+    // plus ref for the success message. State validation still happens in
+    // the engine.
+    const [je] = await rawQuery<any>(
+      `SELECT ref, "createdBy" FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+      [journalId, scope.companyId]
+    );
     if (!je) throw new NotFoundError("القيد غير موجود");
-    if (je.approvalStatus !== "pending_review") {
-      throw new ConflictError("القيد ليس في مرحلة المراجعة", {
-        field: "approvalStatus",
-        fix: "فقط القيود بحالة pending_review يمكن مراجعتها",
-        meta: { currentStatus: je.approvalStatus, expected: "pending_review" },
-      });
-    }
 
     if (Number(je.createdBy) === scope.activeAssignmentId) {
       throw new ForbiddenError(
@@ -391,31 +398,32 @@ financeHardeningRouter.patch("/journal-manual/:id/review", async (req, res) => {
     }
 
     const newStatus = approved ? "approved" : "rejected";
-    await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"=$1, "reviewedBy"=$2, "reviewedAt"=NOW(), "approvalNotes"=$3, "updatedAt"=NOW() WHERE id=$4`,
-      [newStatus, scope.activeAssignmentId, notes ?? null, Number(id)]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: journalId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
       action: `journal.reviewed_${newStatus}`,
-      entity: "journal_entries",
-      entityId: Number(id),
-      after: JSON.stringify({ ref: je.ref, notes }),
-    }).catch((err) => pushToDLQ("event", { action: `journal.reviewed_${newStatus}`, entityId: Number(id) }, err, scope.companyId));
+      statusColumn: "approvalStatus",
+      fromStates: ["pending_review"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
+      setExtras: {
+        reviewedBy: scope.activeAssignmentId,
+        reviewedAt: { raw: "NOW()" },
+        approvalNotes: notes ?? null,
+      },
+      after: { ref: je.ref, notes: notes ?? null, decision: newStatus },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "review",
-      entity: "journal_entries",
-      entityId: Number(id),
-      after: { from: "pending_review", to: newStatus, notes, ref: je.ref },
-    }).catch((err) => console.error("[audit] journal.review:", err));
-
-    res.json({ message: approved ? "تمت المراجعة والموافقة" : "تم رفض القيد", approvalStatus: newStatus });
+    res.json({
+      message: approved ? "تمت المراجعة والموافقة" : "تم رفض القيد",
+      approvalStatus: updated.approvalStatus,
+      event: `journal.reviewed_${newStatus}`,
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Review manual journal error:");
   }
 });
@@ -424,52 +432,51 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", async (req, res) => 
   try {
     const scope = req.scope!;
     assertRole(scope, ["finance_manager", "general_manager", "owner"]);
-    const { id } = req.params;
+    const journalId = Number(req.params.id);
     const { approved, notes } = req.body as any;
-    const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
+
+    const [je] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+      [journalId, scope.companyId]
+    );
     if (!je) throw new NotFoundError("القيد غير موجود");
-    if (je.approvalStatus !== "approved" && je.approvalStatus !== "pending_review") {
-      throw new ConflictError(
-        `لا يمكن اعتماد قيد بحالة "${je.approvalStatus}"`,
-        {
-          field: "approvalStatus",
-          fix: "فقط القيود بحالة pending_review أو approved يمكن اعتمادها",
-          meta: { currentStatus: je.approvalStatus },
-        },
-      );
-    }
+
     if (!approved && !notes) {
       throw new ValidationError("يجب ذكر سبب الرفض", {
         field: "notes",
         fix: "اكتب سبب رفض الاعتماد",
       });
     }
+
     const newStatus = approved ? "approved" : "rejected";
-    await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"=$1, "approvedBy"=$2, "approvedAt"=NOW(), "approvalNotes"=COALESCE($3,"approvalNotes"), "updatedAt"=NOW() WHERE id=$4`,
-      [newStatus, scope.activeAssignmentId, notes ?? null, Number(id)]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: journalId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
       action: `journal.approved_${newStatus}`,
-      entity: "journal_entries",
-      entityId: Number(id),
-      after: JSON.stringify({ ref: je.ref, notes }),
-    }).catch((err) => pushToDLQ("event", { action: `journal.approved_${newStatus}`, entityId: Number(id) }, err, scope.companyId));
+      statusColumn: "approvalStatus",
+      // Approver can act on a journal that is either pending_review
+      // (pre-approved) or already approved (re-confirm / demote to rejected).
+      fromStates: ["pending_review", "approved"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
+      setExtras: {
+        approvedBy: scope.activeAssignmentId,
+        approvedAt: { raw: "NOW()" },
+        ...(notes ? { approvalNotes: notes } : {}),
+      },
+      after: { ref: je.ref, notes: notes ?? null, decision: newStatus },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "approve",
-      entity: "journal_entries",
-      entityId: Number(id),
-      after: { from: je.approvalStatus, to: newStatus, notes, ref: je.ref },
-    }).catch((err) => console.error("[audit] journal.approve:", err));
-
-    res.json({ message: approved ? "تمت الموافقة على القيد" : "تم رفض القيد", approvalStatus: newStatus });
+    res.json({
+      message: approved ? "تمت الموافقة على القيد" : "تم رفض القيد",
+      approvalStatus: updated.approvalStatus,
+      event: `journal.approved_${newStatus}`,
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Approve manual journal error:");
   }
 });
@@ -478,40 +485,44 @@ financeHardeningRouter.patch("/journal-manual/:id/post", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["finance_manager", "general_manager", "owner"]);
-    const { id } = req.params;
-    const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
-    if (!je) throw new NotFoundError("القيد غير موجود");
-    if (je.approvalStatus !== "approved") {
-      throw new ConflictError(
-        "لا يمكن ترحيل قيد يدوي لم يُعتمد بعد — يجب أن يكون القيد بحالة معتمد",
-        {
-          field: "approvalStatus",
-          fix: "اعتمد القيد قبل ترحيله",
-          meta: { currentStatus: je.approvalStatus, expected: "approved" },
-        },
-      );
-    }
-    await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"='posted', status='posted', "postedAt"=NOW(), "postedBy"=$1, "updatedAt"=NOW() WHERE id=$2`,
-      [scope.activeAssignmentId, Number(id)]
+    const journalId = Number(req.params.id);
+
+    const [je] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+      [journalId, scope.companyId]
     );
+    if (!je) throw new NotFoundError("القيد غير موجود");
 
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "journal.posted",
+    // Posting flips BOTH approvalStatus='posted' AND status='posted'. The
+    // engine drives the approvalStatus transition (gate check + row update),
+    // and setExtras carries the mirror write to status and the posting
+    // metadata columns. This keeps one atomic UPDATE for the whole flip.
+    const updated = await applyTransition<any>({
       entity: "journal_entries",
-      entityId: Number(id),
-      after: JSON.stringify({ ref: je.ref }),
-    }).catch((err) => pushToDLQ("event", { action: "journal.posted", entityId: Number(id) }, err, scope.companyId));
+      id: journalId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "journal.posted",
+      statusColumn: "approvalStatus",
+      fromStates: ["approved"],
+      toState: "posted",
+      extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
+      setExtras: {
+        status: "posted",
+        postedAt: { raw: "NOW()" },
+        postedBy: scope.activeAssignmentId,
+      },
+      after: { ref: je.ref, postingStatus: "posted" },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "journal.posted", entity: "journal_entries", entityId: Number(id),
-      after: { approvalStatus: "posted" },
-    }).catch(console.error);
-    res.json({ message: "تم ترحيل القيد اليدوي بنجاح", approvalStatus: "posted" });
+    res.json({
+      message: "تم ترحيل القيد اليدوي بنجاح",
+      approvalStatus: updated.approvalStatus,
+      status: updated.status,
+      event: "journal.posted",
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Post manual journal error:");
   }
 });
