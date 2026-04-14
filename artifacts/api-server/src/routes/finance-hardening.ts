@@ -714,6 +714,114 @@ financeHardeningRouter.delete("/bank-guarantees/:id", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BANK GUARANTEE LIFECYCLE — Phase 8.1
+//
+//   active ─┬─► cancelled   (CFO cancels an outstanding guarantee)
+//           └─► released    (guarantee obligation discharged / returned)
+//
+// Before Phase 8.1 the only way to change a bank_guarantees.status was via
+// the generic PATCH /bank-guarantees/:id, which let any caller flip the
+// status without validating the source state. These two dedicated endpoints
+// go through `applyTransition` so the graph is enforced centrally.
+// ─────────────────────────────────────────────────────────────────────────────
+
+financeHardeningRouter.post("/bank-guarantees/:id/cancel", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
+    const guaranteeId = Number(req.params.id);
+    const { reason } = req.body as any;
+    if (!reason || !String(reason).trim()) {
+      throw new ValidationError("سبب الإلغاء مطلوب", {
+        field: "reason",
+        fix: "اكتب سبب إلغاء الضمان البنكي",
+      });
+    }
+
+    const [existing] = await rawQuery<any>(
+      `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`,
+      [guaranteeId, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الضمان غير موجود");
+
+    // Note: the bank_guarantees table has no dedicated cancelled/released
+    // timestamp columns. The reason is recorded via applyTransition's
+    // `reason` field (which lands in event_logs + audit_logs) and
+    // prepended onto the row's `notes` column. We build the combined
+    // notes here and pass it as a plain parameter so the value is
+    // parameterised rather than interpolated into raw SQL.
+    const combinedNotes = `${existing.notes ?? ""}${existing.notes ? " | " : ""}إلغاء: ${reason}`;
+    const updated = await applyTransition<any>({
+      entity: "bank_guarantees",
+      id: guaranteeId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "bank_guarantee.cancelled",
+      fromStates: ["active"],
+      toState: "cancelled",
+      reason,
+      setExtras: {
+        notes: combinedNotes,
+      },
+      after: { ref: existing.ref, bank: existing.bank, reason },
+    });
+
+    res.json({
+      message: `تم إلغاء الضمان البنكي "${existing.ref}"`,
+      status: updated.status,
+      event: "bank_guarantee.cancelled",
+    });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Cancel bank guarantee error:");
+  }
+});
+
+financeHardeningRouter.post("/bank-guarantees/:id/release", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
+    const guaranteeId = Number(req.params.id);
+    const { notes } = req.body as any;
+
+    const [existing] = await rawQuery<any>(
+      `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`,
+      [guaranteeId, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الضمان غير موجود");
+
+    // Same note as /cancel above: no dedicated releasedAt column; release
+    // notes are prepended onto the existing `notes` column via a plain
+    // parameterised value (no raw SQL interpolation).
+    const releaseNote = notes ?? "تم التحرير";
+    const combinedNotes = `${existing.notes ?? ""}${existing.notes ? " | " : ""}تحرير: ${releaseNote}`;
+    const updated = await applyTransition<any>({
+      entity: "bank_guarantees",
+      id: guaranteeId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "bank_guarantee.released",
+      fromStates: ["active"],
+      toState: "released",
+      reason: notes ?? undefined,
+      setExtras: {
+        notes: combinedNotes,
+      },
+      after: { ref: existing.ref, bank: existing.bank, notes: notes ?? null },
+    });
+
+    res.json({
+      message: `تم تحرير الضمان البنكي "${existing.ref}"`,
+      status: updated.status,
+      event: "bank_guarantee.released",
+    });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Release bank guarantee error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // INTERCOMPANY TRANSACTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 

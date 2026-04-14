@@ -18,6 +18,8 @@ import {
   checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { assertRole } from "../lib/roleGuards.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const journalRouter = Router();
 journalRouter.use(authMiddleware);
@@ -25,14 +27,10 @@ journalRouter.use(authMiddleware);
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 const PAYROLL_ROLES = ["hr_manager", "finance_manager", "general_manager", "owner"];
 
-function assertRole(scope: any, allowedRoles: string[]): void {
-  if (!allowedRoles.includes(scope.role)) {
-    throw new ForbiddenError("ليس لديك الصلاحية للقيام بهذا الإجراء", {
-      fix: `الأدوار المسموحة: ${allowedRoles.join(", ")}`,
-      meta: { requiredRoles: allowedRoles, yourRole: scope.role },
-    });
-  }
-}
+// Role guard is the shared `assertRole` from `../lib/roleGuards.js` (imported
+// above). The local duplicate helper that used to live here was removed in
+// Phase 8.1 — every finance route now goes through the same helper so the
+// typed-error contract is uniform across files.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JOURNAL ENTRY STATE MACHINE — Phase C.7 Finance audit
@@ -284,10 +282,16 @@ journalRouter.patch("/expenses/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { id } = req.params;
+    const expenseId = Number(req.params.id);
     const { approved, notes } = req.body as any;
-    const [exp] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
+
+    // Fetch ref for the audit trail; state gating handled by the engine.
+    const [exp] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      [expenseId, scope.companyId]
+    );
     if (!exp) throw new NotFoundError("المصروف غير موجود");
+
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
@@ -295,12 +299,42 @@ journalRouter.patch("/expenses/:id/approve", async (req, res) => {
         { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
       );
     }
-    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('expense',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+
+    // Central lifecycle engine: expense approval uses the shared `status`
+    // column on journal_entries. fromStates restricts the decision to
+    // pending/draft — an already-approved or already-rejected expense
+    // cannot be flipped again without going through a separate re-open
+    // flow. The onApply hook writes the approval_actions trail in the
+    // same transaction.
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: expenseId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `expense.${newStatus}`,
+      fromStates: ["draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+           VALUES ('expense',$1,$2,$3,$4,$5)`,
+          [expenseId, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+      after: { ref: exp.ref, decision: newStatus, notes: notes ?? null },
+    });
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
-    res.json({ message: labels[newStatus] || newStatus, status: newStatus });
+    res.json({
+      message: labels[newStatus] || newStatus,
+      status: updated.status,
+      event: `expense.${newStatus}`,
+    });
   } catch (err) {
-    handleRouteError(err, res, "Finance journal error:");
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Approve expense error:");
   }
 });
 
@@ -489,17 +523,55 @@ journalRouter.patch("/salary-advances/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PAYROLL_ROLES);
-    const { id } = req.params;
+    const advanceId = Number(req.params.id);
     const { approved, notes } = req.body as any;
-    const [entry] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`, [Number(id), scope.companyId]);
+
+    const [entry] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`,
+      [advanceId, scope.companyId]
+    );
     if (!entry) throw new NotFoundError("السلفة غير موجودة");
+
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
-    if (newStatus === "rejected" && !notes) { throw new ValidationError("يجب ذكر سبب الرفض"); return; }
-    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('salary_advance',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
-    res.json({ id: Number(id), status: newStatus });
+    if (newStatus === "rejected" && !notes) {
+      throw new ValidationError("يجب ذكر سبب الرفض", {
+        field: "notes",
+        fix: "اكتب سبب رفض السلفة",
+      });
+    }
+
+    // Central lifecycle engine: salary advances live on journal_entries
+    // with the standard `status` column. fromStates allows decisions only
+    // when the advance is still pending — approved or rejected advances
+    // cannot be re-decided without going through a fresh approval chain.
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: advanceId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `salary_advance.${newStatus}`,
+      fromStates: ["draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+           VALUES ('salary_advance',$1,$2,$3,$4,$5)`,
+          [advanceId, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+      after: { ref: entry.ref, decision: newStatus, notes: notes ?? null },
+    });
+
+    res.json({
+      id: advanceId,
+      status: updated.status,
+      event: `salary_advance.${newStatus}`,
+    });
   } catch (err) {
-    handleRouteError(err, res, "خطأ في اعتماد السلفة");
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Approve salary advance error:");
   }
 });
 
