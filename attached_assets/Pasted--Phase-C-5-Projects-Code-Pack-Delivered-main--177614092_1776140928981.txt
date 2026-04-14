@@ -1,0 +1,76 @@
+## Phase C.5 Projects — Code + Pack Delivered
+
+### الحالة الآن
+
+```
+main                                         claude/phase-c5-projects
+  f32ce33 (auto-sync)                          d34d97a (Projects pack docs) ← HEAD
+  b70ac81 (Property C.4 verified 18/18)        ceed707 (Projects code)
+  340648d (auto-sync)                          f32ce33 (auto-sync)
+  00db51d (Fleet pack docs)                    b70ac81 (Property)
+  dcc8a1b (hotfix)                             340648d
+  aecd27f (Fleet C.3)                          00db51d ...
+```
+
+### Branch `claude/phase-c5-projects`
+
+**Commit 1 — `ceed707` (Projects code):**
+- `artifacts/api-server/src/routes/projects.ts` +414/-58
+- 5 state machines: PROJECT, PHASE, TASK, MILESTONE, RISK
+- Typed errors + FK pre-checks + audit diff + event emit
+- Delete guard (active/in_progress projects)
+- `assertProjectAccess` refactored to throw `NotFoundError` (eliminates 11 `if (!project) return;` guards)
+
+**Commit 2 — `d34d97a` (Verification pack):**
+- `docs/verification/projects.md` — 1125 سطر
+- 16 سيناريو
+- **§1.2 schema-drift pre-check** — تعلّمتها من Property: يطلب من المبرمج أن يشغّل `\d projects` / `\d project_phases` / إلخ قبل السيناريوهات، ليتأكد أن الأعمدة في الـ INSERTs تطابق الـ schema الحيّ
+
+### الـ 16 سيناريو
+
+| # | Surface | Expected |
+|---|---|---|
+| 1 | POST /projects missing name | 422 |
+| 2 | POST /projects missing dates | 422 |
+| 3 | POST /projects endDate ≤ startDate | 422 |
+| 4 | POST /projects negative budget | 422 |
+| 5 | POST /projects happy path | 201 + `project.created` |
+| 6 | PATCH `status=completed` direct | **409** (refuse-list, defence-in-depth) |
+| 7 | PATCH invalid transition | 409 + allowedNext |
+| 8 | DELETE active project | 409 |
+| 9 | POST phases missing name | 422 |
+| 10 | PATCH phase complete from terminal | 409 |
+| 11 | POST tasks missing title | 422 |
+| 12 | POST tasks invalid assigneeId | 422 (FK) |
+| 13 | PATCH task done→review | 409 (only `done→in_progress` allowed) |
+| 14 | POST milestones missing title/date | 422 |
+| 15 | POST risks missing title | 422 |
+| 16 | POST costs missing desc/amount | 422 |
+
+### Static Review verdict
+
+**16/16 متوقع ✅**. لا gap مثل Fleet Test 11 — الـ refuse-list لـ `completed` في PATCH /projects كان مكتوب منذ اليوم الأول (projects.ts:349) مع `fix` يوجّه لـ `/projects/:id/close`.
+
+| Domain | Test 11-style gap | Defence-in-depth من البداية؟ |
+|---|---|---|
+| Fleet | ⚠️ كان فيه gap (hotfix لزم) | لا — أضيف بعد verification |
+| Property | لا | نعم |
+| Projects | لا | نعم |
+
+### Build state
+
+- `tsc --noEmit`: 0 errors ✅
+- `pnpm run build`: 7.0mb bundle ✅
+- Branch pushed to `origin/claude/phase-c5-projects`
+
+### الخطوات التالية للمبرمج
+
+1. `git fetch origin && git checkout claude/phase-c5-projects && pnpm run build`
+2. **§1.2 schema-drift pre-check** — يشغّل `psql \d` على كل جدول projects/project_phases/project_tasks/project_milestones/project_risks/project_costs ويقارن مع الأعمدة المحجوزة في `projects.ts`. إذا فيه drift، يصلح الـ INSERT بنفس نمط `b70ac81`.
+3. تشغيل الـ 16 سيناريو
+4. §5 DB queries
+5. إذا 16/16 ✅ → fast-forward merge إلى main حسب §7
+6. إذا drift بسيط صَلّحه أثناء التشغيل → توثيق في verdict → merge
+7. إذا ⚠️/❌ → توقف، أبلغني
+
+main لا يزال على `f32ce33` (Fleet+Property). Projects على فرع منفصل بانتظار التأكيد.
