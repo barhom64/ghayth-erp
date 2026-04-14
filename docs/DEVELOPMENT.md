@@ -6,13 +6,48 @@ This is the short, opinionated day-to-day playbook. It assumes you have already 
 
 ## 1. First-run checklist
 
-1. Install Node 24 and pnpm.
-2. Create a local PostgreSQL database.
-3. Copy `.env.example` → `.env` and set `DATABASE_URL` + `JWT_SECRET`.
-4. `pnpm install` at the repo root.
-5. `pnpm run typecheck` — make sure a cold workspace compiles before touching anything.
-6. `pnpm --filter @workspace/api-server run dev` — migrations run automatically on boot. Watch the logs: `migrate › applied NNN_*.sql`.
+1. Install Node 24, pnpm, and PostgreSQL 16.
+2. Clone the repo and `pnpm install`.
+3. **Bootstrap the local DB from the committed schema dump:**
+   ```bash
+   pnpm db:bootstrap
+   ```
+   This drops + recreates the `ghayth_erp` Postgres database, loads
+   `db/schema.sql` (the canonical DDL — full schema dumped from the
+   live Replit instance), `db/seed.sql` (reference rows: companies,
+   branches, permissions, chart of accounts, …), and
+   `db/seed-admin-user.sql` (deterministic test admin
+   `owner@local.test` / `Test1234!`). It also pre-marks every
+   migration in `artifacts/api-server/src/migrations/` as applied,
+   so the runtime migration runner is a no-op on first boot.
+
+   See `db/README.md` for what the bootstrap loads, the relationship
+   to incremental migrations, and how to regenerate the dumps from a
+   live Replit instance via `pnpm db:dump-schema` / `pnpm db:dump-seed`.
+
+4. Drop this `.env` into `artifacts/api-server/.env`:
+   ```
+   DATABASE_URL=postgres://ghayth_erp:ghayth_erp@localhost:5432/ghayth_erp
+   JWT_SECRET=local-dev-secret-must-be-at-least-32-characters-long-test-only
+   NODE_ENV=development
+   PORT=5000
+   ```
+
+5. `pnpm run typecheck` — confirm a cold workspace compiles.
+6. `pnpm --filter @workspace/api-server run dev` — start the API.
+   On first boot you should see `Migration already applied: NNN_*.sql`
+   for every file in `src/migrations/`. **No `column does not exist`
+   or `relation does not exist` errors should appear.** If they do,
+   the committed `db/schema.sql` is out of date — run
+   `pnpm db:dump-schema` on Replit to regenerate it (see §2.4 below).
 7. `pnpm --filter @workspace/ghayth-erp run dev` in a second terminal.
+
+8. Login with the deterministic test admin:
+   ```bash
+   curl -X POST http://localhost:5000/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"owner@local.test","password":"Test1234!"}'
+   ```
 
 ---
 
@@ -45,6 +80,40 @@ Restart the API server to apply it; `lib/migrate.ts` will pick it up. `build.mjs
 ### Rolling back
 
 There is no automated rollback. Write a new, compensating migration.
+
+### 2.4 Regenerating `db/schema.sql` (Phase 2)
+
+Whenever you land a migration that adds tables, columns, or constraints,
+re-export the canonical schema so `pnpm db:bootstrap` keeps working
+for fresh local instances:
+
+```bash
+# On Replit (or any environment where DATABASE_URL points at a fully
+# migrated DB):
+pnpm db:dump-schema
+
+# Review the diff in db/schema.sql:
+git diff db/schema.sql
+
+# If it looks right, also re-export the reference seed if you touched
+# any of the reference tables (companies, permissions, chart_of_accounts,
+# job_titles, …):
+pnpm db:dump-seed
+
+# Commit + push as part of the same change-set as the migration.
+git add db/schema.sql db/seed.sql artifacts/api-server/src/migrations/NNN_*.sql
+git commit -m "feat(thing): NNN_my_change + regenerate schema dump"
+```
+
+Existing instances (Replit, staging, production) will apply the
+incremental migration normally on next boot. The runtime migration
+runner detects that `schema_migrations` already has rows and skips
+loading the dump as a baseline — see `src/lib/migrate.ts`
+`detectAndApplyBaselineIfNeeded` for the exact logic.
+
+**Don't** hand-edit `db/schema.sql` — always regenerate it from a
+real Postgres via `pg_dump`. Hand edits silently drift from the
+actual schema and break the bootstrap on fresh clones.
 
 ---
 
