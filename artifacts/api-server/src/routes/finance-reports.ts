@@ -1,4 +1,7 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError,
+  ForbiddenError,
+  IntegrationError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -387,7 +390,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", async (req, res) => {
       `SELECT id, name, phone, email, "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2`,
       [clientId, scope.companyId]
     );
-    if (!client) { res.status(404).json({ error: "العميل غير موجود" }); return; }
+    if (!client) { throw new NotFoundError("العميل غير موجود"); return; }
 
     // Opening balance = invoices before startDate - payments before startDate
     const [openingRow] = await rawQuery<any>(
@@ -507,7 +510,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", async (req, res) => {
       `SELECT id, name, phone, email, "taxNumber" FROM suppliers WHERE id = $1 AND "companyId" = $2`,
       [supplierId, scope.companyId]
     );
-    if (!supplier) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!supplier) { throw new NotFoundError("المورد غير موجود"); return; }
 
     // Opening balance = POs matched/received before startDate - payments posted
     // before startDate. Uses purchase_orders as the AP proxy since we lack a
