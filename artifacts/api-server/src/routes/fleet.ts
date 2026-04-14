@@ -4,6 +4,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -19,6 +20,56 @@ import { registerObligation, markObligationMet, cancelObligation } from "../lib/
 
 const router = Router();
 router.use(authMiddleware);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIFECYCLE STATE MACHINES — Phase C.3 Fleet audit
+//
+// Every lifecycle transition (vehicle status, trip status, maintenance status,
+// traffic violation status) must go through one of these allowlists. A direct
+// `UPDATE status` on any of these tables outside the allowlist is a bug — the
+// PATCH handlers below refuse unknown transitions with a 409 and a helpful
+// `allowedNext` payload so the UI can grey out invalid buttons.
+// ─────────────────────────────────────────────────────────────────────────────
+const VEHICLE_STATUSES = ["available", "in_use", "maintenance", "out_of_service"] as const;
+const VEHICLE_TRANSITIONS: Record<string, readonly string[]> = {
+  available:       ["in_use", "maintenance", "out_of_service"],
+  in_use:          ["available", "maintenance"],
+  maintenance:     ["available", "out_of_service"],
+  out_of_service:  ["available", "maintenance"],
+};
+
+const TRIP_STATUSES = ["scheduled", "planned", "in_progress", "completed", "cancelled"] as const;
+const TRIP_TRANSITIONS: Record<string, readonly string[]> = {
+  scheduled:   ["planned", "in_progress", "cancelled"],
+  planned:     ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed:   [],
+  cancelled:   [],
+};
+
+const MAINTENANCE_STATUSES = ["scheduled", "in_progress", "completed", "cancelled"] as const;
+const MAINTENANCE_TRANSITIONS: Record<string, readonly string[]> = {
+  scheduled:   ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed:   [],
+  cancelled:   [],
+};
+
+const VIOLATION_STATUSES = ["pending", "paid", "disputed", "cancelled"] as const;
+const VIOLATION_TRANSITIONS: Record<string, readonly string[]> = {
+  pending:   ["paid", "disputed", "cancelled"],
+  disputed:  ["paid", "cancelled"],
+  paid:      [],
+  cancelled: [],
+};
+
+const DRIVER_STATUSES = ["available", "on_trip", "off_duty", "suspended"] as const;
+const DRIVER_TRANSITIONS: Record<string, readonly string[]> = {
+  available:  ["on_trip", "off_duty", "suspended"],
+  on_trip:    ["available", "off_duty"],
+  off_duty:   ["available", "suspended"],
+  suspended:  ["off_duty", "available"],
+};
 
 router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
   try {
@@ -40,22 +91,48 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
     const scope = req.scope!;
     const b = req.body;
 
-    if (!b.plateNumber) {
-      res.status(400).json({ error: "رقم اللوحة مطلوب" });
-      return;
+    const plateNumber = typeof b.plateNumber === "string" ? b.plateNumber.trim() : "";
+    if (!plateNumber) {
+      throw new ValidationError("رقم اللوحة مطلوب", { field: "plateNumber", fix: "أدخل رقم لوحة المركبة" });
     }
+    if (!b.make || typeof b.make !== "string" || !b.make.trim()) {
+      throw new ValidationError("الشركة المصنّعة مطلوبة", { field: "make", fix: "أدخل اسم الشركة المصنّعة للمركبة" });
+    }
+    if (!b.model || typeof b.model !== "string" || !b.model.trim()) {
+      throw new ValidationError("الموديل مطلوب", { field: "model", fix: "أدخل موديل المركبة" });
+    }
+    if (b.year !== undefined && b.year !== null && b.year !== "") {
+      const yr = Number(b.year);
+      const currentYear = new Date().getFullYear();
+      if (!Number.isFinite(yr) || yr < 1950 || yr > currentYear + 1) {
+        throw new ValidationError(`السنة غير صالحة — يجب أن تكون بين 1950 و${currentYear + 1}`, { field: "year", fix: "أدخل سنة صنع المركبة بصيغة صحيحة" });
+      }
+    }
+    if (b.fuelType && !["gasoline", "diesel", "electric", "hybrid", "lpg"].includes(b.fuelType)) {
+      throw new ValidationError("نوع الوقود غير صالح", { field: "fuelType", fix: "اختر من: بنزين، ديزل، كهربائي، هجين، غاز" });
+    }
+
     const [existingVehicle] = await rawQuery<any>(
-      `SELECT id FROM fleet_vehicles WHERE "plateNumber" = $1 AND "companyId" = $2`,
-      [b.plateNumber, scope.companyId]
+      `SELECT id FROM fleet_vehicles WHERE "plateNumber" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [plateNumber, scope.companyId]
     );
     if (existingVehicle) {
-      res.status(409).json({ error: "رقم اللوحة مسجل مسبقاً" });
-      return;
+      throw new ConflictError("رقم اللوحة مسجل مسبقاً", { field: "plateNumber", fix: "استخدم رقم لوحة مختلف أو تحقق من السجل الموجود" });
+    }
+
+    if (b.vinNumber) {
+      const [existingVin] = await rawQuery<any>(
+        `SELECT id FROM fleet_vehicles WHERE "vinNumber" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [b.vinNumber, scope.companyId]
+      );
+      if (existingVin) {
+        throw new ConflictError("رقم الهيكل (VIN) مسجل مسبقاً", { field: "vinNumber", fix: "تحقق من رقم الهيكل — لا يمكن تسجيل نفس المركبة مرتين" });
+      }
     }
 
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
-      [scope.companyId, b.plateNumber, b.make, b.model, b.year, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null]
+      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1`, [insertId]);
     createAuditLog({
@@ -95,9 +172,52 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    const name = typeof b.name === "string" ? b.name.trim() : "";
+    if (!name) {
+      throw new ValidationError("اسم السائق مطلوب", { field: "name", fix: "أدخل الاسم الكامل للسائق" });
+    }
+    const phone = typeof b.phone === "string" ? b.phone.trim() : "";
+    if (!phone) {
+      throw new ValidationError("رقم الهاتف مطلوب", { field: "phone", fix: "أدخل رقم جوال للسائق للتواصل والإشعارات" });
+    }
+    const licenseNumber = typeof b.licenseNumber === "string" ? b.licenseNumber.trim() : "";
+    if (!licenseNumber) {
+      throw new ValidationError("رقم الرخصة مطلوب", { field: "licenseNumber", fix: "أدخل رقم رخصة القيادة" });
+    }
+    if (b.licenseExpiry) {
+      const exp = new Date(b.licenseExpiry);
+      if (Number.isNaN(exp.getTime())) {
+        throw new ValidationError("تاريخ انتهاء الرخصة غير صالح", { field: "licenseExpiry", fix: "استخدم تنسيق التاريخ YYYY-MM-DD" });
+      }
+      if (exp < new Date()) {
+        throw new ValidationError("رخصة السائق منتهية بالفعل", { field: "licenseExpiry", fix: "لا يمكن تسجيل سائق برخصة منتهية — جدّد الرخصة أولاً" });
+      }
+    }
+
+    // Duplicate licenseNumber check (case where the same driver is added twice)
+    const [dupLicense] = await rawQuery<any>(
+      `SELECT id FROM fleet_drivers WHERE "licenseNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [licenseNumber, scope.companyId]
+    );
+    if (dupLicense) {
+      throw new ConflictError("رقم الرخصة مسجل مسبقاً لسائق آخر", { field: "licenseNumber", fix: "استخدم رقم رخصة صحيح أو راجع السجل الموجود" });
+    }
+
+    // FK pre-check on employeeId if provided
+    if (b.employeeId !== undefined && b.employeeId !== null && b.employeeId !== "") {
+      const [emp] = await rawQuery<any>(
+        `SELECT id FROM employees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.employeeId, scope.companyId]
+      );
+      if (!emp) {
+        throw new ValidationError("الموظف المرتبط غير موجود", { field: "employeeId", fix: "اختر موظفاً مسجلاً في النظام أو اترك الحقل فارغاً" });
+      }
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, b.name, b.phone, b.licenseNumber, b.licenseExpiry, b.licenseType, b.employeeId]
+      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1`, [insertId]);
 
@@ -158,7 +278,9 @@ router.get("/vehicles/:id/impact-preview", requirePermission("fleet:read"), asyn
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { status } = req.query as { status?: string };
-    if (!status) { res.status(400).json({ error: "status مطلوب" }); return; }
+    if (!status) {
+      throw new ValidationError("الحالة المطلوبة", { field: "status", fix: "أرسل معامل status في الرابط" });
+    }
     const preview = await getVehicleStatusImpact(id, scope.companyId, status);
     res.json(preview);
   } catch (err) { handleRouteError(err, res, "Vehicle impact preview error:"); }
@@ -168,48 +290,136 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("المركبة غير موجودة");
     const b = req.body;
+
+    // State machine — if the caller is changing status, the transition must be
+    // allowed from the current status. Unknown target → 422; disallowed → 409.
     if (b.status !== undefined && b.status !== existing.status) {
+      if (!VEHICLE_STATUSES.includes(b.status)) {
+        throw new ValidationError(`حالة غير صالحة: ${b.status}`, { field: "status", fix: `اختر من: ${VEHICLE_STATUSES.join(", ")}` });
+      }
+      const allowedNext = VEHICLE_TRANSITIONS[existing.status] ?? [];
+      if (!allowedNext.includes(b.status)) {
+        throw new ConflictError(`لا يمكن نقل المركبة من "${existing.status}" إلى "${b.status}"`, { field: "status", fix: `الانتقالات المسموحة من الحالة الحالية: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد (حالة نهائية)"}` });
+      }
+      // Business-impact guard (blocks status change if e.g. the vehicle is on
+      // an active trip and the caller tries to mark it as out_of_service).
       const preview = await getVehicleStatusImpact(id, scope.companyId, b.status);
       if (!preview.canProceed) {
-        res.status(422).json({ error: "لا يمكن تغيير الحالة", blockers: preview.blockers });
-        return;
+        throw new ConflictError("لا يمكن تغيير الحالة بسبب ارتباطات نشطة", { field: "status", fix: "أنهِ الرحلات أو الصيانة المرتبطة بالمركبة قبل تغيير الحالة" });
       }
     }
+
+    // Duplicate-plate pre-check on rename
+    if (b.plateNumber && b.plateNumber !== existing.plateNumber) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND id<>$3`,
+        [b.plateNumber, scope.companyId, id]
+      );
+      if (dup) {
+        throw new ConflictError("رقم اللوحة مسجل مسبقاً", { field: "plateNumber", fix: "اختر رقم لوحة مختلف" });
+      }
+    }
+
+    // FK pre-check on assignedDriverId
+    if (b.assignedDriverId !== undefined && b.assignedDriverId !== null) {
+      const [drv] = await rawQuery<any>(
+        `SELECT id, status FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.assignedDriverId, scope.companyId]
+      );
+      if (!drv) {
+        throw new ValidationError("السائق غير موجود", { field: "assignedDriverId", fix: "اختر سائقاً مسجلاً في النظام" });
+      }
+    }
+
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.plateNumber !== undefined) { params.push(b.plateNumber); sets.push(`"plateNumber"=$${params.length}`); }
-    if (b.make !== undefined) { params.push(b.make); sets.push(`make=$${params.length}`); }
-    if (b.model !== undefined) { params.push(b.model); sets.push(`model=$${params.length}`); }
-    if (b.year !== undefined) { params.push(b.year); sets.push(`year=$${params.length}`); }
-    if (b.color !== undefined) { params.push(b.color); sets.push(`color=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.fuelType !== undefined) { params.push(b.fuelType); sets.push(`"fuelType"=$${params.length}`); }
-    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
-    if (b.assignedDriverId !== undefined) { params.push(b.assignedDriverId); sets.push(`"assignedDriverId"=$${params.length}`); }
-    if (b.registrationNumber !== undefined) { params.push(b.registrationNumber); sets.push(`"registrationNumber"=$${params.length}`); }
-    if (b.registrationExpiry !== undefined) { params.push(b.registrationExpiry || null); sets.push(`"registrationExpiry"=$${params.length}`); }
-    if (b.inspectionDate !== undefined) { params.push(b.inspectionDate || null); sets.push(`"inspectionDate"=$${params.length}`); }
-    if (b.nextInspectionDate !== undefined) { params.push(b.nextInspectionDate || null); sets.push(`"nextInspectionDate"=$${params.length}`); }
-    if (b.plateType !== undefined) { params.push(b.plateType); sets.push(`"plateType"=$${params.length}`); }
-    if (b.sequenceNumber !== undefined) { params.push(b.sequenceNumber); sets.push(`"sequenceNumber"=$${params.length}`); }
-    if (b.vinNumber !== undefined) { params.push(b.vinNumber); sets.push(`"vinNumber"=$${params.length}`); }
+    const trackedFields = ["plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber"] as const;
+    const colMap: Record<string, string> = {
+      plateNumber: '"plateNumber"',
+      make: "make",
+      model: "model",
+      year: "year",
+      color: "color",
+      status: "status",
+      fuelType: '"fuelType"',
+      notes: "notes",
+      assignedDriverId: '"assignedDriverId"',
+      registrationNumber: '"registrationNumber"',
+      registrationExpiry: '"registrationExpiry"',
+      inspectionDate: '"inspectionDate"',
+      nextInspectionDate: '"nextInspectionDate"',
+      plateType: '"plateType"',
+      sequenceNumber: '"sequenceNumber"',
+      vinNumber: '"vinNumber"',
+    };
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    for (const f of trackedFields) {
+      if (b[f] !== undefined && b[f] !== existing[f]) {
+        const val = (f === "registrationExpiry" || f === "inspectionDate" || f === "nextInspectionDate")
+          ? (b[f] || null)
+          : b[f];
+        params.push(val);
+        sets.push(`${colMap[f]}=$${params.length}`);
+        before[f] = existing[f];
+        after[f] = val;
+      }
+    }
+
+    if (Object.keys(after).length === 0) {
+      res.json(existing);
+      return;
+    }
+
     params.push(id);
     await rawExecute(`UPDATE fleet_vehicles SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    if (b.status !== undefined && b.status !== existing.status) {
-      await createAuditLog({
+
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1`, [id]);
+
+    // Audit diff for any tracked field change.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "fleet_vehicles",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    // If the status changed, emit a dedicated lifecycle event so listeners fire.
+    // Other edits get a generic `fleet.vehicle.updated` so BI / rules engine see them.
+    if ("status" in after) {
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
         userId: scope.userId,
+        action: "fleet.vehicle.status_changed",
         entity: "fleet_vehicles",
         entityId: id,
-        action: "status_change",
-        before: { status: existing.status },
-        after: { status: b.status },
+        before,
+        after,
+      }).catch(console.error);
+    } else {
+      emitEvent({
         companyId: scope.companyId,
-      });
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "fleet.vehicle.updated",
+        entity: "fleet_vehicles",
+        entityId: id,
+        before,
+        after,
+      }).catch(console.error);
     }
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1`, [id]);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update vehicle error:"); }
 });
@@ -218,9 +428,43 @@ router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, re
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "plateNumber", status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("المركبة غير موجودة");
+
+    // Block delete if the vehicle is tied up in an active trip or in-progress
+    // maintenance — otherwise the delete would orphan the driver assignment
+    // and leave a ghost trip referencing a missing vehicle.
+    const [activeTrip] = await rawQuery<any>(
+      `SELECT id FROM fleet_trips WHERE "vehicleId"=$1 AND "companyId"=$2 AND status IN ('scheduled','planned','in_progress') AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (activeTrip) {
+      throw new ConflictError("لا يمكن حذف المركبة — توجد رحلة نشطة مرتبطة بها", { field: "status", fix: "أنهِ الرحلة النشطة أو ألغِها قبل حذف المركبة" });
+    }
+    const [activeMaint] = await rawQuery<any>(
+      `SELECT id FROM fleet_maintenance WHERE "vehicleId"=$1 AND "companyId"=$2 AND status IN ('scheduled','in_progress') AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (activeMaint) {
+      throw new ConflictError("لا يمكن حذف المركبة — توجد صيانة قيد التنفيذ", { field: "status", fix: "أكمل أو ألغِ سجل الصيانة قبل حذف المركبة" });
+    }
+
     await rawExecute(`UPDATE fleet_vehicles SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.vehicle.deleted",
+      entity: "fleet_vehicles",
+      entityId: id,
+      before: { plateNumber: existing.plateNumber, status: existing.status },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المركبة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
 });
@@ -238,20 +482,89 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("السائق غير موجود");
     const b = req.body;
+
+    // State machine on driver status
+    if (b.status !== undefined && b.status !== existing.status) {
+      if (!DRIVER_STATUSES.includes(b.status)) {
+        throw new ValidationError(`حالة سائق غير صالحة: ${b.status}`, { field: "status", fix: `اختر من: ${DRIVER_STATUSES.join(", ")}` });
+      }
+      const allowedNext = DRIVER_TRANSITIONS[existing.status] ?? DRIVER_TRANSITIONS.available;
+      if (!allowedNext.includes(b.status)) {
+        throw new ConflictError(`لا يمكن نقل السائق من "${existing.status}" إلى "${b.status}"`, { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}` });
+      }
+    }
+
+    // Duplicate license check on rename
+    if (b.licenseNumber && b.licenseNumber !== existing.licenseNumber) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM fleet_drivers WHERE "licenseNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND id<>$3`,
+        [b.licenseNumber, scope.companyId, id]
+      );
+      if (dup) {
+        throw new ConflictError("رقم الرخصة مسجل مسبقاً لسائق آخر", { field: "licenseNumber", fix: "اختر رقم رخصة صحيح" });
+      }
+    }
+    if (b.licenseExpiry) {
+      const exp = new Date(b.licenseExpiry);
+      if (Number.isNaN(exp.getTime())) {
+        throw new ValidationError("تاريخ انتهاء الرخصة غير صالح", { field: "licenseExpiry", fix: "استخدم تنسيق التاريخ YYYY-MM-DD" });
+      }
+    }
+
+    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType"] as const;
+    const colMap: Record<string, string> = {
+      name: "name",
+      phone: "phone",
+      licenseNumber: '"licenseNumber"',
+      licenseExpiry: '"licenseExpiry"',
+      status: "status",
+      licenseType: '"licenseType"',
+    };
     const sets: string[] = [];
     const params: any[] = [];
-    if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
-    if (b.phone !== undefined) { params.push(b.phone); sets.push(`phone=$${params.length}`); }
-    if (b.licenseNumber !== undefined) { params.push(b.licenseNumber); sets.push(`"licenseNumber"=$${params.length}`); }
-    if (b.licenseExpiry !== undefined) { params.push(b.licenseExpiry); sets.push(`"licenseExpiry"=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    for (const f of trackedFields) {
+      if (b[f] !== undefined && b[f] !== existing[f]) {
+        params.push(b[f]);
+        sets.push(`${colMap[f]}=$${params.length}`);
+        before[f] = existing[f];
+        after[f] = b[f];
+      }
+    }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE fleet_drivers SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "fleet_drivers",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "fleet.driver.status_changed" : "fleet.driver.updated",
+      entity: "fleet_drivers",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update driver error:"); }
 });
@@ -260,9 +573,33 @@ router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, name, status FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("السائق غير موجود");
+
+    const [activeTrip] = await rawQuery<any>(
+      `SELECT id FROM fleet_trips WHERE "driverId"=$1 AND "companyId"=$2 AND status IN ('scheduled','planned','in_progress') AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (activeTrip) {
+      throw new ConflictError("لا يمكن حذف السائق — توجد رحلة نشطة مسندة إليه", { field: "status", fix: "أنهِ أو ألغِ الرحلة النشطة قبل حذف السائق" });
+    }
+
     await rawExecute(`UPDATE fleet_drivers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.driver.deleted",
+      entity: "fleet_drivers",
+      entityId: id,
+      before: { name: existing.name, status: existing.status },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف السائق بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
 });
@@ -654,14 +991,25 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
     const scope = req.scope!;
     const tripId = Number(req.params.id);
     const b = req.body;
-    const [trip] = await rawQuery<any>(`SELECT "vehicleId","driverId" FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
+    const [trip] = await rawQuery<any>(
+      `SELECT "vehicleId","driverId", status FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [tripId, scope.companyId]
+    );
     if (!trip) throw new NotFoundError("الرحلة غير موجودة");
+    if (trip.status !== "in_progress") {
+      throw new ConflictError("لا يمكن تسجيل نقاط GPS لرحلة غير نشطة", { field: "status", fix: "نقاط الرحلة تُسجل فقط أثناء التنفيذ" });
+    }
+    const lat = b.lat ?? b.latitude;
+    const lon = b.lon ?? b.longitude;
+    if (lat === undefined || lon === undefined) {
+      throw new ValidationError("إحداثيات النقطة مطلوبة", { field: "lat", fix: "أرسل lat و lon (أو latitude و longitude) في جسم الطلب" });
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,NOW())`,
-      [trip.vehicleId, trip.driverId, b.lat || b.latitude, b.lon || b.longitude, b.speed || 0]
+      [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0]
     );
-    res.status(201).json({ id: insertId, tripId, lat: b.lat || b.latitude, lon: b.lon || b.longitude });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+    res.status(201).json({ id: insertId, tripId, lat, lon });
+  } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
 
 router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => {
@@ -685,6 +1033,34 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    if (!b.vehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر المركبة التي ستخضع للصيانة" });
+    }
+    if (!b.type || typeof b.type !== "string" || !b.type.trim()) {
+      throw new ValidationError("نوع الصيانة مطلوب", { field: "type", fix: "اختر نوع الصيانة (مثال: تغيير زيت، إصلاح، فحص دوري)" });
+    }
+    if (!b.description || typeof b.description !== "string" || !b.description.trim()) {
+      throw new ValidationError("وصف الصيانة مطلوب", { field: "description", fix: "اكتب وصفاً موجزاً للعمل المطلوب" });
+    }
+    if (b.cost !== undefined && b.cost !== null && b.cost !== "") {
+      const c = Number(b.cost);
+      if (!Number.isFinite(c) || c < 0) {
+        throw new ValidationError("التكلفة غير صالحة", { field: "cost", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+
+    // FK pre-check: vehicle must exist and not be deleted
+    const [vehicleRow] = await rawQuery<any>(
+      `SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.vehicleId, scope.companyId]
+    );
+    if (!vehicleRow) {
+      throw new ValidationError("المركبة غير موجودة", { field: "vehicleId", fix: "اختر مركبة مسجلة في النظام" });
+    }
+    if (vehicleRow.status === "out_of_service") {
+      throw new ConflictError("لا يمكن إنشاء صيانة لمركبة خارج الخدمة", { field: "vehicleId", fix: "أعد المركبة للحالة المتاحة أو اختر مركبة أخرى" });
+    }
 
     const mechanics = await rawQuery<any>(
       `SELECT e.* FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active' WHERE e.status='active' ORDER BY e.id LIMIT 5`,
@@ -719,6 +1095,23 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1`, [insertId]);
+
+    // Emit the creation event so listeners write audit + event_logs in one place.
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.maintenance.created",
+      entity: "fleet_maintenance",
+      entityId: insertId,
+      after: {
+        vehicleId: b.vehicleId,
+        type: b.type,
+        description: b.description,
+        cost: b.cost || 0,
+        serviceDate: b.serviceDate || new Date().toISOString().split("T")[0],
+      },
+    }).catch(console.error);
 
     if (b.type && ["breakdown", "emergency"].includes(b.type)) {
       const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
@@ -1114,10 +1507,43 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    if (!b.vehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر المركبة المؤمن عليها" });
+    }
+    if (!b.provider || typeof b.provider !== "string" || !b.provider.trim()) {
+      throw new ValidationError("شركة التأمين مطلوبة", { field: "provider", fix: "أدخل اسم شركة التأمين" });
+    }
+    if (!b.startDate) {
+      throw new ValidationError("تاريخ بداية الوثيقة مطلوب", { field: "startDate", fix: "أدخل تاريخ بداية سريان التأمين" });
+    }
+    if (!b.endDate) {
+      throw new ValidationError("تاريخ انتهاء الوثيقة مطلوب", { field: "endDate", fix: "أدخل تاريخ انتهاء سريان التأمين" });
+    }
+    const startD = new Date(b.startDate);
+    const endD = new Date(b.endDate);
+    if (Number.isNaN(startD.getTime()) || Number.isNaN(endD.getTime())) {
+      throw new ValidationError("التواريخ غير صالحة", { field: "startDate", fix: "استخدم تنسيق YYYY-MM-DD" });
+    }
+    if (endD <= startD) {
+      throw new ValidationError("تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية", { field: "endDate", fix: "اختر تاريخ انتهاء لاحق لتاريخ البداية" });
+    }
     const premium = Number(b.premium || 0);
+    if (!Number.isFinite(premium) || premium < 0) {
+      throw new ValidationError("قيمة القسط غير صالحة", { field: "premium", fix: "أدخل قيمة غير سالبة" });
+    }
+
+    const [vehicleRow] = await rawQuery<any>(
+      `SELECT id FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.vehicleId, scope.companyId]
+    );
+    if (!vehicleRow) {
+      throw new ValidationError("المركبة غير موجودة", { field: "vehicleId", fix: "اختر مركبة مسجلة" });
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_insurance ("companyId","vehicleId",type,provider,"policyNumber","startDate","endDate",premium) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, b.vehicleId, b.type || b.insuranceType || 'comprehensive', b.provider, b.policyNumber, b.startDate, b.endDate, premium]
+      [scope.companyId, b.vehicleId, b.type || b.insuranceType || 'comprehensive', b.provider.trim(), b.policyNumber, b.startDate, b.endDate, premium]
     );
 
     // Auto journal entry for insurance premium
@@ -1149,124 +1575,396 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
 router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الرحلة غير موجودة");
+
     const { fromLocation, toLocation, destination, status, notes, cost } = req.body as any;
+    const finalTo = toLocation ?? destination;
+
+    // PATCH on trips is an edit surface only — lifecycle transitions must go
+    // through /complete or /cancel. Explicit status writes here are limited to
+    // the allowlist so the status machine can't be bypassed.
+    if (status !== undefined && status !== existing.status) {
+      if (!TRIP_STATUSES.includes(status)) {
+        throw new ValidationError(`حالة رحلة غير صالحة: ${status}`, { field: "status", fix: `اختر من: ${TRIP_STATUSES.join(", ")}` });
+      }
+      const allowedNext = TRIP_TRANSITIONS[existing.status] ?? [];
+      if (!allowedNext.includes(status)) {
+        throw new ConflictError(`لا يمكن نقل الرحلة من "${existing.status}" إلى "${status}" عبر PATCH`, { field: "status", fix: `استخدم /trips/:id/complete أو /trips/:id/cancel لإدارة دورة حياة الرحلة. الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}` });
+      }
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
     let idx = 1;
-    const finalTo = toLocation ?? destination;
-    if (fromLocation !== undefined) { sets.push(`"fromLocation" = $${idx++}`); params.push(fromLocation); }
-    if (finalTo !== undefined) { sets.push(`"toLocation" = $${idx++}`); params.push(finalTo); }
-    if (status !== undefined) { sets.push(`status = $${idx++}`); params.push(status); }
-    if (notes !== undefined) { sets.push(`notes = $${idx++}`); params.push(notes); }
-    if (cost !== undefined) { sets.push(`cost = $${idx++}`); params.push(cost); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
-    params.push(Number(req.params.id), scope.companyId);
+    if (fromLocation !== undefined && fromLocation !== existing.fromLocation) {
+      sets.push(`"fromLocation" = $${idx++}`); params.push(fromLocation);
+      before.fromLocation = existing.fromLocation; after.fromLocation = fromLocation;
+    }
+    if (finalTo !== undefined && finalTo !== existing.toLocation) {
+      sets.push(`"toLocation" = $${idx++}`); params.push(finalTo);
+      before.toLocation = existing.toLocation; after.toLocation = finalTo;
+    }
+    if (status !== undefined && status !== existing.status) {
+      sets.push(`status = $${idx++}`); params.push(status);
+      before.status = existing.status; after.status = status;
+    }
+    if (notes !== undefined && notes !== existing.notes) {
+      sets.push(`notes = $${idx++}`); params.push(notes);
+      before.notes = existing.notes; after.notes = notes;
+    }
+    if (cost !== undefined && Number(cost) !== Number(existing.cost)) {
+      sets.push(`cost = $${idx++}`); params.push(cost);
+      before.cost = existing.cost; after.cost = cost;
+    }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتعديل", { fix: "أرسل حقلاً واحداً على الأقل لتعديله" });
+    }
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE fleet_trips SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) throw new NotFoundError("الرحلة غير موجودة");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "fleet_trips",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.trip.updated",
+      entity: "fleet_trips",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+  } catch (err) { handleRouteError(err, res, "Update trip error:"); }
 });
 
 router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, status FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("الرحلة غير موجودة");
+    if (existing.status === "in_progress") {
+      throw new ConflictError("لا يمكن حذف رحلة قيد التنفيذ", { field: "status", fix: "ألغِ الرحلة عبر /trips/:id/cancel أو أكملها قبل الحذف" });
+    }
     await rawExecute(`UPDATE fleet_trips SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.trip.deleted",
+      entity: "fleet_trips",
+      entityId: id,
+      before: { status: existing.status },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
+    res.json({ success: true, message: "تم حذف الرحلة" });
+  } catch (err) { handleRouteError(err, res, "Delete trip error:"); }
 });
 
 router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("سجل الصيانة غير موجود");
+
     const { description, status, cost } = req.body as any;
+
+    // State machine — lifecycle transitions still go through /complete + /cancel,
+    // PATCH can only make non-lifecycle edits or same-status noops.
+    if (status !== undefined && status !== existing.status) {
+      if (!MAINTENANCE_STATUSES.includes(status)) {
+        throw new ValidationError(`حالة صيانة غير صالحة: ${status}`, { field: "status", fix: `اختر من: ${MAINTENANCE_STATUSES.join(", ")}` });
+      }
+      const allowedNext = MAINTENANCE_TRANSITIONS[existing.status] ?? [];
+      if (!allowedNext.includes(status)) {
+        throw new ConflictError(`لا يمكن نقل الصيانة من "${existing.status}" إلى "${status}" عبر PATCH`, { field: "status", fix: `استخدم /maintenance/:id/complete أو /maintenance/:id/cancel. الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}` });
+      }
+    }
+
+    if (cost !== undefined && cost !== null) {
+      const c = Number(cost);
+      if (!Number.isFinite(c) || c < 0) {
+        throw new ValidationError("التكلفة غير صالحة", { field: "cost", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
     let idx = 1;
-    if (description !== undefined) { sets.push(`description = $${idx++}`); params.push(description); }
-    if (status !== undefined) { sets.push(`status = $${idx++}`); params.push(status); }
-    if (cost !== undefined) { sets.push(`cost = $${idx++}`); params.push(cost); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
-    params.push(Number(req.params.id), scope.companyId);
+    if (description !== undefined && description !== existing.description) {
+      sets.push(`description = $${idx++}`); params.push(description);
+      before.description = existing.description; after.description = description;
+    }
+    if (status !== undefined && status !== existing.status) {
+      sets.push(`status = $${idx++}`); params.push(status);
+      before.status = existing.status; after.status = status;
+    }
+    if (cost !== undefined && Number(cost) !== Number(existing.cost)) {
+      sets.push(`cost = $${idx++}`); params.push(cost);
+      before.cost = existing.cost; after.cost = cost;
+    }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتعديل", { fix: "أرسل حقلاً واحداً على الأقل لتعديله" });
+    }
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE fleet_maintenance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) throw new NotFoundError("سجل الصيانة غير موجود");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "fleet_maintenance",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.maintenance.updated",
+      entity: "fleet_maintenance",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+  } catch (err) { handleRouteError(err, res, "Update maintenance error:"); }
 });
 
 router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, status, "vehicleId" FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("سجل الصيانة غير موجود");
+    if (existing.status === "in_progress") {
+      throw new ConflictError("لا يمكن حذف صيانة قيد التنفيذ", { field: "status", fix: "ألغِ الصيانة عبر /maintenance/:id/cancel أو أكملها قبل الحذف" });
+    }
     await rawExecute(`UPDATE fleet_maintenance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.maintenance.deleted",
+      entity: "fleet_maintenance",
+      entityId: id,
+      before: { status: existing.status, vehicleId: existing.vehicleId },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
+    res.json({ success: true, message: "تم حذف سجل الصيانة" });
+  } catch (err) { handleRouteError(err, res, "Delete maintenance error:"); }
 });
 
 router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("سجل الوقود غير موجود");
+
     const { liters, quantity, costPerLiter, totalCost, stationName } = req.body as any;
+    const finalLiters = liters ?? quantity;
+    if (finalLiters !== undefined) {
+      const L = Number(finalLiters);
+      if (!Number.isFinite(L) || L <= 0) {
+        throw new ValidationError("كمية الوقود يجب أن تكون أكبر من صفر", { field: "liters", fix: "أدخل كمية الوقود باللتر" });
+      }
+    }
+    if (costPerLiter !== undefined) {
+      const c = Number(costPerLiter);
+      if (!Number.isFinite(c) || c < 0) {
+        throw new ValidationError("سعر اللتر غير صالح", { field: "costPerLiter", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
     let idx = 1;
-    const finalLiters = liters ?? quantity;
-    if (finalLiters !== undefined) { sets.push(`liters = $${idx++}`); params.push(finalLiters); }
-    if (costPerLiter !== undefined) { sets.push(`"costPerLiter" = $${idx++}`); params.push(costPerLiter); }
-    if (totalCost !== undefined) { sets.push(`"totalCost" = $${idx++}`); params.push(totalCost); }
-    if (stationName !== undefined) { sets.push(`"stationName" = $${idx++}`); params.push(stationName); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
-    params.push(Number(req.params.id), scope.companyId);
+    if (finalLiters !== undefined && Number(finalLiters) !== Number(existing.liters)) {
+      sets.push(`liters = $${idx++}`); params.push(finalLiters);
+      before.liters = existing.liters; after.liters = finalLiters;
+    }
+    if (costPerLiter !== undefined && Number(costPerLiter) !== Number(existing.costPerLiter)) {
+      sets.push(`"costPerLiter" = $${idx++}`); params.push(costPerLiter);
+      before.costPerLiter = existing.costPerLiter; after.costPerLiter = costPerLiter;
+    }
+    if (totalCost !== undefined && Number(totalCost) !== Number(existing.totalCost)) {
+      sets.push(`"totalCost" = $${idx++}`); params.push(totalCost);
+      before.totalCost = existing.totalCost; after.totalCost = totalCost;
+    }
+    if (stationName !== undefined && stationName !== existing.stationName) {
+      sets.push(`"stationName" = $${idx++}`); params.push(stationName);
+      before.stationName = existing.stationName; after.stationName = stationName;
+    }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتعديل", { fix: "أرسل حقلاً واحداً على الأقل لتعديله" });
+    }
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE fleet_fuel_logs SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) throw new NotFoundError("سجل الوقود غير موجود");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "fleet_fuel_logs",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+  } catch (err) { handleRouteError(err, res, "Update fuel log error:"); }
 });
 
 router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("سجل الوقود غير موجود");
     await rawExecute(`UPDATE fleet_fuel_logs SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.fuel_log.deleted",
+      entity: "fleet_fuel_logs",
+      entityId: id,
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
+    res.json({ success: true, message: "تم حذف سجل الوقود" });
+  } catch (err) { handleRouteError(err, res, "Delete fuel log error:"); }
 });
 
 router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
+
     const { provider, policyNumber, premium, endDate } = req.body as any;
+
+    if (premium !== undefined) {
+      const p = Number(premium);
+      if (!Number.isFinite(p) || p < 0) {
+        throw new ValidationError("قيمة القسط غير صالحة", { field: "premium", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+    if (endDate !== undefined) {
+      const ed = new Date(endDate);
+      if (Number.isNaN(ed.getTime())) {
+        throw new ValidationError("تاريخ الانتهاء غير صالح", { field: "endDate", fix: "استخدم تنسيق YYYY-MM-DD" });
+      }
+      if (existing.startDate && ed <= new Date(existing.startDate)) {
+        throw new ValidationError("تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية", { field: "endDate", fix: "اختر تاريخاً لاحقاً لتاريخ بداية الوثيقة" });
+      }
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
     let idx = 1;
-    if (provider !== undefined) { sets.push(`provider = $${idx++}`); params.push(provider); }
-    if (policyNumber !== undefined) { sets.push(`"policyNumber" = $${idx++}`); params.push(policyNumber); }
-    if (premium !== undefined) { sets.push(`premium = $${idx++}`); params.push(premium); }
-    if (endDate !== undefined) { sets.push(`"endDate" = $${idx++}`); params.push(endDate); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
-    params.push(Number(req.params.id), scope.companyId);
+    if (provider !== undefined && provider !== existing.provider) {
+      sets.push(`provider = $${idx++}`); params.push(provider);
+      before.provider = existing.provider; after.provider = provider;
+    }
+    if (policyNumber !== undefined && policyNumber !== existing.policyNumber) {
+      sets.push(`"policyNumber" = $${idx++}`); params.push(policyNumber);
+      before.policyNumber = existing.policyNumber; after.policyNumber = policyNumber;
+    }
+    if (premium !== undefined && Number(premium) !== Number(existing.premium)) {
+      sets.push(`premium = $${idx++}`); params.push(premium);
+      before.premium = existing.premium; after.premium = premium;
+    }
+    if (endDate !== undefined && endDate !== existing.endDate) {
+      sets.push(`"endDate" = $${idx++}`); params.push(endDate);
+      before.endDate = existing.endDate; after.endDate = endDate;
+    }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتعديل", { fix: "أرسل حقلاً واحداً على الأقل لتعديله" });
+    }
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE fleet_insurance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) throw new NotFoundError("سجل التأمين غير موجود");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "fleet_insurance",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+  } catch (err) { handleRouteError(err, res, "Update insurance error:"); }
 });
 
 router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, res) => {
@@ -1276,8 +1974,19 @@ router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, r
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
     await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fleet.insurance.deleted",
+      entity: "fleet_insurance",
+      entityId: id,
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
+    res.json({ success: true, message: "تم حذف سجل التأمين" });
+  } catch (err) { handleRouteError(err, res, "Delete insurance error:"); }
 });
 
 router.get("/stats", requirePermission("fleet:read"), async (req, res) => {
@@ -1330,8 +2039,21 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.vehicleId || !b.serviceType) {
-      res.status(400).json({ error: "المركبة ونوع الخدمة مطلوبان" }); return;
+    if (!b.vehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر المركبة التي ستُنشأ لها خطة الصيانة" });
+    }
+    if (!b.serviceType || typeof b.serviceType !== "string" || !b.serviceType.trim()) {
+      throw new ValidationError("نوع الخدمة مطلوب", { field: "serviceType", fix: "اختر نوع الصيانة الوقائية (تغيير زيت، فلتر هواء، إلخ)" });
+    }
+    if (!b.intervalKm && !b.intervalDays) {
+      throw new ValidationError("فترة الصيانة مطلوبة — كم أو أيام", { field: "intervalKm", fix: "أدخل فترة الصيانة بالكيلومترات أو بالأيام (أو كليهما)" });
+    }
+    const [vehicleRow] = await rawQuery<any>(
+      `SELECT id FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.vehicleId, scope.companyId]
+    );
+    if (!vehicleRow) {
+      throw new ValidationError("المركبة غير موجودة", { field: "vehicleId", fix: "اختر مركبة مسجلة" });
     }
 
     // Auto-compute nextServiceDate and nextServiceMileage from intervals + last service values
@@ -1476,10 +2198,38 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.vehicleId || !b.violationType) {
-      res.status(400).json({ error: "المركبة ونوع المخالفة مطلوبان" }); return;
+    if (!b.vehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر المركبة المرتبطة بالمخالفة" });
+    }
+    if (!b.violationType || typeof b.violationType !== "string" || !b.violationType.trim()) {
+      throw new ValidationError("نوع المخالفة مطلوب", { field: "violationType", fix: "أدخل وصف نوع المخالفة" });
     }
     const fineAmount = Number(b.fineAmount || 0);
+    if (!Number.isFinite(fineAmount) || fineAmount < 0) {
+      throw new ValidationError("قيمة الغرامة غير صالحة", { field: "fineAmount", fix: "أدخل قيمة غير سالبة" });
+    }
+    // If liability is on the driver, we need an actual driver on the violation
+    // otherwise the payroll deduction step can't fire and the violation becomes
+    // an orphan.
+    if (b.liability === "driver" && !b.driverId) {
+      throw new ValidationError("مسؤولية السائق تتطلب تحديد السائق", { field: "driverId", fix: "اختر السائق صاحب المخالفة أو غيّر المسؤولية إلى الشركة" });
+    }
+    const [vehicleRow] = await rawQuery<any>(
+      `SELECT id FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.vehicleId, scope.companyId]
+    );
+    if (!vehicleRow) {
+      throw new ValidationError("المركبة غير موجودة", { field: "vehicleId", fix: "اختر مركبة مسجلة" });
+    }
+    if (b.driverId) {
+      const [driverRow] = await rawQuery<any>(
+        `SELECT id FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.driverId, scope.companyId]
+      );
+      if (!driverRow) {
+        throw new ValidationError("السائق غير موجود", { field: "driverId", fix: "اختر سائقاً مسجلاً في النظام" });
+      }
+    }
     // "company" (default) = company pays the fine → GL expense.
     // "driver" = fine liability shifted to driver → payroll deduction in current period.
     const liability: 'company' | 'driver' = b.liability === 'driver' ? 'driver' : 'company';
@@ -1516,8 +2266,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
       } catch (jeErr) {
         console.error("Traffic violation journal entry failed:", jeErr);
         await rawExecute(`DELETE FROM fleet_traffic_violations WHERE id=$1`, [insertId]).catch(() => {});
-        res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة" });
-        return;
+        throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات شجرة الحسابات المالية (5290 / 2100) ثم أعد المحاولة" });
       }
     }
 
@@ -1590,8 +2339,19 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المخالفة غير موجودة");
-    if (existing.status === 'paid') {
-      res.status(409).json({ error: "المخالفة مدفوعة بالفعل" }); return;
+
+    // State machine: must be pending or disputed to pay. paid/cancelled are terminal.
+    const allowedNext = VIOLATION_TRANSITIONS[existing.status] ?? [];
+    if (!allowedNext.includes("paid")) {
+      throw new ConflictError(
+        existing.status === "paid"
+          ? "المخالفة مدفوعة بالفعل"
+          : `لا يمكن سداد مخالفة حالتها "${existing.status}"`,
+        {
+          field: "status",
+          fix: `الانتقالات المسموحة من الحالة الحالية: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد (حالة نهائية)"}`,
+        }
+      );
     }
 
     // Post the cash-out journal entry BEFORE flipping status so dual-entry is guaranteed.
@@ -1613,8 +2373,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
         });
       } catch (jeErr) {
         console.error("Traffic violation payment JE failed:", jeErr);
-        res.status(500).json({ error: "فشل قيد السداد — لم يتم تسجيل العملية" });
-        return;
+        throw new IntegrationError("فشل قيد السداد — لم يتم تسجيل العملية", { field: "journalEntry", fix: "راجع إعدادات الحسابات المالية (2100 / 1100) ثم أعد المحاولة" });
       }
     }
 
