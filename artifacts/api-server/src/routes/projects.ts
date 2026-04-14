@@ -3,6 +3,8 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -23,6 +25,58 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 
 const router = Router();
 router.use(authMiddleware);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIFECYCLE STATE MACHINES — Phase C.5 Projects audit
+// ─────────────────────────────────────────────────────────────────────────────
+const PROJECT_STATUSES = ["planning", "planned", "draft", "active", "in_progress", "on_hold", "completed", "cancelled", "blocked"] as const;
+const PROJECT_TRANSITIONS: Record<string, readonly string[]> = {
+  // completion goes through /close (handled by lifecycleEngine). PATCH can
+  // only move through the non-terminal states below.
+  planning:    ["active", "in_progress", "cancelled", "on_hold"],
+  planned:     ["active", "in_progress", "cancelled", "on_hold"],
+  draft:       ["planning", "active", "cancelled"],
+  active:      ["on_hold", "blocked", "in_progress"],
+  in_progress: ["active", "on_hold", "blocked"],
+  on_hold:     ["active", "in_progress", "cancelled"],
+  blocked:     ["active", "in_progress", "cancelled"],
+  completed:   [],
+  cancelled:   [],
+};
+
+const PHASE_STATUSES = ["pending", "in_progress", "completed", "cancelled"] as const;
+const PHASE_TRANSITIONS: Record<string, readonly string[]> = {
+  pending:     ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed:   [],
+  cancelled:   [],
+};
+
+const TASK_STATUSES = ["todo", "in_progress", "blocked", "done", "cancelled", "review"] as const;
+const TASK_TRANSITIONS: Record<string, readonly string[]> = {
+  todo:        ["in_progress", "blocked", "cancelled", "done"],
+  in_progress: ["review", "done", "blocked", "cancelled"],
+  review:      ["done", "in_progress", "cancelled"],
+  blocked:     ["todo", "in_progress", "cancelled"],
+  done:        ["in_progress"], // re-open
+  cancelled:   [],
+};
+
+const MILESTONE_STATUSES = ["pending", "in_progress", "completed", "cancelled"] as const;
+const MILESTONE_TRANSITIONS: Record<string, readonly string[]> = {
+  pending:     ["in_progress", "completed", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed:   [],
+  cancelled:   [],
+};
+
+const RISK_STATUSES = ["open", "mitigated", "realized", "closed"] as const;
+const RISK_TRANSITIONS: Record<string, readonly string[]> = {
+  open:      ["mitigated", "realized", "closed"],
+  mitigated: ["open", "closed", "realized"],
+  realized:  ["mitigated", "closed"],
+  closed:    [],
+};
 
 router.get("/", requirePermission("projects:read"), async (req, res) => {
   try {
@@ -61,10 +115,12 @@ function isFullAccess(scope: any) {
 
 /**
  * Assert that the current user can access the given project.
- * Returns the project row, or null if access denied (response already sent).
+ * Throws a typed NotFoundError when the project does not exist or the
+ * caller lacks scope — handleRouteError will translate that into a 404.
+ * Never returns null anymore; all callers can rely on the returned row.
  */
-async function assertProjectAccess(projectId: number, scope: any, res: any): Promise<any | null> {
-  let where = `id=$1 AND "companyId"=$2`;
+async function assertProjectAccess(projectId: number, scope: any): Promise<any> {
+  let where = `id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`;
   const params: any[] = [projectId, scope.companyId];
 
   if (!isFullAccess(scope)) {
@@ -79,8 +135,7 @@ async function assertProjectAccess(projectId: number, scope: any, res: any): Pro
 
   const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE ${where}`, params);
   if (!project) {
-    res.status(404).json({ error: "المشروع غير موجود أو غير مصرح بالوصول إليه" });
-    return null;
+    throw new NotFoundError("المشروع غير موجود أو غير مصرح بالوصول إليه");
   }
   return project;
 }
@@ -89,14 +144,57 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
-      res.status(403).json({ error: "لا تملك صلاحية إنشاء مشاريع" });
-      return;
+      throw new ForbiddenError("لا تملك صلاحية إنشاء مشاريع", { fix: "راجع مدير الحساب للحصول على صلاحية projects_manager" });
     }
     const b = req.body;
+    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
+      throw new ValidationError("اسم المشروع مطلوب", { field: "name", fix: "أدخل اسماً واضحاً للمشروع" });
+    }
+    if (!b.startDate) {
+      throw new ValidationError("تاريخ بداية المشروع مطلوب", { field: "startDate", fix: "حدد تاريخ بداية المشروع" });
+    }
+    if (!b.endDate) {
+      throw new ValidationError("تاريخ نهاية المشروع مطلوب", { field: "endDate", fix: "حدد تاريخ التسليم المخطط للمشروع" });
+    }
+    const startD = new Date(b.startDate);
+    const endD = new Date(b.endDate);
+    if (Number.isNaN(startD.getTime()) || Number.isNaN(endD.getTime())) {
+      throw new ValidationError("تواريخ المشروع غير صالحة", { field: "startDate", fix: "استخدم تنسيق YYYY-MM-DD" });
+    }
+    if (endD <= startD) {
+      throw new ValidationError(
+        "تاريخ النهاية يجب أن يكون بعد تاريخ البداية",
+        { field: "endDate", fix: "اختر تاريخ نهاية لاحقاً لتاريخ البداية" }
+      );
+    }
+    if (b.budget !== undefined && b.budget !== null && b.budget !== "") {
+      const budget = Number(b.budget);
+      if (!Number.isFinite(budget) || budget < 0) {
+        throw new ValidationError("الميزانية غير صالحة", { field: "budget", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+    if (b.clientId) {
+      const [cl] = await rawQuery<any>(
+        `SELECT id FROM clients WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.clientId, scope.companyId]
+      );
+      if (!cl) {
+        throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً مسجلاً أو اترك الحقل فارغاً" });
+      }
+    }
+    if (b.managerId) {
+      const [emp] = await rawQuery<any>(
+        `SELECT id FROM employees WHERE id=$1`,
+        [b.managerId]
+      );
+      if (!emp) {
+        throw new ValidationError("مدير المشروع غير موجود", { field: "managerId", fix: "اختر موظفاً مسجلاً" });
+      }
+    }
     const managerId = scope.role === "projects_manager" ? scope.employeeId : b.managerId;
     const { insertId } = await rawExecute(
       `INSERT INTO projects ("companyId",name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, b.name, b.description, b.clientId, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
+      [scope.companyId, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
     );
 
     if (b.phases && Array.isArray(b.phases)) {
@@ -232,31 +330,100 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    let findQuery = `SELECT id, "managerId" FROM projects WHERE id=$1 AND "companyId"=$2`;
+    if (!isFullAccess(scope) && scope.role !== "projects_manager") {
+      throw new ForbiddenError("لا تملك صلاحية تعديل هذا المشروع", { fix: "صلاحية projects_manager مطلوبة" });
+    }
+    let findQuery = `SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`;
     const findParams: any[] = [id, scope.companyId];
     if (!isFullAccess(scope) && scope.role === "projects_manager" && scope.employeeId) {
       findQuery += ` AND "managerId"=$3`;
       findParams.push(scope.employeeId);
-    } else if (!isFullAccess(scope) && scope.role !== "projects_manager") {
-      res.status(403).json({ error: "لا تملك صلاحية تعديل هذا المشروع" });
-      return;
     }
     const [existing] = await rawQuery<any>(findQuery, findParams);
     if (!existing) throw new NotFoundError("المشروع غير موجود");
     const b = req.body;
+
+    // State machine — /close is the only way to reach `completed`; PATCH
+    // refuses direct transitions to terminal states.
+    if (b.status !== undefined && b.status !== existing.status) {
+      if (!PROJECT_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة مشروع غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${PROJECT_STATUSES.join(", ")}` }
+        );
+      }
+      if (b.status === "completed") {
+        throw new ConflictError(
+          "لا يمكن إكمال المشروع عبر PATCH",
+          { field: "status", fix: "استخدم /projects/:id/close لإقفال المشروع بالقيود المحاسبية" }
+        );
+      }
+      const allowedNext = PROJECT_TRANSITIONS[existing.status] ?? [];
+      if (!allowedNext.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل المشروع من "${existing.status}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد (حالة نهائية)"}` }
+        );
+      }
+    }
+
+    if (b.budget !== undefined) {
+      const budget = Number(b.budget);
+      if (!Number.isFinite(budget) || budget < 0) {
+        throw new ValidationError("الميزانية غير صالحة", { field: "budget", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+    if (b.managerId !== undefined && b.managerId !== existing.managerId) {
+      const [emp] = await rawQuery<any>(
+        `SELECT id FROM employees WHERE id=$1`,
+        [b.managerId]
+      );
+      if (!emp) {
+        throw new ValidationError("مدير المشروع غير موجود", { field: "managerId", fix: "اختر موظفاً مسجلاً" });
+      }
+    }
+
+    const tracked = ["name","description","status","budget","startDate","endDate","managerId","spentAmount"] as const;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
-    if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.budget !== undefined) { params.push(b.budget); sets.push(`budget=$${params.length}`); }
-    if (b.startDate !== undefined) { params.push(b.startDate); sets.push(`"startDate"=$${params.length}`); }
-    if (b.endDate !== undefined) { params.push(b.endDate); sets.push(`"endDate"=$${params.length}`); }
-    if (b.managerId !== undefined) { params.push(b.managerId); sets.push(`"managerId"=$${params.length}`); }
-    if (b.spentAmount !== undefined) { params.push(b.spentAmount); sets.push(`"spentAmount"=$${params.length}`); }
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    for (const f of tracked) {
+      if (b[f] === undefined) continue;
+      if (b[f] === existing[f]) continue;
+      params.push(b[f]);
+      const col = ["startDate","endDate","managerId","spentAmount"].includes(f) ? `"${f}"` : f;
+      sets.push(`${col}=$${params.length}`);
+      before[f] = existing[f];
+      after[f] = b[f];
+    }
+    if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "projects",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "project.status_changed" : "project.updated",
+      entity: "projects",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update project error:"); }
 });
@@ -265,30 +432,67 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    let findQuery = `SELECT id FROM projects WHERE id=$1 AND "companyId"=$2`;
+    if (!isFullAccess(scope) && scope.role !== "projects_manager") {
+      throw new ForbiddenError("لا تملك صلاحية حذف هذا المشروع", { fix: "صلاحية projects_manager مطلوبة" });
+    }
+    let findQuery = `SELECT id, name, status FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`;
     const findParams: any[] = [id, scope.companyId];
     if (!isFullAccess(scope) && scope.role === "projects_manager" && scope.employeeId) {
       findQuery += ` AND "managerId"=$3`;
       findParams.push(scope.employeeId);
-    } else if (!isFullAccess(scope) && scope.role !== "projects_manager") {
-      res.status(403).json({ error: "لا تملك صلاحية حذف هذا المشروع" });
-      return;
     }
     const [existing] = await rawQuery<any>(findQuery, findParams);
     if (!existing) throw new NotFoundError("المشروع غير موجود");
+
+    if (["active", "in_progress"].includes(existing.status)) {
+      throw new ConflictError(
+        `لا يمكن حذف مشروع بحالة "${existing.status}"`,
+        { field: "status", fix: "ألغِ المشروع أو أقفله عبر /projects/:id/close قبل الحذف" }
+      );
+    }
+
     await rawExecute(`UPDATE projects SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.deleted",
+      entity: "projects",
+      entityId: id,
+      before: { name: existing.name, status: existing.status },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المشروع بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete project error:"); }
 });
 
 router.post("/:id/phases", requirePermission("projects:create"), async (req, res) => {
   try {
+    const scope = req.scope!;
+    const projectId = Number(req.params.id);
     const b = req.body;
+    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
+      throw new ValidationError("اسم المرحلة مطلوب", { field: "name", fix: "أدخل اسم المرحلة" });
+    }
+    await assertProjectAccess(projectId, scope);
     const { insertId } = await rawExecute(
       `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-      [Number(req.params.id), b.name, b.orderIndex || 0, b.startDate, b.endDate]
+      [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM project_phases WHERE id=$1`, [insertId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.phase.created",
+      entity: "project_phases",
+      entityId: insertId,
+      after: { projectId, name: b.name.trim() },
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create phase error:"); }
 });
@@ -299,13 +503,32 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
     const projectId = Number(req.params.id);
     const phaseId = Number(req.params.phaseId);
 
-    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2`, [projectId, scope.companyId]);
-    if (!project) throw new NotFoundError("المشروع غير موجود");
+    const project = await assertProjectAccess(projectId, scope);
 
     const [phase] = await rawQuery<any>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
     if (!phase) throw new NotFoundError("المرحلة غير موجودة");
 
+    // State machine — phases must be pending or in_progress to complete
+    const allowedNext = PHASE_TRANSITIONS[phase.status ?? "pending"] ?? [];
+    if (!allowedNext.includes("completed")) {
+      throw new ConflictError(
+        `لا يمكن إكمال مرحلة حالتها "${phase.status ?? "pending"}"`,
+        { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}` }
+      );
+    }
+
     await rawExecute(`UPDATE project_phases SET status='completed' WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.phase.completed",
+      entity: "project_phases",
+      entityId: phaseId,
+      before: { status: phase.status ?? "pending" },
+      after: { status: "completed" },
+    }).catch(console.error);
 
     let milestoneInvoiceCreated = false;
     if (project?.clientId) {
@@ -333,7 +556,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
     await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2`, [progressPct, projectId]);
 
     res.json({ message: 'تم إكمال المرحلة', phase, milestoneInvoiceCreated, progressPct });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+  } catch (err) { handleRouteError(err, res, "Complete phase error:"); }
 });
 
 router.post("/:id/tasks", requirePermission("projects:create"), async (req, res) => {
@@ -341,9 +564,34 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
+
+    if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
+      throw new ValidationError("عنوان المهمة مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للمهمة" });
+    }
+    await assertProjectAccess(projectId, scope);
+
+    if (b.assigneeId) {
+      const [emp] = await rawQuery<any>(
+        `SELECT id FROM employees WHERE id=$1`,
+        [b.assigneeId]
+      );
+      if (!emp) {
+        throw new ValidationError("الموظف المُكلَّف غير موجود", { field: "assigneeId", fix: "اختر موظفاً مسجلاً" });
+      }
+    }
+    if (b.phaseId) {
+      const [phase] = await rawQuery<any>(
+        `SELECT id FROM project_phases WHERE id=$1 AND "projectId"=$2`,
+        [b.phaseId, projectId]
+      );
+      if (!phase) {
+        throw new ValidationError("المرحلة غير موجودة", { field: "phaseId", fix: "اختر مرحلة تابعة لهذا المشروع" });
+      }
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO project_tasks ("projectId","phaseId",title,description,"assigneeId",priority,status,"startDate","dueDate","estimatedHours") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [projectId, b.phaseId, b.title, b.description, b.assigneeId, b.priority || 'medium', 'todo', b.startDate, b.dueDate, b.estimatedHours]
+      [projectId, b.phaseId || null, b.title.trim(), b.description || null, b.assigneeId || null, b.priority || 'medium', 'todo', b.startDate || null, b.dueDate || null, b.estimatedHours || null]
     );
 
     if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
@@ -414,15 +662,74 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
     const scope = req.scope!;
     const taskId = Number(req.params.taskId);
     const b = req.body;
+
+    const [existingTask] = await rawQuery<any>(
+      `SELECT pt.* FROM project_tasks pt
+       JOIN projects p ON p.id = pt."projectId"
+       WHERE pt.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`,
+      [taskId, scope.companyId]
+    );
+    if (!existingTask) throw new NotFoundError("المهمة غير موجودة");
+
+    // State machine for task status transitions
+    if (b.status !== undefined && b.status !== existingTask.status) {
+      if (!TASK_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة مهمة غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${TASK_STATUSES.join(", ")}` }
+        );
+      }
+      const allowedNext = TASK_TRANSITIONS[existingTask.status ?? "todo"] ?? [];
+      if (!allowedNext.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل المهمة من "${existingTask.status ?? "todo"}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}` }
+        );
+      }
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.progress !== undefined) { params.push(b.progress); sets.push(`progress=$${params.length}`); }
-    if (b.actualHours !== undefined) { params.push(b.actualHours); sets.push(`"actualHours"=$${params.length}`); }
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    if (b.status !== undefined && b.status !== existingTask.status) {
+      params.push(b.status); sets.push(`status=$${params.length}`);
+      before.status = existingTask.status; after.status = b.status;
+    }
+    if (b.progress !== undefined && Number(b.progress) !== Number(existingTask.progress)) {
+      params.push(b.progress); sets.push(`progress=$${params.length}`);
+      before.progress = existingTask.progress; after.progress = b.progress;
+    }
+    if (b.actualHours !== undefined && Number(b.actualHours) !== Number(existingTask.actualHours)) {
+      params.push(b.actualHours); sets.push(`"actualHours"=$${params.length}`);
+      before.actualHours = existingTask.actualHours; after.actualHours = b.actualHours;
+    }
     if (b.status === 'done') sets.push(`"completedAt"=NOW()`);
-    if (sets.length === 0) { res.json({ ok: true }); return; }
+    if (sets.length === 0) { res.json(existingTask); return; }
     params.push(taskId);
     await rawExecute(`UPDATE project_tasks SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "project_tasks",
+      entityId: taskId,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "project.task.status_changed" : "project.task.updated",
+      entity: "project_tasks",
+      entityId: taskId,
+      before,
+      after,
+    }).catch(console.error);
 
     const [task] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1`, [taskId]);
 
@@ -537,8 +844,7 @@ router.get("/:id/milestones", requirePermission("projects:read"), async (req, re
   try {
     const scope = req.scope!;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
+    const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
       [projectId, scope.companyId]
@@ -552,9 +858,13 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
-    if (!b.title || !b.targetDate) { res.status(400).json({ error: "العنوان والتاريخ المستهدف مطلوبان" }); return; }
+    const project = await assertProjectAccess(projectId, scope);
+    if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
+      throw new ValidationError("عنوان المعلَم مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للمعلَم" });
+    }
+    if (!b.targetDate) {
+      throw new ValidationError("تاريخ المعلَم المستهدف مطلوب", { field: "targetDate", fix: "حدد التاريخ المستهدف" });
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO project_milestones ("projectId","companyId",title,description,"targetDate",status,"completedDate")
        VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
@@ -592,7 +902,29 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
   try {
     const scope = req.scope!;
     const id = Number(req.params.milestoneId);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM project_milestones WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("المعلم غير موجود");
     const b = req.body;
+
+    if (b.status !== undefined && b.status !== existing.status) {
+      if (!MILESTONE_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة معلَم غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${MILESTONE_STATUSES.join(", ")}` }
+        );
+      }
+      const allowed = MILESTONE_TRANSITIONS[existing.status ?? "pending"] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل المعلَم من "${existing.status ?? "pending"}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد"}` }
+        );
+      }
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -600,13 +932,12 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
     if (b.targetDate !== undefined) { params.push(b.targetDate); sets.push(`"targetDate"=$${params.length}`); }
     if (b.completedDate !== undefined) { params.push(b.completedDate); sets.push(`"completedDate"=$${params.length}`); }
     if (b.status === 'completed' && !b.completedDate) sets.push(`"completedDate"=NOW()`);
-    if (sets.length === 0) { res.json({ ok: true }); return; }
+    if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(
       `UPDATE project_milestones SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!rows[0]) throw new NotFoundError("المعلم غير موجود");
 
     // If milestone was marked completed, mark its obligation as met
     if (b.status === 'completed') {
@@ -625,8 +956,7 @@ router.get("/:id/risks", requirePermission("projects:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
+    const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC`,
       [projectId, scope.companyId]
@@ -640,9 +970,10 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
-    if (!b.title) { res.status(400).json({ error: "عنوان المخاطرة مطلوب" }); return; }
+    const project = await assertProjectAccess(projectId, scope);
+    if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
+      throw new ValidationError("عنوان المخاطرة مطلوب", { field: "title", fix: "أدخل وصفاً مختصراً للمخاطرة" });
+    }
     const probability = Math.min(5, Math.max(1, Number(b.probability || 3)));
     const impact = Math.min(5, Math.max(1, Number(b.impact || 3)));
     const riskScore = probability * impact;
@@ -663,7 +994,29 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
   try {
     const scope = req.scope!;
     const id = Number(req.params.riskId);
+    const [existingRisk] = await rawQuery<any>(
+      `SELECT * FROM project_risks WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!existingRisk) throw new NotFoundError("المخاطرة غير موجودة");
     const b = req.body;
+
+    if (b.status !== undefined && b.status !== existingRisk.status) {
+      if (!RISK_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة مخاطرة غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${RISK_STATUSES.join(", ")}` }
+        );
+      }
+      const allowed = RISK_TRANSITIONS[existingRisk.status ?? "open"] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل المخاطرة من "${existingRisk.status ?? "open"}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد"}` }
+        );
+      }
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -705,8 +1058,7 @@ router.get("/:id/resources", requirePermission("projects:read"), async (req, res
   try {
     const scope = req.scope!;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
+    const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT pr.*, e.name AS "employeeName", e."jobTitle" AS "employeeJobTitle"
        FROM project_resources pr
@@ -724,8 +1076,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
+    const project = await assertProjectAccess(projectId, scope);
     const { insertId } = await rawExecute(
       `INSERT INTO project_resources ("projectId","companyId","employeeId","taskId",role,"allocatedHours","budgetAllocated","startDate","endDate")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -746,8 +1097,7 @@ router.get("/:id/costs", requirePermission("projects:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
+    const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT pc.*, e.name AS "enteredByName"
        FROM project_costs pc
@@ -774,9 +1124,17 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
-    if (!b.amount || !b.description) { res.status(400).json({ error: "المبلغ والوصف مطلوبان" }); return; }
+    const project = await assertProjectAccess(projectId, scope);
+    if (!b.description || typeof b.description !== "string" || !b.description.trim()) {
+      throw new ValidationError("وصف التكلفة مطلوب", { field: "description", fix: "أدخل وصفاً للتكلفة" });
+    }
+    if (!b.amount) {
+      throw new ValidationError("المبلغ مطلوب", { field: "amount", fix: "أدخل قيمة التكلفة" });
+    }
+    const amt = Number(b.amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new ValidationError("المبلغ يجب أن يكون أكبر من صفر", { field: "amount", fix: "أدخل قيمة موجبة" });
+    }
     const costDate = b.costDate || new Date().toISOString().split('T')[0];
     const { insertId } = await rawExecute(
       `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
@@ -896,8 +1254,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
   try {
     const scope = req.scope!;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
+    const project = await assertProjectAccess(projectId, scope);
 
     const [totals] = await rawQuery<any>(
       `SELECT COALESCE(SUM(amount),0) AS "totalWip"
@@ -1023,8 +1380,7 @@ router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const projectId = Number(req.params.id);
-    const project = await assertProjectAccess(projectId, scope, res);
-    if (!project) return;
+    const project = await assertProjectAccess(projectId, scope);
 
     const phases = await rawQuery<any>(
       `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex"`,
