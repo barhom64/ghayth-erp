@@ -1,0 +1,74 @@
+## Phase C.6 Legal — Code + Pack Delivered
+
+### الحالة الآن
+
+```
+main                                              claude/phase-c6-legal
+  d3c0987 (auto-sync)                                13bbe16 (.gitignore fix) ← HEAD
+  3fdde57 (employees FK drift fix)                   2850348 (Legal pack docs)
+  515192a (Projects verified)                        950035e (Legal code)
+  f32ce33 ...                                        d3c0987
+```
+
+### Branch `claude/phase-c6-legal`
+
+**Commit 1 — `950035e` (Legal code):** 
+- `legal.ts` +326/-39
+- State machines: LEGAL_CONTRACT_TRANSITIONS + VALID_CASE_TRANSITIONS
+- Typed errors throughout
+- PATCH /contracts refuse-list لـ terminated/renewed/expired (defence-in-depth من البداية)
+- Delete guards على active contracts + open/in_progress/judgment/execution cases
+- paidAmount > amount guard على /judgments PATCH
+- Enum validation على priority/riskLevel
+
+**Commit 2 — `2850348` (Verification pack):**
+- `docs/verification/legal.md` — 929 سطر
+- 14 سيناريو + curl + DB queries + static review
+
+**Commit 3 — `13bbe16` (gitignore fix):** .env re-ignore نفس نمط C.5
+
+### الـ 14 سيناريو
+
+| # | Test | Expected |
+|---|---|---|
+| 1 | POST contract missing title | 422 |
+| 2 | POST contract missing partyName | 422 |
+| 3 | endDate ≤ startDate | 422 |
+| 4 | duplicate ref | 409 |
+| 5 | **PATCH status=terminated direct** | **409** (refuse-list) |
+| 6 | PATCH invalid transition (active→expired) | 409 |
+| 7 | DELETE active contract | 409 |
+| 8 | POST case missing title | 422 |
+| 9 | duplicate caseNumber | 409 |
+| 10 | invalid priority enum | 422 |
+| 11 | PATCH case closed→open | 409 + allowedNext=[] |
+| 12 | DELETE open case | 409 |
+| 13 | PATCH judgment paidAmount > amount | 422 |
+| 14 | PATCH financial-risk invalid riskLevel | 422 |
+
+### Static Review verdict
+
+**14/14 متوقع ✅**. Legal يتبع نفس نمط Property + Projects — defence-in-depth من اليوم الأول، لا gap مثل Fleet Test 11.
+
+| Domain | Test 11-style gap | Defence-in-depth من البداية؟ |
+|---|---|---|
+| Fleet | ⚠️ hotfix لزم | ❌ → ✅ بعد hotfix |
+| Property | None | ✅ |
+| Projects | None | ✅ |
+| **Legal** | **None (متوقع)** | **✅** |
+
+### Schema drift — pre-audit
+
+- ✅ Legal لا يستخدم `employees` FK pre-checks (تفادى درس Projects)
+- الـ JOIN الوحيد على line 719 يستخدم `employee_assignments.companyId` وهو pattern آمن معروف
+- §1.2 في الـ pack يطلب من المبرمج يشغّل `\d legal_contracts` / `\d legal_cases` / `\d legal_judgments` قبل السيناريوهات
+
+### Build state
+
+- tsc --noEmit: 0 errors ✅
+- pnpm run build: clean bundle ✅
+- Branch pushed to `origin/claude/phase-c6-legal`
+
+### Working tree: نظيفة ✅
+
+main على `d3c0987`، Legal على فرع منفصل. بانتظار تقرير المبرمج قبل الانتقال إلى Phase C.7 Finance.
