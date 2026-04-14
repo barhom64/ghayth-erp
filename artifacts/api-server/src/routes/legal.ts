@@ -4,6 +4,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -16,13 +17,31 @@ import { registerObligation, cancelObligation, markObligationMet } from "../lib/
 const router = Router();
 router.use(authMiddleware);
 
-const VALID_CASE_TRANSITIONS: Record<string, string[]> = {
-  open: ['in_progress'],
-  in_progress: ['judgment', 'closed'],
-  judgment: ['execution', 'closed'],
-  execution: ['closed'],
-  closed: [],
+// ─────────────────────────────────────────────────────────────────────────────
+// LIFECYCLE STATE MACHINES — Phase C.6 Legal audit
+// ─────────────────────────────────────────────────────────────────────────────
+const CONTRACT_STATUSES = ["draft", "active", "expired", "terminated", "renewed"] as const;
+const LEGAL_CONTRACT_TRANSITIONS: Record<string, readonly string[]> = {
+  // Lifecycle transitions (renew/terminate) go through the dedicated
+  // /contracts/:id/{renew,terminate} endpoints. PATCH handles admin
+  // corrections only — draft ↔ active is allowed, anything involving
+  // terminated/renewed/expired is refused.
+  draft:      ["active"],
+  active:     ["draft"],
+  expired:    [],
+  terminated: [],
+  renewed:    [],
 };
+
+const VALID_CASE_TRANSITIONS: Record<string, readonly string[]> = {
+  open:        ['in_progress', 'closed'],
+  in_progress: ['judgment', 'closed'],
+  judgment:    ['execution', 'closed'],
+  execution:   ['closed'],
+  closed:      [],
+};
+
+const CASE_STATUSES = ["open", "in_progress", "judgment", "execution", "closed"] as const;
 
 router.get("/contracts", async (req, res) => {
   try {
@@ -42,24 +61,74 @@ router.post("/contracts", async (req, res) => {
     const scope = req.scope!;
     const b = req.body;
 
+    if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
+      throw new ValidationError("عنوان العقد مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للعقد" });
+    }
+    if (!b.partyName || typeof b.partyName !== "string" || !b.partyName.trim()) {
+      throw new ValidationError("اسم الطرف الآخر مطلوب", { field: "partyName", fix: "أدخل اسم الطرف المتعاقد معه" });
+    }
     if (!b.startDate) {
-      validationError(res, "لا يمكن إنشاء عقد بدون تاريخ بداية", "startDate", "حدد تاريخ بداية العقد");
-      return;
+      throw new ValidationError("لا يمكن إنشاء عقد بدون تاريخ بداية", { field: "startDate", fix: "حدد تاريخ بداية العقد" });
     }
     if (!b.endDate) {
-      validationError(res, "لا يمكن إنشاء عقد بدون تاريخ نهاية", "endDate", "حدد تاريخ نهاية العقد");
-      return;
+      throw new ValidationError("لا يمكن إنشاء عقد بدون تاريخ نهاية", { field: "endDate", fix: "حدد تاريخ نهاية العقد" });
     }
-    if (new Date(b.endDate) <= new Date(b.startDate)) {
-      validationError(res, "تاريخ نهاية العقد يجب أن يكون بعد تاريخ البداية", "endDate", "تأكد من أن تاريخ النهاية أحدث من تاريخ البداية");
-      return;
+    const sd = new Date(b.startDate);
+    const ed = new Date(b.endDate);
+    if (Number.isNaN(sd.getTime()) || Number.isNaN(ed.getTime())) {
+      throw new ValidationError("تواريخ العقد غير صالحة", { field: "startDate", fix: "استخدم تنسيق YYYY-MM-DD" });
+    }
+    if (ed <= sd) {
+      throw new ValidationError(
+        "تاريخ نهاية العقد يجب أن يكون بعد تاريخ البداية",
+        { field: "endDate", fix: "تأكد من أن تاريخ النهاية أحدث من تاريخ البداية" }
+      );
+    }
+    if (b.value !== undefined && b.value !== null && b.value !== "") {
+      const v = Number(b.value);
+      if (!Number.isFinite(v) || v < 0) {
+        throw new ValidationError("قيمة العقد غير صالحة", { field: "value", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+    if (b.ref) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM legal_contracts WHERE ref=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.ref, scope.companyId]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "مرجع العقد مسجل مسبقاً",
+          { field: "ref", fix: "استخدم مرجعاً فريداً أو اترك الحقل فارغاً ليُولَّد تلقائياً" }
+        );
+      }
     }
 
     const { insertId } = await rawExecute(
       `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","partyContact","startDate","endDate",value,status,notes,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [scope.companyId, b.ref, b.title, b.contractType, b.partyName, b.partyContact, b.startDate, b.endDate, b.value, b.status || 'draft', b.notes, scope.userId]
+      [scope.companyId, b.ref || null, b.title.trim(), b.contractType || null, b.partyName.trim(), b.partyContact || null, b.startDate, b.endDate, b.value || 0, b.status || 'draft', b.notes || null, scope.userId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1`, [insertId]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "create",
+      entity: "legal_contracts",
+      entityId: insertId,
+      after: { title: b.title, partyName: b.partyName, startDate: b.startDate, endDate: b.endDate, value: b.value },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.contract.created",
+      entity: "legal_contracts",
+      entityId: insertId,
+      details: `عقد جديد: ${b.title} — ${b.partyName}`,
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create legal contract error:"); }
 });
@@ -101,7 +170,7 @@ router.get("/contracts/renewal-alerts", async (req, res) => {
     });
 
     res.json({ data: all, total: all.length, page: 1, pageSize: all.length });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+  } catch (err) { handleRouteError(err, res, "Renewal alerts error:"); }
 });
 
 router.get("/contracts/:id", async (req, res) => {
@@ -117,30 +186,96 @@ router.patch("/contracts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id, "startDate", "endDate" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("العقد غير موجود");
     const b = req.body;
+
+    // State machine: PATCH cannot drive lifecycle transitions (use /renew,
+    // /terminate). draft ↔ active is allowed for admin corrections.
+    if (b.status !== undefined && b.status !== existing.status) {
+      if (!CONTRACT_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة عقد غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${CONTRACT_STATUSES.join(", ")}` }
+        );
+      }
+      if (["terminated", "renewed", "expired"].includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن تغيير حالة العقد إلى ${b.status} عبر PATCH`,
+          { field: "status", fix: "استخدم /contracts/:id/renew أو /contracts/:id/terminate" }
+        );
+      }
+      const allowed = LEGAL_CONTRACT_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل العقد من "${existing.status}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
+        );
+      }
+    }
+
     const effectiveStart = b.startDate || existing.startDate;
     const effectiveEnd = b.endDate || existing.endDate;
     if (effectiveStart && effectiveEnd && new Date(effectiveEnd) <= new Date(effectiveStart)) {
-      validationError(res, "تاريخ نهاية العقد يجب أن يكون بعد تاريخ البداية", "endDate", "تأكد من أن تاريخ النهاية أحدث من تاريخ البداية");
-      return;
+      throw new ValidationError(
+        "تاريخ نهاية العقد يجب أن يكون بعد تاريخ البداية",
+        { field: "endDate", fix: "تأكد من أن تاريخ النهاية أحدث من تاريخ البداية" }
+      );
     }
+    if (b.value !== undefined) {
+      const v = Number(b.value);
+      if (!Number.isFinite(v) || v < 0) {
+        throw new ValidationError("قيمة العقد غير صالحة", { field: "value", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+
+    const tracked = ["title","status","partyName","partyContact","contractType","value","startDate","endDate","notes"] as const;
+    const colMap: Record<string, string> = {
+      title: "title", status: "status", partyName: '"partyName"', partyContact: '"partyContact"',
+      contractType: '"contractType"', value: "value", startDate: '"startDate"', endDate: '"endDate"', notes: "notes",
+    };
     const sets: string[] = [];
     const params: any[] = [];
-    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.partyName !== undefined) { params.push(b.partyName); sets.push(`"partyName"=$${params.length}`); }
-    if (b.partyContact !== undefined) { params.push(b.partyContact); sets.push(`"partyContact"=$${params.length}`); }
-    if (b.contractType !== undefined) { params.push(b.contractType); sets.push(`"contractType"=$${params.length}`); }
-    if (b.value !== undefined) { params.push(b.value); sets.push(`value=$${params.length}`); }
-    if (b.startDate !== undefined) { params.push(b.startDate); sets.push(`"startDate"=$${params.length}`); }
-    if (b.endDate !== undefined) { params.push(b.endDate); sets.push(`"endDate"=$${params.length}`); }
-    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    for (const f of tracked) {
+      if (b[f] === undefined) continue;
+      if (b[f] === existing[f]) continue;
+      params.push(b[f]);
+      sets.push(`${colMap[f]}=$${params.length}`);
+      before[f] = existing[f];
+      after[f] = b[f];
+    }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "legal_contracts",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "legal.contract.status_changed" : "legal.contract.updated",
+      entity: "legal_contracts",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
 });
@@ -149,9 +284,30 @@ router.delete("/contracts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, title, status FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("العقد غير موجود");
+    if (existing.status === "active") {
+      throw new ConflictError(
+        "لا يمكن حذف عقد نشط",
+        { field: "status", fix: "أنهِ العقد عبر /contracts/:id/terminate قبل الحذف" }
+      );
+    }
     await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.contract.deleted",
+      entity: "legal_contracts",
+      entityId: id,
+      before: { title: existing.title, status: existing.status },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف العقد بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
 });
@@ -270,6 +426,31 @@ router.post("/cases", async (req, res) => {
     const scope = req.scope!;
     const b = req.body;
 
+    if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
+      throw new ValidationError("عنوان القضية مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للقضية" });
+    }
+    if (!b.caseType || typeof b.caseType !== "string" || !b.caseType.trim()) {
+      throw new ValidationError("نوع القضية مطلوب", { field: "caseType", fix: "اختر نوع القضية (مدنية، تجارية، جنائية، ...)" });
+    }
+    if (b.priority && !["low", "medium", "high", "critical"].includes(b.priority)) {
+      throw new ValidationError(
+        `أولوية غير صالحة: ${b.priority}`,
+        { field: "priority", fix: "اختر من: low, medium, high, critical" }
+      );
+    }
+    if (b.caseNumber) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM legal_cases WHERE "caseNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.caseNumber, scope.companyId]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "رقم القضية مسجل مسبقاً",
+          { field: "caseNumber", fix: "استخدم رقماً فريداً أو اتركه فارغاً ليُولَّد تلقائياً" }
+        );
+      }
+    }
+
     // Always resolve a responsible lawyer: if caller didn't supply one, fall back
     // to legal_manager → general_manager → owner so the case never lands in
     // open-with-NULL-assignee limbo.
@@ -335,13 +516,22 @@ router.patch("/cases/:id", async (req, res) => {
     const b = req.body;
 
     if (b.status !== undefined && b.status !== existing.status) {
+      if (!CASE_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة قضية غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${CASE_STATUSES.join(", ")}` }
+        );
+      }
       const allowed = VALID_CASE_TRANSITIONS[existing.status] || [];
       if (!allowed.includes(b.status)) {
-        res.status(400).json({
-          error: `لا يمكن الانتقال من "${existing.status}" إلى "${b.status}"`,
-          allowedTransitions: allowed,
-        });
-        return;
+        throw new ConflictError(
+          `لا يمكن الانتقال من "${existing.status}" إلى "${b.status}"`,
+          {
+            field: "status",
+            fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}`,
+            meta: { allowedTransitions: allowed },
+          }
+        );
       }
     }
 
@@ -399,9 +589,30 @@ router.delete("/cases/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, title, status FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("القضية غير موجودة");
+    if (["open", "in_progress", "judgment", "execution"].includes(existing.status)) {
+      throw new ConflictError(
+        `لا يمكن حذف قضية بحالة "${existing.status}"`,
+        { field: "status", fix: "أغلق القضية عبر /cases/:id/close قبل الحذف" }
+      );
+    }
     await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.case.deleted",
+      entity: "legal_cases",
+      entityId: id,
+      before: { title: existing.title, status: existing.status },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف القضية بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete case error:"); }
 });
@@ -418,12 +629,13 @@ router.post("/cases/:id/close", async (req, res) => {
     );
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     if (lc.status === "closed") {
-      validationError(res, "القضية مغلقة بالفعل", "status", "لا حاجة لإغلاق قضية مغلقة");
-      return;
+      throw new ConflictError(
+        "القضية مغلقة بالفعل",
+        { field: "status", fix: "لا حاجة لإغلاق قضية مغلقة" }
+      );
     }
-    if (!b.closureReason) {
-      validationError(res, "سبب الإغلاق مطلوب", "closureReason", "أدخل سبب إغلاق القضية");
-      return;
+    if (!b.closureReason || typeof b.closureReason !== "string" || !b.closureReason.trim()) {
+      throw new ValidationError("سبب الإغلاق مطلوب", { field: "closureReason", fix: "أدخل سبب إغلاق القضية" });
     }
 
     await rawExecute(
@@ -471,8 +683,22 @@ router.post("/cases/:caseId/sessions", async (req, res) => {
     const b = req.body;
     const caseId = Number(req.params.caseId);
 
+    if (!b.sessionDate) {
+      throw new ValidationError("تاريخ الجلسة مطلوب", { field: "sessionDate", fix: "حدد تاريخ الجلسة القضائية" });
+    }
+    const sd = new Date(b.sessionDate);
+    if (Number.isNaN(sd.getTime())) {
+      throw new ValidationError("تاريخ الجلسة غير صالح", { field: "sessionDate", fix: "استخدم تنسيق YYYY-MM-DD" });
+    }
+
     const [legalCase] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة أو غير مصرح بها");
+    if (legalCase.status === "closed") {
+      throw new ConflictError(
+        "لا يمكن إضافة جلسات لقضية مغلقة",
+        { field: "status", fix: "أعد فتح القضية أولاً" }
+      );
+    }
 
     let distanceToCourtKm: number | null = null;
     if (b.courtLat && b.courtLon && b.officeLat && b.officeLon) {
@@ -663,6 +889,18 @@ router.post("/cases/:caseId/judgments", async (req, res) => {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
     const b = req.body;
+    if (!b.judgmentDate) {
+      throw new ValidationError("تاريخ الحكم مطلوب", { field: "judgmentDate", fix: "حدد تاريخ صدور الحكم" });
+    }
+    if (!b.verdict || typeof b.verdict !== "string" || !b.verdict.trim()) {
+      throw new ValidationError("نص الحكم مطلوب", { field: "verdict", fix: "أدخل نصاً يوضح الحكم" });
+    }
+    if (b.amount !== undefined && b.amount !== null) {
+      const amt = Number(b.amount);
+      if (!Number.isFinite(amt) || amt < 0) {
+        throw new ValidationError("قيمة الحكم غير صالحة", { field: "amount", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
     const [lc] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
@@ -734,6 +972,26 @@ router.patch("/cases/:caseId/judgments/:id", async (req, res) => {
     const id = Number(req.params.id);
     const caseId = Number(req.params.caseId);
     const b = req.body;
+
+    const [existingJ] = await rawQuery<any>(
+      `SELECT * FROM legal_judgments WHERE id=$1 AND "caseId"=$2 AND "companyId"=$3`,
+      [id, caseId, scope.companyId]
+    );
+    if (!existingJ) throw new NotFoundError("الحكم غير موجود");
+
+    if (b.paidAmount !== undefined) {
+      const p = Number(b.paidAmount);
+      if (!Number.isFinite(p) || p < 0) {
+        throw new ValidationError("مبلغ السداد غير صالح", { field: "paidAmount", fix: "أدخل قيمة غير سالبة" });
+      }
+      if (p > Number(existingJ.amount || 0)) {
+        throw new ValidationError(
+          "مبلغ السداد أكبر من قيمة الحكم",
+          { field: "paidAmount", fix: `المبلغ الأقصى هو ${existingJ.amount}` }
+        );
+      }
+    }
+
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.paidAmount !== undefined) { params.push(b.paidAmount); sets.push(`"paidAmount"=$${params.length}`); }
@@ -763,13 +1021,42 @@ router.patch("/cases/:id/financial-risk", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { financialRisk, riskLevel } = req.body;
-    const [existing] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("القضية غير موجودة");
+
+    if (financialRisk !== undefined) {
+      const fr = Number(financialRisk);
+      if (!Number.isFinite(fr) || fr < 0) {
+        throw new ValidationError("قيمة المخاطرة المالية غير صالحة", { field: "financialRisk", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+    if (riskLevel && !["low", "medium", "high", "critical"].includes(riskLevel)) {
+      throw new ValidationError(
+        `مستوى المخاطرة غير صالح: ${riskLevel}`,
+        { field: "riskLevel", fix: "اختر من: low, medium, high, critical" }
+      );
+    }
+
     await rawExecute(
       `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3`,
       [financialRisk || 0, riskLevel || 'medium', id]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "legal_cases",
+      entityId: id,
+      before: { financialRisk: existing.financialRisk, riskLevel: existing.riskLevel },
+      after: { financialRisk: financialRisk || 0, riskLevel: riskLevel || 'medium' },
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }
 });
