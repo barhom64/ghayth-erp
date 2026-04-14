@@ -1,7 +1,12 @@
-import { handleRouteError,
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
   ForbiddenError,
   IntegrationError,
 } from "../lib/errorHandler.js";
+import { assertRole } from "../lib/roleGuards.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -14,13 +19,8 @@ zatcaRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({ error: "ليس لديك الصلاحية للقيام بهذا الإجراء" });
-    return false;
-  }
-  return true;
-}
+// Role gate is imported from lib/roleGuards.js as `assertRole`.
+// The older local `requireRole` was orphaned when callsites migrated.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TLV (Tag-Length-Value) QR Code Encoder — ZATCA compliant

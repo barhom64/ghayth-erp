@@ -1,4 +1,6 @@
-import { handleRouteError,
+import {
+  handleRouteError,
+  NotFoundError,
   ForbiddenError,
   IntegrationError,
 } from "../lib/errorHandler.js";

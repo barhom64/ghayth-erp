@@ -7,6 +7,7 @@ import {
   ForbiddenError,
   IntegrationError,
 } from "../lib/errorHandler.js";
+import { assertRole } from "../lib/roleGuards.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -43,17 +44,9 @@ const PR_APPROVAL_ROLES = ["branch_manager", "general_manager", "owner"];
 /** Payroll roles: hr_manager, finance_manager, general_manager, owner */
 const PAYROLL_ROLES = ["hr_manager", "finance_manager", "general_manager", "owner"];
 
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
+// Role-gate helper is imported from lib/roleGuards.js as `assertRole`.
+// The older local `requireRole(scope, allowedRoles, res): boolean` helper
+// was removed when every callsite was migrated to `assertRole(scope, allowedRoles)`.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COLLECTION PIPELINE – 6 stages for overdue invoices

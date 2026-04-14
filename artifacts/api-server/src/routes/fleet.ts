@@ -1592,6 +1592,29 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
       if (!TRIP_STATUSES.includes(status)) {
         throw new ValidationError(`حالة رحلة غير صالحة: ${status}`, { field: "status", fix: `اختر من: ${TRIP_STATUSES.join(", ")}` });
       }
+      // Lifecycle-owned transitions MUST go through the dedicated endpoints.
+      // Even though `completed` and `cancelled` are in TRIP_TRANSITIONS
+      // (e.g. `in_progress → [completed, cancelled]`), letting PATCH write
+      // them directly would silently skip:
+      //   • the cost/fuel/depreciation calculation (complete path)
+      //   • the vehicle release (status back to 'available')
+      //   • the driver release (status back to 'available')
+      //   • the `JE-FLEET-...` journal entry
+      //   • the `fleet.trip.completed` / `fleet.trip.cancelled` event
+      // This was Test 11 in docs/verification/fleet.md and was flagged as
+      // ⚠️ Partial during the first verification run; this explicit
+      // refuse-list is the follow-up fix.
+      if (status === "completed" || status === "cancelled") {
+        throw new ConflictError(
+          `لا يمكن نقل الرحلة إلى "${status}" عبر PATCH`,
+          {
+            field: "status",
+            fix: status === "completed"
+              ? "استخدم POST /trips/:id/complete لإقفال الرحلة مع حساب التكلفة وإصدار القيد المحاسبي وتحرير المركبة والسائق"
+              : "استخدم POST /trips/:id/cancel لإلغاء الرحلة وتحرير المركبة والسائق",
+          }
+        );
+      }
       const allowedNext = TRIP_TRANSITIONS[existing.status] ?? [];
       if (!allowedNext.includes(status)) {
         throw new ConflictError(`لا يمكن نقل الرحلة من "${existing.status}" إلى "${status}" عبر PATCH`, { field: "status", fix: `استخدم /trips/:id/complete أو /trips/:id/cancel لإدارة دورة حياة الرحلة. الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}` });
@@ -1704,6 +1727,23 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
     if (status !== undefined && status !== existing.status) {
       if (!MAINTENANCE_STATUSES.includes(status)) {
         throw new ValidationError(`حالة صيانة غير صالحة: ${status}`, { field: "status", fix: `اختر من: ${MAINTENANCE_STATUSES.join(", ")}` });
+      }
+      // Same defence-in-depth as PATCH /trips/:id — the allowlist permits
+      // `in_progress → completed` and `in_progress → cancelled` but routing
+      // those through PATCH silently skips: vehicle release, journal entry,
+      // obligation mark-met / cancel, and the `fleet.maintenance.completed`
+      // / `fleet.maintenance.cancelled` event. Force the caller to the
+      // dedicated lifecycle endpoints.
+      if (status === "completed" || status === "cancelled") {
+        throw new ConflictError(
+          `لا يمكن نقل الصيانة إلى "${status}" عبر PATCH`,
+          {
+            field: "status",
+            fix: status === "completed"
+              ? "استخدم POST /maintenance/:id/complete لإكمال الصيانة مع إصدار القيد المحاسبي وتحرير المركبة"
+              : "استخدم POST /maintenance/:id/cancel لإلغاء الصيانة وتحرير المركبة",
+          }
+        );
       }
       const allowedNext = MAINTENANCE_TRANSITIONS[existing.status] ?? [];
       if (!allowedNext.includes(status)) {
