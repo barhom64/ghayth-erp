@@ -218,15 +218,6 @@ export function registerEventListeners() {
     await logAudit("crm.opportunity.lost", { ...payload, action: "update" });
   });
 
-  // Phase C domain 2 — CRM audit. Generic opportunity.updated event
-  // covering non-lifecycle edits (title change, contact swap, value
-  // tweak, re-assignment without stage change). Complements the
-  // existing `stage_changed` / `won` / `lost` / `converted` events.
-  eventBus.on("crm.opportunity.updated", async (payload) => {
-    await logEvent("crm.opportunity.updated", payload);
-    await logAudit("crm.opportunity.updated", { ...payload, action: "update", entity: "crm_opportunities" });
-  });
-
   eventBus.on("task.created", async (payload) => {
     await logEvent("task.created", payload);
     await logAudit("task.created", { ...payload, action: "create" });
@@ -296,6 +287,23 @@ export function registerEventListeners() {
     await logAudit("fleet.trip.completed", { ...payload, action: "update" });
   });
 
+  // Phase C.8 — warehouse product lifecycle listeners
+  eventBus.on("warehouse.product.created", async (payload) => {
+    await logEvent("warehouse.product.created", payload);
+    await logAudit("warehouse.product.created", { ...payload, action: "create", entity: "warehouse_product" });
+  });
+  eventBus.on("warehouse.product.updated", async (payload) => {
+    await logEvent("warehouse.product.updated", payload);
+    await logAudit("warehouse.product.updated", { ...payload, action: "update", entity: "warehouse_product" });
+  });
+  eventBus.on("warehouse.product.status_changed", async (payload) => {
+    await logEvent("warehouse.product.status_changed", payload);
+    await logAudit("warehouse.product.status_changed", { ...payload, action: "status_change", entity: "warehouse_product" });
+  });
+  eventBus.on("warehouse.product.deleted", async (payload) => {
+    await logEvent("warehouse.product.deleted", payload);
+    await logAudit("warehouse.product.deleted", { ...payload, action: "delete", entity: "warehouse_product" });
+  });
   eventBus.on("warehouse.movement.created", async (payload) => {
     await logEvent("warehouse.movement.created", payload);
     await logAudit("warehouse.movement.created", { ...payload, action: "create" });
@@ -592,6 +600,27 @@ export function registerEventListeners() {
     await logEvent("legal.contract.terminated", payload);
     await logAudit("legal.contract.terminated", { ...payload, action: "terminate", entity: "legal_contract" });
   });
+  // Phase C.6 — legal contract + case update/delete listeners.
+  eventBus.on("legal.contract.created", async (payload) => {
+    await logEvent("legal.contract.created", payload);
+    await logAudit("legal.contract.created", { ...payload, action: "create", entity: "legal_contract" });
+  });
+  eventBus.on("legal.contract.updated", async (payload) => {
+    await logEvent("legal.contract.updated", payload);
+    await logAudit("legal.contract.updated", { ...payload, action: "update", entity: "legal_contract" });
+  });
+  eventBus.on("legal.contract.status_changed", async (payload) => {
+    await logEvent("legal.contract.status_changed", payload);
+    await logAudit("legal.contract.status_changed", { ...payload, action: "status_change", entity: "legal_contract" });
+  });
+  eventBus.on("legal.contract.deleted", async (payload) => {
+    await logEvent("legal.contract.deleted", payload);
+    await logAudit("legal.contract.deleted", { ...payload, action: "delete", entity: "legal_contract" });
+  });
+  eventBus.on("legal.case.deleted", async (payload) => {
+    await logEvent("legal.case.deleted", payload);
+    await logAudit("legal.case.deleted", { ...payload, action: "delete", entity: "legal_case" });
+  });
 
   // ── CRM — deal + opportunity lifecycle ──
   eventBus.on("crm.deal.won", async (payload) => {
@@ -764,6 +793,66 @@ export function registerEventListeners() {
     await logEvent("deposit.refunded", payload);
     await logAudit("deposit.refunded", { ...payload, action: "refund", entity: "deposit" });
   });
+  // Phase C.4 — missing property lifecycle listeners.
+  // Before this block PATCH/DELETE on units / contracts / buildings / owners /
+  // tenants / inspections was silent in audit_logs + event_logs; the programmer
+  // flagged the same gap during the Fleet audit.
+  eventBus.on("property.unit.updated", async (payload) => {
+    await logEvent("property.unit.updated", payload);
+    await logAudit("property.unit.updated", { ...payload, action: "update", entity: "property_unit" });
+  });
+  eventBus.on("property.unit.status_changed", async (payload) => {
+    await logEvent("property.unit.status_changed", payload);
+    await logAudit("property.unit.status_changed", { ...payload, action: "status_change", entity: "property_unit" });
+  });
+  eventBus.on("property.unit.deleted", async (payload) => {
+    await logEvent("property.unit.deleted", payload);
+    await logAudit("property.unit.deleted", { ...payload, action: "delete", entity: "property_unit" });
+  });
+  eventBus.on("property.contract.updated", async (payload) => {
+    await logEvent("property.contract.updated", payload);
+    await logAudit("property.contract.updated", { ...payload, action: "update", entity: "rental_contract" });
+  });
+  eventBus.on("property.contract.status_changed", async (payload) => {
+    await logEvent("property.contract.status_changed", payload);
+    await logAudit("property.contract.status_changed", { ...payload, action: "status_change", entity: "rental_contract" });
+  });
+  eventBus.on("property.contract.deleted", async (payload) => {
+    await logEvent("property.contract.deleted", payload);
+    await logAudit("property.contract.deleted", { ...payload, action: "delete", entity: "rental_contract" });
+  });
+  eventBus.on("property.building.updated", async (payload) => {
+    await logEvent("property.building.updated", payload);
+    await logAudit("property.building.updated", { ...payload, action: "update", entity: "property_building" });
+  });
+  eventBus.on("property.building.deleted", async (payload) => {
+    await logEvent("property.building.deleted", payload);
+    await logAudit("property.building.deleted", { ...payload, action: "delete", entity: "property_building" });
+  });
+  eventBus.on("property.owner.updated", async (payload) => {
+    await logEvent("property.owner.updated", payload);
+    await logAudit("property.owner.updated", { ...payload, action: "update", entity: "property_owner" });
+  });
+  eventBus.on("property.owner.deleted", async (payload) => {
+    await logEvent("property.owner.deleted", payload);
+    await logAudit("property.owner.deleted", { ...payload, action: "delete", entity: "property_owner" });
+  });
+  eventBus.on("tenant.updated", async (payload) => {
+    await logEvent("tenant.updated", payload);
+    await logAudit("tenant.updated", { ...payload, action: "update", entity: "tenant" });
+  });
+  eventBus.on("tenant.deleted", async (payload) => {
+    await logEvent("tenant.deleted", payload);
+    await logAudit("tenant.deleted", { ...payload, action: "delete", entity: "tenant" });
+  });
+  eventBus.on("property.inspection.updated", async (payload) => {
+    await logEvent("property.inspection.updated", payload);
+    await logAudit("property.inspection.updated", { ...payload, action: "update", entity: "property_inspection" });
+  });
+  eventBus.on("property.inspection.status_changed", async (payload) => {
+    await logEvent("property.inspection.status_changed", payload);
+    await logAudit("property.inspection.status_changed", { ...payload, action: "status_change", entity: "property_inspection" });
+  });
 
   // ── Fleet — vehicles / drivers / trips / maintenance / violations ──
   eventBus.on("fleet.vehicle.created", async (payload) => {
@@ -798,6 +887,66 @@ export function registerEventListeners() {
     await logEvent("fleet.traffic_violation.paid", payload);
     await logAudit("fleet.traffic_violation.paid", { ...payload, action: "pay", entity: "fleet_traffic_violation" });
   });
+  // Phase C.3 — missing fleet lifecycle listeners.
+  // Every mutation now has an audit + event trail. The programmer's earlier
+  // spot-checks found that e.g. vehicle updates, driver deletes and fuel log
+  // edits were completely silent in the audit tables.
+  eventBus.on("fleet.vehicle.updated", async (payload) => {
+    await logEvent("fleet.vehicle.updated", payload);
+    await logAudit("fleet.vehicle.updated", { ...payload, action: "update", entity: "fleet_vehicle" });
+  });
+  eventBus.on("fleet.vehicle.status_changed", async (payload) => {
+    await logEvent("fleet.vehicle.status_changed", payload);
+    await logAudit("fleet.vehicle.status_changed", { ...payload, action: "status_change", entity: "fleet_vehicle" });
+  });
+  eventBus.on("fleet.vehicle.deleted", async (payload) => {
+    await logEvent("fleet.vehicle.deleted", payload);
+    await logAudit("fleet.vehicle.deleted", { ...payload, action: "delete", entity: "fleet_vehicle" });
+  });
+  eventBus.on("fleet.vehicle.breakdown", async (payload) => {
+    await logEvent("fleet.vehicle.breakdown", payload);
+    await logAudit("fleet.vehicle.breakdown", { ...payload, action: "breakdown", entity: "fleet_vehicle" });
+  });
+  eventBus.on("fleet.driver.updated", async (payload) => {
+    await logEvent("fleet.driver.updated", payload);
+    await logAudit("fleet.driver.updated", { ...payload, action: "update", entity: "fleet_driver" });
+  });
+  eventBus.on("fleet.driver.status_changed", async (payload) => {
+    await logEvent("fleet.driver.status_changed", payload);
+    await logAudit("fleet.driver.status_changed", { ...payload, action: "status_change", entity: "fleet_driver" });
+  });
+  eventBus.on("fleet.driver.deleted", async (payload) => {
+    await logEvent("fleet.driver.deleted", payload);
+    await logAudit("fleet.driver.deleted", { ...payload, action: "delete", entity: "fleet_driver" });
+  });
+  eventBus.on("fleet.trip.updated", async (payload) => {
+    await logEvent("fleet.trip.updated", payload);
+    await logAudit("fleet.trip.updated", { ...payload, action: "update", entity: "fleet_trip" });
+  });
+  eventBus.on("fleet.trip.deleted", async (payload) => {
+    await logEvent("fleet.trip.deleted", payload);
+    await logAudit("fleet.trip.deleted", { ...payload, action: "delete", entity: "fleet_trip" });
+  });
+  eventBus.on("fleet.maintenance.created", async (payload) => {
+    await logEvent("fleet.maintenance.created", payload);
+    await logAudit("fleet.maintenance.created", { ...payload, action: "create", entity: "fleet_maintenance" });
+  });
+  eventBus.on("fleet.maintenance.updated", async (payload) => {
+    await logEvent("fleet.maintenance.updated", payload);
+    await logAudit("fleet.maintenance.updated", { ...payload, action: "update", entity: "fleet_maintenance" });
+  });
+  eventBus.on("fleet.maintenance.deleted", async (payload) => {
+    await logEvent("fleet.maintenance.deleted", payload);
+    await logAudit("fleet.maintenance.deleted", { ...payload, action: "delete", entity: "fleet_maintenance" });
+  });
+  eventBus.on("fleet.fuel_log.deleted", async (payload) => {
+    await logEvent("fleet.fuel_log.deleted", payload);
+    await logAudit("fleet.fuel_log.deleted", { ...payload, action: "delete", entity: "fleet_fuel_log" });
+  });
+  eventBus.on("fleet.insurance.deleted", async (payload) => {
+    await logEvent("fleet.insurance.deleted", payload);
+    await logAudit("fleet.insurance.deleted", { ...payload, action: "delete", entity: "fleet_insurance" });
+  });
 
   // ── Purchase — PO lifecycle + PR conversion ──
   eventBus.on("purchase_order.received", async (payload) => {
@@ -821,6 +970,34 @@ export function registerEventListeners() {
   eventBus.on("project.created", async (payload) => {
     await logEvent("project.created", payload);
     await logAudit("project.created", { ...payload, action: "create", entity: "project" });
+  });
+  eventBus.on("project.updated", async (payload) => {
+    await logEvent("project.updated", payload);
+    await logAudit("project.updated", { ...payload, action: "update", entity: "project" });
+  });
+  eventBus.on("project.status_changed", async (payload) => {
+    await logEvent("project.status_changed", payload);
+    await logAudit("project.status_changed", { ...payload, action: "status_change", entity: "project" });
+  });
+  eventBus.on("project.deleted", async (payload) => {
+    await logEvent("project.deleted", payload);
+    await logAudit("project.deleted", { ...payload, action: "delete", entity: "project" });
+  });
+  eventBus.on("project.phase.created", async (payload) => {
+    await logEvent("project.phase.created", payload);
+    await logAudit("project.phase.created", { ...payload, action: "create", entity: "project_phase" });
+  });
+  eventBus.on("project.phase.completed", async (payload) => {
+    await logEvent("project.phase.completed", payload);
+    await logAudit("project.phase.completed", { ...payload, action: "complete", entity: "project_phase" });
+  });
+  eventBus.on("project.task.updated", async (payload) => {
+    await logEvent("project.task.updated", payload);
+    await logAudit("project.task.updated", { ...payload, action: "update", entity: "project_task" });
+  });
+  eventBus.on("project.task.status_changed", async (payload) => {
+    await logEvent("project.task.status_changed", payload);
+    await logAudit("project.task.status_changed", { ...payload, action: "status_change", entity: "project_task" });
   });
   eventBus.on("project.closed", async (payload) => {
     await logEvent("project.closed", payload);
