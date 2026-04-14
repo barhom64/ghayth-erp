@@ -48,3 +48,8 @@ Thumbs.db
 .cache/
 .local/
 attached_assets/
+
+# Local test env for Fleet/finance hotfix verification sandbox (never
+# commit — contains a throwaway JWT_SECRET used only by the local
+# bootstrap in docs/verification/fleet.md §1.2).
+artifacts/api-server/.env
