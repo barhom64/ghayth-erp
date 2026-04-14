@@ -207,8 +207,8 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
     // FK pre-check on employeeId if provided
     if (b.employeeId !== undefined && b.employeeId !== null && b.employeeId !== "") {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-        [b.employeeId, scope.companyId]
+        `SELECT id FROM employees WHERE id=$1`,
+        [b.employeeId]
       );
       if (!emp) {
         throw new ValidationError("الموظف المرتبط غير موجود", { field: "employeeId", fix: "اختر موظفاً مسجلاً في النظام أو اترك الحقل فارغاً" });
