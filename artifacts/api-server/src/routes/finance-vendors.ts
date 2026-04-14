@@ -1,8 +1,13 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { emitEvent } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { assertRole } from "../lib/roleGuards.js";
@@ -32,14 +37,35 @@ vendorsRouter.post("/vendors", async (req, res) => {
     const scope = req.scope!;
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
     if (!name) {
-      res.status(400).json({ error: "اسم المورد مطلوب" });
-      return;
+      throw new ValidationError("اسم المورد مطلوب", {
+        field: "name",
+        fix: "أدخل اسم المورد",
+      });
     }
     const { insertId } = await rawExecute(
       `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null]
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "vendor.created",
+      entity: "suppliers",
+      entityId: insertId,
+      details: JSON.stringify({ name }),
+    }).catch((err) => pushToDLQ("event", { action: "vendor.created", entityId: insertId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "suppliers",
+      entityId: insertId,
+      after: { name },
+    }).catch((err) => console.error("[audit] vendor.created:", err));
+
     res.status(201).json({ id: insertId, ...req.body });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
@@ -53,8 +79,10 @@ vendorsRouter.post("/vendors/create", async (req, res) => {
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
 
     if (!name) {
-      res.status(400).json({ error: "اسم المورد مطلوب" });
-      return;
+      throw new ValidationError("اسم المورد مطلوب", {
+        field: "name",
+        fix: "أدخل اسم المورد",
+      });
     }
 
     const { insertId } = await rawExecute(
@@ -69,6 +97,15 @@ vendorsRouter.post("/vendors/create", async (req, res) => {
       details: JSON.stringify({ name }),
     }).catch((err) => pushToDLQ("event", { action: "vendor.created", entityId: insertId }, err, scope.companyId));
 
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "suppliers",
+      entityId: insertId,
+      after: { name, source: "procurement" },
+    }).catch((err) => console.error("[audit] vendor.created:", err));
+
     res.status(201).json({ id: insertId, name, contactPerson, phone, email, taxNumber });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
@@ -78,6 +115,7 @@ vendorsRouter.post("/vendors/create", async (req, res) => {
 vendorsRouter.patch("/vendors/:id", async (req, res) => {
   try {
     const scope = req.scope!;
+    const vendorId = Number(req.params.id);
     const { name, contactPerson, phone, email, taxNumber, category } = req.body as any;
     const sets: string[] = [];
     const params: any[] = [];
@@ -88,29 +126,54 @@ vendorsRouter.patch("/vendors/:id", async (req, res) => {
     if (email !== undefined) { sets.push(`email = $${idx++}`); params.push(email); }
     if (taxNumber !== undefined) { sets.push(`"taxNumber" = $${idx++}`); params.push(taxNumber); }
     if (category !== undefined) { sets.push(`category = $${idx++}`); params.push(category); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
-    params.push(Number(req.params.id), scope.companyId);
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتحديث", {
+        field: "body",
+        fix: "أرسل حقلاً واحداً على الأقل لتحديثه",
+      });
+    }
+    params.push(vendorId, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE suppliers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE suppliers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المورد غير موجود");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "vendor.updated",
+      entity: "suppliers",
+      entityId: vendorId,
+      details: JSON.stringify({ fields: Object.keys(req.body || {}) }),
+    }).catch((err) => pushToDLQ("event", { action: "vendor.updated", entityId: vendorId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "suppliers",
+      entityId: vendorId,
+      after: { fields: Object.keys(req.body || {}) },
+    }).catch((err) => console.error("[audit] vendor.updated:", err));
+
     res.json(row);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Update vendor error:");
   }
 });
 
 vendorsRouter.delete("/vendors/:id", async (req, res) => {
   try {
     const scope = req.scope!;
+    assertRole(scope, PROCUREMENT_ROLES);
     const vendorId = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(
-      `SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [vendorId, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المورد غير موجود");
 
     const [openOrders] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','received','closed')`,
@@ -125,18 +188,43 @@ vendorsRouter.delete("/vendors/:id", async (req, res) => {
     if (Number(openOrders?.cnt ?? 0) > 0) blockers.push(`يوجد ${openOrders.cnt} أمر شراء مفتوح مرتبط بهذا المورد`);
     if (Number(openRequests?.cnt ?? 0) > 0) blockers.push(`يوجد ${openRequests.cnt} طلب شراء مفتوح مرتبط بهذا المورد`);
     if (blockers.length > 0) {
-      res.status(422).json({ error: "لا يمكن حذف المورد — يوجد طلبات/أوامر مفتوحة مرتبطة به", blockers });
-      return;
+      throw new ConflictError(
+        "لا يمكن حذف المورد — يوجد طلبات/أوامر مفتوحة مرتبطة به",
+        {
+          field: "vendorId",
+          fix: "أغلق الطلبات وأوامر الشراء المفتوحة قبل حذف المورد",
+          meta: { blockers },
+        },
+      );
     }
 
     const [row] = await rawQuery<any>(
       `UPDATE suppliers SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [vendorId, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المورد غير موجود");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "vendor.deleted",
+      entity: "suppliers",
+      entityId: vendorId,
+      details: JSON.stringify({ name: existing.name }),
+    }).catch((err) => pushToDLQ("event", { action: "vendor.deleted", entityId: vendorId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "delete",
+      entity: "suppliers",
+      entityId: vendorId,
+      after: { name: existing.name, softDelete: true },
+    }).catch((err) => console.error("[audit] vendor.deleted:", err));
+
     res.json({ success: true });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Delete vendor error:");
   }
 });
 

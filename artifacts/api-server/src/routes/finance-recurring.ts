@@ -1,10 +1,16 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  IntegrationError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { createJournalEntry, emitEvent } from "../lib/businessHelpers.js";
+import { createJournalEntry, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { assertRole } from "../lib/roleGuards.js";
+import { pushToDLQ } from "../lib/eventBus.js";
 
 export const recurringRouter = Router();
 recurringRouter.use(authMiddleware);
@@ -66,7 +72,7 @@ recurringRouter.get("/recurring-journals/:id", async (req, res) => {
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = ANY($2) AND "deletedAt" IS NULL`,
       [id, scope.allowedCompanies]
     );
-    if (!row) { res.status(404).json({ error: "القيد الدوري غير موجود" }); return; }
+    if (!row) throw new NotFoundError("القيد الدوري غير موجود");
     const history = await rawQuery<any>(
       `SELECT rr.*, je.ref AS "journalRef", je.description AS "journalDescription"
        FROM recurring_journal_runs rr
@@ -136,7 +142,12 @@ recurringRouter.post("/recurring-journals", async (req, res) => {
       });
     }
     const v = validateTemplateLines(templateLines);
-    if (!v.ok) { res.status(400).json({ error: v.error }); return; }
+    if (!v.ok) {
+      throw new ValidationError(v.error, {
+        field: "templateLines",
+        fix: "أرسل بنود القالب متوازنة (مدين = دائن) مع رمز حساب لكل بند",
+      });
+    }
 
     const nextRunDate = startDate; // first run on startDate
     const { insertId } = await rawExecute(
@@ -159,7 +170,16 @@ recurringRouter.post("/recurring-journals", async (req, res) => {
       entity: "recurring_journals",
       entityId: insertId,
       details: JSON.stringify({ name, frequency: freq, startDate }),
-    }).catch(console.error);
+    }).catch((err) => pushToDLQ("event", { action: "recurring_journal.created", entityId: insertId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "recurring_journals",
+      entityId: insertId,
+      after: { name, frequency: freq, startDate, lineCount: v.lines.length },
+    }).catch((err) => console.error("[audit] recurring_journal.created:", err));
 
     res.status(201).json({ id: insertId, name, frequency: freq, startDate, nextRunDate, active });
   } catch (err) {
@@ -178,7 +198,7 @@ recurringRouter.patch("/recurring-journals/:id", async (req, res) => {
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "القيد الدوري غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("القيد الدوري غير موجود");
 
     const fields: string[] = [];
     const params: any[] = [];
@@ -193,7 +213,10 @@ recurringRouter.patch("/recurring-journals/:id", async (req, res) => {
     if (b.frequency !== undefined) {
       const freq = String(b.frequency).toLowerCase();
       if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(freq)) {
-        res.status(400).json({ error: "تكرار غير صالح" }); return;
+        throw new ValidationError("تكرار غير صالح", {
+          field: "frequency",
+          fix: "اختر: daily أو weekly أو monthly أو quarterly أو yearly",
+        });
       }
       addField("frequency", freq);
     }
@@ -204,11 +227,21 @@ recurringRouter.patch("/recurring-journals/:id", async (req, res) => {
     addField("templateDescription", b.templateDescription);
     if (b.templateLines !== undefined) {
       const v = validateTemplateLines(b.templateLines);
-      if (!v.ok) { res.status(400).json({ error: v.error }); return; }
+      if (!v.ok) {
+        throw new ValidationError(v.error, {
+          field: "templateLines",
+          fix: "أرسل بنود القالب متوازنة (مدين = دائن) مع رمز حساب لكل بند",
+        });
+      }
       params.push(JSON.stringify(v.lines));
       fields.push(`"templateLines" = $${params.length}::jsonb`);
     }
-    if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
+    if (fields.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتحديث", {
+        field: "body",
+        fix: "أرسل حقلاً واحداً على الأقل لتحديثه",
+      });
+    }
     fields.push(`"updatedAt" = NOW()`);
     params.push(id);
     params.push(scope.companyId);
@@ -216,6 +249,25 @@ recurringRouter.patch("/recurring-journals/:id", async (req, res) => {
       `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
       params
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recurring_journal.updated",
+      entity: "recurring_journals",
+      entityId: id,
+      details: JSON.stringify({ fields: Object.keys(b) }),
+    }).catch((err) => pushToDLQ("event", { action: "recurring_journal.updated", entityId: id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "recurring_journals",
+      entityId: id,
+      after: { fields: Object.keys(b) },
+    }).catch((err) => console.error("[audit] recurring_journal.updated:", err));
+
     res.json({ success: true, id });
   } catch (err) {
     handleRouteError(err, res, "Update recurring journal error:");
@@ -286,7 +338,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", async (req, res) => {
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!recurring) { res.status(404).json({ error: "القيد الدوري غير موجود" }); return; }
+    if (!recurring) throw new NotFoundError("القيد الدوري غير موجود");
     const result = await runRecurringJournal({
       companyId: scope.companyId,
       recurring,
@@ -295,9 +347,34 @@ recurringRouter.post("/recurring-journals/:id/run-now", async (req, res) => {
       branchId: scope.branchId,
     });
     if (!result.success) {
-      res.status(500).json({ error: result.error || "فشل تنفيذ القيد الدوري" });
-      return;
+      throw new IntegrationError(
+        result.error || "فشل تنفيذ القيد الدوري",
+        {
+          field: "recurringJournalId",
+          fix: "راجع رسالة الخطأ في سجل التشغيل، وتأكد أن قالب القيد لا يزال صالحاً",
+          meta: { recurringId: id },
+        },
+      );
     }
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recurring_journal.run_now",
+      entity: "recurring_journals",
+      entityId: id,
+      details: JSON.stringify({ journalId: result.journalId, ref: result.ref }),
+    }).catch((err) => pushToDLQ("event", { action: "recurring_journal.run_now", entityId: id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "run_now",
+      entity: "recurring_journals",
+      entityId: id,
+      after: { journalId: result.journalId, ref: result.ref, triggeredBy: "manual" },
+    }).catch((err) => console.error("[audit] recurring_journal.run_now:", err));
+
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "Run recurring journal error:");
@@ -309,11 +386,37 @@ recurringRouter.delete("/recurring-journals/:id", async (req, res) => {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
+
+    const [existing] = await rawQuery<any>(
+      `SELECT id, name FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("القيد الدوري غير موجود");
+
     await rawExecute(
       `UPDATE recurring_journals SET "deletedAt" = NOW(), active = FALSE, "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recurring_journal.deleted",
+      entity: "recurring_journals",
+      entityId: id,
+      details: JSON.stringify({ name: existing.name }),
+    }).catch((err) => pushToDLQ("event", { action: "recurring_journal.deleted", entityId: id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "delete",
+      entity: "recurring_journals",
+      entityId: id,
+      after: { name: existing.name, softDelete: true },
+    }).catch((err) => console.error("[audit] recurring_journal.deleted:", err));
+
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete recurring journal error:");

@@ -1,9 +1,17 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+  ForbiddenError,
+} from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { assertRole } from "../lib/roleGuards.js";
+import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { pushToDLQ } from "../lib/eventBus.js";
 
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
@@ -35,8 +43,10 @@ budgetRouter.post("/budget", async (req, res) => {
     assertRole(scope, ["director", "owner"]);
     const { accountCode, period, amount, branchId } = req.body as any;
     if (!accountCode || !period || !amount) {
-      res.status(400).json({ error: "الحساب والفترة والمبلغ مطلوبة" });
-      return;
+      throw new ValidationError("الحساب والفترة والمبلغ مطلوبة", {
+        field: !accountCode ? "accountCode" : !period ? "period" : "amount",
+        fix: "أدخل رمز الحساب والفترة بصيغة YYYY-MM والمبلغ",
+      });
     }
     const { insertId } = await rawExecute(
       `INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used)
@@ -44,6 +54,25 @@ budgetRouter.post("/budget", async (req, res) => {
        ON CONFLICT DO NOTHING`,
       [scope.companyId, branchId ?? scope.branchId, accountCode, period, Number(amount)]
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "budget.created",
+      entity: "budgets",
+      entityId: insertId,
+      details: JSON.stringify({ accountCode, period, amount: Number(amount) }),
+    }).catch((err) => pushToDLQ("event", { action: "budget.created", entityId: insertId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "budgets",
+      entityId: insertId,
+      after: { accountCode, period, amount: Number(amount) },
+    }).catch((err) => console.error("[audit] budget.created:", err));
+
     res.status(201).json({ id: insertId, ...req.body });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");
@@ -55,8 +84,10 @@ budgetRouter.post("/budget/validate", async (req, res) => {
     const scope = req.scope!;
     const { accountCode, amount, period } = req.body as any;
     if (!accountCode || !amount) {
-      res.status(400).json({ error: "الحساب والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("الحساب والمبلغ مطلوبان", {
+        field: !accountCode ? "accountCode" : "amount",
+        fix: "أدخل رمز الحساب والمبلغ المراد التحقق منه",
+      });
     }
 
     const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
@@ -102,10 +133,34 @@ budgetRouter.patch("/budget/:id", async (req, res) => {
     addField("accountCode", b.accountCode);
     addField("period", b.period);
     addField("amount", b.amount);
-    if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
+    if (fields.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتحديث", {
+        field: "body",
+        fix: "أرسل حقلاً واحداً على الأقل لتحديثه",
+      });
+    }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "budget.updated",
+      entity: "budgets",
+      entityId: id,
+      details: JSON.stringify({ fields: Object.keys(b) }),
+    }).catch((err) => pushToDLQ("event", { action: "budget.updated", entityId: id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "budgets",
+      entityId: id,
+      after: { fields: Object.keys(b) },
+    }).catch((err) => console.error("[audit] budget.updated:", err));
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update budget error:"); }
 });
@@ -114,8 +169,58 @@ budgetRouter.delete("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["director", "owner"]);
-    const rows = await rawQuery<any>(`DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
+    const budgetId = Number(req.params.id);
+
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "accountCode", period, amount, used FROM budgets WHERE id = $1 AND "companyId" = $2`,
+      [budgetId, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الميزانية غير موجودة");
+
+    // Refuse delete when the budget has consumed funds — would leave dangling references.
+    if (Number(existing.used ?? 0) > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف ميزانية تم استهلاك جزء منها (المستهلك: ${Number(existing.used).toFixed(2)})`,
+        {
+          field: "budgetId",
+          fix: "قم بأرشفة الميزانية أو صفّر المبلغ بدل حذفها",
+          meta: {
+            accountCode: existing.accountCode,
+            period: existing.period,
+            used: Number(existing.used),
+          },
+        },
+      );
+    }
+
+    const rows = await rawQuery<any>(
+      `DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      [budgetId, scope.companyId]
+    );
+    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "budget.deleted",
+      entity: "budgets",
+      entityId: budgetId,
+      details: JSON.stringify({ accountCode: existing.accountCode, period: existing.period }),
+    }).catch((err) => pushToDLQ("event", { action: "budget.deleted", entityId: budgetId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "delete",
+      entity: "budgets",
+      entityId: budgetId,
+      after: {
+        accountCode: existing.accountCode,
+        period: existing.period,
+        amount: Number(existing.amount),
+      },
+    }).catch((err) => console.error("[audit] budget.deleted:", err));
+
     res.json({ message: "تم حذف الميزانية" });
   } catch (err) { handleRouteError(err, res, "Delete budget error:"); }
 });
@@ -169,10 +274,7 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
       `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3`,
       [scope.companyId, accountCode, period]
     );
-    if (!budget) {
-      res.status(404).json({ error: "لا توجد ميزانية محددة لهذا الحساب" });
-      return;
-    }
+    if (!budget) throw new NotFoundError("لا توجد ميزانية محددة لهذا الحساب");
 
     const budgetAmount = Number(budget.amount);
     const used = Number(budget.used);
@@ -183,7 +285,13 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
     if (utilAfter <= 80) level = "auto";
     else if (utilAfter <= 99) level = "cfo";
     else if (utilAfter <= 110) level = "gm";
-    else { res.status(400).json({ error: "تجاوز 110% — مرفوض نهائياً ولا يمكن اعتماده" }); return; }
+    else {
+      throw new ConflictError("تجاوز 110% — مرفوض نهائياً ولا يمكن اعتماده", {
+        field: "requestedAmount",
+        fix: "قلّل المبلغ المطلوب أو زِد سقف الميزانية أولاً",
+        meta: { utilizationAfter: Math.round(utilAfter * 100) / 100, capPct: 110 },
+      });
+    }
 
     if (level === "auto") {
       res.json({ status: "auto_approved", message: "الميزانية متاحة، لا حاجة لاعتماد" });
@@ -200,6 +308,25 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
        budgetAmount, Math.round(utilBefore * 100) / 100, Math.round(utilAfter * 100) / 100,
        level, sourceType ?? null, sourceId ?? null, reason ?? null, scope.activeAssignmentId]
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "budget.approval_requested",
+      entity: "budget_approval_requests",
+      entityId: row.id,
+      details: JSON.stringify({ accountCode, period, requestedAmount: Number(requestedAmount), level }),
+    }).catch((err) => pushToDLQ("event", { action: "budget.approval_requested", entityId: row.id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "budget_approval_requests",
+      entityId: row.id,
+      after: { accountCode, period, requestedAmount: Number(requestedAmount), level },
+    }).catch((err) => console.error("[audit] budget.approval_requested:", err));
+
     res.status(201).json({ data: row });
   } catch (err) {
     handleRouteError(err, res, "Create budget approval request error:");
@@ -242,10 +369,16 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
       `SELECT * FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
-    if (!request) { res.status(404).json({ error: "طلب الاعتماد غير موجود" }); return; }
+    if (!request) throw new NotFoundError("طلب الاعتماد غير موجود");
     if (request.status !== "pending") {
-      res.status(400).json({ error: `الطلب تم البت فيه مسبقاً (${request.status})` });
-      return;
+      throw new ConflictError(
+        `الطلب تم البت فيه مسبقاً (${request.status})`,
+        {
+          field: "status",
+          fix: "لا يمكن إعادة البت في طلب اعتماد سبق الفصل فيه",
+          meta: { currentStatus: request.status },
+        },
+      );
     }
 
     // Approval level authorization
@@ -253,11 +386,13 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
       ? ["finance", "director", "owner"]
       : ["director", "owner"];
     if (!needed.includes(scope.role)) {
-      res.status(403).json({
-        error: `هذا الطلب يتطلب اعتماد ${request.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`,
-        requiredRoles: needed,
-      });
-      return;
+      throw new ForbiddenError(
+        `هذا الطلب يتطلب اعتماد ${request.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`,
+        {
+          fix: `الأدوار المسموح لها بالبت: ${needed.join(", ")}`,
+          meta: { requiredRoles: needed, yourRole: scope.role, approvalLevel: request.approvalLevel },
+        },
+      );
     }
 
     const [updated] = await rawQuery<any>(
@@ -266,6 +401,25 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
        WHERE id=$4 RETURNING *`,
       [decision, notes ?? null, scope.activeAssignmentId, id]
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: `budget.approval_${decision}`,
+      entity: "budget_approval_requests",
+      entityId: id,
+      details: JSON.stringify({ accountCode: request.accountCode, period: request.period, level: request.approvalLevel }),
+    }).catch((err) => pushToDLQ("event", { action: `budget.approval_${decision}`, entityId: id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: decision,
+      entity: "budget_approval_requests",
+      entityId: id,
+      after: { decision, notes: notes ?? null, level: request.approvalLevel },
+    }).catch((err) => console.error(`[audit] budget.approval_${decision}:`, err));
+
     res.json({ data: updated, message: decision === "approved" ? "تم اعتماد الطلب" : "تم رفض الطلب" });
   } catch (err) {
     handleRouteError(err, res, "Decide budget approval error:");
