@@ -1,4 +1,7 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError,
+  ForbiddenError,
+  IntegrationError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -207,7 +210,7 @@ function computeInvoiceHash(xmlContent: string): string {
 zatcaRouter.get("/zatca/settings", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const [settings] = await rawQuery<any>(
       `SELECT id, "companyId", enabled, environment, "vatRegistrationNumber", "crNumber",
               "organizationName", "organizationNameEn", "streetName", "buildingNumber",
@@ -230,7 +233,7 @@ zatcaRouter.get("/zatca/settings", async (req, res) => {
 zatcaRouter.put("/zatca/settings", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const {
       enabled, environment, vatRegistrationNumber, crNumber,
       organizationName, organizationNameEn, streetName, buildingNumber,
@@ -322,7 +325,7 @@ zatcaRouter.put("/zatca/settings", async (req, res) => {
 zatcaRouter.post("/zatca/test-connection", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
 
     const [settings] = await rawQuery<any>(
       `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
@@ -330,8 +333,7 @@ zatcaRouter.post("/zatca/test-connection", async (req, res) => {
     );
 
     if (!settings) {
-      res.status(400).json({ error: "لم يتم تهيئة إعدادات ZATCA بعد" });
-      return;
+      throw new ValidationError("لم يتم تهيئة إعدادات ZATCA بعد");
     }
 
     const isConfigured = !!(settings.vatRegistrationNumber && settings.organizationName);
@@ -357,7 +359,7 @@ zatcaRouter.post("/zatca/test-connection", async (req, res) => {
 zatcaRouter.get("/zatca/invoice/:id/xml", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
 
     const [settings] = await rawQuery<any>(
@@ -376,8 +378,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", async (req, res) => {
     );
 
     if (!invoice) {
-      res.status(404).json({ error: "الفاتورة غير موجودة" });
-      return;
+      throw new NotFoundError("الفاتورة غير موجودة");
     }
 
     const lines = await rawQuery<any>(
@@ -445,7 +446,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", async (req, res) => {
 zatcaRouter.post("/zatca/invoice/:id/submit", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
 
     const [settings] = await rawQuery<any>(
@@ -454,8 +455,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", async (req, res) => {
     );
 
     if (!settings?.enabled) {
-      res.status(400).json({ error: "ربط ZATCA غير مفعّل. فعّله من الإعدادات أولاً" });
-      return;
+      throw new ValidationError("ربط ZATCA غير مفعّل. فعّله من الإعدادات أولاً");
     }
 
     const [invoice] = await rawQuery<any>(
@@ -469,13 +469,11 @@ zatcaRouter.post("/zatca/invoice/:id/submit", async (req, res) => {
     );
 
     if (!invoice) {
-      res.status(404).json({ error: "الفاتورة غير موجودة" });
-      return;
+      throw new NotFoundError("الفاتورة غير موجودة");
     }
 
     if (!invoice.isTaxLinked) {
-      res.status(400).json({ error: "الفاتورة غير مربوطة بالهيئة. فعّل خيار 'ربط مع الهيئة' أولاً" });
-      return;
+      throw new ValidationError("الفاتورة غير مربوطة بالهيئة. فعّل خيار 'ربط مع الهيئة' أولاً");
     }
 
     const lines = await rawQuery<any>(
@@ -579,7 +577,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", async (req, res) => {
 zatcaRouter.post("/zatca/expense/:id/submit", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
 
     const [settings] = await rawQuery<any>(
@@ -588,8 +586,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", async (req, res) => {
     );
 
     if (!settings?.enabled) {
-      res.status(400).json({ error: "ربط ZATCA غير مفعّل. فعّله من الإعدادات أولاً" });
-      return;
+      throw new ValidationError("ربط ZATCA غير مفعّل. فعّله من الإعدادات أولاً");
     }
 
     const [expense] = await rawQuery<any>(
@@ -598,13 +595,11 @@ zatcaRouter.post("/zatca/expense/:id/submit", async (req, res) => {
     );
 
     if (!expense) {
-      res.status(404).json({ error: "المصروف غير موجود" });
-      return;
+      throw new NotFoundError("المصروف غير موجود");
     }
 
     if (!expense.isTaxLinked) {
-      res.status(400).json({ error: "المصروف غير مربوط بالهيئة" });
-      return;
+      throw new ValidationError("المصروف غير مربوط بالهيئة");
     }
 
     const issueDate = new Date(expense.createdAt).toISOString().split("T")[0];
@@ -658,7 +653,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", async (req, res) => {
 zatcaRouter.get("/zatca/submissions", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { page = "1", limit: lim = "20", status = "" } = req.query as any;
     const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
 
@@ -724,7 +719,7 @@ zatcaRouter.get("/zatca/submissions", async (req, res) => {
 zatcaRouter.patch("/zatca/invoice/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason } = req.body as any;
 
@@ -735,14 +730,14 @@ zatcaRouter.patch("/zatca/invoice/:id", async (req, res) => {
     if (invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(invoiceTypeCode); }
     if (taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(taxCategoryCode); }
     if (exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(exemptionReason); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
 
     params.push(Number(id), scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE invoices SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING id, "isTaxLinked", "invoiceTypeCode", "taxCategoryCode", "exemptionReason", "zatcaStatus"`,
       params
     );
-    if (!row) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!row) { throw new NotFoundError("الفاتورة غير موجودة"); return; }
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "ZATCA invoice patch error:");
@@ -755,7 +750,7 @@ zatcaRouter.patch("/zatca/invoice/:id", async (req, res) => {
 zatcaRouter.patch("/zatca/expense/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason } = req.body as any;
 
@@ -766,14 +761,14 @@ zatcaRouter.patch("/zatca/expense/:id", async (req, res) => {
     if (invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(invoiceTypeCode); }
     if (taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(taxCategoryCode); }
     if (exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(exemptionReason); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
 
     params.push(Number(id), scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE journal_entries SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND type = 'expense' AND "deletedAt" IS NULL RETURNING id, "isTaxLinked", "invoiceTypeCode", "taxCategoryCode", "exemptionReason", "zatcaStatus"`,
       params
     );
-    if (!row) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("المصروف غير موجود"); return; }
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "ZATCA expense patch error:");
