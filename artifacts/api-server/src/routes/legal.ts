@@ -1,6 +1,5 @@
 import {
   handleRouteError,
-  validationError,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -322,8 +321,10 @@ router.post("/contracts/:id/renew", async (req, res) => {
     const id = Number(req.params.id);
     const { newEndDate, newValue, notes } = req.body ?? {};
     if (!newEndDate) {
-      validationError(res, "تاريخ نهاية التجديد مطلوب", "newEndDate", "حدد تاريخ النهاية الجديد");
-      return;
+      throw new ValidationError("تاريخ نهاية التجديد مطلوب", {
+        field: "newEndDate",
+        fix: "حدد تاريخ النهاية الجديد",
+      });
     }
     const [current] = await rawQuery<any>(
       `SELECT id, "endDate", value, "renewalCount" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -331,8 +332,13 @@ router.post("/contracts/:id/renew", async (req, res) => {
     );
     if (!current) throw new NotFoundError("العقد غير موجود");
     if (new Date(newEndDate) <= new Date(current.endDate)) {
-      validationError(res, "تاريخ نهاية التجديد يجب أن يكون بعد تاريخ النهاية الحالي", "newEndDate", "اختر تاريخاً لاحقاً لتاريخ النهاية الحالي");
-      return;
+      throw new ValidationError(
+        "تاريخ نهاية التجديد يجب أن يكون بعد تاريخ النهاية الحالي",
+        {
+          field: "newEndDate",
+          fix: "اختر تاريخاً لاحقاً لتاريخ النهاية الحالي",
+        },
+      );
     }
 
     const setExtras: Record<string, any> = {
@@ -377,8 +383,10 @@ router.post("/contracts/:id/terminate", async (req, res) => {
     const id = Number(req.params.id);
     const { reason, effectiveDate } = req.body ?? {};
     if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
-      validationError(res, "سبب إنهاء العقد مطلوب", "reason", "اكتب سبب الإنهاء");
-      return;
+      throw new ValidationError("سبب إنهاء العقد مطلوب", {
+        field: "reason",
+        fix: "اكتب سبب الإنهاء",
+      });
     }
 
     const updated = await applyTransition({

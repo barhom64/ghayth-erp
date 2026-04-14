@@ -1,6 +1,5 @@
 import {
   handleRouteError,
-  validationError,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -14,20 +13,13 @@ import {
   emitEvent,
   createNotification,
 } from "../lib/businessHelpers.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 const CFO_ROLES = ["finance_manager", "general_manager", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({ error: "ليس لديك الصلاحية للقيام بهذا الإجراء", requiredRoles: allowedRoles, yourRole: scope.role });
-    return false;
-  }
-  return true;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
@@ -56,7 +48,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", async (req, res) => {
 financeHardeningRouter.post("/fiscal-periods-v2", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, CFO_ROLES, res)) return;
+    assertRole(scope, CFO_ROLES);
     const { name, startDate, endDate, notes } = req.body as any;
     if (!name || !startDate || !endDate) {
       res.status(400).json({ error: "الاسم وتاريخ البداية والنهاية مطلوبة" });
@@ -77,7 +69,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", async (req, res) => {
 financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, CFO_ROLES, res)) return;
+    assertRole(scope, CFO_ROLES);
     const { id } = req.params;
     const { notes } = req.body as any;
 
@@ -126,7 +118,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => 
 financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const { id } = req.params;
     const { reason } = req.body as any;
     if (!reason) { res.status(400).json({ error: "سبب فتح الفترة مطلوب" }); return; }
@@ -164,7 +156,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) =>
 financeHardeningRouter.post("/journal-manual", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { description, lines, costCenter, notes } = req.body as any;
     if (!lines || !Array.isArray(lines) || lines.length < 2) {
       res.status(400).json({ error: "القيد يجب أن يحتوي على سطرين على الأقل" });
@@ -240,7 +232,7 @@ financeHardeningRouter.get("/journal-manual", async (req, res) => {
 financeHardeningRouter.patch("/journal-manual/:id/submit", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     if (!je) { res.status(404).json({ error: "القيد غير موجود" }); return; }
@@ -255,7 +247,7 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", async (req, res) => {
 financeHardeningRouter.patch("/journal-manual/:id/review", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
     const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
@@ -283,7 +275,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", async (req, res) => {
 financeHardeningRouter.patch("/journal-manual/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["finance_manager", "general_manager", "owner"], res)) return;
+    assertRole(scope, ["finance_manager", "general_manager", "owner"]);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
     const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
@@ -306,7 +298,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", async (req, res) => 
 financeHardeningRouter.patch("/journal-manual/:id/post", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["finance_manager", "general_manager", "owner"], res)) return;
+    assertRole(scope, ["finance_manager", "general_manager", "owner"]);
     const { id } = req.params;
     const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     if (!je) { res.status(404).json({ error: "القيد غير موجود" }); return; }
@@ -369,7 +361,7 @@ financeHardeningRouter.get("/bank-guarantees", async (req, res) => {
 financeHardeningRouter.post("/bank-guarantees", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = req.body as any;
     if (!ref || !bank || !beneficiary || !amount || !issueDate || !expiryDate) {
       res.status(400).json({ error: "رقم الضمان والبنك والجهة المستفيدة والمبلغ والتواريخ مطلوبة" });
@@ -390,7 +382,7 @@ financeHardeningRouter.post("/bank-guarantees", async (req, res) => {
 financeHardeningRouter.patch("/bank-guarantees/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const b = req.body as any;
     const sets: string[] = [`"updatedAt"=NOW()`];
@@ -415,7 +407,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", async (req, res) => {
 financeHardeningRouter.delete("/bank-guarantees/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const [row] = await rawQuery<any>(
       `DELETE FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 RETURNING id`,
       [Number(req.params.id), scope.companyId]
@@ -454,7 +446,7 @@ financeHardeningRouter.get("/intercompany", async (req, res) => {
 financeHardeningRouter.post("/intercompany", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const { toCompanyId, amount, description, transactionDate, arAccountCode = "1200", apAccountCode = "2100", revenueAccountCode = "4000", expenseAccountCode = "5000" } = req.body as any;
 
     if (!toCompanyId || !amount) {
@@ -596,7 +588,7 @@ financeHardeningRouter.get("/projects", async (req, res) => {
 financeHardeningRouter.post("/projects", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { name, description, budget, startDate, endDate, branchId, ref } = req.body as any;
     if (!name) { res.status(400).json({ error: "اسم المشروع مطلوب" }); return; }
     const { insertId } = await rawExecute(

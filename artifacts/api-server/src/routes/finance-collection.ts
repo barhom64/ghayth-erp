@@ -10,23 +10,12 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const collectionRouter = Router();
 collectionRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance", "director", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 const COLLECTION_STAGES = [
   { stage: 1, name: "sms_email_reminder", label: "تذكير SMS + إيميل", daysOverdue: 1 },
@@ -86,7 +75,7 @@ collectionRouter.get("/collection", async (req, res) => {
 collectionRouter.post("/collection/:invoiceId/action", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { invoiceId } = req.params;
     const { stage, notes } = req.body as any;
 

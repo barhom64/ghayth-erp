@@ -5,23 +5,12 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const vendorsRouter = Router();
 vendorsRouter.use(authMiddleware);
 
 const PROCUREMENT_ROLES = ["procurement", "finance", "director", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 vendorsRouter.get("/vendors", async (req, res) => {
   try {
@@ -60,7 +49,7 @@ vendorsRouter.post("/vendors", async (req, res) => {
 vendorsRouter.post("/vendors/create", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
 
     if (!name) {

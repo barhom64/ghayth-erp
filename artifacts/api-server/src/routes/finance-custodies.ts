@@ -13,23 +13,12 @@ import {
   createJournalEntry,
   initiateApprovalChain,
 } from "../lib/businessHelpers.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const custodiesRouter = Router();
 custodiesRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 custodiesRouter.get("/custodies", async (req, res) => {
   try {
@@ -372,7 +361,7 @@ custodiesRouter.get("/custodies/:id", async (req, res) => {
 custodiesRouter.post("/custodies", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { assignmentId, employeeName, amount, description, sourceAccountCode, purpose, expectedReturnDate } = req.body as any;
 
     if (!amount) {
@@ -462,7 +451,7 @@ custodiesRouter.post("/custodies", async (req, res) => {
 custodiesRouter.post("/custodies/settle", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { custodyRef, amount, description, sourceAccountCode } = req.body as any;
 
     if (!amount || !custodyRef) {
@@ -568,7 +557,7 @@ custodiesRouter.post("/custodies/settle", async (req, res) => {
 custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const custodyId = Number(req.params.id);
     const { amount, description, sourceAccountCode } = req.body as any;
 
@@ -672,7 +661,7 @@ custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
 custodiesRouter.patch("/custodies/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 

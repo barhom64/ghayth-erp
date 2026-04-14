@@ -4,21 +4,10 @@ import { handleRouteError } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { createJournalEntry, checkFinancialPeriodOpen } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const accountsRouter = Router();
 accountsRouter.use(authMiddleware);
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 accountsRouter.get("/chart-of-accounts", async (req, res) => {
   try {
@@ -68,7 +57,7 @@ accountsRouter.get("/accounts", async (req, res) => {
 accountsRouter.post("/accounts", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const b = req.body;
     const r = await rawExecute(
       `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode") VALUES ($1,$2,$3,$4,$5)`,
@@ -83,7 +72,7 @@ accountsRouter.post("/accounts", async (req, res) => {
 accountsRouter.patch("/accounts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -103,7 +92,7 @@ accountsRouter.patch("/accounts/:id", async (req, res) => {
 accountsRouter.delete("/accounts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const rows = await rawQuery<any>(`DELETE FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
     if (rows.length === 0) { res.status(404).json({ error: "الحساب غير موجود" }); return; }
     res.json({ message: "تم حذف الحساب" });

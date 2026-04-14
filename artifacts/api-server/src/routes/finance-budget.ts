@@ -1,25 +1,14 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance", "director", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 budgetRouter.get("/budget", async (req, res) => {
   try {
@@ -43,7 +32,7 @@ budgetRouter.get("/budget", async (req, res) => {
 budgetRouter.post("/budget", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const { accountCode, period, amount, branchId } = req.body as any;
     if (!accountCode || !period || !amount) {
       res.status(400).json({ error: "الحساب والفترة والمبلغ مطلوبة" });
@@ -104,7 +93,7 @@ budgetRouter.post("/budget/validate", async (req, res) => {
 budgetRouter.patch("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -124,7 +113,7 @@ budgetRouter.patch("/budget/:id", async (req, res) => {
 budgetRouter.delete("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const rows = await rawQuery<any>(`DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
     if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
     res.json({ message: "تم حذف الميزانية" });
@@ -169,8 +158,10 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
     const scope = req.scope!;
     const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = req.body as any;
     if (!accountCode || !period || !requestedAmount || Number(requestedAmount) <= 0) {
-      validationError(res, "الحساب والفترة والمبلغ مطلوبة", "requestedAmount", "أدخل قيمة موجبة والفترة بصيغة YYYY-MM");
-      return;
+      throw new ValidationError("الحساب والفترة والمبلغ مطلوبة", {
+        field: "requestedAmount",
+        fix: "أدخل قيمة موجبة والفترة بصيغة YYYY-MM",
+      });
     }
     await ensureBudgetApprovalTable();
 
@@ -240,8 +231,10 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
     const id = Number(req.params.id);
     const { decision, notes } = req.body as any; // decision: 'approved' | 'rejected'
     if (!["approved", "rejected"].includes(decision)) {
-      validationError(res, "القرار يجب أن يكون approved أو rejected", "decision", "استخدم approved أو rejected");
-      return;
+      throw new ValidationError("القرار يجب أن يكون approved أو rejected", {
+        field: "decision",
+        fix: "استخدم approved أو rejected",
+      });
     }
     await ensureBudgetApprovalTable();
 
@@ -288,8 +281,10 @@ budgetRouter.get("/budget/variance", async (req, res) => {
     const scope = req.scope!;
     const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(period)) {
-      validationError(res, "period يجب أن يكون بصيغة YYYY-MM", "period", "مثال: 2026-04");
-      return;
+      throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", {
+        field: "period",
+        fix: "مثال: 2026-04",
+      });
     }
     const [y, m] = period.split("-").map(Number);
     const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -393,12 +388,14 @@ budgetRouter.get("/fiscal-periods", async (req, res) => {
 budgetRouter.post("/fiscal-periods/:period/close", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { period } = req.params;
 
     if (!/^\d{4}-\d{2}$/.test(period)) {
-      validationError(res, "صيغة الفترة غير صحيحة", "period", "استخدم الصيغة YYYY-MM مثل 2025-01");
-      return;
+      throw new ValidationError("صيغة الفترة غير صحيحة", {
+        field: "period",
+        fix: "استخدم الصيغة YYYY-MM مثل 2025-01",
+      });
     }
 
     const pendingJournals = await rawQuery<any>(
@@ -411,8 +408,13 @@ budgetRouter.post("/fiscal-periods/:period/close", async (req, res) => {
     );
 
     if (pendingJournals.length > 0) {
-      validationError(res, `لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`, "journalEntries", "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية");
-      return;
+      throw new ValidationError(
+        `لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`,
+        {
+          field: "journalEntries",
+          fix: "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية",
+        },
+      );
     }
 
     const [debitSum] = await rawQuery<any>(
@@ -425,8 +427,13 @@ budgetRouter.post("/fiscal-periods/:period/close", async (req, res) => {
     const totalDebit = Number(debitSum?.totalDebit ?? 0);
     const totalCredit = Number(debitSum?.totalCredit ?? 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      validationError(res, `لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`, "balance", "تأكد من توازن جميع القيود المحاسبية قبل الإقفال");
-      return;
+      throw new ValidationError(
+        `لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`,
+        {
+          field: "balance",
+          fix: "تأكد من توازن جميع القيود المحاسبية قبل الإقفال",
+        },
+      );
     }
 
     res.json({ message: `تم إقفال الفترة المالية ${period} بنجاح`, period, totalDebit, totalCredit });

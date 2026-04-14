@@ -1,22 +1,15 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { createJournalEntry, emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const recurringRouter = Router();
 recurringRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({ error: "ليس لديك الصلاحية للقيام بهذا الإجراء", requiredRoles: allowedRoles, yourRole: scope.role });
-    return false;
-  }
-  return true;
-}
 
 export type RecurringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
 
@@ -117,21 +110,30 @@ function validateTemplateLines(lines: any): { ok: true; lines: any[] } | { ok: f
 recurringRouter.post("/recurring-journals", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const {
       name, description, frequency, startDate, active = true,
       templateLines, templateRef, templateDescription,
     } = req.body as any;
 
-    if (!name || !String(name).trim()) { validationError(res, "اسم القيد الدوري مطلوب", "name", "أدخل اسماً واضحاً"); return; }
+    if (!name || !String(name).trim()) {
+      throw new ValidationError("اسم القيد الدوري مطلوب", {
+        field: "name",
+        fix: "أدخل اسماً واضحاً",
+      });
+    }
     const freq = String(frequency || "").toLowerCase() as RecurringFrequency;
     if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(freq)) {
-      validationError(res, "تكرار غير صالح", "frequency", "اختر: daily أو weekly أو monthly أو quarterly أو yearly");
-      return;
+      throw new ValidationError("تكرار غير صالح", {
+        field: "frequency",
+        fix: "اختر: daily أو weekly أو monthly أو quarterly أو yearly",
+      });
     }
     if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-      validationError(res, "تاريخ البدء مطلوب", "startDate", "استخدم الصيغة YYYY-MM-DD");
-      return;
+      throw new ValidationError("تاريخ البدء مطلوب", {
+        field: "startDate",
+        fix: "استخدم الصيغة YYYY-MM-DD",
+      });
     }
     const v = validateTemplateLines(templateLines);
     if (!v.ok) { res.status(400).json({ error: v.error }); return; }
@@ -168,7 +170,7 @@ recurringRouter.post("/recurring-journals", async (req, res) => {
 recurringRouter.patch("/recurring-journals/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
     const b = req.body as any;
 
@@ -278,7 +280,7 @@ export async function runRecurringJournal(params: {
 recurringRouter.post("/recurring-journals/:id/run-now", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
     const [recurring] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -305,7 +307,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", async (req, res) => {
 recurringRouter.delete("/recurring-journals/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
     await rawExecute(
       `UPDATE recurring_journals SET "deletedAt" = NOW(), active = FALSE, "updatedAt" = NOW()
