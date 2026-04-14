@@ -1,4 +1,7 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import { handleRouteError, validationError,
+  ForbiddenError,
+  IntegrationError,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -250,8 +253,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", async (req, res) => 
 
     const { rows, accountCode = "1120", statementDate } = req.body as any;
     if (!Array.isArray(rows) || rows.length === 0) {
-      res.status(400).json({ error: "لا توجد بيانات في الكشف البنكي" });
-      return;
+      throw new ValidationError("لا توجد بيانات في الكشف البنكي");
     }
 
     const batchId = `BANK-${Date.now().toString(36).toUpperCase()}`;
@@ -400,14 +402,13 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", async (req, re
     if (!requireFinance(scope, res)) return;
     const { bankStatementId, journalLineId } = req.body as any;
     if (!bankStatementId || !journalLineId) {
-      res.status(400).json({ error: "bankStatementId و journalLineId مطلوبان" });
-      return;
+      throw new ValidationError("bankStatementId و journalLineId مطلوبان");
     }
     const [bs] = await rawQuery<any>(
       `SELECT * FROM bank_statements WHERE id=$1 AND "companyId"=$2 AND "matchStatus"='unmatched'`,
       [bankStatementId, scope.companyId]
     );
-    if (!bs) { res.status(404).json({ error: "سطر الكشف البنكي غير موجود أو تمت مطابقته مسبقاً" }); return; }
+    if (!bs) { throw new NotFoundError("سطر الكشف البنكي غير موجود أو تمت مطابقته مسبقاً"); return; }
 
     const [jl] = await rawQuery<any>(
       `SELECT jl.id FROM journal_lines jl
@@ -512,13 +513,11 @@ financeAlgorithmsRouter.post("/fixed-assets", async (req, res) => {
     if (!requireFinance(scope, res)) return;
     const b = req.body as any;
     if (!b.name || !b.purchaseCost || !b.purchaseDate) {
-      res.status(400).json({ error: "الاسم والتكلفة وتاريخ الشراء مطلوبة" });
-      return;
+      throw new ValidationError("الاسم والتكلفة وتاريخ الشراء مطلوبة");
     }
     const usefulYears = Number(b.usefulLifeYears ?? 5);
     if (!usefulYears || usefulYears <= 0) {
-      res.status(400).json({ error: "العمر الإنتاجي يجب أن يكون أكبر من صفر" });
-      return;
+      throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
     const purchaseCost = Number(b.purchaseCost);
     const salvageValue = Number(b.salvageValue ?? 0);
@@ -551,7 +550,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id", async (req, res) => {
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!asset) { res.status(404).json({ error: "الأصل غير موجود" }); return; }
+    if (!asset) { throw new NotFoundError("الأصل غير موجود"); return; }
     const schedule = await rawQuery<any>(
       `SELECT * FROM depreciation_entries WHERE "assetId"=$1 ORDER BY period ASC`,
       [asset.id]
@@ -571,20 +570,19 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", async (req, res) => {
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.usefulLifeYears !== undefined && Number(b.usefulLifeYears) <= 0) {
-      res.status(400).json({ error: "العمر الإنتاجي يجب أن يكون أكبر من صفر" });
-      return;
+      throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
     const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
     f("name", b.name); f("description", b.description); f("category", b.category);
     f("salvageValue", b.salvageValue); f("usefulLifeYears", b.usefulLifeYears);
     f("depreciationMethod", b.depreciationMethod); f("status", b.status);
-    if (sets.length === 1) { res.status(400).json({ error: "لا توجد تغييرات" }); return; }
+    if (sets.length === 1) { throw new ValidationError("لا توجد تغييرات"); return; }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE fixed_assets SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "الأصل غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("الأصل غير موجود"); return; }
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Update fixed asset error:");
@@ -650,14 +648,13 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", async (req, res) => {
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!asset) { res.status(404).json({ error: "الأصل غير موجود" }); return; }
+    if (!asset) { throw new NotFoundError("الأصل غير موجود"); return; }
 
     const purchaseCost = Number(asset.purchaseCost);
     const salvageValue = Number(asset.salvageValue);
     const usefulLifeYears = Number(asset.usefulLifeYears);
     if (!usefulLifeYears || usefulLifeYears <= 0) {
-      res.status(400).json({ error: "العمر الإنتاجي غير محدد لهذا الأصل — لا يمكن حساب جدول الإهلاك" });
-      return;
+      throw new ValidationError("العمر الإنتاجي غير محدد لهذا الأصل — لا يمكن حساب جدول الإهلاك");
     }
     const usefulLifeMonths = usefulLifeYears * 12;
     const depreciable = purchaseCost - salvageValue;
@@ -730,21 +727,19 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) =>
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2 AND status='active'`,
       [id, scope.companyId]
     );
-    if (!asset) { res.status(404).json({ error: "الأصل غير موجود أو غير نشط" }); return; }
+    if (!asset) { throw new NotFoundError("الأصل غير موجود أو غير نشط"); return; }
 
     const [existing] = await rawQuery<any>(
       `SELECT id FROM depreciation_entries WHERE "assetId"=$1 AND period=$2`,
       [id, targetPeriod]
     );
     if (existing) {
-      res.status(409).json({ error: `تم إهلاك هذا الأصل لفترة ${targetPeriod} مسبقاً` });
-      return;
+      throw new ConflictError(`تم إهلاك هذا الأصل لفترة ${targetPeriod} مسبقاً`);
     }
 
     const depAmount = calcDepreciationAmount(asset, targetPeriod, { unitsThisPeriod: Number(unitsThisPeriod) || 0 });
     if (depAmount <= 0) {
-      res.status(400).json({ error: "لا يوجد إهلاك متبقي لهذا الأصل" });
-      return;
+      throw new ValidationError("لا يوجد إهلاك متبقي لهذا الأصل");
     }
 
     const newAccumulated = Number(asset.accumulatedDepreciation) + depAmount;
@@ -907,7 +902,7 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", async (req, res) =>
       `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2`,
       [productId, scope.companyId]
     );
-    if (!product) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+    if (!product) { throw new NotFoundError("المنتج غير موجود"); return; }
 
     const movements = await rawQuery<any>(
       `SELECT m.*, m."createdAt" AS date
@@ -1011,13 +1006,11 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", async (req, res) => 
 
     const { journalEntryId, roundingAmount, description } = req.body as any;
     if (!journalEntryId || Math.abs(Number(roundingAmount ?? 0)) === 0) {
-      res.status(400).json({ error: "معرف القيد وفرق التقريب مطلوبان" });
-      return;
+      throw new ValidationError("معرف القيد وفرق التقريب مطلوبان");
     }
     const diff = Math.round(Number(roundingAmount) * 100) / 100;
     if (Math.abs(diff) > 0.05) {
-      res.status(400).json({ error: "فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)" });
-      return;
+      throw new ValidationError("فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)");
     }
 
     const [roundingAcc] = await rawQuery<any>(
@@ -1025,8 +1018,7 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", async (req, res) => 
       [scope.companyId]
     );
     if (!roundingAcc) {
-      res.status(400).json({ error: "يجب إنشاء حساب فروقات التقريب أولاً" });
-      return;
+      throw new ValidationError("يجب إنشاء حساب فروقات التقريب أولاً");
     }
 
     const [je] = await rawQuery<any>(
@@ -1128,8 +1120,7 @@ financeAlgorithmsRouter.post("/fx/rates", async (req, res) => {
     if (!requireFinance(scope, res)) return;
     const { rateDate, fromCurrency, toCurrency = "SAR", rate, type = "spot" } = req.body as any;
     if (!rateDate || !fromCurrency || !rate || Number(rate) <= 0) {
-      validationError(res, "rateDate / fromCurrency / rate مطلوبة", "rate", "أدخل قيمة موجبة للسعر والعملة والتاريخ");
-      return;
+      throw new ValidationError("rateDate / fromCurrency / rate مطلوبة", { field: "rate", fix: "أدخل قيمة موجبة للسعر والعملة والتاريخ" });
     }
     await ensureFxTables();
     const [row] = await rawQuery<any>(
@@ -1153,8 +1144,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", async (req, res) => {
     if (!requireFinance(scope, res)) return;
     const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(period)) {
-      validationError(res, "period يجب أن يكون بصيغة YYYY-MM", "period", "استخدم صيغة YYYY-MM مثل 2026-04");
-      return;
+      throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
     }
     await ensureFxTables();
 
@@ -1278,16 +1268,14 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", async (req, res) => {
     if (!requireFinance(scope, res)) return;
     const period = (req.body?.period as string) ?? new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(period)) {
-      validationError(res, "period يجب أن يكون بصيغة YYYY-MM", "period", "استخدم صيغة YYYY-MM مثل 2026-04");
-      return;
+      throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
     }
     await ensureFxTables();
     const [yPeriod, mPeriod] = period.split("-").map(Number);
     const periodEndDate = new Date(yPeriod, mPeriod, 0).toISOString().slice(0, 10);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, periodEndDate);
     if (!periodCheck.open) {
-      res.status(400).json({ error: `لا يمكن الترحيل — الفترة ${periodCheck.periodName ?? period} مقفلة` });
-      return;
+      throw new ValidationError(`لا يمكن الترحيل — الفترة ${periodCheck.periodName ?? period} مقفلة`);
     }
 
     const [existing] = await rawQuery<any>(
@@ -1295,8 +1283,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", async (req, res) => {
       [scope.companyId, period]
     );
     if (existing) {
-      res.status(409).json({ error: `تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً` });
-      return;
+      throw new ConflictError(`تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً`);
     }
 
     // Reuse preview logic by calling it inline via the same query shape
@@ -1365,8 +1352,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", async (req, res) => {
     apDiff = Math.round(apDiff * 100) / 100;
 
     if (arDiff === 0 && apDiff === 0) {
-      res.status(400).json({ error: "لا توجد فروق إعادة تقييم لهذه الفترة" });
-      return;
+      throw new ValidationError("لا توجد فروق إعادة تقييم لهذه الفترة");
     }
 
     // Account codes (configurable via accounting_mappings)
