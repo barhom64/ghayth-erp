@@ -4,6 +4,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -16,6 +17,71 @@ import { registerObligation, cancelObligation } from "../lib/obligationsEngine.j
 
 const router = Router();
 router.use(authMiddleware);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIFECYCLE STATE MACHINES — Phase C.4 Property audit
+//
+// Every status-changing endpoint must validate the transition against one of
+// these allowlists. Direct `UPDATE status` outside the allowlist is a bug.
+// Lifecycle transitions to terminal states (terminated/expired/refunded)
+// must go through dedicated endpoints — PATCH refuses them with 409.
+// ─────────────────────────────────────────────────────────────────────────────
+const UNIT_STATUSES = ["available", "rented", "maintenance", "under_maintenance", "out_of_service", "reserved"] as const;
+const UNIT_TRANSITIONS: Record<string, readonly string[]> = {
+  available:         ["rented", "maintenance", "under_maintenance", "out_of_service", "reserved"],
+  rented:            ["available", "maintenance", "under_maintenance"],
+  maintenance:       ["available", "out_of_service"],
+  under_maintenance: ["available", "out_of_service"],
+  reserved:          ["available", "rented"],
+  out_of_service:    ["available", "maintenance", "under_maintenance"],
+};
+
+const CONTRACT_STATUSES = ["draft", "active", "terminated", "expired", "cancelled", "renewed"] as const;
+const CONTRACT_TRANSITIONS: Record<string, readonly string[]> = {
+  // Lifecycle transitions to terminal states (terminated/expired/renewed) must
+  // use the dedicated /contracts/:id/{renew,terminate} endpoints. Direct PATCH
+  // writes to those states are refused so the obligations + JE side-effects
+  // can't be bypassed.
+  draft:      ["active", "cancelled"],
+  active:     [],  // no direct status edits from active via PATCH
+  terminated: [],
+  expired:    [],
+  cancelled:  [],
+  renewed:    [],
+};
+
+const MAINT_REQUEST_STATUSES = [
+  "pending", "open", "approved", "rejected", "returned",
+  "assigned", "in_progress", "completed", "closed", "cancelled",
+] as const;
+const MAINT_REQUEST_TRANSITIONS: Record<string, readonly string[]> = {
+  pending:     ["approved", "rejected", "returned", "cancelled"],
+  open:        ["approved", "assigned", "rejected", "cancelled"],
+  approved:    ["assigned", "in_progress", "cancelled"],
+  returned:    ["approved", "rejected", "cancelled"],
+  assigned:    ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed:   ["closed"],
+  rejected:    [],
+  cancelled:   [],
+  closed:      [],
+};
+
+const INSPECTION_STATUSES = ["scheduled", "in_progress", "completed", "cancelled"] as const;
+const INSPECTION_TRANSITIONS: Record<string, readonly string[]> = {
+  scheduled:   ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed:   [],
+  cancelled:   [],
+};
+
+const DEPOSIT_STATUSES = ["held", "refunded", "forfeited", "partial_refund"] as const;
+const DEPOSIT_TRANSITIONS: Record<string, readonly string[]> = {
+  held:           ["refunded", "forfeited", "partial_refund"],
+  partial_refund: ["refunded", "forfeited"],
+  refunded:       [],
+  forfeited:      [],
+};
 
 router.get("/units", async (req, res) => {
   try {
@@ -53,7 +119,53 @@ router.post("/units", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
-    const unitNumber = b.unitNumber || `UNIT-${Date.now().toString(36).toUpperCase()}`;
+
+    const unitNumber = (typeof b.unitNumber === "string" && b.unitNumber.trim())
+      ? b.unitNumber.trim()
+      : `UNIT-${Date.now().toString(36).toUpperCase()}`;
+
+    // Pre-checks — fail fast with a typed error so the frontend can highlight
+    // the offending field. The old code used an auto-generated unit number
+    // which hid the UX cue that the user forgot to fill it in.
+    if (b.monthlyRent !== undefined && b.monthlyRent !== null && b.monthlyRent !== "") {
+      const r = Number(b.monthlyRent);
+      if (!Number.isFinite(r) || r < 0) {
+        throw new ValidationError("الإيجار الشهري غير صالح", { field: "monthlyRent", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+    if (b.buildingId !== undefined && b.buildingId !== null && b.buildingId !== "") {
+      const [bldg] = await rawQuery<any>(
+        `SELECT id, name FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.buildingId, scope.companyId]
+      );
+      if (!bldg) {
+        throw new ValidationError("المبنى غير موجود", { field: "buildingId", fix: "اختر مبنى مسجلاً أو أنشئه أولاً" });
+      }
+    }
+    if (b.ownerId !== undefined && b.ownerId !== null && b.ownerId !== "") {
+      const [owner] = await rawQuery<any>(
+        `SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.ownerId, scope.companyId]
+      );
+      if (!owner) {
+        throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً أو أنشئه أولاً" });
+      }
+    }
+    // Duplicate (unitNumber, buildingId) — same unit number in the same building is not allowed
+    const [dup] = await rawQuery<any>(
+      `SELECT id FROM property_units
+       WHERE "unitNumber"=$1 AND "companyId"=$2
+         AND ("buildingId" IS NOT DISTINCT FROM $3)
+         AND "deletedAt" IS NULL`,
+      [unitNumber, scope.companyId, b.buildingId || null]
+    );
+    if (dup) {
+      throw new ConflictError(
+        "رقم الوحدة مستخدم مسبقاً في نفس المبنى",
+        { field: "unitNumber", fix: "اختر رقم وحدة مختلف أو اختر مبنى آخر" }
+      );
+    }
+
     const amenities = b.amenities ? (Array.isArray(b.amenities) ? JSON.stringify(b.amenities) : b.amenities) : null;
     const { insertId } = await rawExecute(
       `INSERT INTO property_units ("companyId","unitNumber","buildingId","buildingName",type,area,bedrooms,bathrooms,floor,"monthlyRent",status,address,direction,finishing,amenities,"branchId","electricityMeter","waterMeter","usageType","ownerId","parkingSpaces","acType","hasKitchen","yearlyRent","insurancePolicy","insuranceExpiry")
@@ -124,7 +236,9 @@ router.get("/units/:id/impact-preview", async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { status } = req.query as { status?: string };
-    if (!status) { res.status(400).json({ error: "status مطلوب" }); return; }
+    if (!status) {
+      throw new ValidationError("الحالة المطلوبة", { field: "status", fix: "أرسل معامل status في الرابط" });
+    }
     const preview = await getPropertyUnitStatusImpact(id, scope.companyId, status);
     res.json(preview);
   } catch (err) { handleRouteError(err, res, "Impact preview error:"); }
@@ -134,57 +248,133 @@ router.patch("/units/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id, status FROM property_units WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("الوحدة غير موجودة");
     const b = req.body;
+
+    // State machine + business impact guard
     if (b.status !== undefined && b.status !== existing.status) {
+      if (!UNIT_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${UNIT_STATUSES.join(", ")}` }
+        );
+      }
+      const allowedNext = UNIT_TRANSITIONS[existing.status] ?? [];
+      if (!allowedNext.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل الوحدة من "${existing.status}" إلى "${b.status}"`,
+          {
+            field: "status",
+            fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}`,
+          }
+        );
+      }
       const preview = await getPropertyUnitStatusImpact(id, scope.companyId, b.status);
       if (!preview.canProceed) {
-        res.status(422).json({ error: "لا يمكن تغيير الحالة", blockers: preview.blockers });
-        return;
+        throw new ConflictError(
+          "لا يمكن تغيير حالة الوحدة بسبب ارتباطات نشطة",
+          { field: "status", fix: "أنهِ العقود أو طلبات الصيانة المرتبطة بالوحدة أولاً" }
+        );
       }
     }
+
+    if (b.monthlyRent !== undefined && b.monthlyRent !== null) {
+      const r = Number(b.monthlyRent);
+      if (!Number.isFinite(r) || r < 0) {
+        throw new ValidationError("الإيجار الشهري غير صالح", { field: "monthlyRent", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+    if (b.unitNumber && b.unitNumber !== existing.unitNumber) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM property_units
+         WHERE "unitNumber"=$1 AND "companyId"=$2
+           AND ("buildingId" IS NOT DISTINCT FROM $3)
+           AND "deletedAt" IS NULL AND id<>$4`,
+        [b.unitNumber, scope.companyId, b.buildingId ?? existing.buildingId, id]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "رقم الوحدة مستخدم مسبقاً في نفس المبنى",
+          { field: "unitNumber", fix: "اختر رقماً مختلفاً" }
+        );
+      }
+    }
+    if (b.buildingId !== undefined && b.buildingId !== null && b.buildingId !== existing.buildingId) {
+      const [bldg] = await rawQuery<any>(
+        `SELECT id FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.buildingId, scope.companyId]
+      );
+      if (!bldg) {
+        throw new ValidationError("المبنى غير موجود", { field: "buildingId", fix: "اختر مبنى مسجلاً" });
+      }
+    }
+    if (b.ownerId !== undefined && b.ownerId !== null && b.ownerId !== existing.ownerId) {
+      const [owner] = await rawQuery<any>(
+        `SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.ownerId, scope.companyId]
+      );
+      if (!owner) {
+        throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً" });
+      }
+    }
+
+    const trackedFields = [
+      "unitNumber","buildingName","type","area","monthlyRent","status","address",
+      "electricityMeter","waterMeter","usageType","ownerId","parkingSpaces","acType",
+      "hasKitchen","yearlyRent","insurancePolicy","insuranceExpiry","amenities","notes",
+      "buildingId","floor","bedrooms","bathrooms","direction","finishing",
+    ] as const;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.unitNumber !== undefined) { params.push(b.unitNumber); sets.push(`"unitNumber"=$${params.length}`); }
-    if (b.buildingName !== undefined) { params.push(b.buildingName); sets.push(`"buildingName"=$${params.length}`); }
-    if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
-    if (b.area !== undefined) { params.push(b.area); sets.push(`area=$${params.length}`); }
-    if (b.monthlyRent !== undefined) { params.push(b.monthlyRent); sets.push(`"monthlyRent"=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.address !== undefined) { params.push(b.address); sets.push(`address=$${params.length}`); }
-    if (b.electricityMeter !== undefined) { params.push(b.electricityMeter); sets.push(`"electricityMeter"=$${params.length}`); }
-    if (b.waterMeter !== undefined) { params.push(b.waterMeter); sets.push(`"waterMeter"=$${params.length}`); }
-    if (b.usageType !== undefined) { params.push(b.usageType); sets.push(`"usageType"=$${params.length}`); }
-    if (b.ownerId !== undefined) { params.push(b.ownerId || null); sets.push(`"ownerId"=$${params.length}`); }
-    if (b.parkingSpaces !== undefined) { params.push(b.parkingSpaces); sets.push(`"parkingSpaces"=$${params.length}`); }
-    if (b.acType !== undefined) { params.push(b.acType); sets.push(`"acType"=$${params.length}`); }
-    if (b.hasKitchen !== undefined) { params.push(b.hasKitchen); sets.push(`"hasKitchen"=$${params.length}`); }
-    if (b.yearlyRent !== undefined) { params.push(b.yearlyRent); sets.push(`"yearlyRent"=$${params.length}`); }
-    if (b.insurancePolicy !== undefined) { params.push(b.insurancePolicy); sets.push(`"insurancePolicy"=$${params.length}`); }
-    if (b.insuranceExpiry !== undefined) { params.push(b.insuranceExpiry); sets.push(`"insuranceExpiry"=$${params.length}`); }
-    if (b.amenities !== undefined) { params.push(Array.isArray(b.amenities) ? JSON.stringify(b.amenities) : b.amenities); sets.push(`amenities=$${params.length}`); }
-    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
-    if (b.buildingId !== undefined) { params.push(b.buildingId || null); sets.push(`"buildingId"=$${params.length}`); }
-    if (b.floor !== undefined) { params.push(b.floor); sets.push(`floor=$${params.length}`); }
-    if (b.bedrooms !== undefined) { params.push(b.bedrooms); sets.push(`bedrooms=$${params.length}`); }
-    if (b.bathrooms !== undefined) { params.push(b.bathrooms); sets.push(`bathrooms=$${params.length}`); }
-    if (b.direction !== undefined) { params.push(b.direction); sets.push(`direction=$${params.length}`); }
-    if (b.finishing !== undefined) { params.push(b.finishing); sets.push(`finishing=$${params.length}`); }
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    for (const f of trackedFields) {
+      if (b[f] === undefined) continue;
+      let val = b[f];
+      if (f === "amenities" && val !== null) {
+        val = Array.isArray(val) ? JSON.stringify(val) : val;
+      }
+      if ((f === "ownerId" || f === "buildingId") && !val) val = null;
+      if (val === existing[f]) continue;
+      params.push(val);
+      sets.push(`"${f}"=$${params.length}`);
+      before[f] = existing[f];
+      after[f] = val;
+    }
+    if (Object.keys(after).length === 0) {
+      res.json(existing);
+      return;
+    }
     params.push(id);
     await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    if (b.status !== undefined && b.status !== existing.status) {
-      await createAuditLog({
-        userId: scope.userId,
-        entity: "property_units",
-        entityId: id,
-        action: "status_change",
-        before: { status: existing.status },
-        after: { status: b.status },
-        companyId: scope.companyId,
-      });
-    }
     const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "property_units",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "property.unit.status_changed" : "property.unit.updated",
+      entity: "property_units",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update unit error:"); }
 });
@@ -193,9 +383,46 @@ router.delete("/units/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "unitNumber", status FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("الوحدة غير موجودة");
+
+    const [activeContract] = await rawQuery<any>(
+      `SELECT id FROM rental_contracts WHERE "unitId"=$1 AND "companyId"=$2 AND status IN ('active','draft') AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (activeContract) {
+      throw new ConflictError(
+        "لا يمكن حذف الوحدة — يوجد عقد إيجار نشط مرتبط بها",
+        { field: "status", fix: "أنهِ العقد أو ألغِه قبل حذف الوحدة" }
+      );
+    }
+    const [activeMaint] = await rawQuery<any>(
+      `SELECT id FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND status NOT IN ('completed','closed','rejected','cancelled') LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (activeMaint) {
+      throw new ConflictError(
+        "لا يمكن حذف الوحدة — يوجد طلب صيانة نشط",
+        { field: "status", fix: "أكمل أو ألغِ طلب الصيانة قبل حذف الوحدة" }
+      );
+    }
+
     await rawExecute(`UPDATE property_units SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.unit.deleted",
+      entity: "property_units",
+      entityId: id,
+      before: { unitNumber: existing.unitNumber, status: existing.status },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف الوحدة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
 });
@@ -222,24 +449,68 @@ router.post("/contracts", async (req, res) => {
     const b = req.body;
 
     if (!b.unitId) {
-      validationError(res, "لا يمكن إنشاء عقد إيجار بدون وحدة عقارية", "unitId", "حدد الوحدة العقارية المراد تأجيرها");
-      return;
+      throw new ValidationError("لا يمكن إنشاء عقد إيجار بدون وحدة عقارية", { field: "unitId", fix: "حدد الوحدة العقارية المراد تأجيرها" });
     }
     if (!b.startDate) {
-      validationError(res, "لا يمكن إنشاء عقد بدون تاريخ بداية", "startDate", "حدد تاريخ بداية العقد");
-      return;
+      throw new ValidationError("لا يمكن إنشاء عقد بدون تاريخ بداية", { field: "startDate", fix: "حدد تاريخ بداية العقد" });
     }
     if (!b.endDate) {
-      validationError(res, "لا يمكن إنشاء عقد بدون تاريخ نهاية", "endDate", "حدد تاريخ نهاية العقد");
-      return;
+      throw new ValidationError("لا يمكن إنشاء عقد بدون تاريخ نهاية", { field: "endDate", fix: "حدد تاريخ نهاية العقد" });
+    }
+    if (!b.tenantName || typeof b.tenantName !== "string" || !b.tenantName.trim()) {
+      throw new ValidationError("اسم المستأجر مطلوب", { field: "tenantName", fix: "أدخل اسم المستأجر أو اختر من قائمة المستأجرين المسجلين" });
+    }
+    const startDate = new Date(b.startDate);
+    const endDate = new Date(b.endDate);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new ValidationError("تواريخ العقد غير صالحة", { field: "startDate", fix: "استخدم تنسيق التاريخ YYYY-MM-DD" });
+    }
+    if (endDate <= startDate) {
+      throw new ValidationError(
+        "تاريخ نهاية العقد يجب أن يكون بعد تاريخ البداية",
+        { field: "endDate", fix: "اختر تاريخ نهاية لاحقاً لتاريخ البداية" }
+      );
+    }
+    const monthlyRent = Number(b.monthlyRent) || 0;
+    if (!Number.isFinite(monthlyRent) || monthlyRent < 0) {
+      throw new ValidationError("الإيجار الشهري غير صالح", { field: "monthlyRent", fix: "أدخل قيمة غير سالبة" });
+    }
+
+    // FK pre-check: unit must exist and not be rented
+    const [unit] = await rawQuery<any>(
+      `SELECT id, status, "unitNumber" FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.unitId, scope.companyId]
+    );
+    if (!unit) {
+      throw new ValidationError("الوحدة غير موجودة", { field: "unitId", fix: "اختر وحدة مسجلة" });
+    }
+    if (unit.status === "rented") {
+      throw new ConflictError(
+        `الوحدة ${unit.unitNumber} مؤجرة بالفعل`,
+        { field: "unitId", fix: "اختر وحدة متاحة أو أنهِ العقد الحالي قبل إنشاء عقد جديد" }
+      );
+    }
+    if (["maintenance", "under_maintenance", "out_of_service"].includes(unit.status)) {
+      throw new ConflictError(
+        `لا يمكن تأجير وحدة بحالة ${unit.status}`,
+        { field: "unitId", fix: "أعد الوحدة لحالة متاحة قبل إنشاء العقد" }
+      );
+    }
+
+    // FK pre-check: tenant if provided
+    if (b.tenantId) {
+      const [tenant] = await rawQuery<any>(
+        `SELECT id FROM tenants WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [Number(b.tenantId), scope.companyId]
+      );
+      if (!tenant) {
+        throw new ValidationError("المستأجر غير موجود", { field: "tenantId", fix: "اختر مستأجراً مسجلاً أو اترك الحقل فارغاً" });
+      }
     }
 
     const tenantId = b.tenantId ? Number(b.tenantId) : null;
     const frequency = b.paymentFrequency || 'monthly';
-    const monthlyRent = Number(b.monthlyRent) || 0;
     let yearlyRent = b.yearlyRent ? Number(b.yearlyRent) : monthlyRent * 12;
-    const startDate = new Date(b.startDate);
-    const endDate = new Date(b.endDate);
     const contractMonths = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (30.44 * 24 * 60 * 60 * 1000)));
     const totalContractValue = b.totalContractValue ? Number(b.totalContractValue) : monthlyRent * contractMonths;
 
@@ -339,10 +610,66 @@ router.patch("/contracts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("العقد غير موجود");
+
     const b = req.body;
+
+    // State machine: terminated/renewed/expired must go through dedicated
+    // lifecycle endpoints (/renew, /terminate) so obligations + JE + unit
+    // release side-effects fire. PATCH refuses those transitions outright.
+    if (b.status !== undefined && b.status !== existing.status) {
+      if (!CONTRACT_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة عقد غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${CONTRACT_STATUSES.join(", ")}` }
+        );
+      }
+      if (["terminated", "renewed", "expired"].includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن تغيير حالة العقد إلى ${b.status} عبر PATCH`,
+          { field: "status", fix: "استخدم /contracts/:id/renew أو /contracts/:id/terminate" }
+        );
+      }
+      const allowedNext = CONTRACT_TRANSITIONS[existing.status] ?? [];
+      if (!allowedNext.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل العقد من "${existing.status}" إلى "${b.status}" عبر PATCH`,
+          {
+            field: "status",
+            fix: `استخدم /contracts/:id/renew أو /contracts/:id/terminate. الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}`,
+          }
+        );
+      }
+    }
+
+    // Date range sanity check when either endpoint is edited
+    if (b.startDate || b.endDate) {
+      const sd = new Date(b.startDate || existing.startDate);
+      const ed = new Date(b.endDate || existing.endDate);
+      if (!Number.isNaN(sd.getTime()) && !Number.isNaN(ed.getTime()) && ed <= sd) {
+        throw new ValidationError(
+          "تاريخ نهاية العقد يجب أن يكون بعد تاريخ البداية",
+          { field: "endDate", fix: "اختر تاريخ نهاية لاحقاً لتاريخ البداية" }
+        );
+      }
+    }
+
     const fields: string[] = [];
     const params: any[] = [];
-    const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    const addField = (col: string, val: any) => {
+      if (val === undefined) return;
+      if (val === existing[col]) return;
+      params.push(val);
+      fields.push(`"${col}" = $${params.length}`);
+      before[col] = existing[col];
+      after[col] = val;
+    };
     addField("tenantId", b.tenantId !== undefined ? (b.tenantId ? Number(b.tenantId) : null) : undefined);
     addField("tenantName", b.tenantName);
     addField("tenantPhone", b.tenantPhone);
@@ -354,12 +681,6 @@ router.patch("/contracts/:id", async (req, res) => {
     addField("depositAmount", b.depositAmount);
     addField("paymentDay", b.paymentDay);
     addField("notes", b.notes);
-    // Status transitions to terminated/renewed/expired must go through dedicated
-    // lifecycle endpoints (/renew, /terminate) so obligations + events fire.
-    if (b.status !== undefined && ["terminated", "renewed", "expired"].includes(b.status)) {
-      validationError(res, `لا يمكن تغيير حالة العقد إلى ${b.status} عبر PATCH`, "status", "استخدم /contracts/:id/renew أو /contracts/:id/terminate");
-      return;
-    }
     addField("status", b.status);
     addField("contractNumber", b.contractNumber);
     addField("ejarNumber", b.ejarNumber);
@@ -392,6 +713,29 @@ router.patch("/contracts/:id", async (req, res) => {
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE rental_contracts SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("العقد غير موجود");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "rental_contracts",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "property.contract.status_changed" : "property.contract.updated",
+      entity: "rental_contracts",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
 });
@@ -400,9 +744,30 @@ router.delete("/contracts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, status, "contractNumber", "unitId" FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("العقد غير موجود");
+    if (existing.status === "active") {
+      throw new ConflictError(
+        "لا يمكن حذف عقد نشط",
+        { field: "status", fix: "أنهِ العقد عبر /contracts/:id/terminate قبل الحذف" }
+      );
+    }
     await rawExecute(`UPDATE rental_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.contract.deleted",
+      entity: "rental_contracts",
+      entityId: id,
+      before: { status: existing.status, contractNumber: existing.contractNumber },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف العقد" });
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
 });
@@ -424,8 +789,10 @@ router.post("/contracts/:id/renew", async (req, res) => {
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
     if (!["active", "expired"].includes(contract.status)) {
-      validationError(res, `لا يمكن تجديد عقد بحالة ${contract.status}`, "status", "يمكن تجديد العقود النشطة أو المنتهية فقط");
-      return;
+      throw new ConflictError(
+        `لا يمكن تجديد عقد بحالة ${contract.status}`,
+        { field: "status", fix: "يمكن تجديد العقود النشطة أو المنتهية فقط" }
+      );
     }
 
     const renewalMonths = Number(b.renewalPeriodMonths || contract.renewalPeriodMonths || 12);
@@ -533,12 +900,13 @@ router.post("/contracts/:id/terminate", async (req, res) => {
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
     if (!["active", "draft"].includes(contract.status)) {
-      validationError(res, `لا يمكن إنهاء عقد بحالة ${contract.status}`, "status", "العقد منتهي أو ملغي مسبقاً");
-      return;
+      throw new ConflictError(
+        `لا يمكن إنهاء عقد بحالة ${contract.status}`,
+        { field: "status", fix: "العقد منتهي أو ملغي مسبقاً" }
+      );
     }
-    if (!b.reason) {
-      validationError(res, "يجب تحديد سبب الإنهاء", "reason", "أدخل سبب إنهاء العقد");
-      return;
+    if (!b.reason || typeof b.reason !== "string" || !b.reason.trim()) {
+      throw new ValidationError("يجب تحديد سبب الإنهاء", { field: "reason", fix: "أدخل سبب إنهاء العقد" });
     }
 
     const terminationDate = b.terminationDate || new Date().toISOString().split("T")[0];
@@ -619,10 +987,38 @@ router.patch("/tenants/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM tenants WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("المستأجر غير موجود");
     const b = req.body;
+
+    if (b.nationalId && b.nationalId !== existing.nationalId) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM tenants WHERE "nationalId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND id<>$3`,
+        [b.nationalId, scope.companyId, id]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "رقم الهوية مسجل مسبقاً لمستأجر آخر",
+          { field: "nationalId", fix: "تحقق من صحة الرقم" }
+        );
+      }
+    }
+
     const fields: string[] = [];
     const params: any[] = [];
-    const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    const addField = (col: string, val: any) => {
+      if (val === undefined) return;
+      if (val === existing[col]) return;
+      params.push(val);
+      fields.push(`"${col}" = $${params.length}`);
+      before[col] = existing[col];
+      after[col] = val;
+    };
     addField("name", b.name);
     addField("phone", b.phone);
     addField("email", b.email);
@@ -647,10 +1043,32 @@ router.patch("/tenants/:id", async (req, res) => {
     addField("previousLandlord", b.previousLandlord);
     addField("previousLandlordPhone", b.previousLandlordPhone);
     addField("notes", b.notes);
-    if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
+    if (fields.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE tenants SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) throw new NotFoundError("المستأجر غير موجود");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "tenants",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "tenant.updated",
+      entity: "tenants",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update tenant error:"); }
 });
@@ -659,9 +1077,38 @@ router.delete("/tenants/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM tenants WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, name FROM tenants WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("المستأجر غير موجود");
+
+    const [activeContract] = await rawQuery<any>(
+      `SELECT id FROM rental_contracts
+       WHERE "tenantId"=$1 AND "companyId"=$2
+         AND status IN ('active','draft') AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (activeContract) {
+      throw new ConflictError(
+        "لا يمكن حذف المستأجر — يوجد عقد إيجار نشط مرتبط به",
+        { field: "status", fix: "أنهِ العقد قبل حذف المستأجر" }
+      );
+    }
+
     await rawExecute(`UPDATE tenants SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "tenant.deleted",
+      entity: "tenants",
+      entityId: id,
+      before: { name: existing.name },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المستأجر" });
   } catch (err) { handleRouteError(err, res, "Delete tenant error:"); }
 });
@@ -688,9 +1135,8 @@ router.post("/payments/:id/pay", async (req, res) => {
     const { id } = req.params;
     const b = req.body;
     const paidAmount = Number(b.paidAmount ?? b.amount);
-    if (!(paidAmount > 0)) {
-      validationError(res, "مبلغ السداد غير صالح", "paidAmount", "أدخل مبلغاً موجباً");
-      return;
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      throw new ValidationError("مبلغ السداد غير صالح", { field: "paidAmount", fix: "أدخل مبلغاً موجباً" });
     }
 
     // Fetch payment + contract context BEFORE mutating so we can post GL first.
@@ -727,8 +1173,10 @@ router.post("/payments/:id/pay", async (req, res) => {
       });
     } catch (jErr) {
       console.error("Rent payment journal entry failed:", jErr);
-      res.status(500).json({ error: "فشل قيد تحصيل الإيجار — لم يتم تسجيل السداد", detail: (jErr as Error).message });
-      return;
+      throw new IntegrationError(
+        "فشل قيد تحصيل الإيجار — لم يتم تسجيل السداد",
+        { field: "journalEntry", fix: "راجع إعدادات الحسابات المالية (1100/1110/4100) ثم أعد المحاولة" }
+      );
     }
 
     // 2. Journal succeeded — record the cash receipt on the rent_payments row.
@@ -897,6 +1345,20 @@ router.post("/maintenance-requests", async (req, res) => {
     const scope = req.scope!;
     const b = req.body;
 
+    if (!b.unitId) {
+      throw new ValidationError("الوحدة مطلوبة", { field: "unitId", fix: "اختر الوحدة التي يتعلق بها البلاغ" });
+    }
+    if (!b.description || typeof b.description !== "string" || !b.description.trim()) {
+      throw new ValidationError("وصف البلاغ مطلوب", { field: "description", fix: "اكتب وصفاً لمشكلة الصيانة" });
+    }
+    const [unit] = await rawQuery<any>(
+      `SELECT id FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.unitId, scope.companyId]
+    );
+    if (!unit) {
+      throw new ValidationError("الوحدة غير موجودة", { field: "unitId", fix: "اختر وحدة مسجلة في النظام" });
+    }
+
     const emergencyKeywords = ['تسرب', 'حريق', 'كسر', 'انهيار', 'غاز', 'كهرباء', 'طوارئ', 'خطر', 'فيضان', 'ماس كهربائي'];
     const descLower = (b.description || '').toLowerCase();
     const isEmergency = emergencyKeywords.some(kw => descLower.includes(kw));
@@ -1041,8 +1503,20 @@ router.patch("/maintenance-requests/:id/approve", async (req, res) => {
     if (!mr) throw new NotFoundError("طلب الصيانة غير موجود");
 
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
-    if (newStatus === "rejected" && !notes) {
-      res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return;
+    if (newStatus === "rejected" && (!notes || !String(notes).trim())) {
+      throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes", fix: "أدخل سبب الرفض في حقل الملاحظات" });
+    }
+
+    // State machine: approval is only valid from pending/open/returned.
+    const allowedNext = MAINT_REQUEST_TRANSITIONS[mr.status] ?? [];
+    if (!allowedNext.includes(newStatus)) {
+      throw new ConflictError(
+        `لا يمكن ${newStatus === "approved" ? "اعتماد" : newStatus === "rejected" ? "رفض" : "إرجاع"} طلب بحالة "${mr.status}"`,
+        {
+          field: "status",
+          fix: `الانتقالات المسموحة من الحالة الحالية: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}`,
+        }
+      );
     }
 
     await rawExecute(
@@ -1102,6 +1576,23 @@ router.post("/maintenance-requests/:id/complete", async (req, res) => {
     const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!mr) throw new NotFoundError("الطلب غير موجود");
 
+    // State machine — only valid from assigned or in_progress
+    const allowedNext = MAINT_REQUEST_TRANSITIONS[mr.status] ?? [];
+    if (!allowedNext.includes("completed")) {
+      throw new ConflictError(
+        `لا يمكن إكمال طلب بحالة "${mr.status}"`,
+        {
+          field: "status",
+          fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}`,
+        }
+      );
+    }
+
+    // Closure preconditions — report + after photos + cost + materials.
+    // The previous implementation sent them as a raw validationErrors array
+    // which the frontend's toast layer shows as a single "حدث خطأ" fallback.
+    // Shipping them as one ValidationError with a structured meta lets the
+    // client render each individual message.
     const validationErrors: string[] = [];
     if (!b.closureReport && !mr.closureReport) validationErrors.push("تقرير الإغلاق مطلوب");
     const afterPhotos = b.afterPhotos || (mr.afterPhotos ? (typeof mr.afterPhotos === "string" ? JSON.parse(mr.afterPhotos) : mr.afterPhotos) : []);
@@ -1118,8 +1609,14 @@ router.post("/maintenance-requests/:id/complete", async (req, res) => {
     const materials = b.materialsUsed || (mr.materialsUsed ? (typeof mr.materialsUsed === "string" ? JSON.parse(mr.materialsUsed) : mr.materialsUsed) : []);
     if (!materials || !Array.isArray(materials) || materials.length === 0) validationErrors.push("قائمة المواد المستخدمة مطلوبة (مادة واحدة على الأقل)");
     if (validationErrors.length > 0) {
-      res.status(400).json({ error: "بيانات الإغلاق غير مكتملة", validationErrors });
-      return;
+      throw new ValidationError(
+        "بيانات الإغلاق غير مكتملة",
+        {
+          field: "closureReport",
+          fix: validationErrors.join(" | "),
+          meta: { validationErrors },
+        }
+      );
     }
 
     const cost = resolvedCost ?? 0;
@@ -1276,7 +1773,21 @@ router.post("/tenants", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.name) { res.status(400).json({ error: "اسم المستأجر مطلوب" }); return; }
+    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
+      throw new ValidationError("اسم المستأجر مطلوب", { field: "name", fix: "أدخل الاسم الكامل للمستأجر" });
+    }
+    if (b.nationalId) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM tenants WHERE "nationalId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.nationalId, scope.companyId]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "رقم الهوية مسجل مسبقاً لمستأجر آخر",
+          { field: "nationalId", fix: "تحقق من صحة الرقم أو راجع سجل المستأجر الموجود" }
+        );
+      }
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO tenants ("companyId", name, phone, email, "nationalId", nationality, "idType", notes, "tenantType", "crNumber", "unifiedNumber", "birthDate", "gender", "guarantorName", "guarantorId", "guarantorPhone", "guarantorRelation", "emergencyContact", "emergencyName", "maritalStatus", "occupation", "monthlyIncome", "previousAddress", "previousLandlord", "previousLandlordPhone")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
@@ -1488,14 +1999,25 @@ router.post("/buildings", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.name) { res.status(400).json({ error: "اسم المبنى مطلوب" }); return; }
+    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
+      throw new ValidationError("اسم المبنى مطلوب", { field: "name", fix: "أدخل اسم المبنى" });
+    }
+    if (b.ownerId) {
+      const [owner] = await rawQuery<any>(
+        `SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.ownerId, scope.companyId]
+      );
+      if (!owner) {
+        throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً" });
+      }
+    }
     const nationalAddress = b.nationalAddress ? (typeof b.nationalAddress === 'string' ? b.nationalAddress : JSON.stringify(b.nationalAddress)) : null;
     const { insertId } = await rawExecute(
-      `INSERT INTO property_buildings ("companyId","branchId",name,address,city,type,floors,description,"deedNumber","deedDate","buildingPermitNumber","nationalAddress","latitude","longitude","totalUnits","totalArea","yearBuilt","ownerId","managerId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
-      [scope.companyId, b.branchId || scope.branchId, b.name, b.address || null, b.city || null, b.type || "residential", b.floors || null, b.description || null,
+      `INSERT INTO property_buildings ("companyId",name,address,city,type,"deedNumber","deedDate","buildingPermitNumber","nationalAddress","latitude","longitude","totalUnits","totalArea","yearBuilt","ownerId","managerId","notes")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+      [scope.companyId, b.name, b.address || null, b.city || null, b.type || "residential",
        b.deedNumber || null, b.deedDate || null, b.buildingPermitNumber || null, nationalAddress, b.latitude || null, b.longitude || null,
-       b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null]
+       b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null, b.description || b.notes || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1`, [insertId]);
     createAuditLog({
@@ -1516,31 +2038,73 @@ router.patch("/buildings/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM property_buildings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("المبنى غير موجود");
     const b = req.body;
+    if (b.ownerId && b.ownerId !== existing.ownerId) {
+      const [owner] = await rawQuery<any>(
+        `SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.ownerId, scope.companyId]
+      );
+      if (!owner) {
+        throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً" });
+      }
+    }
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
-    if (b.address !== undefined) { params.push(b.address); sets.push(`address=$${params.length}`); }
-    if (b.city !== undefined) { params.push(b.city); sets.push(`city=$${params.length}`); }
-    if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
-    if (b.floors !== undefined) { params.push(b.floors); sets.push(`floors=$${params.length}`); }
-    if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
-    if (b.deedNumber !== undefined) { params.push(b.deedNumber); sets.push(`"deedNumber"=$${params.length}`); }
-    if (b.deedDate !== undefined) { params.push(b.deedDate); sets.push(`"deedDate"=$${params.length}`); }
-    if (b.buildingPermitNumber !== undefined) { params.push(b.buildingPermitNumber); sets.push(`"buildingPermitNumber"=$${params.length}`); }
-    if (b.nationalAddress !== undefined) { params.push(typeof b.nationalAddress === 'string' ? b.nationalAddress : JSON.stringify(b.nationalAddress)); sets.push(`"nationalAddress"=$${params.length}`); }
-    if (b.latitude !== undefined) { params.push(b.latitude); sets.push(`latitude=$${params.length}`); }
-    if (b.longitude !== undefined) { params.push(b.longitude); sets.push(`longitude=$${params.length}`); }
-    if (b.totalUnits !== undefined) { params.push(b.totalUnits); sets.push(`"totalUnits"=$${params.length}`); }
-    if (b.totalArea !== undefined) { params.push(b.totalArea); sets.push(`"totalArea"=$${params.length}`); }
-    if (b.yearBuilt !== undefined) { params.push(b.yearBuilt); sets.push(`"yearBuilt"=$${params.length}`); }
-    if (b.ownerId !== undefined) { params.push(b.ownerId || null); sets.push(`"ownerId"=$${params.length}`); }
-    if (b.managerId !== undefined) { params.push(b.managerId); sets.push(`"managerId"=$${params.length}`); }
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    if (b.name !== undefined && b.name !== existing.name) { params.push(b.name); sets.push(`name=$${params.length}`); before.name = existing.name; after.name = b.name; }
+    const trackedBldg = ["address","city","type","floors","description","deedNumber","deedDate","buildingPermitNumber","latitude","longitude","totalUnits","totalArea","yearBuilt","ownerId","managerId"] as const;
+    for (const f of trackedBldg) {
+      if (b[f] === undefined) continue;
+      const val = f === "ownerId" ? (b[f] || null) : b[f];
+      if (val === existing[f]) continue;
+      params.push(val);
+      const col = ["deedNumber","deedDate","buildingPermitNumber","totalUnits","totalArea","yearBuilt","ownerId","managerId"].includes(f) ? `"${f}"` : f;
+      sets.push(`${col}=$${params.length}`);
+      before[f] = existing[f];
+      after[f] = val;
+    }
+    if (b.nationalAddress !== undefined) {
+      const val = typeof b.nationalAddress === 'string' ? b.nationalAddress : JSON.stringify(b.nationalAddress);
+      if (val !== existing.nationalAddress) {
+        params.push(val);
+        sets.push(`"nationalAddress"=$${params.length}`);
+        before.nationalAddress = existing.nationalAddress;
+        after.nationalAddress = val;
+      }
+    }
+    if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE property_buildings SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "property_buildings",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.building.updated",
+      entity: "property_buildings",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update building error:"); }
 });
@@ -1549,9 +2113,36 @@ router.delete("/buildings/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM property_buildings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, name FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("المبنى غير موجود");
+
+    const [activeUnit] = await rawQuery<any>(
+      `SELECT id FROM property_units WHERE "buildingId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (activeUnit) {
+      throw new ConflictError(
+        "لا يمكن حذف المبنى — يوجد وحدات مسجلة تحته",
+        { field: "status", fix: "احذف الوحدات أو انقلها لمبنى آخر قبل حذف المبنى" }
+      );
+    }
+
     await rawExecute(`UPDATE property_buildings SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.building.deleted",
+      entity: "property_buildings",
+      entityId: id,
+      before: { name: existing.name },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المبنى" });
   } catch (err) { handleRouteError(err, res, "Delete building error:"); }
 });
@@ -1575,6 +2166,19 @@ router.post("/maintenance", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
+    if (!b.unitId) {
+      throw new ValidationError("الوحدة مطلوبة", { field: "unitId", fix: "اختر الوحدة المطلوب صيانتها" });
+    }
+    if (!b.description || typeof b.description !== "string" || !b.description.trim()) {
+      throw new ValidationError("وصف الصيانة مطلوب", { field: "description", fix: "اكتب وصفاً للمشكلة" });
+    }
+    const [unit] = await rawQuery<any>(
+      `SELECT id FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.unitId, scope.companyId]
+    );
+    if (!unit) {
+      throw new ValidationError("الوحدة غير موجودة", { field: "unitId", fix: "اختر وحدة مسجلة" });
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO maintenance_requests ("companyId","unitId","tenantName",category,description,priority,status) VALUES ($1,$2,$3,$4,$5,$6,'open')`,
       [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium']
@@ -1658,6 +2262,24 @@ router.patch("/maintenance-requests/:id", async (req, res) => {
     const [existing] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
     const b = req.body;
+
+    // State machine — PATCH allowed to move through the allowlist only
+    if (b.status !== undefined && b.status !== existing.status) {
+      if (!MAINT_REQUEST_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${MAINT_REQUEST_STATUSES.join(", ")}` }
+        );
+      }
+      const allowed = MAINT_REQUEST_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل الطلب من "${existing.status}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد"}` }
+        );
+      }
+    }
+
     const params: any[] = [];
     const sets: string[] = [];
     if (b.status === "completed" && existing.status !== "completed") {
@@ -1671,8 +2293,10 @@ router.patch("/maintenance-requests/:id", async (req, res) => {
       const materialsUsed = b.materialsUsed || (existing.materialsUsed ? (typeof existing.materialsUsed === "string" ? JSON.parse(existing.materialsUsed) : existing.materialsUsed) : []);
       if (!materialsUsed || !Array.isArray(materialsUsed) || materialsUsed.length === 0) validationErrors.push("قائمة المواد المستخدمة مطلوبة (مادة واحدة على الأقل)");
       if (validationErrors.length > 0) {
-        res.status(400).json({ error: "بيانات الإغلاق غير مكتملة", validationErrors });
-        return;
+        throw new ValidationError(
+          "بيانات الإغلاق غير مكتملة",
+          { field: "closureReport", fix: validationErrors.join(" | "), meta: { validationErrors } }
+        );
       }
     }
     for (const key of ["status","category","description","priority","assignedTo","technicianId","costResponsibility","estimatedCost","actualCost","closureReport","clientRating","clientComment"]) {
@@ -1681,27 +2305,9 @@ router.patch("/maintenance-requests/:id", async (req, res) => {
     if (b.beforePhotos !== undefined) { params.push(JSON.stringify(b.beforePhotos)); sets.push(`"beforePhotos"=$${params.length}`); }
     if (b.afterPhotos !== undefined) { params.push(JSON.stringify(b.afterPhotos)); sets.push(`"afterPhotos"=$${params.length}`); }
     if (b.materialsUsed !== undefined) { params.push(JSON.stringify(b.materialsUsed)); sets.push(`"materialsUsed"=$${params.length}`); }
-    if (b.status === "completed" && existing.status !== "completed") {
-      const closureValidation: string[] = [];
-      const finalClosureReport = b.closureReport || existing.closureReport;
-      if (!finalClosureReport) closureValidation.push("تقرير الإغلاق مطلوب");
-      const finalAfterPhotos = b.afterPhotos || (existing.afterPhotos ? (typeof existing.afterPhotos === "string" ? JSON.parse(existing.afterPhotos) : existing.afterPhotos) : []);
-      if (!finalAfterPhotos || finalAfterPhotos.length === 0) closureValidation.push("صور ما بعد الصيانة مطلوبة (صورة واحدة على الأقل)");
-      const finalCost = b.actualCost !== undefined ? Number(b.actualCost) : (existing.actualCost !== null && existing.actualCost !== undefined ? Number(existing.actualCost) : null);
-      if (finalCost === null || finalCost === undefined || isNaN(finalCost)) {
-        closureValidation.push("التكلفة الفعلية مطلوبة");
-      } else if (finalCost < 0) {
-        closureValidation.push("التكلفة الفعلية لا يمكن أن تكون سالبة");
-      } else if (finalCost === 0 && !b.zeroCostConfirmed) {
-        closureValidation.push("يرجى تأكيد أن التكلفة صفر");
-      }
-      const finalMaterials = b.materialsUsed || (existing.materialsUsed ? (typeof existing.materialsUsed === "string" ? JSON.parse(existing.materialsUsed) : existing.materialsUsed) : []);
-      if (!finalMaterials || finalMaterials.length === 0) closureValidation.push("قائمة المواد المستخدمة مطلوبة");
-      if (closureValidation.length > 0) {
-        res.status(400).json({ error: "بيانات الإغلاق غير مكتملة", validationErrors: closureValidation });
-        return;
-      }
-    }
+    // The closure preconditions are already enforced above via the first
+    // validationErrors block. A second near-identical block used to exist
+    // here and was dead code — we now rely solely on the earlier check.
     sets.push(`"updatedAt"=NOW()`);
     if (b.status === "completed" && existing.status !== "completed") {
       sets.push(`"completedAt"=NOW()`);
@@ -1843,7 +2449,39 @@ router.post("/owners", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.name) { res.status(400).json({ error: "اسم المالك مطلوب" }); return; }
+    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
+      throw new ValidationError("اسم المالك مطلوب", { field: "name", fix: "أدخل اسم المالك الكامل" });
+    }
+    if (b.ownerType === "company" && !b.crNumber) {
+      throw new ValidationError(
+        "رقم السجل التجاري مطلوب للمالك الشركة",
+        { field: "crNumber", fix: "أدخل رقم السجل التجاري أو غيّر نوع المالك إلى فرد" }
+      );
+    }
+    if (b.nationalId) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM property_owners WHERE "nationalId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.nationalId, scope.companyId]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "رقم الهوية مسجل مسبقاً لمالك آخر",
+          { field: "nationalId", fix: "تحقق من صحة الرقم" }
+        );
+      }
+    }
+    if (b.crNumber) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM property_owners WHERE "crNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.crNumber, scope.companyId]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "السجل التجاري مسجل مسبقاً لمالك آخر",
+          { field: "crNumber", fix: "تحقق من صحة الرقم" }
+        );
+      }
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO property_owners ("companyId","ownerType",name,"nationalId","crNumber",phone,email,iban,"bankName",address,city,"authorizationNumber","authorizationDate","authorizationExpiry",notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
@@ -1891,6 +2529,25 @@ router.patch("/owners/:id", async (req, res) => {
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE property_owners SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "property_owners",
+      entityId: id,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.owner.updated",
+      entity: "property_owners",
+      entityId: id,
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update owner error:"); }
 });
@@ -1899,9 +2556,46 @@ router.delete("/owners/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, name FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("المالك غير موجود");
+
+    const [bldg] = await rawQuery<any>(
+      `SELECT id FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (bldg) {
+      throw new ConflictError(
+        "لا يمكن حذف المالك — يوجد مبانٍ مسجلة باسمه",
+        { field: "status", fix: "انقل المباني لمالك آخر قبل الحذف" }
+      );
+    }
+    const [unit] = await rawQuery<any>(
+      `SELECT id FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (unit) {
+      throw new ConflictError(
+        "لا يمكن حذف المالك — يوجد وحدات مسجلة باسمه",
+        { field: "status", fix: "انقل الوحدات لمالك آخر قبل الحذف" }
+      );
+    }
+
     await rawExecute(`UPDATE property_owners SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.owner.deleted",
+      entity: "property_owners",
+      entityId: id,
+      before: { name: existing.name },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المالك" });
   } catch (err) { handleRouteError(err, res, "Delete owner error:"); }
 });
@@ -1988,8 +2682,18 @@ router.post("/inspections", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.unitId || !b.type) {
-      res.status(400).json({ error: "الوحدة ونوع الفحص مطلوبان" }); return;
+    if (!b.unitId) {
+      throw new ValidationError("الوحدة مطلوبة", { field: "unitId", fix: "اختر الوحدة المراد فحصها" });
+    }
+    if (!b.type || typeof b.type !== "string" || !b.type.trim()) {
+      throw new ValidationError("نوع الفحص مطلوب", { field: "type", fix: "اختر نوع الفحص (دوري، تسليم، استلام، ...)" });
+    }
+    const [unit] = await rawQuery<any>(
+      `SELECT id FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.unitId, scope.companyId]
+    );
+    if (!unit) {
+      throw new ValidationError("الوحدة غير موجودة", { field: "unitId", fix: "اختر وحدة مسجلة" });
     }
     const { insertId } = await rawExecute(
       `INSERT INTO property_inspections
@@ -2010,22 +2714,70 @@ router.patch("/inspections/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM property_inspections WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الفحص غير موجود");
+
     const b = req.body;
+
+    // State machine
+    if (b.status !== undefined && b.status !== existing.status) {
+      if (!INSPECTION_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة فحص غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${INSPECTION_STATUSES.join(", ")}` }
+        );
+      }
+      const allowed = INSPECTION_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل الفحص من "${existing.status}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
+        );
+      }
+    }
+
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.inspectionDate !== undefined) { params.push(b.inspectionDate); sets.push(`"inspectionDate"=$${params.length}`); }
-    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
-    if (b.findings !== undefined) { params.push(JSON.stringify(b.findings)); sets.push(`findings=$${params.length}`); }
-    if (b.conditionRating !== undefined) { params.push(b.conditionRating); sets.push(`"conditionRating"=$${params.length}`); }
-    if (b.inspectorName !== undefined) { params.push(b.inspectorName); sets.push(`"inspectorName"=$${params.length}`); }
-    if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    if (b.status !== undefined && b.status !== existing.status) { params.push(b.status); sets.push(`status=$${params.length}`); before.status = existing.status; after.status = b.status; }
+    if (b.inspectionDate !== undefined) { params.push(b.inspectionDate); sets.push(`"inspectionDate"=$${params.length}`); before.inspectionDate = existing.inspectionDate; after.inspectionDate = b.inspectionDate; }
+    if (b.notes !== undefined && b.notes !== existing.notes) { params.push(b.notes); sets.push(`notes=$${params.length}`); before.notes = existing.notes; after.notes = b.notes; }
+    if (b.findings !== undefined) { params.push(JSON.stringify(b.findings)); sets.push(`findings=$${params.length}`); before.findings = existing.findings; after.findings = b.findings; }
+    if (b.conditionRating !== undefined && b.conditionRating !== existing.conditionRating) { params.push(b.conditionRating); sets.push(`"conditionRating"=$${params.length}`); before.conditionRating = existing.conditionRating; after.conditionRating = b.conditionRating; }
+    if (b.inspectorName !== undefined && b.inspectorName !== existing.inspectorName) { params.push(b.inspectorName); sets.push(`"inspectorName"=$${params.length}`); before.inspectorName = existing.inspectorName; after.inspectorName = b.inspectorName; }
+    if (sets.length === 1) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(
       `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!rows[0]) throw new NotFoundError("الفحص غير موجود");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "property_inspections",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "property.inspection.status_changed" : "property.inspection.updated",
+      entity: "property_inspections",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update inspection error:"); }
 });
@@ -2059,11 +2811,25 @@ router.post("/deposits", async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.contractId || !b.amount) {
-      res.status(400).json({ error: "العقد والمبلغ مطلوبان" }); return;
+    if (!b.contractId) {
+      throw new ValidationError("العقد مطلوب", { field: "contractId", fix: "اختر العقد المرتبط بالوديعة" });
     }
-    if (Number(b.amount) <= 0) {
-      res.status(400).json({ error: "قيمة الوديعة يجب أن تكون أكبر من صفر" }); return;
+    if (!b.amount) {
+      throw new ValidationError("المبلغ مطلوب", { field: "amount", fix: "أدخل قيمة الوديعة" });
+    }
+    const amount = Number(b.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new ValidationError(
+        "قيمة الوديعة يجب أن تكون أكبر من صفر",
+        { field: "amount", fix: "أدخل قيمة موجبة" }
+      );
+    }
+    const [contract] = await rawQuery<any>(
+      `SELECT id, status FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.contractId, scope.companyId]
+    );
+    if (!contract) {
+      throw new ValidationError("العقد غير موجود", { field: "contractId", fix: "اختر عقداً مسجلاً" });
     }
     const { insertId } = await rawExecute(
       `INSERT INTO property_security_deposits
@@ -2091,8 +2857,10 @@ router.post("/deposits", async (req, res) => {
     } catch (jErr) {
       console.error("Deposit journal entry failed:", jErr);
       await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1`, [insertId]).catch(() => {});
-      res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي للوديعة — لم يتم تسجيل الوديعة" });
-      return;
+      throw new IntegrationError(
+        "تعذّر إنشاء القيد المحاسبي للوديعة — لم يتم تسجيل الوديعة",
+        { field: "journalEntry", fix: "راجع إعدادات شجرة الحسابات (1100/2300) ثم أعد المحاولة" }
+      );
     }
 
     createAuditLog({
@@ -2117,14 +2885,26 @@ router.patch("/deposits/:id/refund", async (req, res) => {
     const id = Number(req.params.id);
     const b = req.body;
     const [deposit] = await rawQuery<any>(
-      `SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2 AND status='held'`,
+      `SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
-    if (!deposit) throw new NotFoundError("الوديعة غير موجودة أو تم إرجاعها");
+    if (!deposit) throw new NotFoundError("الوديعة غير موجودة");
+
+    // State machine — must be held or partial_refund
+    const allowed = DEPOSIT_TRANSITIONS[deposit.status] ?? [];
+    if (!allowed.includes("refunded")) {
+      throw new ConflictError(
+        `لا يمكن إرجاع وديعة حالتها "${deposit.status}"`,
+        { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
+      );
+    }
+
     const refundAmount = Number(b.refundAmount || deposit.amount);
-    if (refundAmount < 0 || refundAmount > Number(deposit.amount)) {
-      res.status(400).json({ error: "قيمة الإرجاع غير صحيحة — يجب أن تكون بين صفر وقيمة الوديعة" });
-      return;
+    if (!Number.isFinite(refundAmount) || refundAmount < 0 || refundAmount > Number(deposit.amount)) {
+      throw new ValidationError(
+        "قيمة الإرجاع غير صحيحة — يجب أن تكون بين صفر وقيمة الوديعة",
+        { field: "refundAmount", fix: `أدخل قيمة بين 0 و ${deposit.amount}` }
+      );
     }
 
     // Post the GL entry FIRST so that if it fails, the deposit row stays in
@@ -2144,8 +2924,10 @@ router.patch("/deposits/:id/refund", async (req, res) => {
       });
     } catch (jErr) {
       console.error("Deposit refund journal entry failed:", jErr);
-      res.status(500).json({ error: "تعذّر إنشاء القيد المحاسبي لإرجاع الوديعة — لم يتم تنفيذ الإرجاع" });
-      return;
+      throw new IntegrationError(
+        "تعذّر إنشاء القيد المحاسبي لإرجاع الوديعة — لم يتم تنفيذ الإرجاع",
+        { field: "journalEntry", fix: "راجع إعدادات شجرة الحسابات (2300/1100) ثم أعد المحاولة" }
+      );
     }
 
     await rawExecute(
