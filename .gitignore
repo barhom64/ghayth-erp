@@ -48,3 +48,6 @@ Thumbs.db
 .cache/
 .local/
 attached_assets/
+
+# Local sandbox .env
+artifacts/api-server/.env

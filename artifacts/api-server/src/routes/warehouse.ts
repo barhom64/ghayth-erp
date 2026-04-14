@@ -3,6 +3,7 @@ import {
   NotFoundError,
   ValidationError,
   ConflictError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -15,10 +16,30 @@ import {
   createJournalEntry,
   checkFinancialPeriodOpen,
   getAccountCodeFromMapping,
+  createAuditLog,
+  emitEvent,
 } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WAREHOUSE STATE MACHINES — Phase C.8 Warehouse audit
+// ─────────────────────────────────────────────────────────────────────────────
+const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment"] as const;
+const PRODUCT_STATUSES = ["active", "inactive", "discontinued"] as const;
+const PRODUCT_TRANSITIONS: Record<string, readonly string[]> = {
+  active:       ["inactive", "discontinued"],
+  inactive:     ["active", "discontinued"],
+  discontinued: [],
+};
+const COUNT_STATUSES = ["draft", "in_progress", "approved", "cancelled"] as const;
+const COUNT_TRANSITIONS: Record<string, readonly string[]> = {
+  draft:       ["in_progress", "approved", "cancelled"],
+  in_progress: ["approved", "cancelled"],
+  approved:    [],
+  cancelled:   [],
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Weighted-average cost maintenance helper.
@@ -275,14 +296,70 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
+      throw new ValidationError("اسم المنتج مطلوب", { field: "name", fix: "أدخل اسم المنتج" });
+    }
+    if (!b.sku || typeof b.sku !== "string" || !b.sku.trim()) {
+      throw new ValidationError("رمز المنتج (SKU) مطلوب", { field: "sku", fix: "أدخل رمز تعريف فريد للمنتج" });
+    }
     const costPrice = Number(b.costPrice) || 0;
     const sellPrice = Number(b.sellPrice) || 0;
+    if (!Number.isFinite(costPrice) || costPrice < 0) {
+      throw new ValidationError("سعر التكلفة غير صالح", { field: "costPrice", fix: "أدخل قيمة غير سالبة" });
+    }
+    if (!Number.isFinite(sellPrice) || sellPrice < 0) {
+      throw new ValidationError("سعر البيع غير صالح", { field: "sellPrice", fix: "أدخل قيمة غير سالبة" });
+    }
+    // Duplicate SKU check
+    const [dup] = await rawQuery<any>(
+      `SELECT id FROM warehouse_products WHERE sku=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.sku, scope.companyId]
+    );
+    if (dup) {
+      throw new ConflictError(
+        "رمز المنتج (SKU) مستخدم مسبقاً",
+        { field: "sku", fix: "اختر رمزاً فريداً لهذا المنتج" }
+      );
+    }
+    // FK check for categoryId
+    if (b.categoryId) {
+      const [cat] = await rawQuery<any>(
+        `SELECT id FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.categoryId, scope.companyId]
+      );
+      if (!cat) {
+        throw new ValidationError("الفئة غير موجودة", { field: "categoryId", fix: "اختر فئة مسجلة" });
+      }
+    }
+
     const sellPriceWarning = sellPrice > 0 && sellPrice < costPrice;
     const { insertId } = await rawExecute(
       `INSERT INTO warehouse_products ("companyId",sku,name,description,"categoryId",unit,"minStock","maxStock","currentStock","costPrice","sellPrice",location,"branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, b.sku, b.name, b.description, b.categoryId, b.unit || 'piece', b.minStock || 0, b.maxStock || 99999, b.currentStock || 0, costPrice, sellPrice, b.location, b.branchId || scope.branchId]
+      [scope.companyId, b.sku.trim(), b.name.trim(), b.description, b.categoryId || null, b.unit || 'piece', b.minStock || 0, b.maxStock || 99999, b.currentStock || 0, costPrice, sellPrice, b.location, b.branchId || scope.branchId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1`, [insertId]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "create",
+      entity: "warehouse_products",
+      entityId: insertId,
+      after: { sku: b.sku, name: b.name, categoryId: b.categoryId, costPrice, sellPrice },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.product.created",
+      entity: "warehouse_products",
+      entityId: insertId,
+      details: `منتج جديد: ${b.name} (${b.sku})`,
+    }).catch(console.error);
+
     res.status(201).json({ ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
   } catch (err) { handleRouteError(err, res, "Create product error:"); }
 });
@@ -300,28 +377,107 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id, "costPrice", "sellPrice" FROM warehouse_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     const b = req.body;
+
+    // State machine on status
+    if (b.status !== undefined && b.status !== existing.status) {
+      if (!PRODUCT_STATUSES.includes(b.status)) {
+        throw new ValidationError(
+          `حالة منتج غير صالحة: ${b.status}`,
+          { field: "status", fix: `اختر من: ${PRODUCT_STATUSES.join(", ")}` }
+        );
+      }
+      const allowed = PRODUCT_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل المنتج من "${existing.status}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
+        );
+      }
+    }
+    // Duplicate SKU on rename
+    if (b.sku && b.sku !== existing.sku) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM warehouse_products WHERE sku=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND id<>$3`,
+        [b.sku, scope.companyId, id]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "رمز المنتج (SKU) مستخدم مسبقاً",
+          { field: "sku", fix: "اختر رمزاً مختلفاً" }
+        );
+      }
+    }
+    if (b.costPrice !== undefined) {
+      const c = Number(b.costPrice);
+      if (!Number.isFinite(c) || c < 0) {
+        throw new ValidationError("سعر التكلفة غير صالح", { field: "costPrice", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+    if (b.sellPrice !== undefined) {
+      const s = Number(b.sellPrice);
+      if (!Number.isFinite(s) || s < 0) {
+        throw new ValidationError("سعر البيع غير صالح", { field: "sellPrice", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+
     const effectiveCost = b.costPrice !== undefined ? Number(b.costPrice) : Number(existing.costPrice);
     const effectiveSell = b.sellPrice !== undefined ? Number(b.sellPrice) : Number(existing.sellPrice);
     const sellPriceWarning = effectiveSell > 0 && effectiveSell < effectiveCost;
+
+    const tracked = ["name","sku","description","categoryId","unit","minStock","maxStock","costPrice","sellPrice","location","status"] as const;
+    const colMap: Record<string, string> = {
+      name: "name", sku: "sku", description: "description", categoryId: '"categoryId"',
+      unit: "unit", minStock: '"minStock"', maxStock: '"maxStock"',
+      costPrice: '"costPrice"', sellPrice: '"sellPrice"', location: "location", status: "status",
+    };
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
-    if (b.sku !== undefined) { params.push(b.sku); sets.push(`sku=$${params.length}`); }
-    if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
-    if (b.categoryId !== undefined) { params.push(b.categoryId); sets.push(`"categoryId"=$${params.length}`); }
-    if (b.unit !== undefined) { params.push(b.unit); sets.push(`unit=$${params.length}`); }
-    if (b.minStock !== undefined) { params.push(b.minStock); sets.push(`"minStock"=$${params.length}`); }
-    if (b.maxStock !== undefined) { params.push(b.maxStock); sets.push(`"maxStock"=$${params.length}`); }
-    if (b.costPrice !== undefined) { params.push(b.costPrice); sets.push(`"costPrice"=$${params.length}`); }
-    if (b.sellPrice !== undefined) { params.push(b.sellPrice); sets.push(`"sellPrice"=$${params.length}`); }
-    if (b.location !== undefined) { params.push(b.location); sets.push(`location=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    for (const f of tracked) {
+      if (b[f] === undefined) continue;
+      if (b[f] === existing[f]) continue;
+      params.push(b[f]);
+      sets.push(`${colMap[f]}=$${params.length}`);
+      before[f] = existing[f];
+      after[f] = b[f];
+    }
+    if (Object.keys(after).length === 0) {
+      res.json({ ...existing, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
+      return;
+    }
     params.push(id);
     await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "warehouse_products",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "warehouse.product.status_changed" : "warehouse.product.updated",
+      entity: "warehouse_products",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json({ ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
   } catch (err) { handleRouteError(err, res, "Update product error:"); }
 });
@@ -330,9 +486,33 @@ router.delete("/products/:id", requirePermission("warehouse:delete"), async (req
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, sku, name, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("المنتج غير موجود");
+
+    // Block delete if there's stock on hand — would orphan inventory
+    if (Number(existing.currentStock) > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف المنتج — يحتوي على ${existing.currentStock} وحدة في المخزون`,
+        { field: "currentStock", fix: "قم بصرف أو تعديل المخزون لصفر قبل الحذف" }
+      );
+    }
+
     await rawExecute(`UPDATE warehouse_products SET "deletedAt"=NOW(), status='inactive' WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.product.deleted",
+      entity: "warehouse_products",
+      entityId: id,
+      before: { sku: existing.sku, name: existing.name },
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المنتج بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete product error:"); }
 });
@@ -359,6 +539,26 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
     const scope = req.scope!;
     const b = req.body;
 
+    if (!b.productId) {
+      throw new ValidationError("المنتج مطلوب", { field: "productId", fix: "اختر المنتج المراد تحريكه" });
+    }
+    if (!b.type || !MOVEMENT_TYPES.includes(b.type)) {
+      throw new ValidationError(
+        "نوع الحركة غير صالح",
+        { field: "type", fix: `اختر من: ${MOVEMENT_TYPES.join(", ")}` }
+      );
+    }
+    const qtyNum = Number(b.quantity);
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "quantity", fix: "أدخل كمية موجبة" });
+    }
+    if (b.unitCost !== undefined && b.unitCost !== null) {
+      const uc = Number(b.unitCost);
+      if (!Number.isFinite(uc) || uc < 0) {
+        throw new ValidationError("تكلفة الوحدة غير صالحة", { field: "unitCost", fix: "أدخل قيمة غير سالبة" });
+      }
+    }
+
     let unitCost = b.unitCost || 0;
     let insertId = 0;
     let updatedProduct: any = null;
@@ -367,11 +567,19 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
 
     await withTransaction(async (client) => {
       const prodRes = await client.query(
-        `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 FOR UPDATE`,
+        `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
         [b.productId, scope.companyId]
       );
       const product = prodRes.rows[0];
-      if (!product) throw Object.assign(new Error("المنتج غير موجود"), { status: 404 });
+      if (!product) throw new NotFoundError("المنتج غير موجود");
+
+      // Prevent overdraw on out / transfer_out
+      if ((b.type === 'out' || b.type === 'transfer_out') && Number(product.currentStock) < qtyNum) {
+        throw new ConflictError(
+          `الكمية المطلوبة (${qtyNum}) تتجاوز المخزون الحالي (${product.currentStock})`,
+          { field: "quantity", fix: `المخزون المتاح: ${product.currentStock}` }
+        );
+      }
       productRef = product;
       // Snapshot weighted-average cost BEFORE the movement runs so that
       // "out"/issue postings use the pre-movement WA rather than the
@@ -557,8 +765,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
     }
 
     res.status(201).json(row);
-  } catch (err: any) {
-    if (err.status === 404) { res.status(404).json({ error: err.message }); return; }
+  } catch (err) {
     handleRouteError(err, res, "Create movement error:");
   }
 });
@@ -598,6 +805,14 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
     const scope = req.scope!;
     const b = req.body;
 
+    if (!b.productId) {
+      throw new ValidationError("المنتج مطلوب", { field: "productId", fix: "اختر المنتج المراد تحويله" });
+    }
+    const qtyNum = Number(b.quantity);
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "quantity", fix: "أدخل كمية موجبة" });
+    }
+
     const transferRef = `TRANSFER-${Date.now().toString(36).toUpperCase()}`;
     const fromLocation = b.fromLocation || b.fromWarehouseId ? `مستودع-${b.fromWarehouseId}` : 'المستودع الرئيسي';
     const toLocation = b.toLocation || b.toWarehouseId ? `مستودع-${b.toWarehouseId}` : 'المستودع الفرعي';
@@ -608,13 +823,16 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
 
     await withTransaction(async (client) => {
       const prodRes = await client.query(
-        `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 FOR UPDATE`,
+        `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
         [b.productId, scope.companyId]
       );
       const product = prodRes.rows[0];
-      if (!product) throw Object.assign(new Error("المنتج غير موجود"), { status: 404 });
-      if (Number(product.currentStock) < Number(b.quantity)) {
-        throw Object.assign(new Error("الكمية المطلوبة تتجاوز المخزون الحالي"), { status: 400 });
+      if (!product) throw new NotFoundError("المنتج غير موجود");
+      if (Number(product.currentStock) < qtyNum) {
+        throw new ConflictError(
+          `الكمية المطلوبة (${qtyNum}) تتجاوز المخزون الحالي (${product.currentStock})`,
+          { field: "quantity", fix: `المخزون المتاح: ${product.currentStock}` }
+        );
       }
 
       unitCost = Number(product.costPrice) || 0;
@@ -645,9 +863,7 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       totalValue: Number(b.quantity) * unitCost,
       status: 'completed',
     });
-  } catch (err: any) {
-    if (err.status === 404) { res.status(404).json({ error: err.message }); return; }
-    if (err.status === 400) { res.status(400).json({ error: err.message }); return; }
+  } catch (err) {
     handleRouteError(err, res, "Transfer error:");
   }
 });
@@ -663,9 +879,22 @@ router.get("/categories", requirePermission("warehouse:read"), async (req, res) 
 router.post("/categories", requirePermission("warehouse:create"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const b = req.body;
+    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
+      throw new ValidationError("اسم الفئة مطلوب", { field: "name", fix: "أدخل اسم الفئة" });
+    }
+    if (b.parentId) {
+      const [parent] = await rawQuery<any>(
+        `SELECT id FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.parentId, scope.companyId]
+      );
+      if (!parent) {
+        throw new ValidationError("الفئة الأب غير موجودة", { field: "parentId", fix: "اختر فئة أب مسجلة أو اتركها فارغة" });
+      }
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO warehouse_categories ("companyId",name,"parentId") VALUES ($1,$2,$3)`,
-      [scope.companyId, req.body.name, req.body.parentId]
+      [scope.companyId, b.name.trim(), b.parentId || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -684,9 +913,24 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
   try {
     const scope = req.scope!;
     const b = req.body;
+    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
+      throw new ValidationError("اسم المورد مطلوب", { field: "name", fix: "أدخل اسم المورد" });
+    }
+    if (b.taxNumber) {
+      const [dup] = await rawQuery<any>(
+        `SELECT id FROM suppliers WHERE "taxNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.taxNumber, scope.companyId]
+      );
+      if (dup) {
+        throw new ConflictError(
+          "الرقم الضريبي مسجل مسبقاً لمورد آخر",
+          { field: "taxNumber", fix: "تحقق من صحة الرقم الضريبي" }
+        );
+      }
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO suppliers ("companyId",name,"contactPerson",phone,email,address,"taxNumber","paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, b.name, b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
+      [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -714,8 +958,33 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM warehouse_categories WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(
+      `SELECT id, name FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!existing) throw new NotFoundError("الفئة غير موجودة");
+
+    const [hasProducts] = await rawQuery<any>(
+      `SELECT COUNT(*) AS cnt FROM warehouse_products WHERE "categoryId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (Number(hasProducts?.cnt || 0) > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف الفئة "${existing.name}" لأنها تحتوي على ${hasProducts.cnt} منتج`,
+        { field: "categoryId", fix: "انقل المنتجات لفئة أخرى أو احذفها أولاً" }
+      );
+    }
+    const [hasChildren] = await rawQuery<any>(
+      `SELECT COUNT(*) AS cnt FROM warehouse_categories WHERE "parentId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (Number(hasChildren?.cnt || 0) > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف الفئة "${existing.name}" لأنها تحتوي على ${hasChildren.cnt} فئة فرعية`,
+        { field: "categoryId", fix: "احذف الفئات الفرعية أولاً" }
+      );
+    }
+
     await rawExecute(`UPDATE warehouse_categories SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف الفئة" });
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
@@ -843,7 +1112,12 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
     // Ensure count exists and is in draft
     const [count] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [countId, scope.companyId]);
     if (!count) throw new NotFoundError("الجرد غير موجود");
-    if (count.status === 'approved') { res.status(400).json({ error: "لا يمكن تعديل جرد معتمد" }); return; }
+    if (count.status !== "draft" && count.status !== "in_progress") {
+      throw new ConflictError(
+        `لا يمكن تعديل جرد بحالة "${count.status}"`,
+        { field: "status", fix: "الجرد المعتمد أو الملغى لا يمكن تعديله" }
+      );
+    }
 
     const [product] = await rawQuery<any>(
       `SELECT id, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2`,
