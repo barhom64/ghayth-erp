@@ -102,7 +102,7 @@ export default function LedgerPage() {
         </CardContent></Card>
       </div>
 
-      <DataTable<any>
+      <DataTable
         columns={[
           {
             key: "date",

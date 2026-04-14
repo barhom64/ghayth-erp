@@ -109,7 +109,7 @@ function ProductsTab() {
       <Card>
         <CardHeader><CardTitle>المنتجات</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filteredProducts}
             isLoading={isLoading}
@@ -230,7 +230,7 @@ function OrdersTab() {
       <Card>
         <CardHeader><CardTitle>الطلبات</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filteredOrders}
             isLoading={isLoading}

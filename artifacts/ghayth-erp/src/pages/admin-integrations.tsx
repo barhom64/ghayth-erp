@@ -230,7 +230,7 @@ function IntegrationLogs() {
       </div>
       <Card>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={logs}
             isLoading={isLoading}

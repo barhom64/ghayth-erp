@@ -35,7 +35,7 @@ export function PropertyOccupancyTab() {
           </CardContent>
         </Card>
       )}
-      <DataTable<any>
+      <DataTable
         data={rows}
         isLoading={isLoading}
         isError={isError}

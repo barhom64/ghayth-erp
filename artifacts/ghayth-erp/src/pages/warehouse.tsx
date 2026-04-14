@@ -135,7 +135,7 @@ function ProductsTab() {
       <Card>
         <CardHeader><CardTitle>المنتجات</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filtered}
             isLoading={isLoading}
@@ -217,7 +217,7 @@ function MovementsTab() {
       <Card>
         <CardHeader><CardTitle>حركات المخزون</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filtered}
             isLoading={isLoading}
@@ -275,7 +275,7 @@ function CategoriesTab() {
       </div>
       <Card>
         <CardContent className="pt-6">
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filtered}
             isLoading={isLoading}
@@ -341,7 +341,7 @@ function SuppliersTab() {
       </div>
       <Card>
         <CardContent className="pt-6">
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filtered}
             isLoading={isLoading}

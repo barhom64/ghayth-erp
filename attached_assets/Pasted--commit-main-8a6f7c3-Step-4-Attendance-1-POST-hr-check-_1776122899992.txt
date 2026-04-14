@@ -1,0 +1,55 @@
+آخر commit على main: 8a6f7c3
+
+Step 4 — Attendance
+---
+1. POST /hr/check-in بدون الحساب يعمل check-in مسبقاً:
+2. POST /hr/check-in مرتين نفس اليوم → 409 CONFLICT
+   field=attendance, meta.existingAttendanceId
+3. POST /hr/check-in على موظف عنده إجازة معتمدة اليوم → 409
+   CONFLICT meta.leaveRequestId
+4. POST /hr/check-out بدون check-in سابق → 409 CONFLICT
+5. POST /hr/check-out مرتين → 409 CONFLICT meta.checkOutAt
+
+Step 5 — Submit leave (12 سيناريو!)
+---
+1. POST /hr/leave-requests بدون startDate → 422 field=startDate
+2. بدون leaveTypeId → 422 field=leaveTypeId
+3. leaveTypeId=99999 → 404 NOT_FOUND
+4. إجازة تتجاوز الرصيد → 409 CONFLICT field=days, meta كامل
+   (requested/remaining/entitled/used/reserved)
+5. إجازة متداخلة مع إجازة قائمة → 409 CONFLICT field=startDate,
+   meta.overlappingLeaveId
+6. إجازة بنوع يتطلب وثيقة بدون documentUrl/reason → 422
+   field=documentUrl
+7. إجازة مقيدة بالجنس (نوع "أمومة" على موظف ذكر) → 403
+   FORBIDDEN meta.required + meta.employeeGender
+8. إجازة تتطلب 6 أشهر خدمة على موظف جديد → 409 CONFLICT
+   meta.requiredMonths + meta.actualMonths
+9. إجازة oncePerCareer (حج) مرتين → 409 CONFLICT
+   meta.previousLeaveId
+10. إجازة تتجاوز نسبة الغياب في القسم → 409 CONFLICT
+    meta.maxAbsentPct + currentlyAbsent + totalInDept
+11. إجازة في شركة بدون أي مدير → 409 CONFLICT meta.missingRoles
+12. أي تعيين يعمل happy path → 201 + leave.requested event
+
+Step 6 — Approve leave
+---
+1. PATCH على طلب بـ role=employee → 403 FORBIDDEN meta.yourRole
+2. PATCH على طلب تم اعتماده مسبقاً → 409 CONFLICT
+   meta.currentStatus
+3. PATCH بالمستخدم غير المخصص للمرحلة → 403 FORBIDDEN
+   meta.requiredRole + currentStage + assignedTo
+4. Happy path: حدث leave.approved + stage advances
+
+Step 7 — Cancel / Delete
+---
+1. DELETE على طلب non-pending → 409 CONFLICT field=status,
+   meta.currentStatus + fix يقول "استخدم زر الإلغاء"
+2. POST /cancel بدون reason → 422 field=reason
+3. POST /cancel بطلب بحالة rejected → 409 meta.currentStatus
+
+ملاحظة: لا تنسَ تحقق من event_logs: كل فعل يجب يكتب
+row واحد فقط (بعد dedup fix في 3fc9f69)، ليس مرتين.
+
+إذا كل هذا يعمل، Phase A (HR reference domain) مكتملة
+ونعمم النمط على باقي الـ domains.

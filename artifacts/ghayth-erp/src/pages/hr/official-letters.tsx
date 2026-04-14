@@ -172,7 +172,7 @@ export default function OfficialLettersPage() {
         </Card>
       )}
 
-      <DataTable<any>
+      <DataTable
         columns={columns}
         data={filtered}
         isLoading={isLoading}

@@ -29,7 +29,7 @@ export function TrainingROITab() {
           </Card>
         ))}
       </div>
-      <DataTable<any>
+      <DataTable
         data={programs}
         isLoading={isLoading}
         isError={isError}

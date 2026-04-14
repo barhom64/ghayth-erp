@@ -94,7 +94,7 @@ export function ComplianceTab() {
       <Card>
         <CardHeader><CardTitle>الامتثال</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filteredCompliance}
             isLoading={isLoading}

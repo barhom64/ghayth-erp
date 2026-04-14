@@ -155,7 +155,7 @@ function ContractsTab() {
       <Card>
         <CardHeader><CardTitle>العقود القانونية</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filtered}
             isLoading={isLoading}
@@ -270,7 +270,7 @@ function CasesTab() {
       </div>
       <Card>
         <CardContent className="pt-6">
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filtered}
             isLoading={isLoading}
@@ -360,7 +360,7 @@ function FinancialLegalTab() {
             <Card>
               <CardHeader><CardTitle>الأحكام الأخيرة</CardTitle></CardHeader>
               <CardContent className="p-0">
-                <DataTable<any>
+                <DataTable
                   noToolbar
                   pageSize={0}
                   data={report.recentJudgments || []}

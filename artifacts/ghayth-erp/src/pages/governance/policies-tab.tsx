@@ -134,7 +134,7 @@ export function PoliciesTab() {
       <Card>
         <CardHeader><CardTitle>السياسات</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filteredPolicies}
             isLoading={isLoading}

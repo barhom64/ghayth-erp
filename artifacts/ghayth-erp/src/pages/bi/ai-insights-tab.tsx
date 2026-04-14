@@ -109,7 +109,7 @@ export function AIInsightsTab() {
       {proactive.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-semibold text-gray-700 flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-purple-500" />إجراءات الأتمتة الأخيرة</h3>
-          <DataTable<any>
+          <DataTable
             data={proactive.slice(0, 10)}
             rowKey={(p) => p.id}
             searchPlaceholder="بحث..."

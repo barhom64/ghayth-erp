@@ -168,7 +168,7 @@ export default function UmrahImport() {
                 )}
               </div>
               <div className="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                <DataTable<any>
+                <DataTable
                   columns={[
                     {
                       key: "__index",

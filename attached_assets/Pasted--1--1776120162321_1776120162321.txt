@@ -1,0 +1,73 @@
+## ✅ الخطوة 1 منتهية + الإصلاح الجذري لـ"حدث خطأ"
+
+### اكتشاف مهم جداً
+**السبب الحقيقي** لـ "كل إجراء يرد حدث خطأ" كان: `classifyDbError` **كان يعرف** السبب الفعلي (duplicate email، department missing، FK broken)، لكنه كان يبعث فقط `{ error: "النص" }` — **بدون `code` و`field`**. فـ `useApiMutation.onFieldError` في الـ frontend ما كان يملك أي شيء يشتغل عليه، والحقل في الـ form ما كان يُلوَّن.
+
+### 🔴 الـ Single-Point Fix
+Upgraded `classifyDbError` + `handleRouteError` لترجع `{ status, message, code, field, fix }` بدل `{ status, message }` فقط.
+
+**هذا الإصلاح يفيد كل routes النظام دفعة واحدة** — أي endpoint في أي domain، عند وقوع pg error على:
+- Email duplicate → `{ code: "CONFLICT", field: "email" }`
+- Department FK → `{ code: "VALIDATION_ERROR", field: "departmentId" }`
+- NULL hireDate → `{ code: "VALIDATION_ERROR", field: "hireDate" }`
+- 10 أنواع أخرى من pg errors
+
+**الأن الـ frontend يقدر يُلوّن الحقل الصحيح تلقائياً في أي صفحة**، مش HR فقط.
+
+### Step 1 — POST /employees الإصلاحات
+1. **9 `validationError(res, ...)` → `throw new ValidationError(...)`** مع field + fix لكل واحد
+2. **Department string resolution strict** — لو القسم مش موجود، ترجع ValidationError بدل insert صامت بـ null
+3. **Pre-check managerId** — يفحص وجود المدير قبل التعامل مع transaction (بدل انتظار 23503 FK deep)
+
+### ⚠️ ما تركته عمداً في Step 1 (للشفافية)
+ثغرات درجة ثانية لم أصلحها ولن تحجب الاختبار الفعلي:
+- `createNotification(...).catch(console.error)` — فشل صامت لو notifications engine down
+- `createSubsidiaryAccountsForEntity(...).catch(console.error)` — فشل صامت لو COA مش seeded
+- Welcome/credentials email queue insert `.catch(console.error)`
+- `employee_salary_components` copy `.catch(() => {})`
+
+هذه تذهب لـ DLQ/audit لاحقاً، لكنها ما تكسر الـ happy path.
+
+### التقدّم على الـ 7 خطوات
+```
+[x] Step 1 — Create employee          ← هذا الـ commit
+[ ] Step 2 — Update employee
+[ ] Step 3 — Link assignment
+[ ] Step 4 — Attendance check-in/out
+[ ] Step 5 — Submit leave
+[ ] Step 6 — Approve leave
+[ ] Step 7 — Close leave
+```
+
+### التحقق
+- ✅ Typecheck
+- ✅ Lint
+- ✅ **110 / 110 tests** (كان 107، +3 regression جديدة للـ pg → typed mapping)
+
+### 📋 رسالة للمبرمج ليختبر Step 1 الآن
+
+```
+آخر commit على main: 158d937
+
+اسحب وشغّل، ثم جرب /create/hr/employee وتأكد من:
+
+1. احفظ بدون اسم      → يلوّن حقل "الاسم" + "أدخل الاسم الكامل"
+2. احفظ بدون جنسية    → يلوّن حقل "الجنسية"
+3. احفظ برقم هوية موجود لموظف آخر → يلوّن "nationalId" + "الرقم مرتبط بموظف آخر"
+4. احفظ ببريد موجود مسبقاً → يلوّن "email" + "البريد الإلكتروني مستخدم مسبقاً"
+5. احفظ بـ managerId=99999 → يلوّن "managerId" + "المدير 99999 غير موجود"
+6. احفظ بقسم مكتوب بالخطأ (مثل "المالياتت") → يلوّن "department" + "القسم غير موجود"
+
+لازم في كل حالة:
+- toast يظهر بعنوان دقيق حسب الـ code (البيانات غير صالحة / لا يمكن تنفيذ الآن)
+- الحقل المُخالف يُلوّن باللون الأحمر ويُعرض الـ fix تحته
+- ما فيه "حدث خطأ غير متوقع"
+
+إذا شاهدت هذه النتائج، أكمل لـ Step 2 (update employee).
+إذا في حالة ترجع "حدث خطأ" عامة، أرسل لي الـ server log للحدث
+وسأصلحه قبل ما نكمل.
+```
+
+---
+
+**هات checklist التحقق اللي عرضتها** وسأستخدمها عقداً معك ومع المبرمج قبل الإعلان عن Step 1 أنه "جاهز"، ثم أنتقل لـ Step 2.

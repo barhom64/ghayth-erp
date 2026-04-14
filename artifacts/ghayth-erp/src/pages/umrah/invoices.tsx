@@ -111,7 +111,7 @@ export default function UmrahInvoices() {
         resultCount={filteredItems.length}
       />
 
-      <DataTable<any>
+      <DataTable
         columns={[
           { key: "ref", header: "المرجع", render: (inv) => <span className="font-mono text-sm">{inv.ref}</span> },
           { key: "agentName", header: "الوكيل" },

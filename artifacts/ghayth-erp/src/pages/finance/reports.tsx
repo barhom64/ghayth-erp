@@ -278,7 +278,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
           </div></div>
         ) : (
           <>
-            <DataTable<any>
+            <DataTable
               columns={flatColumns}
               data={rows}
               isLoading={isLoading}
@@ -399,7 +399,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
           <span className="text-lg">{formatCurrency(totalRevenue)}</span>
         </CardTitle></CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={revenueColumns}
             data={revenues}
             rowKey={(r) => r.code}
@@ -416,7 +416,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
           <span className="text-lg">{formatCurrency(totalExpenses)}</span>
         </CardTitle></CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={expenseColumns}
             data={expenses}
             rowKey={(e) => e.code}
@@ -479,7 +479,7 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={sectionColumns}
             data={items}
             rowKey={(r) => r.code}
@@ -593,7 +593,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-green-700">التدفقات الداخلة</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <DataTable<any>
+            <DataTable
               columns={inflowColumns}
               data={inflows}
               rowKey={(_, i) => i}
@@ -607,7 +607,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-red-700">التدفقات الخارجة</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <DataTable<any>
+            <DataTable
               columns={outflowColumns}
               data={outflows}
               rowKey={(_, i) => i}
@@ -682,7 +682,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
         </Card>
       </div>
 
-      <DataTable<any>
+      <DataTable
         columns={cashBankColumns}
         data={entries}
         isLoading={isLoading}
@@ -741,7 +741,7 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-blue-700 text-base">العهد ({custodies.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <DataTable<any>
+            <DataTable
               columns={custodyColumns}
               data={custodies}
               noToolbar
@@ -754,7 +754,7 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-orange-700 text-base">السلف ({advances.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <DataTable<any>
+            <DataTable
               columns={custodyColumns}
               data={advances}
               noToolbar
@@ -819,7 +819,7 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
         <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(summary.total || 0))}</p>
       </CardContent></Card>
 
-      <DataTable<any>
+      <DataTable
         columns={expensesColumns}
         data={rows}
         isLoading={isLoading}
@@ -884,7 +884,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-base">الإيرادات حسب الحساب</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <DataTable<any>
+            <DataTable
               columns={byAccountColumns}
               data={byAccount}
               rowKey={(r) => r.code}
@@ -898,7 +898,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
         <Card>
           <CardHeader><CardTitle className="text-base">الإيرادات الشهرية</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <DataTable<any>
+            <DataTable
               columns={byMonthColumns}
               data={byMonth}
               rowKey={(r) => r.period}
@@ -987,7 +987,7 @@ function BudgetVariance() {
         </Card>
       </div>
 
-      <DataTable<any>
+      <DataTable
         columns={budgetColumns}
         data={rows}
         isLoading={isLoading}
@@ -1126,7 +1126,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
             </Card>
           </div>
 
-          <DataTable<any>
+          <DataTable
             columns={entityColumns}
             data={rowsWithBalance}
             isLoading={isLoading}

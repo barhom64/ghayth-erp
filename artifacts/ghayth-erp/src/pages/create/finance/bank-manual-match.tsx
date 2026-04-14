@@ -111,7 +111,7 @@ export default function BankManualMatchPage() {
 
           {jeResults.length > 0 && (
             <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded">
-              <DataTable<any>
+              <DataTable
                 columns={[
                   {
                     key: "ref",

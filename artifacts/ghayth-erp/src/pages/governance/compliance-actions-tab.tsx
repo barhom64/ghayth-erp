@@ -102,7 +102,7 @@ export function ComplianceActionsTab() {
       <Card>
         <CardHeader><CardTitle>إجراءات الامتثال</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "title", header: "الإجراء", sortable: true, searchable: true, render: (item) => <span className="font-medium">{item.title}</span> },
               { key: "regulation", header: "اللائحة", sortable: true, searchable: true, render: (item) => <span className="text-muted-foreground">{item.regulation || "-"}</span> },

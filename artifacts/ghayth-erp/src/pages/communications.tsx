@@ -490,7 +490,7 @@ function CommLogTab() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input className="ps-9" placeholder="بحث بالرقم أو الموضوع..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <DataTable<any>
+        <DataTable
           columns={columns}
           data={filtered}
           isLoading={isLoading}
@@ -548,7 +548,7 @@ function WhatsAppTab() {
             <option value="failed">فاشل</option>
           </select>
         </div>
-        <DataTable<any>
+        <DataTable
           columns={columns}
           data={filtered}
           isLoading={isLoading}
@@ -606,7 +606,7 @@ function SMSTab() {
             <option value="failed">فاشل</option>
           </select>
         </div>
-        <DataTable<any>
+        <DataTable
           columns={columns}
           data={filtered}
           isLoading={isLoading}
@@ -652,7 +652,7 @@ function PBXTab() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input className="ps-9" placeholder="بحث برقم المتصل أو المستقبل..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <DataTable<any>
+        <DataTable
           columns={columns}
           data={filtered}
           isLoading={isLoading}

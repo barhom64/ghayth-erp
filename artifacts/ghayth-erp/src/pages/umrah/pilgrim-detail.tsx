@@ -118,7 +118,7 @@ export default function PilgrimDetail() {
           <Card>
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-red-500" />الغرامات ({data.penalties.length})</CardTitle></CardHeader>
             <CardContent>
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
                   { key: "daysOverstayed", header: "أيام التأخر", render: (p) => `${p.daysOverstayed} يوم` },

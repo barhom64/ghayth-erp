@@ -94,7 +94,7 @@ export function AuditsTab() {
       <Card>
         <CardHeader><CardTitle>التدقيق</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filteredAudits}
             isLoading={isLoading}

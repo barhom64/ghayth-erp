@@ -92,7 +92,7 @@ export function AlertFatigueTab() {
       {settings.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-semibold text-gray-700">قواعد الكتم النشطة</h3>
-          <DataTable<any>
+          <DataTable
             data={settings}
             rowKey={(s, i) => s.alertType ?? i}
             searchPlaceholder="بحث بنوع التنبيه..."

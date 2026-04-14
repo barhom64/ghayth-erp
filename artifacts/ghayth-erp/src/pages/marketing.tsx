@@ -72,7 +72,7 @@ function FunnelTab() {
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Target className="h-5 w-5 text-purple-600" />تتبع مصادر العملاء</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <DataTable<any>
+            <DataTable
               noToolbar
               pageSize={0}
               rowKey={(sf) => sf.source}
@@ -240,7 +240,7 @@ function CampaignsTab() {
       <Card>
         <CardHeader><CardTitle>الحملات</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filtered}
             isLoading={isLoading}

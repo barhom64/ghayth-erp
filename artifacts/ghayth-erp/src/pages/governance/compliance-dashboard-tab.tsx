@@ -23,7 +23,7 @@ export function ComplianceDashboardTab() {
             <Card>
               <CardHeader><CardTitle>الامتثال حسب الوحدة</CardTitle></CardHeader>
               <CardContent>
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "module", header: "الوحدة", sortable: true, searchable: true, render: (m) => <span className="font-medium">{m.module}</span> },
                     { key: "compliant", header: "ممتثل", sortable: true, render: (m) => <span className="text-green-700">{m.compliant}</span> },

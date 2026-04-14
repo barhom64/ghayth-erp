@@ -11,7 +11,7 @@ scheduledReportsRouter.get("/", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
       `SELECT sr.*,
-         COALESCE(e."fullName", e."arabicName", 'Unknown') AS "createdByName"
+         COALESCE(e."name", e."nameEn", 'Unknown') AS "createdByName"
        FROM scheduled_reports sr
        LEFT JOIN employee_assignments ea ON ea.id = sr."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"

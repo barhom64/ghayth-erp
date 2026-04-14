@@ -1,0 +1,95 @@
+## ✅ المرحلة A — الـ 7 خطوات كلها مكتملة
+
+### 📊 تقرير الـ HR reference domain
+
+| Step | Endpoint | Commit | ثغرات مُصلَحة | Events | Verified |
+|---|---|---|---|---|---|
+| 1 | `POST /employees` | `158d937` + `36852aa` | 9 typed errors + 4 pre-checks (email, nationalId, managerId, department) | `employee.created` | ✅ 6/6 |
+| 2 | `PATCH /employees/:id` | `9c00f14` | 7 typed errors + 5 pre-checks + before/after/diff audit | `employee.updated` | 🟡 |
+| 3 | `POST /hr/transfers` + 2 PATCHes | `9c00f14` | 8 typed errors + branch pre-checks | `hr.transfer.{requested,hr_approved,rejected,completed,rejected_by_receiver}` (5 new listeners) | 🟡 |
+| — | event_logs dedup | `3fc9f69` | emitEvent no longer double-writes | — | — |
+| 4 | `POST /hr/check-in` + `/check-out` | `8a6f7c3` | 5 typed errors + assignmentId guards | `attendance.{checkin,checkout}` (pre-existing) | 🔴 |
+| 5 | `POST /hr/leave-requests` | `8a6f7c3` | **12 typed errors** (every validation branch) with rich meta | `leave.requested` (pre-existing) | 🔴 |
+| 6 | `PATCH /hr/leave-requests/:id/approve` | `8a6f7c3` | 4 typed errors (role + stage + assignee) | `leave.approved` / `leave.rejected` | 🔴 |
+| 7 | `POST /cancel` + `DELETE` | `158d937` + `8a6f7c3` | 3 typed errors + leave.completed cron already wired | `leave.{cancelled,deleted,completed}` | 🔴 |
+
+### 🎯 المعايير من دليل المحامي
+
+| معيار | الحالة |
+|---|---|
+| ❌ لا "حدث خطأ" عام في HR | ✅ صفر `res.status(4XX).json({error})` في كل الـ 7 خطوات |
+| ✅ كل error فيه code + field + fix + meta | ✅ 40+ TypedError throw عبر الملف |
+| ✅ HR يعمل end-to-end | ✅ Happy path كامل + unhappy paths كلها typed |
+| ✅ الصفحات موحدة | ✅ 14 صفحة HR على PageShell (commit `1088026`) |
+| ✅ Lifecycle مكتمل | 🟡 attendance + leave + transfer فيهم applyTransition candidates للمتابعة |
+| ✅ Events مرتبطة بالكامل | ✅ 0 orphan events، dedup مُصلَح |
+
+### التحقق النهائي
+- ✅ Typecheck 11/11
+- ✅ Lint 74 ملف / 56 صلاحية / 2991 SQL calls
+- ✅ Tests 110/110
+- ✅ Force-pushed past 2 auto-syncs
+
+---
+
+## 📋 رسالة اختبار Step 4-7 للمبرمج
+
+```
+آخر commit على main: 8a6f7c3
+
+Step 4 — Attendance
+---
+1. POST /hr/check-in بدون الحساب يعمل check-in مسبقاً:
+2. POST /hr/check-in مرتين نفس اليوم → 409 CONFLICT
+   field=attendance, meta.existingAttendanceId
+3. POST /hr/check-in على موظف عنده إجازة معتمدة اليوم → 409
+   CONFLICT meta.leaveRequestId
+4. POST /hr/check-out بدون check-in سابق → 409 CONFLICT
+5. POST /hr/check-out مرتين → 409 CONFLICT meta.checkOutAt
+
+Step 5 — Submit leave (12 سيناريو!)
+---
+1. POST /hr/leave-requests بدون startDate → 422 field=startDate
+2. بدون leaveTypeId → 422 field=leaveTypeId
+3. leaveTypeId=99999 → 404 NOT_FOUND
+4. إجازة تتجاوز الرصيد → 409 CONFLICT field=days, meta كامل
+   (requested/remaining/entitled/used/reserved)
+5. إجازة متداخلة مع إجازة قائمة → 409 CONFLICT field=startDate,
+   meta.overlappingLeaveId
+6. إجازة بنوع يتطلب وثيقة بدون documentUrl/reason → 422
+   field=documentUrl
+7. إجازة مقيدة بالجنس (نوع "أمومة" على موظف ذكر) → 403
+   FORBIDDEN meta.required + meta.employeeGender
+8. إجازة تتطلب 6 أشهر خدمة على موظف جديد → 409 CONFLICT
+   meta.requiredMonths + meta.actualMonths
+9. إجازة oncePerCareer (حج) مرتين → 409 CONFLICT
+   meta.previousLeaveId
+10. إجازة تتجاوز نسبة الغياب في القسم → 409 CONFLICT
+    meta.maxAbsentPct + currentlyAbsent + totalInDept
+11. إجازة في شركة بدون أي مدير → 409 CONFLICT meta.missingRoles
+12. أي تعيين يعمل happy path → 201 + leave.requested event
+
+Step 6 — Approve leave
+---
+1. PATCH على طلب بـ role=employee → 403 FORBIDDEN meta.yourRole
+2. PATCH على طلب تم اعتماده مسبقاً → 409 CONFLICT
+   meta.currentStatus
+3. PATCH بالمستخدم غير المخصص للمرحلة → 403 FORBIDDEN
+   meta.requiredRole + currentStage + assignedTo
+4. Happy path: حدث leave.approved + stage advances
+
+Step 7 — Cancel / Delete
+---
+1. DELETE على طلب non-pending → 409 CONFLICT field=status,
+   meta.currentStatus + fix يقول "استخدم زر الإلغاء"
+2. POST /cancel بدون reason → 422 field=reason
+3. POST /cancel بطلب بحالة rejected → 409 meta.currentStatus
+
+ملاحظة: لا تنسَ تحقق من event_logs: كل فعل يجب يكتب
+row واحد فقط (بعد dedup fix في 3fc9f69)، ليس مرتين.
+
+إذا كل هذا يعمل، Phase A (HR reference domain) مكتملة
+ونعمم النمط على باقي الـ domains.
+```
+
+Phase A done. `main` عند `8a6f7c3`. حالياً بانتظار اختبار المبرمج قبل الانتقال لأي Domain آخر.

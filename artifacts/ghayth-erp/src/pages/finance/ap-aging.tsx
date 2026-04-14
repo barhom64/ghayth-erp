@@ -109,7 +109,7 @@ export default function ApAgingPage() {
         </CardContent>
       </Card>
 
-      <DataTable<any>
+      <DataTable
         columns={columns}
         data={suppliers}
         isLoading={isLoading}
@@ -130,7 +130,7 @@ export default function ApAgingPage() {
           if (expanded !== sid || !s.orders?.length) return null;
           return (
             <div className="border-t bg-gray-50/30 p-3">
-              <DataTable<any>
+              <DataTable
                 noToolbar
                 pageSize={0}
                 data={s.orders}

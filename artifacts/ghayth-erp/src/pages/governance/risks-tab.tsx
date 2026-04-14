@@ -97,7 +97,7 @@ export function RisksTab() {
       <Card>
         <CardHeader><CardTitle>المخاطر</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filteredRisks}
             isLoading={isLoading}

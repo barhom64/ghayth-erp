@@ -64,7 +64,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
         <span className="text-gray-400">{paidCount} / {schedule.length} دفعة</span>
       </div>
 
-      <DataTable<any>
+      <DataTable
         noToolbar
         pageSize={0}
         data={schedule}

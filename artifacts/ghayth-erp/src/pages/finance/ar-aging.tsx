@@ -109,7 +109,7 @@ export default function ArAgingPage() {
         </CardContent>
       </Card>
 
-      <DataTable<any>
+      <DataTable
         columns={columns}
         data={clients}
         isLoading={isLoading}
@@ -126,7 +126,7 @@ export default function ArAgingPage() {
           if (expanded !== c.clientId || !c.invoices?.length) return null;
           return (
             <div className="border-t bg-gray-50/30 p-3">
-              <DataTable<any>
+              <DataTable
                 noToolbar
                 pageSize={0}
                 data={c.invoices}

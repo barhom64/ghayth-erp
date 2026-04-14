@@ -223,7 +223,7 @@ export default function Automation() {
                 </div>
               )}
 
-              <DataTable<any>
+              <DataTable
                 columns={autoLogColumns}
                 data={filteredAutoLogs}
                 isLoading={loadingAutoLogs}
@@ -250,7 +250,7 @@ export default function Automation() {
                 <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input className="ps-9" placeholder="بحث بالاسم أو الوصف..." value={jobSearch} onChange={(e) => setJobSearch(e.target.value)} />
               </div>
-              <DataTable<any>
+              <DataTable
                 columns={jobColumns}
                 data={filteredJobs}
                 isLoading={isLoading}
@@ -277,7 +277,7 @@ export default function Automation() {
                 <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input className="ps-9" placeholder="بحث في سجل التشغيل..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
               </div>
-              <DataTable<any>
+              <DataTable
                 columns={logColumns}
                 data={filteredLogs}
                 isLoading={loadingLogs}

@@ -1,0 +1,175 @@
+نعم، اقتراحك صحيح 100% — وهذا هو الطريق الصواب
+رأيك هو بالضبط الـ plan-B option أ اللي اقترحتُه، لكن مع إضافة مهمة:
+
+"توحيد مراكز المكتبات وتنظيم النظام وتوحيد آلية العمل"
+
+وهذه النقطة هي الفرق بين "refactor سطحي" و"refactor معماري حقيقي". دعني أبني الخطة كاملة.
+
+📐 خطة "HR كنموذج مرجعي" → تعميم
+الفلسفة
+HR يصبح الـ "reference domain" — أي domain آخر يُقاس عليه. عند الانتهاء:
+
+أي صفحة HR تبدو كأختها (نفس الـ layout, نفس الـ spacing, نفس الـ error states)
+أي معاملة HR تمرّ بنفس الـ lifecycle pattern
+أي نموذج HR يستخدم نفس الـ form primitives
+لمّا نوسّع لـ Finance → ننسخ الـ pattern حرفياً بدل الاختراع من جديد
+🎯 المرحلة A — HR كـ reference domain
+A.1 صفحات HR كلها (~15 صفحة) على الـ primitives
+صفحة	التغييرات	حالة الفرق
+/hr	✅ done P4.2	🟢
+/employees (list)	PageShell + DataTable presets + PageStatusBadge + إصلاح nested button	🔴 الآن
+/employees/:id (detail)	PageShell + PageSection + إصلاح 404 بصفحة واضحة	🔴 الآن
+/employees/create	FormShell + FormField primitives	🔴 الآن
+/hr/leaves	✅ done P3	🟢
+/hr/leaves/create	FormShell	🔴
+/hr/leaves/:id	PageShell + PageSection + useLifecycleAction	🔴
+/hr/attendance	PageShell + DataTable presets	🔴
+/hr/payroll	PageShell + currencyColumn + statusColumn	🔴
+/hr/letters	PageShell + FormShell + PageStatusBadge	🔴
+/hr/recruitment	PageShell + PageStatusBadge	🔴
+/hr/training	PageShell	🔴
+/hr/evaluations	PageShell + PageStatusBadge	🔴
+/hr/discipline	PageShell + PageStatusBadge (memo)	🔴
+/hr/shifts	PageShell	🔴
+A.2 حذف StatusBadge القديم من HR فقط
+مش من كل الـ app (هذا P5 الكامل). فقط في صفحات HR نضمن أن <StatusBadge> لا يظهر ولا مرة. النتيجة: ستشعر أن HR وحدة واحدة بدل تجميعة.
+
+A.3 إصلاحات مرئية إضافية في HR
+✅ إصلاح nested button warning في /employees
+✅ صفحة "موظف غير موجود" صديقة (بدلاً من 404 خام) لـ /employees/734
+✅ رسائل errors inline على الحقول (field highlighting)
+✅ loading skeletons موحّدة
+✅ empty states موحّدة
+A.4 التوثيق: "HR Domain Blueprint"
+ملف docs/blueprints/hr-domain.md يصف:
+
+كيف بُنيت كل صفحة
+أي primitives استخدَمت ولماذا
+الـ state machines المعرَّفة
+كيف تُنسخ لباقي الدومينات
+🏗 المرحلة B — توحيد المكتبات المركزية (هذه نقطتك المهمة)
+B.1 تنظيم components/ بهيكل واضح
+components/
+├── primitives/             ← ما أنشأته في P1
+│   ├── page-shell.tsx
+│   ├── form-shell.tsx
+│   ├── page-error-boundary.tsx
+│   ├── page-status-badge.tsx
+│   └── data-table-presets.tsx
+├── ui/                     ← shadcn/ui (Button, Card, Dialog، إلخ)
+├── shared/                 ← مشتركة بين domains (Filters, Timeline، إلخ)
+└── domains/                ← خاصة بـ domain (EmployeeCard، إلخ) — جديد
+    ├── hr/
+    ├── finance/
+    └── ...
+
+B.2 تنظيم hooks/
+hooks/
+├── api/                    ← كل الـ data hooks
+│   ├── use-api-query.ts
+│   ├── use-api-mutation.ts
+│   └── use-lifecycle-action.ts
+├── ui/                     ← hooks للتفاعل مع الـ UI
+│   ├── use-toast.ts
+│   └── use-filters.ts
+└── domain/                 ← hooks خاصة بالـ domain
+    └── hr/
+        ├── use-employee.ts
+        └── use-leave-balance.ts
+
+B.3 تنظيم lib/
+lib/
+├── api.ts                  ← ApiError + apiFetch + useApiMutation
+├── formatters.ts
+├── utils.ts
+└── domain-contracts/       ← جديد
+    ├── hr-lifecycle.ts     ← state machines + types
+    ├── finance-lifecycle.ts
+    └── ...
+
+B.4 تنظيم الـ backend
+api-server/src/
+├── lib/
+│   ├── lifecycleEngine.ts  ← موجود
+│   ├── obligationsEngine.ts ← موجود
+│   ├── errorHandler.ts     ← موجود، سنوثّقه
+│   └── eventBus.ts         ← موجود
+├── routes/
+│   └── hr/                 ← جديد: تقسيم hr.ts إلى ملفات أصغر
+│       ├── employees.ts
+│       ├── leaves.ts
+│       ├── attendance.ts
+│       └── payroll.ts
+
+هذا التنظيم يجعل إضافة ميزة جديدة عملية إسقاط، ليس بحثاً عن المكان الصحيح.
+
+🔄 المرحلة C — تعميم HR pattern على باقي الـ domains
+بعد أن HR يصير مرجع، نطبّق نفس الخطوات على:
+
+ترتيب	Domain	صفحات تقريبية	تعقيد
+C.1	Support	4	صغير
+C.2	CRM	8	متوسط
+C.3	Fleet	12	متوسط
+C.4	Property	10	متوسط
+C.5	Projects	8	متوسط
+C.6	Legal	6	صغير
+C.7	Warehouse	6	صغير
+C.8	Finance	30+	كبير
+الأخير هو Finance لأنه الأكبر والأعقد، ولأننا سنستفيد من كل الدروس المكتسبة من الـ 7 domains قبله.
+
+📏 المرحلة D — التوسّع الدقيق (النقطة الأخيرة في كلامك)
+D.1 Lint rules تمنع الرجوع للنمط القديم
+// scripts/lintPatterns.mjs (جديد)
+forbid('<StatusBadge ', 'استخدم <PageStatusBadge>')
+forbid('<table ', 'استخدم <DataTable>')
+forbid('fetch(["\']/api', 'استخدم useApiQuery أو useApiMutation')
+forbid('res\\.status\\(40\\d\\)\\.json\\(\\{\\s*error:', 'استخدم throw new TypedError')
+
+يفشل CI لو أي PR رجع للقديم. هذا يضمن أن التوسع دقيق — لا يمكن لأحد (أنا، المبرمج، auto-sync) إعادة إدخال النمط القديم.
+
+D.2 لوحة /admin/system-health تعرض نسب التبنّي
+% pages using PageShell
+% routes using TypedError
+% forms using FormShell
+% tables using DataTable
+Schema coverage (من /health/schema)
+Golden path tests per domain
+كل PR يُحدِّث الأرقام. التقدّم مرئي.
+
+D.3 Templates للمبرمجين
+templates/
+├── new-list-page.template.tsx         ← PageShell + DataTable + presets
+├── new-create-page.template.tsx       ← FormShell + field primitives
+├── new-detail-page.template.tsx       ← PageShell + PageSection + lifecycle
+└── new-backend-route.template.ts      ← TypedError + applyTransition
+
+المبرمج ينسخ template ويعدّل. لا اختراع من الصفر = لا اختلاف أسلوب.
+
+📊 ترتيب التنفيذ اللي أوصي به
+#	المرحلة	مدة commits	فرق مرئي
+1	A.1 + A.3 — HR pages + إصلاحات	15-20 commit	🟢🟢🟢 كبير
+2	A.2 — حذف StatusBadge من HR	2-3 commits	🟢🟢
+3	A.4 — توثيق HR Blueprint	1 commit	—
+4	B — إعادة تنظيم المكتبات	5-8 commits	🟡 تنظيمي
+5	D.1 — lint rules منع الرجوع	1 commit	🟢 مستمر
+6	D.3 — templates	2 commits	🟢 للمطوّرين
+7	C — تعميم على باقي الـ domains واحداً تلو الآخر	~80 commit موزّعة	🟢🟢🟢 شامل
+8	D.2 — admin/system-health dashboard	3-5 commits	🟢 تتبّع
+✅ رأيي الصريح في خطتك
+نقاطك الأربع كلها صحيحة وأساسية:
+
+كلامك	ترجمته المعمارية	مكانه في الخطة
+"ابدأ بـ HR ثم عمّم"	Reference domain → pattern replication	✅ المرحلة A → C
+"توحيد مراكز المكتبات"	Library organization + single source of truth	✅ المرحلة B
+"تنظيم النظام"	Folder structure + naming conventions	✅ المرحلة B
+"توحيد آلية العمل"	Shared patterns + enforcement	✅ المرحلة D
+"التوسع بشكل ادق وافضل"	Lint rules + templates + dashboard	✅ المرحلة D
+🚀 اقتراحي العملي الآن
+ابدأ معي بالمرحلة A فقط (HR كامل + إصلاحات مرئية). سأدفع كل commit إلى main مباشرة. بعد الانتهاء:
+
+ستختبر على workspace وتحكم: هل HR فعلاً يبدو موحَّداً؟
+لو نعم → ننتقل للمرحلة B (تنظيم المكتبات) ثم C (تعميم)
+لو في مشاكل → نصلحها في HR قبل التعميم (أفضل من إصلاح 8 domains لاحقاً)
+هل أبدأ الآن بالمرحلة A؟ سأبدأ بـ /employees + /employees/:id + /employees/create أولاً لأنها اللي المبرمج أشار لمشاكلها.
+
+

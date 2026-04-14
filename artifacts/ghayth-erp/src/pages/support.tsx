@@ -178,7 +178,7 @@ function Support() {
       <Card>
         <CardHeader><CardTitle className="gap-2 flex items-center"><Headphones className="h-5 w-5" /> تذاكر الدعم</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={filtered}
             isLoading={isLoading}
@@ -309,7 +309,7 @@ function KBManagement() {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-blue-600" />مقالات قاعدة المعرفة</CardTitle></CardHeader>
         <CardContent>
-          <DataTable<any>
+          <DataTable
             columns={kbColumns}
             data={filteredItems}
             isLoading={isLoading}
@@ -378,7 +378,7 @@ function CSATStats() {
         <Card>
           <CardHeader><CardTitle>أداء الوكلاء (رضا العملاء)</CardTitle></CardHeader>
           <CardContent>
-            <DataTable<any>
+            <DataTable
               columns={csatColumns}
               data={stats}
               isLoading={isLoading}

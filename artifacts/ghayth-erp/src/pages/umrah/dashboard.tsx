@@ -136,7 +136,7 @@ export default function UmrahDashboard() {
         <Card>
           <CardHeader><CardTitle className="text-base">آخر الواصلين</CardTitle></CardHeader>
           <CardContent>
-            <DataTable<any>
+            <DataTable
               columns={[
                 { key: "fullName", header: "الاسم", render: (r) => <span className="font-medium">{r.fullName}</span> },
                 { key: "passportNumber", header: "الجواز" },

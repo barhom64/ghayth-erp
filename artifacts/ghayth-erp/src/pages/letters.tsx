@@ -161,7 +161,7 @@ function HROfficialLettersTab() {
         </Card>
       )}
 
-      <DataTable<any>
+      <DataTable
         columns={columns}
         data={searchFiltered}
         isLoading={isLoading}
@@ -268,7 +268,7 @@ function GeneralLettersTab() {
         </select>
       </div>
 
-      <DataTable<any>
+      <DataTable
         columns={columns}
         data={filtered}
         isLoading={isLoading}

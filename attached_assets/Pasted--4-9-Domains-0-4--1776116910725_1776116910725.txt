@@ -1,0 +1,58 @@
+## ✅ المرحلة 4 مكتملة — كل الـ 9 Domains
+
+### الملخص الإجمالي للمراحل 0 → 4
+
+| المرحلة | المحتوى | الحالة |
+|---|---|---|
+| **P0** | Safety net — typed errors + PageErrorBoundary + /health/schema | ✅ |
+| **P1** | 6 primitives — PageShell, FormShell, ApiError, useApiMutation, useLifecycleAction, PageStatusBadge، DataTable presets | ✅ |
+| **P3** | HR leave pilot — backend typed errors + frontend PageShell | ✅ |
+| **P4.1** | Support | ✅ |
+| **P4.2** | HR hub | ✅ |
+| **P4.3** | CRM | ✅ |
+| **P4.4** | Fleet | ✅ |
+| **P4.5** | Property | ✅ |
+| **P4.6** | Projects | ✅ |
+| **P4.7** | Legal | ✅ |
+| **P4.8** | Finance hub + invoices + expenses | ✅ |
+| **P4.9** | Warehouse | ✅ |
+
+### الأرقام بعد الدفعة الأخيرة
+
+**Backend typed errors**
+- ~130 موقع ad-hoc 404 → thrown TypedError
+- 11 ملف routes يحمل الآن typed-error vocabulary
+- كل الـ NotFoundError + ValidationError + ConflictError + ForbiddenError + IntegrationError متاحة
+
+**Frontend consolidation**
+- **9 domain hub pages** الآن على `<PageShell>` (كانت بـ header مخصّص)
+- كل `<StatusBadge>` قديم في الـ hubs → `<PageStatusBadge>` بـ domain مناسب
+- `<PageErrorBoundary>` يلفّ كل body تلقائياً
+- 2 صفحات finance فرعية (invoices, expenses) على PageShell
+
+### التحقق النهائي
+- ✅ Typecheck 11/11 workspaces
+- ✅ Lint (74 ملف، 56 صلاحية، 2982 SQL call)
+- ✅ Tests 107/107
+- ✅ صفر كسر — كل المسارات الأخرى تعمل
+- ✅ كل commit على main + فرع العمل
+
+### المتبقي من الخطة (Phase 5 + Phase 6)
+
+بعد أن تصبح الأنماط الموحَّدة مُتبنّاة بشكل واسع، Phase 5 يحذف القديم:
+- إزالة `<StatusBadge>` legacy بعد تبنّي 100%
+- إزالة direct `fetch()` خام → `useApiMutation`
+- إزالة `<table>` خامة → DataTable
+- إزالة `UPDATE ... SET status` المباشر → `applyTransition`
+- lint rules تمنع الرجوع (P5.6)
+
+لكن **هذا الحذف خطير ولا ينبغي أن يحدث قبل اختبار ميداني** على المزايا الحالية.
+
+### توصيتي للخطوة التالية
+1. **اختبر الآن** الصفحات التي لمسها P4 على الـ Replit workspace — تأكّد أن الـ layout موحّد وأن الـ errors تعرض بوضوح
+2. إذا كل شيء يعمل، نكمل مع:
+   - P2 (schema consolidation) — مصدر وحيد للحقيقة
+   - P5 (الحذف الآمن) — بعد التحقق من التبنّي
+   - Phase 6 (enforcement lint rules)
+
+هل تريد أن أبدأ P2 (schema) أم نتوقف للاختبار الميداني أولاً؟

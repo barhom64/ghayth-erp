@@ -825,4 +825,37 @@ router.get("/judgments/financial-report", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
+router.get("/financial-report", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cases = await rawQuery<any>(
+      `SELECT status, COUNT(*) AS count, COALESCE(SUM("financialRisk"),0) AS risk
+       FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL GROUP BY status`,
+      [scope.companyId]
+    );
+    const [totals] = await rawQuery<any>(
+      `SELECT COUNT(*) AS "totalCases",
+              COALESCE(SUM("financialRisk"),0) AS "totalRisk"
+       FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    const [judgments] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(amount),0) AS "totalJudgments",
+              COALESCE(SUM("paidAmount"),0) AS "totalPaid"
+       FROM legal_judgments WHERE "companyId"=$1`,
+      [scope.companyId]
+    ).catch(() => [{ totalJudgments: 0, totalPaid: 0 }]);
+    res.json({
+      data: {
+        byStatus: cases,
+        totalCases: Number(totals?.totalCases || 0),
+        totalRisk: Number(totals?.totalRisk || 0),
+        totalJudgments: Number(judgments?.totalJudgments || 0),
+        totalPaid: Number(judgments?.totalPaid || 0),
+        outstanding: Number(judgments?.totalJudgments || 0) - Number(judgments?.totalPaid || 0),
+      }
+    });
+  } catch (err) { handleRouteError(err, res, "Legal financial report error:"); }
+});
+
 export default router;

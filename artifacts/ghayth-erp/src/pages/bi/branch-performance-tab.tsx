@@ -38,7 +38,7 @@ export function BranchPerformanceTab() {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold">مقارنة أداء الفروع</h2>
-      <DataTable<any>
+      <DataTable
         columns={columns}
         data={rows}
         isLoading={isLoading}

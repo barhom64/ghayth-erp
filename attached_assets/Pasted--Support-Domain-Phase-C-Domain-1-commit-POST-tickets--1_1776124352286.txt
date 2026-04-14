@@ -1,0 +1,75 @@
+## ✅ Support Domain (Phase C — Domain 1) مكتمل
+
+### ما نجز في هذا الـ commit
+- **POST /tickets**: validation على `title` + `description` + pre-check `clientId` FK + `emitEvent("support.ticket.created")` (كان orphan listener)
+- **PATCH /tickets/:id**: **state machine guard** (6 حالات، 12 transition مسموحة) + **event لكل transition** بدل `resolved` فقط
+- **DELETE /tickets/:id**: `emitEvent("support.ticket.deleted")`
+- **4 listeners جديدة** في `eventListeners.ts`: status_changed / closed / assigned / deleted
+
+### State Machine Support Ticket
+```
+open              → in_progress | pending_customer | field_visit | resolved | closed
+in_progress       → pending_customer | field_visit | resolved | closed | open
+pending_customer  → in_progress | field_visit | resolved | closed
+field_visit       → in_progress | resolved | closed
+resolved          → closed | in_progress (reopen)
+closed            → (terminal)
+```
+
+### التحقق
+- ✅ Typecheck 11/11
+- ✅ Lint 73 ملف (كان 74 — hr-attendance.ts محذوف), 56 صلاحية, 2967 SQL calls
+- ✅ Tests 110/110
+- ✅ Force-pushed `1de56ac` → `9e5a1e7`
+
+### حالة Phase C
+```
+[x] Domain 1 — Support   (commit 9e5a1e7)
+[ ] Domain 2 — CRM
+[ ] Domain 3 — Fleet
+[ ] Domain 4 — Property
+[ ] Domain 5 — Projects
+[ ] Domain 6 — Legal
+[ ] Domain 7 — Finance
+[ ] Domain 8 — Warehouse
+```
+
+### 📋 اختبار Support (للمبرمج)
+
+```
+آخر commit على main: 9e5a1e7
+
+Test scenarios:
+
+CREATE (POST /support/tickets):
+1. بدون title → 422 VALIDATION_ERROR field=title
+2. بدون description → 422 VALIDATION_ERROR field=description
+3. clientId=99999 → 422 VALIDATION_ERROR field=clientId
+4. Happy path → 201 + event "support.ticket.created" (row واحد
+   في event_logs، dedup يعمل)
+
+UPDATE (PATCH /support/tickets/:id):
+5. status: open → closed (سكب المراحل) → يجب أن يعمل (open→closed
+   موجود في allowlist)
+6. status: closed → open (محاولة إعادة فتح حالة نهائية) →
+   409 CONFLICT field=status, meta.allowedNext=[]
+7. status: resolved → pending_customer → 409 CONFLICT
+   (transition غير مسموح)
+8. status: in_progress → resolved → 200 + event
+   "support.ticket.resolved"
+9. تغيير assigneeId → 200 + event "support.ticket.assigned"
+
+DELETE (DELETE /support/tickets/:id):
+10. حذف تذكرة → 200 + event "support.ticket.deleted"
+
+EVENT LOG VERIFICATION:
+SELECT action, COUNT(*) FROM event_logs
+ WHERE "entityId" = <ticketId>
+ GROUP BY action;
+
+لازم يكون كل event مرة واحدة فقط (dedup من commit 3fc9f69).
+
+إذا كل السيناريوهات تعمل، أكمل لـ Domain 2 (CRM).
+```
+
+أكمل لـ Domain 2 (CRM) بدون انتظار؟
