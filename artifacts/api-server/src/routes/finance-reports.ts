@@ -598,3 +598,307 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", async (req, res) => {
     handleRouteError(err, res, "Vendor statement error:");
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+reportsRouter.get("/reports/entity-statement", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { entityType, entityId, startDate, endDate } = req.query as any;
+
+    let rows: any[] = [];
+    let entityName = "";
+
+    if (entityType === "employee" && entityId) {
+      const [emp] = await rawQuery<any>(
+        `SELECT e.name, ea.id AS aid FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
+         WHERE e.id = $2 LIMIT 1`,
+        [scope.companyId, Number(entityId)]
+      );
+      entityName = emp?.name || "";
+      const aid = emp?.aid;
+      if (aid) {
+        const qParams: any[] = [aid, scope.companyId];
+        let dateFilter = "";
+        if (startDate) { qParams.push(startDate); dateFilter += ` AND pr."createdAt" >= $${qParams.length}`; }
+        if (endDate) { qParams.push(endDate); dateFilter += ` AND pr."createdAt" <= $${qParams.length}`; }
+        rows = await rawQuery<any>(
+          `SELECT pr.period AS ref, CONCAT('راتب ', pr.period) AS description,
+                  pr."grossSalary" AS debit, pr."totalDeductions" AS credit,
+                  pr."netSalary" AS net, pr."createdAt" AS date, 'payroll' AS type
+           FROM payroll_records pr
+           WHERE pr."employeeAssignmentId" = $1 AND pr."companyId" = $2 ${dateFilter}
+           ORDER BY pr."createdAt" DESC LIMIT 100`,
+          qParams
+        );
+      }
+    } else if (entityType === "client" && entityId) {
+      const [cl] = await rawQuery<any>(`SELECT name FROM clients WHERE id = $1 AND "companyId" = $2`, [Number(entityId), scope.companyId]);
+      entityName = cl?.name || "";
+      const qParams: any[] = [Number(entityId), scope.companyId];
+      let dateFilter = "";
+      if (startDate) { qParams.push(startDate); dateFilter += ` AND i."createdAt" >= $${qParams.length}`; }
+      if (endDate) { qParams.push(endDate); dateFilter += ` AND i."createdAt" <= $${qParams.length}`; }
+      rows = await rawQuery<any>(
+        `SELECT i.ref, COALESCE(i.description, i.ref) AS description,
+                i.total AS debit, i."paidAmount" AS credit,
+                (i.total - i."paidAmount") AS net,
+                i."createdAt" AS date, i.status AS type
+         FROM invoices i WHERE i."clientId" = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL ${dateFilter}
+         ORDER BY i."createdAt" DESC LIMIT 100`,
+        qParams
+      );
+    } else if (entityType === "supplier" && entityId) {
+      const [sup] = await rawQuery<any>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`, [Number(entityId), scope.companyId]);
+      entityName = sup?.name || "";
+      const qParams: any[] = [Number(entityId), scope.companyId];
+      let dateFilter = "";
+      if (startDate) { qParams.push(startDate); dateFilter += ` AND po."createdAt" >= $${qParams.length}`; }
+      if (endDate) { qParams.push(endDate); dateFilter += ` AND po."createdAt" <= $${qParams.length}`; }
+      rows = await rawQuery<any>(
+        `SELECT po.ref, CONCAT('أمر شراء: ', po.ref) AS description,
+                po."totalAmount" AS debit, 0 AS credit,
+                po."totalAmount" AS net,
+                po."createdAt" AS date, po.status AS type
+         FROM purchase_orders po WHERE po."supplierId" = $1 AND po."companyId" = $2 ${dateFilter}
+         ORDER BY po."createdAt" DESC LIMIT 100`,
+        qParams
+      );
+    }
+
+    const totalDebit = rows.reduce((s: number, r: any) => s + Number(r.debit || 0), 0);
+    const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.credit || 0), 0);
+
+    res.json({ entityName, entityType, rows, summary: { totalDebit, totalCredit, balance: totalDebit - totalCredit, count: rows.length } });
+  } catch (err) {
+    handleRouteError(err, res, "Entity statement error:");
+  }
+});
+
+reportsRouter.get("/reports/custody-advances", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate, branchId } = req.query as any;
+
+    let dateFilter = "";
+    const params: any[] = [scope.companyId];
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
+
+    const custodies = await rawQuery<any>(
+      `SELECT je.id, je.ref, je.description,
+              COALESCE(SUM(jl.debit), 0) AS amount,
+              je."createdAt" AS date, je.status,
+              e.name AS "employeeName", 'custody' AS type
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
+       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' ${dateFilter}
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
+       ORDER BY je."createdAt" DESC`,
+      params
+    );
+
+    const advances = await rawQuery<any>(
+      `SELECT je.id, je.ref, je.description,
+              COALESCE(SUM(jl.debit), 0) AS amount,
+              je."createdAt" AS date, je.status,
+              e.name AS "employeeName", 'advance' AS type
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410'
+       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'ADV%' ${dateFilter}
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
+       ORDER BY je."createdAt" DESC`,
+      params
+    );
+
+    const totalCustodies = custodies.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const totalAdvances = advances.reduce((s: number, r: any) => s + Number(r.amount), 0);
+
+    res.json({
+      custodies, advances,
+      summary: {
+        totalCustodies, custodyCount: custodies.length,
+        totalAdvances, advanceCount: advances.length,
+        total: totalCustodies + totalAdvances,
+      }
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Custody advances report error:");
+  }
+});
+
+reportsRouter.get("/reports/expenses-analysis", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate, branchId, departmentId, projectId, costCenterId, groupBy = "account" } = req.query as any;
+
+    let dateFilter = "";
+    const params: any[] = [scope.companyId];
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
+    if (projectId) { params.push(projectId); dateFilter += ` AND je."projectId" = $${params.length}`; }
+
+    let selectCol = "coa.code AS key, coa.name AS label";
+    let groupCol = "coa.code, coa.name";
+    if (groupBy === "branch") {
+      selectCol = "b.id AS key, COALESCE(b.name, 'غير محدد') AS label";
+      groupCol = "b.id, b.name";
+    } else if (groupBy === "employee") {
+      selectCol = "e.id AS key, COALESCE(e.name, 'غير محدد') AS label";
+      groupCol = "e.id, e.name";
+    }
+
+    const rows = await rawQuery<any>(
+      `SELECT ${selectCol},
+              COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount,
+              COUNT(DISTINCT je.id) AS "entryCount"
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+       JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense'
+       LEFT JOIN branches b ON b.id = je."branchId"
+       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE jl.debit > jl.credit
+       GROUP BY ${groupCol}
+       ORDER BY amount DESC`,
+      params
+    );
+
+    const total = rows.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    res.json({ data: rows, summary: { total, count: rows.length, groupBy } });
+  } catch (err) {
+    handleRouteError(err, res, "Expenses analysis error:");
+  }
+});
+
+reportsRouter.get("/reports/revenue-analysis", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate, branchId } = req.query as any;
+
+    let dateFilter = "";
+    const params: any[] = [scope.companyId];
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
+
+    const byAccount = await rawQuery<any>(
+      `SELECT coa.code, coa.name,
+              COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount,
+              COUNT(DISTINCT je.id) AS "entryCount"
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+       JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue'
+       GROUP BY coa.code, coa.name
+       ORDER BY amount DESC`,
+      params
+    );
+
+    const byMonth = await rawQuery<any>(
+      `SELECT to_char(i."createdAt", 'YYYY-MM') AS period,
+              COALESCE(SUM(i."paidAmount"), 0) AS collected,
+              COALESCE(SUM(i.total), 0) AS invoiced,
+              COUNT(*) AS "invoiceCount"
+       FROM invoices i
+       WHERE i."companyId" = $1 AND i."deletedAt" IS NULL ${dateFilter.replace(/je\./g, 'i.')}
+       GROUP BY to_char(i."createdAt", 'YYYY-MM')
+       ORDER BY period ASC`,
+      params
+    );
+
+    const totalRevenue = byAccount.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    res.json({ byAccount, byMonth, summary: { totalRevenue, accountCount: byAccount.length } });
+  } catch (err) {
+    handleRouteError(err, res, "Revenue analysis error:");
+  }
+});
+
+reportsRouter.get("/reports/budget-variance", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { period, branchId } = req.query as any;
+
+    const targetPeriod = period || new Date().toISOString().slice(0, 7);
+    const params: any[] = [scope.companyId, targetPeriod];
+    const branchFilter = branchId ? ` AND b."branchId" = $${params.length + 1}` : "";
+    if (branchId) params.push(branchId);
+
+    const rows = await rawQuery<any>(
+      `SELECT b."accountCode", b.amount AS budget,
+              coa.name AS "accountName", coa.type,
+              COALESCE(b.used, 0) AS actual,
+              b.amount - COALESCE(b.used, 0) AS variance,
+              CASE WHEN b.amount > 0 THEN ROUND(COALESCE(b.used, 0)::numeric / b.amount * 100, 1) ELSE 0 END AS "usagePct"
+       FROM budgets b
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1
+       WHERE b."companyId" = $1 AND b.period = $2 ${branchFilter}
+       ORDER BY b."accountCode"`,
+      params
+    );
+
+    const totalBudget = rows.reduce((s: number, r: any) => s + Number(r.budget || 0), 0);
+    const totalActual = rows.reduce((s: number, r: any) => s + Number(r.actual || 0), 0);
+    const totalVariance = totalBudget - totalActual;
+
+    res.json({ data: rows, summary: { totalBudget, totalActual, totalVariance, period: targetPeriod } });
+  } catch (err) {
+    handleRouteError(err, res, "Budget variance error:");
+  }
+});
+
+reportsRouter.get("/reports/cash-bank-statement", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate, accountCode = "1100", branchId } = req.query as any;
+
+    let dateFilter = "";
+    const params: any[] = [scope.companyId, accountCode];
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
+
+    const [accountInfo] = await rawQuery<any>(
+      `SELECT code, name, type FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2`,
+      [scope.companyId, accountCode]
+    );
+
+    const entries = await rawQuery<any>(
+      `SELECT jl.id, je.ref, je.description,
+              jl.debit, jl.credit, je."createdAt" AS date,
+              b.name AS "branchName"
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+       LEFT JOIN branches b ON b.id = je."branchId"
+       WHERE jl."accountCode" = $2
+       ORDER BY je."createdAt" ASC`,
+      params
+    );
+
+    let runningBalance = 0;
+    const enriched = entries.map((e: any) => {
+      runningBalance += Number(e.debit) - Number(e.credit);
+      return { ...e, runningBalance };
+    });
+
+    const totalDebit = entries.reduce((s: number, e: any) => s + Number(e.debit), 0);
+    const totalCredit = entries.reduce((s: number, e: any) => s + Number(e.credit), 0);
+
+    res.json({
+      account: accountInfo,
+      entries: enriched,
+      summary: { totalDebit, totalCredit, closingBalance: runningBalance, count: entries.length }
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Cash bank statement error:");
+  }
+});
+

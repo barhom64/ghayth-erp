@@ -333,3 +333,33 @@ vendorsRouter.get("/financial-requests", async (req, res) => {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+vendorsRouter.get("/vendors/:id", async (req, res) => {
+  try {
+    const scope = (req as any).scope!;
+    const id = Number(req.params.id);
+    if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); return; }
+    // NB: the SUM aggregate uses "totalAmount" — the purchase_orders table
+    // has no `total` column. This was broken in the original finance.ts
+    // handler but was never exercised at runtime; fixed during Phase 7.1
+    // migration after a fresh smoke test caught the column-not-found error.
+    const [vendor] = await rawQuery<any>(
+      `SELECT s.*,
+              COALESCE((SELECT SUM("totalAmount") FROM purchase_orders po WHERE po."supplierId" = s.id), 0)::numeric AS "totalPurchases",
+              COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po."supplierId" = s.id AND po.status IN ('pending','approved','sent')), 0)::int AS "activeOrders",
+              (SELECT MAX(po."createdAt") FROM purchase_orders po WHERE po."supplierId" = s.id) AS "lastOrderAt"
+       FROM suppliers s
+       WHERE s.id = $1 AND s."companyId" = ANY($2) AND s."deletedAt" IS NULL`,
+      [id, scope.allowedCompanies]
+    );
+    if (!vendor) throw new NotFoundError("المورد غير موجود");
+    res.json(vendor);
+  } catch (err) {
+    handleRouteError(err, res, "Get vendor error:");
+  }
+});
+
