@@ -4,6 +4,8 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -108,14 +110,14 @@ router.get("/collection", async (req, res) => {
 
     res.json(enriched);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
 router.post("/collection/:invoiceId/action", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { invoiceId } = req.params;
     const { stage, notes } = req.body as any;
 
@@ -126,8 +128,7 @@ router.post("/collection/:invoiceId/action", async (req, res) => {
       [Number(invoiceId), scope.companyId]
     );
     if (!invoice) {
-      res.status(404).json({ error: "الفاتورة غير موجودة" });
-      return;
+      throw new NotFoundError("الفاتورة غير موجودة");
     }
 
     const requestedStage = Number(stage);
@@ -199,7 +200,7 @@ router.post("/collection/:invoiceId/action", async (req, res) => {
 
     res.json({ message: `تم تسجيل إجراء التحصيل: ${stageInfo.label}`, stage: stageInfo });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -214,8 +215,7 @@ router.get("/collection/:invoiceId/history", async (req, res) => {
       [Number(invoiceId), scope.companyId]
     );
     if (!invoice) {
-      res.status(404).json({ error: "الفاتورة غير موجودة" });
-      return;
+      throw new NotFoundError("الفاتورة غير موجودة");
     }
 
     const history = await rawQuery<any>(
@@ -230,7 +230,7 @@ router.get("/collection/:invoiceId/history", async (req, res) => {
 
     res.json(history);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -260,11 +260,10 @@ router.get("/budget", async (req, res) => {
 router.post("/budget", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const { accountCode, period, amount, branchId } = req.body as any;
     if (!accountCode || !period || !amount) {
-      res.status(400).json({ error: "الحساب والفترة والمبلغ مطلوبة" });
-      return;
+      throw new ValidationError("الحساب والفترة والمبلغ مطلوبة");
     }
     const { insertId } = await rawExecute(
       `INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used)
@@ -284,8 +283,7 @@ router.post("/budget/validate", async (req, res) => {
     const scope = req.scope!;
     const { accountCode, amount, period } = req.body as any;
     if (!accountCode || !amount) {
-      res.status(400).json({ error: "الحساب والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("الحساب والمبلغ مطلوبان");
     }
 
     const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
@@ -343,7 +341,7 @@ router.post("/budget/validate", async (req, res) => {
       });
     }
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -444,7 +442,7 @@ function checkAttachmentRequired(params: {
 router.post("/expenses", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const {
       accountCode, amount, description, period, sourceAccountCode,
       branchId, companyId: bodyCompanyId, departmentId, costCenter, expenseType, subAccountCode,
@@ -461,24 +459,20 @@ router.post("/expenses", async (req, res) => {
     if (isTaxLinked) {
       const validInvoiceTypes = ["388", "381", "383"];
       const validTaxCategories = ["S", "Z", "E", "O"];
-      if (invoiceTypeCode && !validInvoiceTypes.includes(invoiceTypeCode)) { res.status(400).json({ error: `نوع الفاتورة غير صالح. القيم المسموحة: ${validInvoiceTypes.join(", ")}` }); return; }
-      if (taxCategoryCode && !validTaxCategories.includes(taxCategoryCode)) { res.status(400).json({ error: `فئة الضريبة غير صالحة. القيم المسموحة: ${validTaxCategories.join(", ")}` }); return; }
+      if (invoiceTypeCode && !validInvoiceTypes.includes(invoiceTypeCode)) { throw new ValidationError(`نوع الفاتورة غير صالح. القيم المسموحة: ${validInvoiceTypes.join(", ")}`); return; }
+      if (taxCategoryCode && !validTaxCategories.includes(taxCategoryCode)) { throw new ValidationError(`فئة الضريبة غير صالحة. القيم المسموحة: ${validTaxCategories.join(", ")}`); return; }
     }
     if (!accountCode) {
-      validationError(res, "لا يمكن صرف بدون حساب محاسبي واضح", "accountCode", "حدد الحساب المحاسبي للمصروف (مثل 5100 رواتب، 5200 وقود)");
-      return;
+      throw new ValidationError("لا يمكن صرف بدون حساب محاسبي واضح", { field: "accountCode", fix: "حدد الحساب المحاسبي للمصروف (مثل 5100 رواتب، 5200 وقود)" });
     }
     if (!amount || Number(amount) <= 0) {
-      validationError(res, "لا يمكن تسجيل مصروف بقيمة صفر أو سالبة", "amount", "أدخل مبلغ المصروف بقيمة موجبة");
-      return;
+      throw new ValidationError("لا يمكن تسجيل مصروف بقيمة صفر أو سالبة", { field: "amount", fix: "أدخل مبلغ المصروف بقيمة موجبة" });
     }
     if (!branchId && !scope.branchId) {
-      validationError(res, "الفرع مطلوب لتسجيل المصروف", "branchId", "حدد الفرع الذي ينتمي إليه هذا المصروف");
-      return;
+      throw new ValidationError("الفرع مطلوب لتسجيل المصروف", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه هذا المصروف" });
     }
     if (!costCenter) {
-      validationError(res, "مركز التكلفة مطلوب لتسجيل المصروف", "costCenter", "حدد مركز التكلفة (مثل: مشروع-001، فرع-الرياض)");
-      return;
+      throw new ValidationError("مركز التكلفة مطلوب لتسجيل المصروف", { field: "costCenter", fix: "حدد مركز التكلفة (مثل: مشروع-001، فرع-الرياض)" });
     }
 
     const [costCenterSettingRow] = await rawQuery<any>(
@@ -492,13 +486,7 @@ router.post("/expenses", async (req, res) => {
         [[effectiveCompanyId], costCenter]
       );
       if (!ccRow) {
-        validationError(
-          res,
-          `مركز التكلفة "${costCenter}" غير موجود في بيانات الشركة`,
-          "costCenter",
-          "أدخل مركز تكلفة معرّف في إعدادات الأقسام"
-        );
-        return;
+        throw new ValidationError(`مركز التكلفة "${costCenter}" غير موجود في بيانات الشركة`, { field: "costCenter", fix: "أدخل مركز تكلفة معرّف في إعدادات الأقسام" });
       }
     }
 
@@ -520,8 +508,7 @@ router.post("/expenses", async (req, res) => {
     const expenseDate = (period ? `${period}-01` : null) || new Date().toISOString().split("T")[0];
     const expPeriodCheck = await checkFinancialPeriodOpen(effectiveCompanyId, expenseDate);
     if (!expPeriodCheck.open) {
-      res.status(422).json({ error: `لا يمكن تسجيل مصروف في فترة مالية مُقفلة: ${expPeriodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن تسجيل مصروف في فترة مالية مُقفلة: ${expPeriodCheck.periodName ?? ""}`);
     }
 
     const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
@@ -765,21 +752,18 @@ router.get("/purchase-requests", async (req, res) => {
 router.post("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { supplierId, items, notes, totalAmount, branchId, companyId: bodyCompanyId, costCenter, expectedDelivery } = req.body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
     if (!supplierId) {
-      validationError(res, "المورد مطلوب لإنشاء طلب الشراء", "supplierId", "حدد المورد الذي سيتم الشراء منه");
-      return;
+      throw new ValidationError("المورد مطلوب لإنشاء طلب الشراء", { field: "supplierId", fix: "حدد المورد الذي سيتم الشراء منه" });
     }
     if (!branchId && !scope.branchId) {
-      validationError(res, "الفرع مطلوب لإنشاء طلب الشراء", "branchId", "حدد الفرع الذي ينتمي إليه طلب الشراء");
-      return;
+      throw new ValidationError("الفرع مطلوب لإنشاء طلب الشراء", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه طلب الشراء" });
     }
     if (!items || !Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ error: "البنود مطلوبة" });
-      return;
+      throw new ValidationError("البنود مطلوبة");
     }
 
     // Auto-generate PR reference using DB sequence (race-safe)
@@ -847,7 +831,7 @@ router.post("/purchase-requests", async (req, res) => {
 router.patch("/purchase-requests/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PR_APPROVAL_ROLES, res)) return;
+    assertRole(scope, PR_APPROVAL_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -856,8 +840,7 @@ router.patch("/purchase-requests/:id/approve", async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!pr) {
-      res.status(404).json({ error: "طلب الشراء غير موجود" });
-      return;
+      throw new NotFoundError("طلب الشراء غير موجود");
     }
 
     const prTotal = Number(pr.totalAmount ?? 0);
@@ -923,7 +906,7 @@ router.patch("/purchase-requests/:id/approve", async (req, res) => {
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus, budgetCheck });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -931,7 +914,7 @@ router.patch("/purchase-requests/:id/approve", async (req, res) => {
 router.post("/purchase-requests/:id/convert-to-po", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { id } = req.params;
     const { expectedDelivery, notes } = req.body as any;
 
@@ -940,12 +923,10 @@ router.post("/purchase-requests/:id/convert-to-po", async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!pr) {
-      res.status(404).json({ error: "طلب الشراء غير موجود" });
-      return;
+      throw new NotFoundError("طلب الشراء غير موجود");
     }
     if (pr.status !== "approved") {
-      res.status(400).json({ error: "يجب الموافقة على طلب الشراء أولاً" });
-      return;
+      throw new ValidationError("يجب الموافقة على طلب الشراء أولاً");
     }
 
     // Auto-generate PO ref using DB sequence (race-safe)
@@ -1018,7 +999,7 @@ router.post("/purchase-requests/:id/convert-to-po", async (req, res) => {
 
     res.status(201).json({ ...po, approval: approvalResult, supplierNotified: !!pr.supplierId });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -1093,7 +1074,7 @@ router.get("/purchase-orders/:id", async (req, res) => {
 router.patch("/purchase-orders/:id/vendor-confirm", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { id } = req.params;
     const { confirmedDelivery, notes } = req.body as any;
 
@@ -1102,12 +1083,10 @@ router.patch("/purchase-orders/:id/vendor-confirm", async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!po) {
-      res.status(404).json({ error: "أمر الشراء غير موجود" });
-      return;
+      throw new NotFoundError("أمر الشراء غير موجود");
     }
     if (!["pending", "sent"].includes(po.status)) {
-      res.status(400).json({ error: "لا يمكن تأكيد أمر الشراء في هذه الحالة" });
-      return;
+      throw new ValidationError("لا يمكن تأكيد أمر الشراء في هذه الحالة");
     }
 
     await rawExecute(
@@ -1128,14 +1107,14 @@ router.patch("/purchase-orders/:id/vendor-confirm", async (req, res) => {
 
     res.json({ message: "تم تأكيد أمر الشراء من المورد", status: "confirmed" });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
 router.patch("/purchase-orders/:id/receive", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { id } = req.params;
     const { qualityPassed = true, notes, receivedItems } = req.body as any;
 
@@ -1144,8 +1123,7 @@ router.patch("/purchase-orders/:id/receive", async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!po) {
-      res.status(404).json({ error: "أمر الشراء غير موجود" });
-      return;
+      throw new NotFoundError("أمر الشراء غير موجود");
     }
 
     let prItems: any[] = [];
@@ -1251,13 +1229,12 @@ router.patch("/purchase-orders/:id/receive", async (req, res) => {
 router.post("/purchase-orders/:id/match-invoice", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { supplierInvoiceRef, invoicedAmount, invoicedDate } = req.body as any;
 
     if (!supplierInvoiceRef || !invoicedAmount) {
-      res.status(400).json({ error: "رقم فاتورة المورد والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("رقم فاتورة المورد والمبلغ مطلوبان");
     }
 
     const [po] = await rawQuery<any>(
@@ -1265,12 +1242,10 @@ router.post("/purchase-orders/:id/match-invoice", async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!po) {
-      res.status(404).json({ error: "أمر الشراء غير موجود" });
-      return;
+      throw new NotFoundError("أمر الشراء غير موجود");
     }
     if (!["received", "partial_received"].includes(po.status)) {
-      res.status(400).json({ error: "يجب استلام البضاعة قبل مطابقة الفاتورة" });
-      return;
+      throw new ValidationError("يجب استلام البضاعة قبل مطابقة الفاتورة");
     }
 
     const poTotal = Number(po.totalAmount);
@@ -1351,7 +1326,7 @@ router.post("/purchase-orders/:id/match-invoice", async (req, res) => {
       status: isMatched ? "invoice_matched" : "invoice_mismatch",
     });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -1359,13 +1334,12 @@ router.post("/purchase-orders/:id/match-invoice", async (req, res) => {
 router.post("/purchase-orders/:id/schedule-payment", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { paymentDate, amount, method = "bank_transfer", notes } = req.body as any;
 
     if (!paymentDate || !amount) {
-      res.status(400).json({ error: "تاريخ الدفع والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("تاريخ الدفع والمبلغ مطلوبان");
     }
 
     const [po] = await rawQuery<any>(
@@ -1373,8 +1347,7 @@ router.post("/purchase-orders/:id/schedule-payment", async (req, res) => {
       [Number(id), scope.companyId]
     );
     if (!po) {
-      res.status(404).json({ error: "أمر الشراء غير موجود" });
-      return;
+      throw new NotFoundError("أمر الشراء غير موجود");
     }
 
     await rawExecute(
@@ -1415,7 +1388,7 @@ router.post("/purchase-orders/:id/schedule-payment", async (req, res) => {
       status: "payment_scheduled",
     });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -1437,7 +1410,7 @@ router.get("/chart-of-accounts", async (req, res) => {
     );
     res.json(accounts);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -1471,7 +1444,7 @@ router.get("/accounts", async (req, res) => {
 router.post("/accounts", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const b = req.body;
     const r = await rawExecute(
       `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode") VALUES ($1,$2,$3,$4,$5)`,
@@ -1486,7 +1459,7 @@ router.post("/accounts", async (req, res) => {
 router.patch("/accounts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -1506,7 +1479,7 @@ router.patch("/accounts/:id", async (req, res) => {
 router.delete("/accounts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const rows = await rawQuery<any>(`DELETE FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
     if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
     res.json({ message: "تم حذف الحساب" });
@@ -1516,7 +1489,7 @@ router.delete("/accounts/:id", async (req, res) => {
 router.patch("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -1536,7 +1509,7 @@ router.patch("/budget/:id", async (req, res) => {
 router.delete("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const rows = await rawQuery<any>(`DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
     if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
     res.json({ message: "تم حذف الميزانية" });
@@ -1568,16 +1541,14 @@ router.post("/journal", async (req, res) => {
     const scope = req.scope!;
     const { ref, description, lines, date: journalBodyDate } = req.body as any;
     if (!lines || !Array.isArray(lines)) {
-      res.status(400).json({ error: "بنود القيد مطلوبة" });
-      return;
+      throw new ValidationError("بنود القيد مطلوبة");
     }
     const journalDate = journalBodyDate
       ? new Date(journalBodyDate).toISOString().split("T")[0]
       : new Date().toISOString().split("T")[0];
     const journalPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, journalDate);
     if (!journalPeriodCheck.open) {
-      res.status(422).json({ error: `لا يمكن إنشاء قيد في فترة مالية مُقفلة: ${journalPeriodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن إنشاء قيد في فترة مالية مُقفلة: ${journalPeriodCheck.periodName ?? ""}`);
     }
     const journalId = await createJournalEntry({
       companyId: scope.companyId,
@@ -1624,7 +1595,7 @@ router.get("/vouchers", async (req, res) => {
 router.post("/vouchers", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const {
       type, amount, description, payee, accountCode, method = "cash", sourceAccountCode,
       subAccountCode, relatedEntityType, relatedEntityId, relatedEntityName,
@@ -1635,23 +1606,19 @@ router.post("/vouchers", async (req, res) => {
     } = req.body as any;
 
     if (!amount || !type) {
-      res.status(400).json({ error: "النوع والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("النوع والمبلغ مطلوبان");
     }
 
     if (Number(amount) <= 0) {
-      validationError(res, "لا يمكن إنشاء سند بمبلغ صفر أو سالب", "amount", "أدخل مبلغاً موجباً للسند");
-      return;
+      throw new ValidationError("لا يمكن إنشاء سند بمبلغ صفر أو سالب", { field: "amount", fix: "أدخل مبلغاً موجباً للسند" });
     }
 
     if (!branchId && !scope.branchId) {
-      validationError(res, "الفرع مطلوب لإنشاء السند", "branchId", "حدد الفرع الذي ينتمي إليه هذا السند");
-      return;
+      throw new ValidationError("الفرع مطلوب لإنشاء السند", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه هذا السند" });
     }
 
     if (!accountCode) {
-      validationError(res, "الحساب المحاسبي مطلوب", "accountCode", "حدد الحساب المحاسبي الرئيسي للسند");
-      return;
+      throw new ValidationError("الحساب المحاسبي مطلوب", { field: "accountCode", fix: "حدد الحساب المحاسبي الرئيسي للسند" });
     }
 
     // Mandatory attachment check for large payment vouchers
@@ -1673,8 +1640,7 @@ router.post("/vouchers", async (req, res) => {
       : new Date().toISOString().split("T")[0];
     const voucherPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, voucherDate);
     if (!voucherPeriodCheck.open) {
-      res.status(422).json({ error: `لا يمكن إنشاء سند في فترة مالية مُقفلة: ${voucherPeriodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن إنشاء سند في فترة مالية مُقفلة: ${voucherPeriodCheck.periodName ?? ""}`);
     }
 
     const baseAmount = Number(amount);
@@ -1791,7 +1757,7 @@ router.get("/vendors/:id", async (req, res) => {
   try {
     const scope = (req as any).scope!;
     const id = Number(req.params.id);
-    if (!id || isNaN(id)) { res.status(400).json({ error: "معرف غير صالح" }); return; }
+    if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); return; }
     const [vendor] = await rawQuery<any>(
       `SELECT s.*,
               COALESCE((SELECT SUM(total) FROM purchase_orders po WHERE po."supplierId" = s.id), 0)::numeric AS "totalPurchases",
@@ -1813,8 +1779,7 @@ router.post("/vendors", async (req, res) => {
     const scope = (req as any).scope!;
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
     if (!name) {
-      res.status(400).json({ error: "اسم المورد مطلوب" });
-      return;
+      throw new ValidationError("اسم المورد مطلوب");
     }
     const { insertId } = await rawExecute(
       `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms")
@@ -1853,7 +1818,7 @@ router.get("/stats", async (req, res) => {
       paidThisMonth: Number(stats?.paidThisMonth ?? 0),
     });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -2077,7 +2042,7 @@ router.get("/tax/declarations", async (req, res) => {
     }
     res.json({ data: declarations });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -2106,7 +2071,7 @@ router.get("/receivables", async (req, res) => {
 
     res.json({ data: rows, summary: { totalReceivable, overdueAmount, count: rows.length } });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -2131,7 +2096,7 @@ router.get("/payments", async (req, res) => {
     const totalPayments = rows.reduce((s: number, r: any) => s + Number(r.amount), 0);
     res.json({ data: rows, summary: { totalPayments, count: rows.length } });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -2156,7 +2121,7 @@ router.get("/commitments", async (req, res) => {
     const totalCommitments = rows.reduce((s: number, r: any) => s + Number(r.amount), 0);
     res.json({ data: rows, summary: { totalCommitments, count: rows.length } });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -2186,7 +2151,7 @@ router.get("/financial-requests", async (req, res) => {
 
     res.json({ data: rows, summary: { total: rows.length, pending: pending.length, approved: approved.length } });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -2409,8 +2374,7 @@ router.get("/custodies/:id", async (req, res) => {
     );
 
     if (!custody) {
-      res.status(404).json({ error: "العهدة غير موجودة" });
-      return;
+      throw new NotFoundError("العهدة غير موجودة");
     }
 
     const settlements = await rawQuery<any>(
@@ -2490,12 +2454,11 @@ router.get("/custodies/:id", async (req, res) => {
 router.post("/custodies", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { assignmentId, employeeName, amount, description, sourceAccountCode, purpose, expectedReturnDate } = req.body as any;
 
     if (!amount) {
-      res.status(400).json({ error: "المبلغ مطلوب" });
-      return;
+      throw new ValidationError("المبلغ مطلوب");
     }
 
     let resolvedAssignmentId = assignmentId ? Number(assignmentId) : null;
@@ -2507,13 +2470,11 @@ router.post("/custodies", async (req, res) => {
         [resolvedAssignmentId, scope.companyId]
       );
       if (!emp) {
-        res.status(400).json({ error: "الموظف غير موجود" });
-        return;
+        throw new ValidationError("الموظف غير موجود");
       }
       resolvedEmployeeName = emp.name;
     } else if (!resolvedEmployeeName) {
-      res.status(400).json({ error: "يرجى اختيار الموظف" });
-      return;
+      throw new ValidationError("يرجى اختيار الموظف");
     }
 
     const sourceAcct = sourceAccountCode || "1100";
@@ -2580,18 +2541,16 @@ router.post("/custodies", async (req, res) => {
 router.post("/custodies/settle", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { custodyRef, amount, description, sourceAccountCode } = req.body as any;
 
     if (!amount || !custodyRef) {
-      res.status(400).json({ error: "مرجع العهدة ومبلغ التسوية مطلوبان" });
-      return;
+      throw new ValidationError("مرجع العهدة ومبلغ التسوية مطلوبان");
     }
 
     const settleAmount = Number(amount);
     if (isNaN(settleAmount) || settleAmount <= 0) {
-      res.status(400).json({ error: "مبلغ التسوية يجب أن يكون رقم موجب" });
-      return;
+      throw new ValidationError("مبلغ التسوية يجب أن يكون رقم موجب");
     }
 
     const [custodyHeader] = await rawQuery<any>(
@@ -2602,14 +2561,12 @@ router.post("/custodies/settle", async (req, res) => {
     );
 
     if (!custodyHeader) {
-      res.status(404).json({ error: "العهدة غير موجودة" });
-      return;
+      throw new NotFoundError("العهدة غير موجودة");
     }
 
     const blockedStatuses = ["pending_approval", "draft", "rejected", "returned"];
     if (blockedStatuses.includes(custodyHeader.approvalStatus)) {
-      res.status(400).json({ error: "لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة" });
-      return;
+      throw new ValidationError("لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة");
     }
 
     const custodyEntries = await rawQuery<any>(
@@ -2686,7 +2643,7 @@ router.post("/custodies/settle", async (req, res) => {
 router.post("/custodies/:id/settle", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const custodyId = Number(req.params.id);
     const { amount, description, sourceAccountCode } = req.body as any;
 
@@ -2696,25 +2653,21 @@ router.post("/custodies/:id/settle", async (req, res) => {
       [custodyId, scope.companyId]
     );
     if (!custody) {
-      res.status(404).json({ error: "العهدة غير موجودة" });
-      return;
+      throw new NotFoundError("العهدة غير موجودة");
     }
 
     const blockedStatuses = ["pending_approval", "draft", "rejected", "returned"];
     if (blockedStatuses.includes(custody.approvalStatus)) {
-      res.status(400).json({ error: "لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة" });
-      return;
+      throw new ValidationError("لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة");
     }
 
     if (!amount) {
-      res.status(400).json({ error: "مبلغ التسوية مطلوب" });
-      return;
+      throw new ValidationError("مبلغ التسوية مطلوب");
     }
 
     const settleAmount = Number(amount);
     if (isNaN(settleAmount) || settleAmount <= 0) {
-      res.status(400).json({ error: "مبلغ التسوية يجب أن يكون رقم موجب" });
-      return;
+      throw new ValidationError("مبلغ التسوية يجب أن يكون رقم موجب");
     }
 
     const custodyLines = await rawQuery<any>(
@@ -2834,19 +2787,18 @@ router.get("/fiscal-periods", async (req, res) => {
 
     res.json({ data: periods });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
 router.post("/fiscal-periods/:period/close", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { period } = req.params;
 
     if (!/^\d{4}-\d{2}$/.test(period)) {
-      validationError(res, "صيغة الفترة غير صحيحة", "period", "استخدم الصيغة YYYY-MM مثل 2025-01");
-      return;
+      throw new ValidationError("صيغة الفترة غير صحيحة", { field: "period", fix: "استخدم الصيغة YYYY-MM مثل 2025-01" });
     }
 
     const pendingJournals = await rawQuery<any>(
@@ -2859,13 +2811,7 @@ router.post("/fiscal-periods/:period/close", async (req, res) => {
     );
 
     if (pendingJournals.length > 0) {
-      validationError(
-        res,
-        `لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`,
-        "journalEntries",
-        "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية"
-      );
-      return;
+      throw new ValidationError(`لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`, { field: "journalEntries", fix: "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية" });
     }
 
     const [debitSum] = await rawQuery<any>(
@@ -2878,13 +2824,7 @@ router.post("/fiscal-periods/:period/close", async (req, res) => {
     const totalDebit = Number(debitSum?.totalDebit ?? 0);
     const totalCredit = Number(debitSum?.totalCredit ?? 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      validationError(
-        res,
-        `لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`,
-        "balance",
-        "تأكد من توازن جميع القيود المحاسبية قبل الإقفال"
-      );
-      return;
+      throw new ValidationError(`لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`, { field: "balance", fix: "تأكد من توازن جميع القيود المحاسبية قبل الإقفال" });
     }
 
     // Save the closed status to DB (upsert)
@@ -2941,12 +2881,11 @@ router.get("/salary-advances", async (req, res) => {
 router.post("/salary-advances", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PAYROLL_ROLES, res)) return;
+    assertRole(scope, PAYROLL_ROLES);
     const { employeeName, amount, description, deductMonths = 1, sourceAccountCode } = req.body as any;
 
     if (!amount || !employeeName) {
-      res.status(400).json({ error: "اسم الموظف والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("اسم الموظف والمبلغ مطلوبان");
     }
 
     const sourceAcct = sourceAccountCode || "1100";
@@ -2990,14 +2929,14 @@ router.post("/salary-advances", async (req, res) => {
 
     res.status(201).json({ id: journalId, ref, employeeName, amount, deductMonths, description, approval: approvalResult });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
 router.patch("/salary-advances/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PAYROLL_ROLES, res)) return;
+    assertRole(scope, PAYROLL_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -3009,7 +2948,7 @@ router.patch("/salary-advances/:id/approve", async (req, res) => {
 
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
     if (newStatus === "rejected" && !notes) {
-      res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return;
+      throw new ValidationError("يجب ذكر سبب الرفض"); return;
     }
 
     await rawExecute(
@@ -3033,7 +2972,7 @@ router.patch("/salary-advances/:id/approve", async (req, res) => {
 router.patch("/custodies/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -3045,7 +2984,7 @@ router.patch("/custodies/:id/approve", async (req, res) => {
 
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
     if (newStatus === "rejected" && !notes) {
-      res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return;
+      throw new ValidationError("يجب ذكر سبب الرفض"); return;
     }
 
     await rawExecute(
@@ -3073,12 +3012,11 @@ router.patch("/custodies/:id/approve", async (req, res) => {
 router.post("/vendors/create", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
 
     if (!name) {
-      res.status(400).json({ error: "اسم المورد مطلوب" });
-      return;
+      throw new ValidationError("اسم المورد مطلوب");
     }
 
     const { insertId } = await rawExecute(
@@ -3116,17 +3054,16 @@ router.patch("/expenses/:id", async (req, res) => {
     );
     if (!existing) throw new NotFoundError("المصروف غير موجود");
     if (existing.status === "posted") {
-      res.status(422).json({ error: "لا يمكن تعديل قيد محاسبي مُقفل (posted)" });
-      return;
+      throw new ConflictError("لا يمكن تعديل قيد محاسبي مُقفل (posted)");
     }
     const [row] = await rawQuery<any>(
       `UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`,
       [description, Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("المصروف غير موجود"); return; }
     res.json(row);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -3138,10 +3075,10 @@ router.delete("/expenses/:id", async (req, res) => {
       `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("المصروف غير موجود"); return; }
     res.json({ success: true });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -3157,19 +3094,18 @@ router.patch("/vouchers/:id", async (req, res) => {
       `SELECT id, status FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "السند غير موجود" }); return; }
+    if (!existing) { throw new NotFoundError("السند غير موجود"); return; }
     if (existing.status === "posted") {
-      res.status(422).json({ error: "لا يمكن تعديل قيد محاسبي مُقفل (posted)" });
-      return;
+      throw new ConflictError("لا يمكن تعديل قيد محاسبي مُقفل (posted)");
     }
     const [row] = await rawQuery<any>(
       `UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`,
       [description, Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "السند غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("السند غير موجود"); return; }
     res.json(row);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -3181,10 +3117,10 @@ router.delete("/vouchers/:id", async (req, res) => {
       `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "السند غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("السند غير موجود"); return; }
     res.json({ success: true });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -3205,16 +3141,16 @@ router.patch("/vendors/:id", async (req, res) => {
     if (email !== undefined) { sets.push(`email = $${idx++}`); params.push(email); }
     if (taxNumber !== undefined) { sets.push(`"taxNumber" = $${idx++}`); params.push(taxNumber); }
     if (category !== undefined) { sets.push(`category = $${idx++}`); params.push(category); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
     params.push(Number(req.params.id), scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE suppliers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("المورد غير موجود"); return; }
     res.json(row);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -3227,7 +3163,7 @@ router.delete("/vendors/:id", async (req, res) => {
       `SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2`,
       [vendorId, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!existing) { throw new NotFoundError("المورد غير موجود"); return; }
 
     const [openOrders] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','received','closed')`,
@@ -3257,10 +3193,10 @@ router.delete("/vendors/:id", async (req, res) => {
       `UPDATE suppliers SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [vendorId, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المورد غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("المورد غير موجود"); return; }
     res.json({ success: true });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -3293,7 +3229,7 @@ router.get("/summary", async (req, res) => {
       totalExpenses: Number(exp?.total ?? 0),
     });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -3341,7 +3277,7 @@ router.get("/ledger/:accountCode", async (req, res) => {
 router.patch("/purchase-orders/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -3371,14 +3307,14 @@ router.patch("/purchase-orders/:id/approve", async (req, res) => {
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
 router.patch("/expenses/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -3386,7 +3322,7 @@ router.patch("/expenses/:id/approve", async (req, res) => {
       `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
-    if (!exp) { res.status(404).json({ error: "المصروف غير موجود" }); return; }
+    if (!exp) { throw new NotFoundError("المصروف غير موجود"); return; }
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) {
@@ -3408,14 +3344,14 @@ router.patch("/expenses/:id/approve", async (req, res) => {
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
 router.patch("/custodies/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -3423,7 +3359,7 @@ router.patch("/custodies/:id/approve", async (req, res) => {
       `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
       [Number(id), scope.companyId]
     );
-    if (!cust) { res.status(404).json({ error: "العهدة غير موجودة" }); return; }
+    if (!cust) { throw new NotFoundError("العهدة غير موجودة"); return; }
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) {
@@ -3455,7 +3391,7 @@ router.patch("/custodies/:id/approve", async (req, res) => {
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance error:");
   }
 });
 
@@ -4084,8 +4020,7 @@ router.post("/opening-balances", async (req, res) => {
     const scope = (req as any).scope;
     const { date, lines, description } = req.body;
     if (!lines?.length) {
-      res.status(400).json({ error: "lines required" });
-      return;
+      throw new ValidationError("lines required");
     }
     const result = await withTransaction(async (client) => {
       const { rows: entryRows } = await client.query<any>(
