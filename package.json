@@ -4,9 +4,10 @@
   "license": "MIT",
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "build": "pnpm run typecheck && pnpm run lint:patterns && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "lint:patterns": "node scripts/src/lint-patterns.mjs",
     "db:bootstrap": "bash db/bootstrap.sh",
     "db:dump-schema": "bash db/dump-schema.sh",
     "db:dump-seed": "bash db/dump-seed.sh"

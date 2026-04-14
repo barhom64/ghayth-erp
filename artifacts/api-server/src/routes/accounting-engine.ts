@@ -1,4 +1,4 @@
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -170,8 +170,10 @@ router.post("/accounting-mappings/batch", async (req, res) => {
     if (!requireFinance(scope, res)) return;
     const { mappings } = req.body as any;
     if (!Array.isArray(mappings)) {
-      validationError(res, "mappings يجب أن تكون مصفوفة", "mappings", "أرسل مصفوفة من التوجيهات");
-      return;
+      throw new ValidationError("mappings يجب أن تكون مصفوفة", {
+        field: "mappings",
+        fix: "أرسل مصفوفة من التوجيهات",
+      });
     }
 
     for (const m of mappings) {
@@ -258,8 +260,10 @@ router.post("/journal-templates", async (req, res) => {
     const { name, operationType, description, branchId, activityType, lines = [] } = req.body as any;
 
     if (!name || !operationType) {
-      validationError(res, "الاسم ونوع العملية مطلوبان", "name", "أدخل اسم القالب ونوع العملية");
-      return;
+      throw new ValidationError("الاسم ونوع العملية مطلوبان", {
+        field: "name",
+        fix: "أدخل اسم القالب ونوع العملية",
+      });
     }
 
     const result = await withTransaction(async (client) => {
@@ -419,8 +423,10 @@ router.post("/subsidiary-accounts", async (req, res) => {
     const { entityType, entityId, accountType, accountId } = req.body as any;
 
     if (!entityType || !entityId || !accountType || !accountId) {
-      validationError(res, "جميع الحقول مطلوبة", "entityType", "أدخل نوع الكيان، معرفه، نوع الحساب، والحساب");
-      return;
+      throw new ValidationError("جميع الحقول مطلوبة", {
+        field: "entityType",
+        fix: "أدخل نوع الكيان، معرفه، نوع الحساب، والحساب",
+      });
     }
 
     const { insertId } = await rawExecute(

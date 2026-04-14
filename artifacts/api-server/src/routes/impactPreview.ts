@@ -191,7 +191,7 @@ router.post("/", async (req, res): Promise<void> => {
           rawQuery<any>(
             `SELECT COUNT(*) AS c FROM project_tasks pt
              JOIN projects p ON p.id = pt."projectId"
-             WHERE pt."assigneeId" = $1 AND p."companyId" = $2 AND pt.status NOT IN ('completed','cancelled')`,
+             WHERE pt."assigneeId" = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL AND pt.status NOT IN ('completed','cancelled')`,
             [entityId, scope.companyId]
           ),
           rawQuery<any>(
@@ -210,7 +210,7 @@ router.post("/", async (req, res): Promise<void> => {
 
     if (action === "delete" && entityType === "project") {
       const [proj] = await rawQuery<any>(
-        `SELECT p.name FROM projects p WHERE p.id = $1 AND p."companyId" = $2`,
+        `SELECT p.name FROM projects p WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (proj) {

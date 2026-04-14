@@ -1,25 +1,23 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+  ForbiddenError,
+} from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { assertRole } from "../lib/roleGuards.js";
+import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { pushToDLQ } from "../lib/eventBus.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance", "director", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 budgetRouter.get("/budget", async (req, res) => {
   try {
@@ -43,11 +41,13 @@ budgetRouter.get("/budget", async (req, res) => {
 budgetRouter.post("/budget", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const { accountCode, period, amount, branchId } = req.body as any;
     if (!accountCode || !period || !amount) {
-      res.status(400).json({ error: "الحساب والفترة والمبلغ مطلوبة" });
-      return;
+      throw new ValidationError("الحساب والفترة والمبلغ مطلوبة", {
+        field: !accountCode ? "accountCode" : !period ? "period" : "amount",
+        fix: "أدخل رمز الحساب والفترة بصيغة YYYY-MM والمبلغ",
+      });
     }
     const { insertId } = await rawExecute(
       `INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used)
@@ -55,6 +55,25 @@ budgetRouter.post("/budget", async (req, res) => {
        ON CONFLICT DO NOTHING`,
       [scope.companyId, branchId ?? scope.branchId, accountCode, period, Number(amount)]
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "budget.created",
+      entity: "budgets",
+      entityId: insertId,
+      details: JSON.stringify({ accountCode, period, amount: Number(amount) }),
+    }).catch((err) => pushToDLQ("event", { action: "budget.created", entityId: insertId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "budgets",
+      entityId: insertId,
+      after: { accountCode, period, amount: Number(amount) },
+    }).catch((err) => console.error("[audit] budget.created:", err));
+
     res.status(201).json({ id: insertId, ...req.body });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");
@@ -66,8 +85,10 @@ budgetRouter.post("/budget/validate", async (req, res) => {
     const scope = req.scope!;
     const { accountCode, amount, period } = req.body as any;
     if (!accountCode || !amount) {
-      res.status(400).json({ error: "الحساب والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("الحساب والمبلغ مطلوبان", {
+        field: !accountCode ? "accountCode" : "amount",
+        fix: "أدخل رمز الحساب والمبلغ المراد التحقق منه",
+      });
     }
 
     const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
@@ -104,7 +125,7 @@ budgetRouter.post("/budget/validate", async (req, res) => {
 budgetRouter.patch("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -113,10 +134,34 @@ budgetRouter.patch("/budget/:id", async (req, res) => {
     addField("accountCode", b.accountCode);
     addField("period", b.period);
     addField("amount", b.amount);
-    if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
+    if (fields.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتحديث", {
+        field: "body",
+        fix: "أرسل حقلاً واحداً على الأقل لتحديثه",
+      });
+    }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "budget.updated",
+      entity: "budgets",
+      entityId: id,
+      details: JSON.stringify({ fields: Object.keys(b) }),
+    }).catch((err) => pushToDLQ("event", { action: "budget.updated", entityId: id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "budgets",
+      entityId: id,
+      after: { fields: Object.keys(b) },
+    }).catch((err) => console.error("[audit] budget.updated:", err));
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update budget error:"); }
 });
@@ -124,9 +169,59 @@ budgetRouter.patch("/budget/:id", async (req, res) => {
 budgetRouter.delete("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
-    const rows = await rawQuery<any>(`DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (rows.length === 0) { res.status(404).json({ error: "الميزانية غير موجودة" }); return; }
+    assertRole(scope, ["director", "owner"]);
+    const budgetId = Number(req.params.id);
+
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "accountCode", period, amount, used FROM budgets WHERE id = $1 AND "companyId" = $2`,
+      [budgetId, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الميزانية غير موجودة");
+
+    // Refuse delete when the budget has consumed funds — would leave dangling references.
+    if (Number(existing.used ?? 0) > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف ميزانية تم استهلاك جزء منها (المستهلك: ${Number(existing.used).toFixed(2)})`,
+        {
+          field: "budgetId",
+          fix: "قم بأرشفة الميزانية أو صفّر المبلغ بدل حذفها",
+          meta: {
+            accountCode: existing.accountCode,
+            period: existing.period,
+            used: Number(existing.used),
+          },
+        },
+      );
+    }
+
+    const rows = await rawQuery<any>(
+      `DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      [budgetId, scope.companyId]
+    );
+    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "budget.deleted",
+      entity: "budgets",
+      entityId: budgetId,
+      details: JSON.stringify({ accountCode: existing.accountCode, period: existing.period }),
+    }).catch((err) => pushToDLQ("event", { action: "budget.deleted", entityId: budgetId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "delete",
+      entity: "budgets",
+      entityId: budgetId,
+      after: {
+        accountCode: existing.accountCode,
+        period: existing.period,
+        amount: Number(existing.amount),
+      },
+    }).catch((err) => console.error("[audit] budget.deleted:", err));
+
     res.json({ message: "تم حذف الميزانية" });
   } catch (err) { handleRouteError(err, res, "Delete budget error:"); }
 });
@@ -139,7 +234,15 @@ budgetRouter.delete("/budget/:id", async (req, res) => {
 // which is then routed to CFO or GM by approval_level.
 
 async function ensureBudgetApprovalTable() {
-  await rawExecute(`
+  // Use rawQuery for DDL: rawExecute would append `RETURNING id` to the
+  // CREATE TABLE statement and produce a SQL syntax error. rawQuery
+  // passes the statement through verbatim.
+  //
+  // Phase 9 added updatedAt + deletedAt columns. The CREATE TABLE below
+  // includes them so fresh sandboxes created via this helper match the
+  // schema produced by migration 074. Existing installs that already
+  // have the table get the columns via that migration.
+  await rawQuery(`
     CREATE TABLE IF NOT EXISTS budget_approval_requests (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
@@ -157,6 +260,8 @@ async function ensureBudgetApprovalTable() {
       reason TEXT,
       "requestedBy" INTEGER NOT NULL,
       "requestedAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW(),
+      "deletedAt" TIMESTAMP,
       "decidedBy" INTEGER,
       "decidedAt" TIMESTAMP,
       "decisionNotes" TEXT
@@ -169,8 +274,10 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
     const scope = req.scope!;
     const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = req.body as any;
     if (!accountCode || !period || !requestedAmount || Number(requestedAmount) <= 0) {
-      validationError(res, "الحساب والفترة والمبلغ مطلوبة", "requestedAmount", "أدخل قيمة موجبة والفترة بصيغة YYYY-MM");
-      return;
+      throw new ValidationError("الحساب والفترة والمبلغ مطلوبة", {
+        field: "requestedAmount",
+        fix: "أدخل قيمة موجبة والفترة بصيغة YYYY-MM",
+      });
     }
     await ensureBudgetApprovalTable();
 
@@ -178,10 +285,7 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
       `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3`,
       [scope.companyId, accountCode, period]
     );
-    if (!budget) {
-      res.status(404).json({ error: "لا توجد ميزانية محددة لهذا الحساب" });
-      return;
-    }
+    if (!budget) throw new NotFoundError("لا توجد ميزانية محددة لهذا الحساب");
 
     const budgetAmount = Number(budget.amount);
     const used = Number(budget.used);
@@ -192,7 +296,13 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
     if (utilAfter <= 80) level = "auto";
     else if (utilAfter <= 99) level = "cfo";
     else if (utilAfter <= 110) level = "gm";
-    else { res.status(400).json({ error: "تجاوز 110% — مرفوض نهائياً ولا يمكن اعتماده" }); return; }
+    else {
+      throw new ConflictError("تجاوز 110% — مرفوض نهائياً ولا يمكن اعتماده", {
+        field: "requestedAmount",
+        fix: "قلّل المبلغ المطلوب أو زِد سقف الميزانية أولاً",
+        meta: { utilizationAfter: Math.round(utilAfter * 100) / 100, capPct: 110 },
+      });
+    }
 
     if (level === "auto") {
       res.json({ status: "auto_approved", message: "الميزانية متاحة، لا حاجة لاعتماد" });
@@ -209,6 +319,25 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
        budgetAmount, Math.round(utilBefore * 100) / 100, Math.round(utilAfter * 100) / 100,
        level, sourceType ?? null, sourceId ?? null, reason ?? null, scope.activeAssignmentId]
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "budget.approval_requested",
+      entity: "budget_approval_requests",
+      entityId: row.id,
+      details: JSON.stringify({ accountCode, period, requestedAmount: Number(requestedAmount), level }),
+    }).catch((err) => pushToDLQ("event", { action: "budget.approval_requested", entityId: row.id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "budget_approval_requests",
+      entityId: row.id,
+      after: { accountCode, period, requestedAmount: Number(requestedAmount), level },
+    }).catch((err) => console.error("[audit] budget.approval_requested:", err));
+
     res.status(201).json({ data: row });
   } catch (err) {
     handleRouteError(err, res, "Create budget approval request error:");
@@ -224,7 +353,7 @@ budgetRouter.get("/budget/approval-requests", async (req, res) => {
       `SELECT ar.*, coa.name AS "accountName"
        FROM budget_approval_requests ar
        LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId"
-       WHERE ar."companyId"=$1 AND ar.status=$2
+       WHERE ar."companyId"=$1 AND ar.status=$2 AND ar."deletedAt" IS NULL
        ORDER BY ar."requestedAt" DESC LIMIT 200`,
       [scope.companyId, status]
     );
@@ -237,44 +366,73 @@ budgetRouter.get("/budget/approval-requests", async (req, res) => {
 budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const requestId = Number(req.params.id);
     const { decision, notes } = req.body as any; // decision: 'approved' | 'rejected'
     if (!["approved", "rejected"].includes(decision)) {
-      validationError(res, "القرار يجب أن يكون approved أو rejected", "decision", "استخدم approved أو rejected");
-      return;
+      throw new ValidationError("القرار يجب أن يكون approved أو rejected", {
+        field: "decision",
+        fix: "استخدم approved أو rejected",
+      });
     }
     await ensureBudgetApprovalTable();
 
+    // Fetch approval level + context to drive business rules that sit
+    // outside the lifecycle engine (approval-level role check + reporting).
     const [request] = await rawQuery<any>(
-      `SELECT * FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
+      `SELECT id, "approvalLevel", "accountCode", period FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [requestId, scope.companyId]
     );
-    if (!request) { res.status(404).json({ error: "طلب الاعتماد غير موجود" }); return; }
-    if (request.status !== "pending") {
-      res.status(400).json({ error: `الطلب تم البت فيه مسبقاً (${request.status})` });
-      return;
-    }
+    if (!request) throw new NotFoundError("طلب الاعتماد غير موجود");
 
-    // Approval level authorization
+    // Approval level authorization — cfo-tier requests can be signed by
+    // finance/director/owner, gm-tier only by director/owner.
     const needed = request.approvalLevel === "cfo"
       ? ["finance", "director", "owner"]
       : ["director", "owner"];
     if (!needed.includes(scope.role)) {
-      res.status(403).json({
-        error: `هذا الطلب يتطلب اعتماد ${request.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`,
-        requiredRoles: needed,
-      });
-      return;
+      throw new ForbiddenError(
+        `هذا الطلب يتطلب اعتماد ${request.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`,
+        {
+          fix: `الأدوار المسموح لها بالبت: ${needed.join(", ")}`,
+          meta: { requiredRoles: needed, yourRole: scope.role, approvalLevel: request.approvalLevel },
+        },
+      );
     }
 
-    const [updated] = await rawQuery<any>(
-      `UPDATE budget_approval_requests
-         SET status=$1, "decisionNotes"=$2, "decidedBy"=$3, "decidedAt"=NOW()
-       WHERE id=$4 RETURNING *`,
-      [decision, notes ?? null, scope.activeAssignmentId, id]
-    );
-    res.json({ data: updated, message: decision === "approved" ? "تم اعتماد الطلب" : "تم رفض الطلب" });
+    // Central lifecycle engine: rejects "already decided" via fromStates and
+    // writes the decision atomically along with decidedBy/decidedAt/notes.
+    // Phase 9 added the `updatedAt` and `deletedAt` columns to this table,
+    // so the engine can now manage the updatedAt clock and we can filter
+    // out soft-deleted rows from state transitions.
+    const updated = await applyTransition<any>({
+      entity: "budget_approval_requests",
+      id: requestId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `budget.approval_${decision}`,
+      fromStates: ["pending"],
+      toState: decision,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        decisionNotes: notes ?? null,
+        decidedBy: scope.activeAssignmentId,
+        decidedAt: { raw: "NOW()" },
+      },
+      after: {
+        accountCode: request.accountCode,
+        period: request.period,
+        level: request.approvalLevel,
+      },
+    });
+
+    res.json({
+      data: updated,
+      message: decision === "approved" ? "تم اعتماد الطلب" : "تم رفض الطلب",
+      event: `budget.approval_${decision}`,
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Decide budget approval error:");
   }
 });
@@ -288,8 +446,10 @@ budgetRouter.get("/budget/variance", async (req, res) => {
     const scope = req.scope!;
     const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(period)) {
-      validationError(res, "period يجب أن يكون بصيغة YYYY-MM", "period", "مثال: 2026-04");
-      return;
+      throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", {
+        field: "period",
+        fix: "مثال: 2026-04",
+      });
     }
     const [y, m] = period.split("-").map(Number);
     const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -393,12 +553,14 @@ budgetRouter.get("/fiscal-periods", async (req, res) => {
 budgetRouter.post("/fiscal-periods/:period/close", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { period } = req.params;
 
     if (!/^\d{4}-\d{2}$/.test(period)) {
-      validationError(res, "صيغة الفترة غير صحيحة", "period", "استخدم الصيغة YYYY-MM مثل 2025-01");
-      return;
+      throw new ValidationError("صيغة الفترة غير صحيحة", {
+        field: "period",
+        fix: "استخدم الصيغة YYYY-MM مثل 2025-01",
+      });
     }
 
     const pendingJournals = await rawQuery<any>(
@@ -411,8 +573,13 @@ budgetRouter.post("/fiscal-periods/:period/close", async (req, res) => {
     );
 
     if (pendingJournals.length > 0) {
-      validationError(res, `لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`, "journalEntries", "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية");
-      return;
+      throw new ValidationError(
+        `لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`,
+        {
+          field: "journalEntries",
+          fix: "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية",
+        },
+      );
     }
 
     const [debitSum] = await rawQuery<any>(
@@ -425,8 +592,13 @@ budgetRouter.post("/fiscal-periods/:period/close", async (req, res) => {
     const totalDebit = Number(debitSum?.totalDebit ?? 0);
     const totalCredit = Number(debitSum?.totalCredit ?? 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      validationError(res, `لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`, "balance", "تأكد من توازن جميع القيود المحاسبية قبل الإقفال");
-      return;
+      throw new ValidationError(
+        `لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`,
+        {
+          field: "balance",
+          fix: "تأكد من توازن جميع القيود المحاسبية قبل الإقفال",
+        },
+      );
     }
 
     res.json({ message: `تم إقفال الفترة المالية ${period} بنجاح`, period, totalDebit, totalCredit });

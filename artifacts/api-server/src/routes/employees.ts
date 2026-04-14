@@ -1,6 +1,5 @@
 import {
   handleRouteError,
-  validationError,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -681,7 +680,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
          LEFT JOIN projects p ON p.id = pt."projectId"
-         WHERE pt."assigneeId" = $1 AND p."companyId" = $2
+         WHERE pt."assigneeId" = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
          ORDER BY pt."dueDate" DESC NULLS LAST LIMIT 20`,
         [Number(id), scope.companyId]
       ),

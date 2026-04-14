@@ -1,6 +1,5 @@
 import {
   handleRouteError,
-  validationError,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -709,145 +708,6 @@ purchaseRouter.get("/purchase-orders/:id/match", async (req, res) => {
   }
 });
 
-purchaseRouter.get("/vendors", async (req, res) => {
-  try {
-    const scope = (req as any).scope!;
-    const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
-    const rows = await rawQuery<any>(`SELECT * FROM suppliers WHERE ${where} AND "deletedAt" IS NULL ORDER BY name`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
-  }
-});
-
-purchaseRouter.post("/vendors", async (req, res) => {
-  try {
-    const scope = (req as any).scope!;
-    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
-    if (!name) { throw new ValidationError("اسم المورد مطلوب"); return; }
-    const { insertId } = await rawExecute(`INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null]);
-    res.status(201).json({ id: insertId, ...req.body });
-  } catch (err) {
-    handleRouteError(err, res, "Create vendor error:");
-  }
-});
-
-purchaseRouter.post("/vendors/create", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
-    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
-    if (!name) { throw new ValidationError("اسم المورد مطلوب"); return; }
-    const { insertId } = await rawExecute(`INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null]);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "vendor.created", entity: "suppliers", entityId: insertId, details: JSON.stringify({ name }) }).catch(console.error);
-    res.status(201).json({ id: insertId, name, contactPerson, phone, email, taxNumber });
-  } catch (err) {
-    handleRouteError(err, res, "Create vendor error:");
-  }
-});
-
-purchaseRouter.patch("/vendors/:id", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { name, contactPerson, phone, email, taxNumber, category } = req.body as any;
-    const sets: string[] = [];
-    const params: any[] = [];
-    let idx = 1;
-    if (name) { sets.push(`name = $${idx++}`); params.push(name); }
-    if (contactPerson !== undefined) { sets.push(`"contactPerson" = $${idx++}`); params.push(contactPerson); }
-    if (phone !== undefined) { sets.push(`phone = $${idx++}`); params.push(phone); }
-    if (email !== undefined) { sets.push(`email = $${idx++}`); params.push(email); }
-    if (taxNumber !== undefined) { sets.push(`"taxNumber" = $${idx++}`); params.push(taxNumber); }
-    if (category !== undefined) { sets.push(`category = $${idx++}`); params.push(category); }
-    if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
-    params.push(Number(req.params.id), scope.companyId);
-    const [row] = await rawQuery<any>(`UPDATE suppliers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`, params);
-    if (!row) throw new NotFoundError("المورد غير موجود");
-    res.json(row);
-  } catch (err) {
-    handleRouteError(err, res, "Finance purchase error:");
-  }
-});
-
-purchaseRouter.delete("/vendors/:id", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const [row] = await rawQuery<any>(`UPDATE suppliers SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (!row) throw new NotFoundError("المورد غير موجود");
-    res.json({ success: true });
-  } catch (err) {
-    handleRouteError(err, res, "Finance purchase error:");
-  }
-});
-
-purchaseRouter.get("/commitments", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT po.id, po.ref, po."totalAmount" AS amount, po.status, po."expectedDelivery" AS "dueDate", po."createdAt", s.name AS "vendorName" FROM purchase_orders po LEFT JOIN suppliers s ON s.id = po."supplierId" WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','paid','completed') ORDER BY po."expectedDelivery" ASC NULLS LAST`, [scope.companyId]);
-    const totalCommitments = rows.reduce((s: number, r: any) => s + Number(r.amount), 0);
-    res.json({ data: rows, summary: { totalCommitments, count: rows.length } });
-  } catch (err) {
-    handleRouteError(err, res, "Finance purchase error:");
-  }
-});
-
-purchaseRouter.get("/budget", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"' });
-    const rows = await rawQuery<any>(`SELECT b.*, coa.name AS "accountName" FROM budgets b LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" WHERE ${where} ORDER BY b.period DESC, b."accountCode"`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) {
-    handleRouteError(err, res, "List budgets error:");
-  }
-});
-
-purchaseRouter.post("/budget", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    assertRole(scope, ["general_manager", "owner"]);
-    const b = req.body;
-    const r = await rawExecute(`INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used) VALUES ($1,$2,$3,$4,$5,0)`, [scope.companyId, scope.branchId, b.accountCode, b.period, Number(b.amount)]);
-    res.status(201).json({ id: r.insertId, ...b, used: 0 });
-  } catch (err) {
-    handleRouteError(err, res, "Create budget error:");
-  }
-});
-
-purchaseRouter.patch("/budget/:id", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    assertRole(scope, ["general_manager", "owner"]);
-    const id = Number(req.params.id);
-    const b = req.body;
-    const fields: string[] = [];
-    const params: any[] = [];
-    const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
-    addField("accountCode", b.accountCode); addField("period", b.period); addField("amount", b.amount);
-    if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
-    params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
-    res.json(rows[0]);
-  } catch (err) {
-    handleRouteError(err, res, "Update budget error:");
-  }
-});
-
-purchaseRouter.delete("/budget/:id", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    assertRole(scope, ["general_manager", "owner"]);
-    const rows = await rawQuery<any>(`DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
-    res.json({ message: "تم حذف الميزانية" });
-  } catch (err) {
-    handleRouteError(err, res, "Delete budget error:");
-  }
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
 // PAYMENT RUN — batch settlement of supplier invoices
 // Lets finance select multiple approved/matched POs and post a single payment
@@ -1070,3 +930,354 @@ purchaseRouter.get("/payment-run", async (req, res) => {
     handleRouteError(err, res, "List payment runs error:");
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+purchaseRouter.post("/purchase-requests/:id/convert-to-po", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertRole(scope, PROCUREMENT_ROLES);
+    const { id } = req.params;
+    const { expectedDelivery, notes } = req.body as any;
+
+    const [pr] = await rawQuery<any>(
+      `SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!pr) {
+      throw new NotFoundError("طلب الشراء غير موجود");
+    }
+    if (pr.status !== "approved") {
+      throw new ValidationError("يجب الموافقة على طلب الشراء أولاً");
+    }
+
+    // Auto-generate PO ref using DB sequence (race-safe)
+    const [poSeqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`);
+    const poRef = `PO-${new Date().getFullYear()}-${String(Number(poSeqRow.seq)).padStart(4, "0")}`;
+
+    const { insertId: poId } = await rawExecute(
+      `INSERT INTO purchase_orders ("companyId",ref,"supplierId","requestId",status,"totalAmount","expectedDelivery","createdBy",notes,"branchId")
+       VALUES ($1,$2,$3,$4,'pending',$5,$6,$7,$8,$9)`,
+      [
+        scope.companyId,
+        poRef,
+        pr.supplierId,
+        Number(id),
+        Number(pr.totalAmount),
+        expectedDelivery ?? null,
+        scope.activeAssignmentId,
+        notes ?? null,
+        scope.branchId || null,
+      ]
+    );
+
+    await rawExecute(
+      `UPDATE purchase_requests SET status = 'converted' WHERE id = $1`,
+      [Number(id)]
+    );
+
+    const approvalResult = await initiateApprovalChain({
+      companyId: scope.companyId, branchId: scope.branchId,
+      chainType: "purchases", refType: "purchase_order", refId: poId,
+      amount: Number(pr.totalAmount),
+    });
+
+    if (approvalResult.requiresApproval) {
+      await rawExecute(
+        `UPDATE purchase_orders SET status = 'pending_approval' WHERE id = $1`,
+        [poId]
+      );
+    }
+
+    if (pr.supplierId) {
+      const [supplier] = await rawQuery<any>(
+        `SELECT name, email, phone FROM suppliers WHERE id = $1`,
+        [pr.supplierId]
+      );
+      if (supplier?.email) {
+        console.log(`[P2P] Supplier email → ${supplier.email} for PO ${poRef}`);
+      }
+      if (supplier?.phone) {
+        console.log(`[P2P] Supplier SMS → ${supplier.phone} for PO ${poRef}`);
+      }
+    }
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "purchase_order.created",
+      entity: "purchase_orders",
+      entityId: poId,
+      details: JSON.stringify({ poRef, prId: id, approvalRequired: approvalResult.requiresApproval, supplierNotified: !!pr.supplierId }),
+    }).catch(console.error);
+
+    const [po] = await rawQuery<any>(
+      `SELECT po.*, s.name AS "supplierName", s.email AS "supplierEmail"
+       FROM purchase_orders po
+       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       WHERE po.id = $1`,
+      [poId]
+    );
+
+    res.status(201).json({ ...po, approval: approvalResult, supplierNotified: !!pr.supplierId });
+  } catch (err) {
+    handleRouteError(err, res, "Finance error:");
+  }
+});
+
+purchaseRouter.get("/purchase-orders/pending-grn", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT po.id, po.ref, po.status, po."totalAmount" AS total, s.name AS "supplierName",
+              po."createdAt", po."expectedDelivery"
+       FROM purchase_orders po
+       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       WHERE po."companyId" = $1 AND po.status IN ('approved','sent','partial_received')
+         AND po."deletedAt" IS NULL
+       ORDER BY po."createdAt" DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "PO pending GRN error:"); }
+});
+
+purchaseRouter.get("/purchase-orders/:id", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+    const [po] = await rawQuery<any>(
+      `SELECT po.*, s.name AS "supplierName", s.phone AS "supplierPhone", s.email AS "supplierEmail",
+              b.name AS "branchName", b."nameEn" AS "branchNameEn", b."logoUrl" AS "branchLogoUrl",
+              b.address AS "branchAddress", b.phone AS "branchPhone", b.email AS "branchEmail",
+              b.website AS "branchWebsite", b."taxNumber" AS "branchTaxNumber", b."crNumber" AS "branchCrNumber",
+              b."footerText" AS "branchFooterText", b.city AS "branchCity"
+       FROM purchase_orders po
+       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       LEFT JOIN branches b ON b.id = po."branchId"
+       WHERE po.id = $1 AND po."companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!po) throw new NotFoundError("أمر الشراء غير موجود");
+
+    let lines: any[] = [];
+    try {
+      lines = await rawQuery<any>(
+        `SELECT * FROM purchase_order_lines WHERE "purchaseOrderId" = $1 ORDER BY id`,
+        [Number(id)]
+      );
+    } catch { }
+
+    res.json({ ...po, lines });
+  } catch (err) {
+    handleRouteError(err, res, "PO detail error:");
+  }
+});
+
+purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertRole(scope, PROCUREMENT_ROLES);
+    const { id } = req.params;
+    const { confirmedDelivery, notes } = req.body as any;
+
+    const [po] = await rawQuery<any>(
+      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!po) {
+      throw new NotFoundError("أمر الشراء غير موجود");
+    }
+    if (!["pending", "sent"].includes(po.status)) {
+      throw new ValidationError("لا يمكن تأكيد أمر الشراء في هذه الحالة");
+    }
+
+    await rawExecute(
+      `UPDATE purchase_orders
+       SET status = 'confirmed', "expectedDelivery" = COALESCE($1, "expectedDelivery"), notes = COALESCE($2, notes)
+       WHERE id = $3`,
+      [confirmedDelivery ?? null, notes ?? null, Number(id)]
+    );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "purchase_order.vendor_confirmed",
+      entity: "purchase_orders",
+      entityId: Number(id),
+      details: JSON.stringify({ confirmedDelivery }),
+    }).catch(console.error);
+
+    res.json({ message: "تم تأكيد أمر الشراء من المورد", status: "confirmed" });
+  } catch (err) {
+    handleRouteError(err, res, "Finance error:");
+  }
+});
+
+purchaseRouter.post("/purchase-orders/:id/match-invoice", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
+    const { id } = req.params;
+    const { supplierInvoiceRef, invoicedAmount, invoicedDate } = req.body as any;
+
+    if (!supplierInvoiceRef || !invoicedAmount) {
+      throw new ValidationError("رقم فاتورة المورد والمبلغ مطلوبان");
+    }
+
+    const [po] = await rawQuery<any>(
+      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!po) {
+      throw new NotFoundError("أمر الشراء غير موجود");
+    }
+    if (!["received", "partial_received"].includes(po.status)) {
+      throw new ValidationError("يجب استلام البضاعة قبل مطابقة الفاتورة");
+    }
+
+    const poTotal = Number(po.totalAmount);
+    const invAmount = Number(invoicedAmount);
+
+    let prTotal = poTotal;
+    if (po.requestId) {
+      const [prRow] = await rawQuery<any>(
+        `SELECT "totalAmount" FROM purchase_requests WHERE id = $1`,
+        [po.requestId]
+      );
+      if (prRow) prTotal = Number(prRow.totalAmount);
+    }
+
+    let receivedTotal = poTotal;
+    const grMovements = await rawQuery<any>(
+      `SELECT COALESCE(SUM(quantity * "unitCost"), 0) AS total
+       FROM warehouse_movements
+       WHERE "companyId" = $1 AND reference = $2 AND type = 'in'`,
+      [scope.companyId, `GR-${po.ref}`]
+    );
+    if (grMovements[0]?.total) receivedTotal = Number(grMovements[0].total);
+
+    const poVariance = Math.abs(poTotal - invAmount);
+    const poVariancePct = poTotal > 0 ? (poVariance / poTotal) * 100 : 0;
+    const prVariance = Math.abs(prTotal - invAmount);
+    const prVariancePct = prTotal > 0 ? (prVariance / prTotal) * 100 : 0;
+    const grVariance = Math.abs(receivedTotal - invAmount);
+    const grVariancePct = receivedTotal > 0 ? (grVariance / receivedTotal) * 100 : 0;
+
+    const isMatched = poVariancePct <= 5 && prVariancePct <= 5 && grVariancePct <= 5;
+
+    await rawExecute(
+      `UPDATE purchase_orders SET status = $1, notes = CONCAT(COALESCE(notes,''), $2) WHERE id = $3`,
+      [
+        isMatched ? "invoice_matched" : "invoice_mismatch",
+        ` | مطابقة ثلاثية: فاتورة=${invAmount} طلب=${prTotal} أمر=${poTotal} استلام=${receivedTotal}`,
+        Number(id),
+      ]
+    );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: isMatched ? "purchase_order.three_way_matched" : "purchase_order.three_way_mismatch",
+      entity: "purchase_orders",
+      entityId: Number(id),
+      details: JSON.stringify({ supplierInvoiceRef, invoicedAmount: invAmount, poTotal, prTotal, receivedTotal }),
+    }).catch(console.error);
+
+    if (!isMatched) {
+      createNotification({
+        companyId: scope.companyId,
+        assignmentId: scope.activeAssignmentId,
+        type: "three_way_mismatch",
+        title: `عدم تطابق ثلاثي – ${po.ref}`,
+        body: `فاتورة=${invAmount} | طلب=${prTotal} | أمر=${poTotal} | استلام=${receivedTotal}`,
+        priority: "high",
+        refType: "purchase_orders",
+        refId: Number(id),
+      }).catch(console.error);
+    }
+
+    res.json({
+      message: isMatched ? "تمت المطابقة الثلاثية بنجاح" : "عدم تطابق في المطابقة الثلاثية",
+      isMatched,
+      threeWayMatch: {
+        purchaseRequest: prTotal,
+        purchaseOrder: poTotal,
+        goodsReceipt: receivedTotal,
+        supplierInvoice: invAmount,
+      },
+      variances: {
+        poVsInvoice: { amount: poVariance, pct: Math.round(poVariancePct) },
+        prVsInvoice: { amount: prVariance, pct: Math.round(prVariancePct) },
+        grVsInvoice: { amount: grVariance, pct: Math.round(grVariancePct) },
+      },
+      status: isMatched ? "invoice_matched" : "invoice_mismatch",
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Finance error:");
+  }
+});
+
+purchaseRouter.post("/purchase-orders/:id/schedule-payment", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
+    const { id } = req.params;
+    const { paymentDate, amount, method = "bank_transfer", notes } = req.body as any;
+
+    if (!paymentDate || !amount) {
+      throw new ValidationError("تاريخ الدفع والمبلغ مطلوبان");
+    }
+
+    const [po] = await rawQuery<any>(
+      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!po) {
+      throw new NotFoundError("أمر الشراء غير موجود");
+    }
+
+    await rawExecute(
+      `UPDATE purchase_orders
+       SET status = 'payment_scheduled',
+           notes = CONCAT(COALESCE(notes,''), $1)
+       WHERE id = $2`,
+      [` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`, Number(id)]
+    );
+
+    // Create a scheduled journal entry for the payment
+    createJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: `SCHED-PAY-${po.ref}`,
+      description: `دفعة مجدولة لأمر الشراء ${po.ref} بتاريخ ${paymentDate}`,
+      lines: [
+        { accountCode: "2100", debit: Number(amount), credit: 0 },
+        { accountCode: "1100", debit: 0, credit: Number(amount) },
+      ],
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "purchase_order.payment_scheduled",
+      entity: "purchase_orders",
+      entityId: Number(id),
+      details: JSON.stringify({ paymentDate, amount, method }),
+    }).catch(console.error);
+
+    res.json({
+      message: "تم جدولة الدفعة بنجاح",
+      paymentDate,
+      amount,
+      method,
+      status: "payment_scheduled",
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Finance error:");
+  }
+});
+

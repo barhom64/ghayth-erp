@@ -1,6 +1,5 @@
 import {
   handleRouteError,
-  validationError,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -635,13 +634,23 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       );
       if (vehicle) {
         if (!vehicle.assignedDriverId && !b.driverId) {
-          validationError(res, "لا يمكن بدء رحلة بدون سائق مرتبط بالمركبة", "driverId", "عيّن سائقاً للمركبة أو حدد سائقاً في الطلب");
-          return;
+          throw new ValidationError(
+            "لا يمكن بدء رحلة بدون سائق مرتبط بالمركبة",
+            {
+              field: "driverId",
+              fix: "عيّن سائقاً للمركبة أو حدد سائقاً في الطلب",
+            },
+          );
         }
         const insuranceEnd = vehicle.insuranceEnd ? new Date(vehicle.insuranceEnd) : null;
         if (!insuranceEnd || insuranceEnd < new Date()) {
-          validationError(res, "لا يمكن بدء رحلة بمركبة تأمينها منتهي", "vehicleId", "جدد تأمين المركبة قبل بدء الرحلة");
-          return;
+          throw new ValidationError(
+            "لا يمكن بدء رحلة بمركبة تأمينها منتهي",
+            {
+              field: "vehicleId",
+              fix: "جدد تأمين المركبة قبل بدء الرحلة",
+            },
+          );
         }
       }
     }
@@ -739,15 +748,22 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       if (autoVehicle) {
         const insuranceEnd = autoVehicle.insuranceEnd ? new Date(autoVehicle.insuranceEnd) : null;
         if (!insuranceEnd || insuranceEnd < new Date()) {
-          validationError(res, "لا يمكن بدء رحلة بمركبة تأمينها منتهي", "vehicleId", "جدد تأمين المركبة قبل بدء الرحلة أو حدد مركبة بتأمين ساري");
-          return;
+          throw new ValidationError(
+            "لا يمكن بدء رحلة بمركبة تأمينها منتهي",
+            {
+              field: "vehicleId",
+              fix: "جدد تأمين المركبة قبل بدء الرحلة أو حدد مركبة بتأمين ساري",
+            },
+          );
         }
       }
     }
 
     if (!selectedDriverId) {
-      validationError(res, "لا يمكن تسليم مركبة بدون سائق مرتبط", "driverId", "حدد سائقاً للرحلة أو أضف سائقين متاحين في النظام");
-      return;
+      throw new ValidationError("لا يمكن تسليم مركبة بدون سائق مرتبط", {
+        field: "driverId",
+        fix: "حدد سائقاً للرحلة أو أضف سائقين متاحين في النظام",
+      });
     }
 
     const fuelPricePerLiter = b.fuelPricePerLiter || 2.5;
@@ -835,12 +851,16 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
     const [trip] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
     if (!trip) throw new NotFoundError("الرحلة غير موجودة");
     if (trip.status === "completed") {
-      validationError(res, "الرحلة مكتملة بالفعل", "status", "لا يمكن إكمال رحلة مكتملة مرة أخرى");
-      return;
+      throw new ValidationError("الرحلة مكتملة بالفعل", {
+        field: "status",
+        fix: "لا يمكن إكمال رحلة مكتملة مرة أخرى",
+      });
     }
     if (trip.status === "cancelled") {
-      validationError(res, "الرحلة ملغاة", "status", "لا يمكن إكمال رحلة ملغاة");
-      return;
+      throw new ValidationError("الرحلة ملغاة", {
+        field: "status",
+        fix: "لا يمكن إكمال رحلة ملغاة",
+      });
     }
 
     const endMileage = b.endMileage || 0;
@@ -945,8 +965,10 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
     const tripId = Number(req.params.id);
     const reason = (req.body?.reason as string | undefined)?.trim();
     if (!reason) {
-      validationError(res, "سبب الإلغاء مطلوب", "reason", "اكتب سبب إلغاء الرحلة");
-      return;
+      throw new ValidationError("سبب الإلغاء مطلوب", {
+        field: "reason",
+        fix: "اكتب سبب إلغاء الرحلة",
+      });
     }
 
     const updated = await applyTransition({
@@ -1157,12 +1179,16 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
-      validationError(res, "سجل الصيانة مكتمل بالفعل", "status", "لا يمكن إكمال سجل مكتمل");
-      return;
+      throw new ValidationError("سجل الصيانة مكتمل بالفعل", {
+        field: "status",
+        fix: "لا يمكن إكمال سجل مكتمل",
+      });
     }
     if (m.status === "cancelled") {
-      validationError(res, "سجل الصيانة ملغى", "status", "لا يمكن إكمال سجل ملغى");
-      return;
+      throw new ValidationError("سجل الصيانة ملغى", {
+        field: "status",
+        fix: "لا يمكن إكمال سجل ملغى",
+      });
     }
     const finalCost = Number(b.cost || m.cost || 0);
     await rawExecute(`UPDATE fleet_maintenance SET status='completed', cost=$1 WHERE id=$2`, [finalCost, id]);
@@ -1231,16 +1257,22 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
-      validationError(res, "لا يمكن إلغاء صيانة مكتملة", "status", "السجل مكتمل مسبقاً");
-      return;
+      throw new ValidationError("لا يمكن إلغاء صيانة مكتملة", {
+        field: "status",
+        fix: "السجل مكتمل مسبقاً",
+      });
     }
     if (m.status === "cancelled") {
-      validationError(res, "السجل ملغى بالفعل", "status", "لا حاجة لإلغاء سجل ملغى");
-      return;
+      throw new ValidationError("السجل ملغى بالفعل", {
+        field: "status",
+        fix: "لا حاجة لإلغاء سجل ملغى",
+      });
     }
     if (!b.reason) {
-      validationError(res, "سبب الإلغاء مطلوب", "reason", "أدخل سبب إلغاء الصيانة");
-      return;
+      throw new ValidationError("سبب الإلغاء مطلوب", {
+        field: "reason",
+        fix: "أدخل سبب إلغاء الصيانة",
+      });
     }
 
     await rawExecute(
@@ -1431,8 +1463,10 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
     const liters = Number(b.liters) || 0;
 
     if (liters <= 0) {
-      validationError(res, "كمية الوقود يجب أن تكون أكبر من صفر", "liters", "أدخل كمية الوقود باللتر");
-      return;
+      throw new ValidationError("كمية الوقود يجب أن تكون أكبر من صفر", {
+        field: "liters",
+        fix: "أدخل كمية الوقود باللتر",
+      });
     }
 
     if (resolvedVehicleId) {
@@ -1442,13 +1476,13 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       );
       const tankCapacity = Number(veh?.fuelCapacity ?? 0);
       if (tankCapacity > 0 && liters > tankCapacity) {
-        validationError(
-          res,
+        throw new ValidationError(
           `لا يمكن تسجيل وقود يتجاوز سعة الخزان (${tankCapacity} لتر). الكمية المدخلة: ${liters} لتر`,
-          "liters",
-          `أدخل كمية لا تتجاوز سعة خزان المركبة (${tankCapacity} لتر)`
+          {
+            field: "liters",
+            fix: `أدخل كمية لا تتجاوز سعة خزان المركبة (${tankCapacity} لتر)`,
+          },
         );
-        return;
       }
     }
 

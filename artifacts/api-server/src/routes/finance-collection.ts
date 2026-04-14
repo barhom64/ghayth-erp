@@ -4,29 +4,17 @@ import {
   handleRouteError,
   NotFoundError,
   ValidationError,
-  ConflictError,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const collectionRouter = Router();
 collectionRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance", "director", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 const COLLECTION_STAGES = [
   { stage: 1, name: "sms_email_reminder", label: "تذكير SMS + إيميل", daysOverdue: 1 },
@@ -86,7 +74,7 @@ collectionRouter.get("/collection", async (req, res) => {
 collectionRouter.post("/collection/:invoiceId/action", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { invoiceId } = req.params;
     const { stage, notes } = req.body as any;
 
@@ -96,23 +84,31 @@ collectionRouter.post("/collection/:invoiceId/action", async (req, res) => {
        FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(invoiceId), scope.companyId]
     );
-    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
     const requestedStage = Number(stage);
     const stageInfo = COLLECTION_STAGES.find((s) => s.stage === requestedStage);
     if (!stageInfo) {
-      res.status(400).json({ error: "مرحلة التحصيل غير معرّفة", validStages: COLLECTION_STAGES.map((s) => s.stage) });
-      return;
+      throw new ValidationError("مرحلة التحصيل غير معرّفة", {
+        field: "stage",
+        fix: `استخدم إحدى المراحل: ${COLLECTION_STAGES.map((s) => s.stage).join(", ")}`,
+        meta: { validStages: COLLECTION_STAGES.map((s) => s.stage) },
+      });
     }
 
     const daysOverdue = Number(invoice.daysOverdue ?? 0);
     if (daysOverdue < stageInfo.daysOverdue) {
-      res.status(400).json({
-        error: `هذه المرحلة تتطلب تأخراً ${stageInfo.daysOverdue} يوم على الأقل. التأخر الحالي: ${daysOverdue} يوم`,
-        requiredDaysOverdue: stageInfo.daysOverdue,
-        currentDaysOverdue: daysOverdue,
-      });
-      return;
+      throw new ValidationError(
+        `هذه المرحلة تتطلب تأخراً ${stageInfo.daysOverdue} يوم على الأقل. التأخر الحالي: ${daysOverdue} يوم`,
+        {
+          field: "stage",
+          fix: `انتظر حتى يبلغ التأخر ${stageInfo.daysOverdue} يوماً قبل تطبيق هذه المرحلة`,
+          meta: {
+            requiredDaysOverdue: stageInfo.daysOverdue,
+            currentDaysOverdue: daysOverdue,
+          },
+        },
+      );
     }
 
     const [lastStageRecord] = await rawQuery<any>(
@@ -121,12 +117,17 @@ collectionRouter.post("/collection/:invoiceId/action", async (req, res) => {
     );
     const lastStage = lastStageRecord ? Number(lastStageRecord.stage) : 0;
     if (requestedStage <= lastStage || requestedStage > lastStage + 1) {
-      res.status(400).json({
-        error: `يجب اتباع المراحل بالتسلسل. المرحلة المتوقعة: ${lastStage + 1}، المطلوب: ${requestedStage}`,
-        expectedStage: lastStage + 1,
-        requestedStage,
-      });
-      return;
+      throw new ValidationError(
+        `يجب اتباع المراحل بالتسلسل. المرحلة المتوقعة: ${lastStage + 1}، المطلوب: ${requestedStage}`,
+        {
+          field: "stage",
+          fix: `طبّق المرحلة ${lastStage + 1} أولاً`,
+          meta: {
+            expectedStage: lastStage + 1,
+            requestedStage,
+          },
+        },
+      );
     }
 
     if (invoice.status !== "overdue") {
@@ -166,7 +167,7 @@ collectionRouter.get("/collection/:invoiceId/history", async (req, res) => {
       `SELECT id FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(invoiceId), scope.companyId]
     );
-    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
     const history = await rawQuery<any>(
       `SELECT ics.*, e.name AS "performedByName"

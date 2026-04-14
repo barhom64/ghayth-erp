@@ -1,6 +1,5 @@
 import {
   handleRouteError,
-  validationError,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -1797,13 +1796,13 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const totalActive = Number(activeCount?.cnt ?? 0);
     const totalWithAttendance = Number(attendanceCount?.cnt ?? 0);
     if (totalActive > 0 && totalWithAttendance < totalActive) {
-      validationError(
-        res,
+      throw new ValidationError(
         `لا يمكن تشغيل الرواتب: سجلات الحضور غير مكتملة (${totalWithAttendance} من ${totalActive} موظف لديهم حضور مسجّل)`,
-        "attendance",
-        `تأكد من اكتمال سجلات الحضور لجميع الموظفين في شهر ${targetPeriod} قبل تشغيل الرواتب`
+        {
+          field: "attendance",
+          fix: `تأكد من اكتمال سجلات الحضور لجميع الموظفين في شهر ${targetPeriod} قبل تشغيل الرواتب`,
+        },
       );
-      return;
     }
 
     // ── Payroll pre-check: no unresolved violations ──
@@ -1817,13 +1816,13 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       [scope.companyId, targetPeriod]
     );
     if (unresolvedViolations.length > 0) {
-      validationError(
-        res,
+      throw new ValidationError(
         `لا يمكن تشغيل الرواتب: يوجد ${unresolvedViolations.length} مخالفة لم يُحدد جزاؤها`,
-        "violations",
-        "راجع المخالفات وحدد الجزاء لكل مخالفة قبل تشغيل الرواتب"
+        {
+          field: "violations",
+          fix: "راجع المخالفات وحدد الجزاء لكل مخالفة قبل تشغيل الرواتب",
+        },
       );
-      return;
     }
 
     const salaryComponents = await rawQuery<any>(
@@ -1833,13 +1832,13 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     );
 
     if (salaryComponents.length === 0) {
-      validationError(
-        res,
+      throw new ValidationError(
         "لا يمكن تشغيل الرواتب: لم يتم إعداد بنود الراتب (salary_components) لهذه الشركة",
-        "salary_components",
-        "يرجى الانتقال إلى إعدادات الرواتب وإضافة بنود الراتب (بدل سكن، بدل نقل، التأمينات الاجتماعية...) قبل تشغيل الرواتب"
+        {
+          field: "salary_components",
+          fix: "يرجى الانتقال إلى إعدادات الرواتب وإضافة بنود الراتب (بدل سكن، بدل نقل، التأمينات الاجتماعية...) قبل تشغيل الرواتب",
+        },
       );
-      return;
     }
 
     const gosiSettings = await rawQuery<{ key: string; value: string }>(

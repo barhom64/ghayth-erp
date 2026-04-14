@@ -144,7 +144,7 @@ router.get("/:id", async (req, res) => {
       rawQuery<any>(
         `SELECT id, name, status, budget, progress, "startDate", "endDate"
          FROM projects
-         WHERE "clientId" = $1 AND "companyId" = $2
+         WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [Number(id), scope.companyId]
       ),
@@ -182,7 +182,7 @@ router.get("/:id", async (req, res) => {
           FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2)
          UNION ALL
          (SELECT 'project' AS type, name AS ref, status, progress::text AS detail, "createdAt"
-          FROM projects WHERE "clientId" = $1 AND "companyId" = $2)
+          FROM projects WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          ORDER BY "createdAt" DESC LIMIT 50`,
         [Number(id), scope.companyId]
       ),

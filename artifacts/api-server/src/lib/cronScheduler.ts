@@ -1183,7 +1183,7 @@ async function dailyProjectCheck(): Promise<string> {
     const projects = await rawQuery<any>(
       `SELECT id, name, "endDate", budget, "spentAmount", progress
        FROM projects
-       WHERE "companyId" = $1 AND status = 'active' AND "endDate" < CURRENT_DATE`,
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status = 'active' AND "endDate" < CURRENT_DATE`,
       [company.id]
     );
     for (const p of projects) {

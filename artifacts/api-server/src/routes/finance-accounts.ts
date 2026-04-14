@@ -1,24 +1,19 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  handleRouteError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { createJournalEntry, checkFinancialPeriodOpen } from "../lib/businessHelpers.js";
+import { createJournalEntry, checkFinancialPeriodOpen, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { assertRole } from "../lib/roleGuards.js";
+import { pushToDLQ } from "../lib/eventBus.js";
 
 export const accountsRouter = Router();
 accountsRouter.use(authMiddleware);
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 accountsRouter.get("/chart-of-accounts", async (req, res) => {
   try {
@@ -68,12 +63,37 @@ accountsRouter.get("/accounts", async (req, res) => {
 accountsRouter.post("/accounts", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const b = req.body;
+    if (!b.code || !b.name) {
+      throw new ValidationError("رمز الحساب واسمه مطلوبان", {
+        field: !b.code ? "code" : "name",
+        fix: "أدخل رمز الحساب واسمه",
+      });
+    }
     const r = await rawExecute(
       `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode") VALUES ($1,$2,$3,$4,$5)`,
       [scope.companyId, b.code, b.name, b.type || "asset", b.parentCode]
     );
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "account.created",
+      entity: "chart_of_accounts",
+      entityId: r.insertId,
+      details: JSON.stringify({ code: b.code, name: b.name, type: b.type }),
+    }).catch((err) => pushToDLQ("event", { action: "account.created", entityId: r.insertId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "chart_of_accounts",
+      entityId: r.insertId,
+      after: { code: b.code, name: b.name, type: b.type },
+    }).catch((err) => console.error("[audit] account.created:", err));
+
     res.status(201).json({ id: r.insertId, ...b });
   } catch (err) {
     handleRouteError(err, res, "Create account error:");
@@ -83,7 +103,7 @@ accountsRouter.post("/accounts", async (req, res) => {
 accountsRouter.patch("/accounts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
+    assertRole(scope, ["director", "owner"]);
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -92,10 +112,34 @@ accountsRouter.patch("/accounts/:id", async (req, res) => {
     addField("name", b.name);
     addField("type", b.type);
     addField("parentCode", b.parentCode);
-    if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
+    if (fields.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتحديث", {
+        field: "body",
+        fix: "أرسل حقلاً واحداً على الأقل لتحديثه",
+      });
+    }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) { res.status(404).json({ error: "الحساب غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "account.updated",
+      entity: "chart_of_accounts",
+      entityId: id,
+      details: JSON.stringify({ fields: Object.keys(b) }),
+    }).catch((err) => pushToDLQ("event", { action: "account.updated", entityId: id }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "chart_of_accounts",
+      entityId: id,
+      after: { fields: Object.keys(b) },
+    }).catch((err) => console.error("[audit] account.updated:", err));
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update account error:"); }
 });
@@ -103,9 +147,57 @@ accountsRouter.patch("/accounts/:id", async (req, res) => {
 accountsRouter.delete("/accounts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["director", "owner"], res)) return;
-    const rows = await rawQuery<any>(`DELETE FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
-    if (rows.length === 0) { res.status(404).json({ error: "الحساب غير موجود" }); return; }
+    assertRole(scope, ["director", "owner"]);
+    const accountId = Number(req.params.id);
+
+    const [existing] = await rawQuery<any>(
+      `SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2`,
+      [accountId, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الحساب غير موجود");
+
+    // Referential integrity: refuse delete when journal lines reference this account code.
+    const [journalUsage] = await rawQuery<any>(
+      `SELECT COUNT(*) AS cnt FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId"
+       WHERE jl."accountCode" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
+      [existing.code, scope.companyId]
+    );
+    if (Number(journalUsage?.cnt ?? 0) > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف الحساب — يوجد ${journalUsage.cnt} سطر في القيود المحاسبية مرتبط بهذا الحساب`,
+        {
+          field: "accountId",
+          fix: "ارحّل/احذف القيود المرتبطة قبل حذف الحساب أو قم بأرشفته فقط",
+          meta: { journalLinesCount: Number(journalUsage.cnt) },
+        },
+      );
+    }
+
+    const rows = await rawQuery<any>(
+      `DELETE FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      [accountId, scope.companyId]
+    );
+    if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "account.deleted",
+      entity: "chart_of_accounts",
+      entityId: accountId,
+      details: JSON.stringify({ code: existing.code, name: existing.name }),
+    }).catch((err) => pushToDLQ("event", { action: "account.deleted", entityId: accountId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "delete",
+      entity: "chart_of_accounts",
+      entityId: accountId,
+      after: { code: existing.code, name: existing.name, hardDelete: true },
+    }).catch((err) => console.error("[audit] account.deleted:", err));
+
     res.json({ message: "تم حذف الحساب" });
   } catch (err) { handleRouteError(err, res, "Delete account error:"); }
 });
@@ -134,17 +226,25 @@ accountsRouter.post("/journal", async (req, res) => {
   try {
     const scope = req.scope!;
     const { ref, description, lines, date: journalBodyDate } = req.body as any;
-    if (!lines || !Array.isArray(lines)) {
-      res.status(400).json({ error: "بنود القيد مطلوبة" });
-      return;
+    if (!lines || !Array.isArray(lines) || lines.length === 0) {
+      throw new ValidationError("بنود القيد مطلوبة", {
+        field: "lines",
+        fix: "أرسل مصفوفة بنود القيد (سطرين على الأقل)",
+      });
     }
     const journalDate = journalBodyDate
       ? new Date(journalBodyDate).toISOString().split("T")[0]
       : new Date().toISOString().split("T")[0];
     const journalPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, journalDate);
     if (!journalPeriodCheck.open) {
-      res.status(422).json({ error: `لا يمكن إنشاء قيد في فترة مالية مُقفلة: ${journalPeriodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(
+        `لا يمكن إنشاء قيد في فترة مالية مُقفلة: ${journalPeriodCheck.periodName ?? ""}`,
+        {
+          field: "date",
+          fix: "اختر تاريخاً ضمن فترة مالية مفتوحة، أو اطلب من المدير المالي إعادة فتح الفترة",
+          meta: { periodName: journalPeriodCheck.periodName },
+        },
+      );
     }
     const journalId = await createJournalEntry({
       companyId: scope.companyId,
@@ -154,6 +254,25 @@ accountsRouter.post("/journal", async (req, res) => {
       description: description ?? "",
       lines,
     });
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "journal.created",
+      entity: "journal_entries",
+      entityId: journalId,
+      details: JSON.stringify({ ref, lineCount: lines.length }),
+    }).catch((err) => pushToDLQ("event", { action: "journal.created", entityId: journalId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "journal_entries",
+      entityId: journalId,
+      after: { ref, lineCount: lines.length, date: journalDate },
+    }).catch((err) => console.error("[audit] journal.created:", err));
+
     res.status(201).json({ id: journalId, ref, description, lines });
   } catch (err) {
     handleRouteError(err, res, "Create journal error:");

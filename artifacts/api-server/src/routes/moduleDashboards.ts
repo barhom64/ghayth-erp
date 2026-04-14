@@ -182,16 +182,16 @@ router.get("/projects", async (req, res) => {
     const cid = scope.companyId;
 
     const [projects, budgetInfo, tasks] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active' OR status = 'in_progress') AS active, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'active' AND "endDate" < CURRENT_DATE) AS delayed, COALESCE(AVG(progress), 0) AS "avgProgress" FROM projects WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COALESCE(SUM(budget), 0) AS "totalBudget", COALESCE(SUM("spentAmount"), 0) AS "totalSpent", COUNT(*) FILTER (WHERE budget > 0 AND "spentAmount" >= budget * 0.8) AS "overBudget" FROM projects WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'done') AS done, COUNT(*) FILTER (WHERE status = 'blocked') AS blocked, COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND "dueDate" < CURRENT_DATE) AS overdue FROM project_tasks pt JOIN projects p ON p.id = pt."projectId" WHERE p."companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active' OR status = 'in_progress') AS active, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'active' AND "endDate" < CURRENT_DATE) AS delayed, COALESCE(AVG(progress), 0) AS "avgProgress" FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COALESCE(SUM(budget), 0) AS "totalBudget", COALESCE(SUM("spentAmount"), 0) AS "totalSpent", COUNT(*) FILTER (WHERE budget > 0 AND "spentAmount" >= budget * 0.8) AS "overBudget" FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'done') AS done, COUNT(*) FILTER (WHERE status = 'blocked') AS blocked, COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND "dueDate" < CURRENT_DATE) AS overdue FROM project_tasks pt JOIN projects p ON p.id = pt."projectId" WHERE p."companyId" = $1 AND p."deletedAt" IS NULL`, [cid]),
     ]);
 
     const budgetVariance = Number(budgetInfo?.totalBudget ?? 0) > 0
       ? Math.round(((Number(budgetInfo.totalBudget) - Number(budgetInfo.totalSpent)) / Number(budgetInfo.totalBudget)) * 100) : 0;
 
     const projectProgress = await safeQuery(
-      `SELECT id, name, progress, budget, "spentAmount", status, "startDate", "endDate" FROM projects WHERE "companyId" = $1 AND status IN ('active','in_progress') ORDER BY "endDate" ASC LIMIT 10`, [cid]
+      `SELECT id, name, progress, budget, "spentAmount", status, "startDate", "endDate" FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('active','in_progress') ORDER BY "endDate" ASC LIMIT 10`, [cid]
     );
 
     res.json({

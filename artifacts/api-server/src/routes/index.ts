@@ -5,7 +5,12 @@ import dashboardRouter from "./dashboard.js";
 import employeesRouter from "./employees.js";
 import clientsRouter from "./clients.js";
 import hrRouter from "./hr.js";
-import financeRouter from "./finance.js";
+// finance.ts monolith removed in Phase 7.1 — all its routes now live in the
+// per-domain split files below (finance-vendors, finance-accounts,
+// finance-budget, finance-collection, finance-custodies, finance-hardening,
+// finance-recurring, finance-purchase, finance-invoices, finance-journal,
+// finance-reports, finance-algorithms, accounting-engine, zatca). There is
+// no more /finance fallback router.
 import { invoicesRouter } from "./finance-invoices.js";
 import { journalRouter } from "./finance-journal.js";
 import { purchaseRouter } from "./finance-purchase.js";
@@ -135,7 +140,9 @@ router.use("/finance", requireModule("finance"), accountsRouter);
 router.use("/finance", requireModule("finance"), vendorsRouter);
 router.use("/finance", requireModule("finance"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), recurringRouter);
-router.use("/finance", requireModule("finance"), financeRouter);
+// financeRouter (finance.ts monolith) removed in Phase 7.1 — the 13
+// singleton routes it still owned were migrated to finance-purchase.ts,
+// finance-vendors.ts, and finance-reports.ts during canonicalisation.
 router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
 router.use("/fleet", requireModule("fleet"), fleetRouter);

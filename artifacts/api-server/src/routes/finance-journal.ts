@@ -1,6 +1,5 @@
 import {
   handleRouteError,
-  validationError,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -19,6 +18,8 @@ import {
   checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { assertRole } from "../lib/roleGuards.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const journalRouter = Router();
 journalRouter.use(authMiddleware);
@@ -26,14 +27,10 @@ journalRouter.use(authMiddleware);
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 const PAYROLL_ROLES = ["hr_manager", "finance_manager", "general_manager", "owner"];
 
-function assertRole(scope: any, allowedRoles: string[]): void {
-  if (!allowedRoles.includes(scope.role)) {
-    throw new ForbiddenError("ليس لديك الصلاحية للقيام بهذا الإجراء", {
-      fix: `الأدوار المسموحة: ${allowedRoles.join(", ")}`,
-      meta: { requiredRoles: allowedRoles, yourRole: scope.role },
-    });
-  }
-}
+// Role guard is the shared `assertRole` from `../lib/roleGuards.js` (imported
+// above). The local duplicate helper that used to live here was removed in
+// Phase 8.1 — every finance route now goes through the same helper so the
+// typed-error contract is uniform across files.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JOURNAL ENTRY STATE MACHINE — Phase C.7 Finance audit
@@ -85,33 +82,6 @@ function checkAttachmentRequired(params: { operationType: string; amount?: numbe
   if (amount >= HIGH_VALUE_THRESHOLD && operationType === "payment") { return { required: true, reason: `المرفقات إلزامية لسندات الصرف الكبيرة (أكثر من ${HIGH_VALUE_THRESHOLD.toLocaleString()} ريال)` }; }
   return { required: false };
 }
-
-journalRouter.get("/journal", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
-    const rows = await rawQuery<any>(
-      `SELECT je.*, json_agg(jl.*) AS lines FROM journal_entries je LEFT JOIN journal_lines jl ON jl."journalId" = je.id WHERE ${where} AND je."deletedAt" IS NULL GROUP BY je.id ORDER BY je."createdAt" DESC LIMIT 100`,
-      params
-    );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
-  }
-});
-
-journalRouter.post("/journal", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { ref, description, lines } = req.body as any;
-    if (!lines || !Array.isArray(lines)) { throw new ValidationError("بنود القيد مطلوبة"); return; }
-    const journalId = await createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref: ref ?? `JE-${Date.now()}`, description: description ?? "", lines });
-    res.status(201).json({ id: journalId, ref, description, lines });
-  } catch (err) {
-    handleRouteError(err, res, "Create journal error:");
-  }
-});
 
 journalRouter.get("/expenses", async (req, res) => {
   try {
@@ -312,10 +282,16 @@ journalRouter.patch("/expenses/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { id } = req.params;
+    const expenseId = Number(req.params.id);
     const { approved, notes } = req.body as any;
-    const [exp] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
+
+    // Fetch ref for the audit trail; state gating handled by the engine.
+    const [exp] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      [expenseId, scope.companyId]
+    );
     if (!exp) throw new NotFoundError("المصروف غير موجود");
+
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
@@ -323,12 +299,42 @@ journalRouter.patch("/expenses/:id/approve", async (req, res) => {
         { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
       );
     }
-    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('expense',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+
+    // Central lifecycle engine: expense approval uses the shared `status`
+    // column on journal_entries. fromStates restricts the decision to
+    // pending/draft — an already-approved or already-rejected expense
+    // cannot be flipped again without going through a separate re-open
+    // flow. The onApply hook writes the approval_actions trail in the
+    // same transaction.
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: expenseId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `expense.${newStatus}`,
+      fromStates: ["draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+           VALUES ('expense',$1,$2,$3,$4,$5)`,
+          [expenseId, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+      after: { ref: exp.ref, decision: newStatus, notes: notes ?? null },
+    });
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
-    res.json({ message: labels[newStatus] || newStatus, status: newStatus });
+    res.json({
+      message: labels[newStatus] || newStatus,
+      status: updated.status,
+      event: `expense.${newStatus}`,
+    });
   } catch (err) {
-    handleRouteError(err, res, "Finance journal error:");
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Approve expense error:");
   }
 });
 
@@ -486,129 +492,6 @@ journalRouter.delete("/vouchers/:id", async (req, res) => {
   }
 });
 
-journalRouter.get("/chart-of-accounts", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
-    const accounts = await rawQuery<any>(`SELECT id, code, name, type, "parentCode", status FROM chart_of_accounts WHERE ${where} AND "deletedAt" IS NULL ORDER BY code ASC`, params);
-    res.json(accounts);
-  } catch (err) {
-    handleRouteError(err, res, "Finance journal error:");
-  }
-});
-
-journalRouter.get("/accounts", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
-    const { search, type: accountType } = req.query as { search?: string; type?: string };
-    let extraWhere = " AND \"deletedAt\" IS NULL";
-    if (search && search.trim()) { params.push(`%${search.trim()}%`); extraWhere += ` AND (name ILIKE $${params.length} OR code ILIKE $${params.length})`; }
-    if (accountType && accountType.trim()) { params.push(accountType.trim()); extraWhere += ` AND type = $${params.length}`; }
-    const rows = await rawQuery(`SELECT * FROM chart_of_accounts WHERE ${where}${extraWhere} ORDER BY code`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
-  }
-});
-
-journalRouter.post("/accounts", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    assertRole(scope, ["general_manager", "owner"]);
-    const b = req.body;
-    const r = await rawExecute(`INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode") VALUES ($1,$2,$3,$4,$5)`, [scope.companyId, b.code, b.name, b.type || "asset", b.parentCode]);
-    res.status(201).json({ id: r.insertId, ...b });
-  } catch (err) {
-    handleRouteError(err, res, "Create account error:");
-  }
-});
-
-journalRouter.patch("/accounts/:id", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    assertRole(scope, ["general_manager", "owner"]);
-    const id = Number(req.params.id);
-    const b = req.body;
-    const fields: string[] = [];
-    const params: any[] = [];
-    const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
-    addField("name", b.name); addField("type", b.type); addField("parentCode", b.parentCode);
-    if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
-    params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
-    if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
-    res.json(rows[0]);
-  } catch (err) {
-    handleRouteError(err, res, "Update account error:");
-  }
-});
-
-journalRouter.delete("/accounts/:id", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    assertRole(scope, ["general_manager", "owner"]);
-    const id = Number(req.params.id);
-    const [account] = await rawQuery<any>(`SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!account) throw new NotFoundError("الحساب غير موجود");
-    const [hasLines] = await rawQuery<any>(`SELECT COUNT(*)::int AS cnt FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL WHERE jl."accountCode" = $1 AND je."companyId" = $2`, [account.code, scope.companyId]);
-    if (hasLines && hasLines.cnt > 0) {
-      throw new ConflictError(
-        `لا يمكن حذف الحساب "${account.name}" لأنه مرتبط بـ ${hasLines.cnt} قيد محاسبي`,
-        { field: "accountCode", fix: "احذف أو اعكس القيود المرتبطة أولاً", meta: { linkedEntries: hasLines.cnt } }
-      );
-    }
-    const [hasChildren] = await rawQuery<any>(`SELECT COUNT(*)::int AS cnt FROM chart_of_accounts WHERE "parentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (hasChildren && hasChildren.cnt > 0) {
-      throw new ConflictError(
-        `لا يمكن حذف الحساب "${account.name}" لأنه يحتوي على ${hasChildren.cnt} حساب فرعي`,
-        { field: "accountCode", fix: "احذف أو انقل الحسابات الفرعية أولاً", meta: { childAccounts: hasChildren.cnt } }
-      );
-    }
-    await rawQuery<any>(`UPDATE chart_of_accounts SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 RETURNING id`, [id, scope.companyId]);
-    res.json({ message: "تم حذف الحساب" });
-  } catch (err) {
-    handleRouteError(err, res, "Delete account error:");
-  }
-});
-
-journalRouter.get("/fiscal-periods", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-    const periods = [];
-    for (let m = 1; m <= 12; m++) {
-      const period = `${currentYear}-${String(m).padStart(2, "0")}`;
-      const [stats] = await rawQuery<any>(`SELECT COUNT(*) AS entries, COALESCE(SUM(jl.debit), 0) AS "totalDebit" FROM journal_entries je LEFT JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, period]);
-      periods.push({ period, name: new Date(currentYear, m - 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric" }), entries: Number(stats?.entries ?? 0), totalAmount: Number(stats?.totalDebit ?? 0), status: m < currentMonth ? "closed" : m === currentMonth ? "active" : "future" });
-    }
-    res.json({ data: periods });
-  } catch (err) {
-    handleRouteError(err, res, "Finance journal error:");
-  }
-});
-
-journalRouter.post("/fiscal-periods/:period/close", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
-    const { period } = req.params;
-    if (!/^\d{4}-\d{2}$/.test(period)) { throw new ValidationError("صيغة الفترة غير صحيحة", { field: "period", fix: "استخدم الصيغة YYYY-MM مثل 2025-01" }); }
-    const pendingJournals = await rawQuery<any>(`SELECT je.id, je.ref, je.description FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2 AND je.status = 'draft' LIMIT 10`, [scope.companyId, period]);
-    if (pendingJournals.length > 0) { throw new ValidationError(`لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`, { field: "journalEntries", fix: "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية" }); }
-    const [debitSum] = await rawQuery<any>(`SELECT COALESCE(SUM(jl.debit), 0) AS "totalDebit", COALESCE(SUM(jl.credit), 0) AS "totalCredit" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, period]);
-    const totalDebit = Number(debitSum?.totalDebit ?? 0);
-    const totalCredit = Number(debitSum?.totalCredit ?? 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) { throw new ValidationError(`لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`, { field: "balance", fix: "تأكد من توازن جميع القيود المحاسبية قبل الإقفال" }); }
-    res.json({ message: `تم إقفال الفترة المالية ${period} بنجاح`, period, totalDebit, totalCredit });
-  } catch (err) {
-    handleRouteError(err, res, "Close fiscal period error:");
-  }
-});
-
 journalRouter.get("/salary-advances", async (req, res) => {
   try {
     const scope = req.scope!;
@@ -640,61 +523,55 @@ journalRouter.patch("/salary-advances/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PAYROLL_ROLES);
-    const { id } = req.params;
+    const advanceId = Number(req.params.id);
     const { approved, notes } = req.body as any;
-    const [entry] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`, [Number(id), scope.companyId]);
+
+    const [entry] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`,
+      [advanceId, scope.companyId]
+    );
     if (!entry) throw new NotFoundError("السلفة غير موجودة");
+
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
-    if (newStatus === "rejected" && !notes) { throw new ValidationError("يجب ذكر سبب الرفض"); return; }
-    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('salary_advance',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
-    res.json({ id: Number(id), status: newStatus });
-  } catch (err) {
-    handleRouteError(err, res, "خطأ في اعتماد السلفة");
-  }
-});
+    if (newStatus === "rejected" && !notes) {
+      throw new ValidationError("يجب ذكر سبب الرفض", {
+        field: "notes",
+        fix: "اكتب سبب رفض السلفة",
+      });
+    }
 
-journalRouter.get("/ledger/:accountCode", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { accountCode } = req.params;
-    const { startDate, endDate } = req.query as any;
-    let dateFilter = "";
-    const params: any[] = [scope.companyId, accountCode];
-    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    const [account] = await rawQuery<any>(`SELECT * FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2`, [scope.companyId, accountCode]);
-    const entries = await rawQuery<any>(`SELECT jl.id, jl.debit, jl.credit, je.ref, je.description, je."createdAt" AS date FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL WHERE je."companyId" = $1 AND jl."accountCode" = $2 ${dateFilter} ORDER BY je."createdAt" ASC`, params);
-    let runningBalance = 0;
-    const withBalance = entries.map((e: any) => { runningBalance += Number(e.debit) - Number(e.credit); return { ...e, runningBalance }; });
-    const totalDebit = entries.reduce((s: number, e: any) => s + Number(e.debit), 0);
-    const totalCredit = entries.reduce((s: number, e: any) => s + Number(e.credit), 0);
-    res.json({ account: account || { code: accountCode }, entries: withBalance, summary: { totalDebit, totalCredit, balance: totalDebit - totalCredit } });
-  } catch (err) {
-    handleRouteError(err, res, "Ledger error:");
-  }
-});
+    // Central lifecycle engine: salary advances live on journal_entries
+    // with the standard `status` column. fromStates allows decisions only
+    // when the advance is still pending — approved or rejected advances
+    // cannot be re-decided without going through a fresh approval chain.
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: advanceId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `salary_advance.${newStatus}`,
+      fromStates: ["draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+           VALUES ('salary_advance',$1,$2,$3,$4,$5)`,
+          [advanceId, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+      after: { ref: entry.ref, decision: newStatus, notes: notes ?? null },
+    });
 
-journalRouter.get("/payments", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.credit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" IN ('1100','1110') WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND jl.credit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 100`, [scope.companyId]);
-    const totalPayments = rows.reduce((s: number, r: any) => s + Number(r.amount), 0);
-    res.json({ data: rows, summary: { totalPayments, count: rows.length } });
+    res.json({
+      id: advanceId,
+      status: updated.status,
+      event: `salary_advance.${newStatus}`,
+    });
   } catch (err) {
-    handleRouteError(err, res, "Finance journal error:");
-  }
-});
-
-journalRouter.get("/financial-requests", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT pr.id, pr.ref, pr."totalAmount" AS amount, pr.status, pr."createdAt", pr.notes, s.name AS "supplierName", e.name AS "requestedByName" FROM purchase_requests pr LEFT JOIN suppliers s ON s.id = pr."supplierId" LEFT JOIN employee_assignments ea ON ea.id = pr."requestedBy" LEFT JOIN employees e ON e.id = ea."employeeId" WHERE pr."companyId" = $1 ORDER BY pr."createdAt" DESC`, [scope.companyId]);
-    const pending = rows.filter((r: any) => r.status === "draft" || r.status === "pending");
-    const approved = rows.filter((r: any) => r.status === "approved");
-    res.json({ data: rows, summary: { total: rows.length, pending: pending.length, approved: approved.length } });
-  } catch (err) {
-    handleRouteError(err, res, "Finance journal error:");
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Approve salary advance error:");
   }
 });
 
@@ -952,7 +829,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
 
     // Verify all 12 periods are closed, unless force=true
     const closedPeriods = await rawQuery<any>(
-      `SELECT to_char("startDate", 'YYYY-MM') AS period FROM financial_periods WHERE "companyId" = $1 AND status = 'closed' AND EXTRACT(YEAR FROM "startDate") = $2`,
+      `SELECT to_char("startDate", 'YYYY-MM') AS period FROM financial_periods WHERE "companyId" = $1 AND status = 'closed' AND "deletedAt" IS NULL AND EXTRACT(YEAR FROM "startDate") = $2`,
       [scope.companyId, year]
     );
     const closedSet = new Set(closedPeriods.map((p: any) => p.period));
@@ -997,7 +874,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
         const startDate = `${p}-01`;
         const endDate = new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0).toISOString().split("T")[0];
         const [existing] = await rawQuery<any>(
-          `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 LIMIT 1`,
+          `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
           [scope.companyId, p]
         );
         if (existing) {
@@ -1034,7 +911,8 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
          SET "yearEndClosed" = TRUE,
              "yearEndClosedAt" = NOW(),
              "yearEndClosingJournalId" = $1
-       WHERE "companyId" = $2 AND EXTRACT(YEAR FROM "startDate") = $3`,
+       WHERE "companyId" = $2 AND EXTRACT(YEAR FROM "startDate") = $3
+         AND "deletedAt" IS NULL`,
       [journalId, scope.companyId, year]
     );
 

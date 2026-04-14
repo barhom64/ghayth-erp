@@ -1,9 +1,9 @@
 import {
   handleRouteError,
-  validationError,
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -14,20 +14,15 @@ import {
   emitEvent,
   createNotification,
 } from "../lib/businessHelpers.js";
+import { assertRole } from "../lib/roleGuards.js";
+import { pushToDLQ } from "../lib/eventBus.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 const CFO_ROLES = ["finance_manager", "general_manager", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({ error: "ليس لديك الصلاحية للقيام بهذا الإجراء", requiredRoles: allowedRoles, yourRole: scope.role });
-    return false;
-  }
-  return true;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
@@ -43,7 +38,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", async (req, res) => {
        FROM financial_periods fp
        LEFT JOIN employee_assignments ea ON ea.id = fp."closedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE fp."companyId" = $1
+       WHERE fp."companyId" = $1 AND fp."deletedAt" IS NULL
        ORDER BY fp."startDate" DESC`,
       [scope.companyId]
     );
@@ -56,11 +51,13 @@ financeHardeningRouter.get("/fiscal-periods-v2", async (req, res) => {
 financeHardeningRouter.post("/fiscal-periods-v2", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, CFO_ROLES, res)) return;
+    assertRole(scope, CFO_ROLES);
     const { name, startDate, endDate, notes } = req.body as any;
     if (!name || !startDate || !endDate) {
-      res.status(400).json({ error: "الاسم وتاريخ البداية والنهاية مطلوبة" });
-      return;
+      throw new ValidationError("الاسم وتاريخ البداية والنهاية مطلوبة", {
+        field: !name ? "name" : !startDate ? "startDate" : "endDate",
+        fix: "أدخل اسم الفترة وتاريخي البداية والنهاية بصيغة YYYY-MM-DD",
+      });
     }
     const { insertId } = await rawExecute(
       `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,notes)
@@ -68,6 +65,25 @@ financeHardeningRouter.post("/fiscal-periods-v2", async (req, res) => {
       [scope.companyId, name, startDate, endDate, notes ?? null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM financial_periods WHERE id=$1`, [insertId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "fiscal_period.created",
+      entity: "financial_periods",
+      entityId: insertId,
+      details: JSON.stringify({ name, startDate, endDate }),
+    }).catch((err) => pushToDLQ("event", { action: "fiscal_period.created", entityId: insertId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "financial_periods",
+      entityId: insertId,
+      after: { name, startDate, endDate },
+    }).catch((err) => console.error("[audit] fiscal_period.created:", err));
+
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create fiscal period error:");
@@ -77,16 +93,18 @@ financeHardeningRouter.post("/fiscal-periods-v2", async (req, res) => {
 financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, CFO_ROLES, res)) return;
-    const { id } = req.params;
+    assertRole(scope, CFO_ROLES);
+    const periodId = Number(req.params.id);
     const { notes } = req.body as any;
 
+    // Pre-flight: refuse close when the period still has unposted manual
+    // journals. The business rule lives here (not in applyTransition) so we
+    // can surface a ConflictError with structured `pendingCount` meta.
     const [period] = await rawQuery<any>(
-      `SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      `SELECT id, name, "startDate", "endDate" FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [periodId, scope.companyId]
     );
-    if (!period) { res.status(404).json({ error: "الفترة غير موجودة" }); return; }
-    if (period.status === "closed") { res.status(400).json({ error: "الفترة مُقفلة مسبقاً" }); return; }
+    if (!period) throw new NotFoundError("الفترة غير موجودة");
 
     const pendingJournals = await rawQuery<any>(
       `SELECT id FROM journal_entries
@@ -98,27 +116,46 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => 
       [scope.companyId, period.startDate, period.endDate]
     );
     if (pendingJournals.length > 0) {
-      res.status(422).json({
-        error: `لا يمكن إقفال الفترة: يوجد ${pendingJournals.length} قيد يدوي لم يُرحّل بعد`,
-        pendingCount: pendingJournals.length,
-      });
-      return;
+      throw new ConflictError(
+        `لا يمكن إقفال الفترة: يوجد ${pendingJournals.length} قيد يدوي لم يُرحّل بعد`,
+        {
+          field: "journalEntries",
+          fix: "ارحّل أو احذف القيود اليدوية المعلّقة قبل إقفال الفترة",
+          meta: { pendingCount: pendingJournals.length },
+        },
+      );
     }
 
-    await rawExecute(
-      `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, notes=COALESCE($2,notes), "updatedAt"=NOW()
-       WHERE id=$3`,
-      [scope.activeAssignmentId, notes ?? null, Number(id)]
-    );
+    // Central lifecycle engine: validates fromStates=['open'], writes
+    // status='closed' + audit trail + event_logs + eventBus emission
+    // atomically. Any attempt to close an already-closed period is rejected
+    // by the engine's fromStates check, not by a hand-written guard.
+    const updated = await applyTransition<any>({
+      entity: "financial_periods",
+      id: periodId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "fiscal_period.closed",
+      fromStates: ["open"],
+      toState: "closed",
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        closedAt: { raw: "NOW()" },
+        closedBy: scope.activeAssignmentId,
+        ...(notes ? { notes } : {}),
+      },
+      after: { name: period.name, notes: notes ?? null },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "fiscal_period.close", entity: "financial_periods", entityId: Number(id),
-      after: { status: "closed", notes },
-    }).catch(console.error);
-
-    res.json({ message: `تم إقفال الفترة المالية "${period.name}" بنجاح`, periodId: Number(id), status: "closed" });
+    res.json({
+      message: `تم إقفال الفترة المالية "${period.name}" بنجاح`,
+      periodId,
+      status: updated.status,
+      event: "fiscal_period.closed",
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Close fiscal period error:");
   }
 });
@@ -126,32 +163,50 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => 
 financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
-    const { id } = req.params;
+    assertRole(scope, ["general_manager", "owner"]);
+    const periodId = Number(req.params.id);
     const { reason } = req.body as any;
-    if (!reason) { res.status(400).json({ error: "سبب فتح الفترة مطلوب" }); return; }
+    if (!reason) {
+      throw new ValidationError("سبب فتح الفترة مطلوب", {
+        field: "reason",
+        fix: "اكتب سبب إعادة فتح الفترة المالية",
+      });
+    }
 
+    // Fetch only the name for the success message; the engine does the
+    // state check and row update.
     const [period] = await rawQuery<any>(
-      `SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      `SELECT name FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [periodId, scope.companyId]
     );
-    if (!period) { res.status(404).json({ error: "الفترة غير موجودة" }); return; }
-    if (period.status !== "closed") { res.status(400).json({ error: "الفترة غير مُقفلة" }); return; }
+    if (!period) throw new NotFoundError("الفترة غير موجودة");
 
-    await rawExecute(
-      `UPDATE financial_periods SET status='open', "reopenedAt"=NOW(), "reopenedBy"=$1, "reopenReason"=$2, "updatedAt"=NOW()
-       WHERE id=$3`,
-      [scope.activeAssignmentId, reason, Number(id)]
-    );
+    const updated = await applyTransition<any>({
+      entity: "financial_periods",
+      id: periodId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "fiscal_period.reopened",
+      fromStates: ["closed"],
+      toState: "open",
+      reason,
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        reopenedAt: { raw: "NOW()" },
+        reopenedBy: scope.activeAssignmentId,
+        reopenReason: reason,
+      },
+      after: { name: period.name, reason },
+    });
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "fiscal_period.reopen", entity: "financial_periods", entityId: Number(id),
-      after: { status: "open", reason },
-    }).catch(console.error);
-
-    res.json({ message: `تم إعادة فتح الفترة المالية "${period.name}"`, reason });
+    res.json({
+      message: `تم إعادة فتح الفترة المالية "${period.name}"`,
+      reason,
+      status: updated.status,
+      event: "fiscal_period.reopened",
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Reopen fiscal period error:");
   }
 });
@@ -164,18 +219,26 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) =>
 financeHardeningRouter.post("/journal-manual", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { description, lines, costCenter, notes } = req.body as any;
     if (!lines || !Array.isArray(lines) || lines.length < 2) {
-      res.status(400).json({ error: "القيد يجب أن يحتوي على سطرين على الأقل" });
-      return;
+      throw new ValidationError("القيد يجب أن يحتوي على سطرين على الأقل", {
+        field: "lines",
+        fix: "أرسل سطرين أو أكثر بحيث يكون مجموع المدين = مجموع الدائن",
+      });
     }
 
     const totalDebit = lines.reduce((s: number, l: any) => s + Number(l.debit ?? 0), 0);
     const totalCredit = lines.reduce((s: number, l: any) => s + Number(l.credit ?? 0), 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      res.status(400).json({ error: `القيد غير متوازن: مدين ${totalDebit.toFixed(2)}، دائن ${totalCredit.toFixed(2)}` });
-      return;
+      throw new ValidationError(
+        `القيد غير متوازن: مدين ${totalDebit.toFixed(2)}، دائن ${totalCredit.toFixed(2)}`,
+        {
+          field: "lines",
+          fix: "تأكد من تساوي مجموع المدين مع مجموع الدائن",
+          meta: { totalDebit, totalCredit, diff: totalDebit - totalCredit },
+        },
+      );
     }
 
     const ref = `MJE-${Date.now()}`;
@@ -193,7 +256,23 @@ financeHardeningRouter.post("/journal-manual", async (req, res) => {
       [costCenter ?? null, journalId]
     );
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "journal.manual_created", entity: "journal_entries", entityId: journalId, details: JSON.stringify({ ref, totalDebit, lines: lines.length }) }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "journal.manual_created",
+      entity: "journal_entries",
+      entityId: journalId,
+      details: JSON.stringify({ ref, totalDebit, lines: lines.length }),
+    }).catch((err) => pushToDLQ("event", { action: "journal.manual_created", entityId: journalId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "journal_entries",
+      entityId: journalId,
+      after: { ref, totalDebit, lineCount: lines.length, approvalStatus: "draft", isManual: true },
+    }).catch((err) => console.error("[audit] journal.manual_created:", err));
 
     res.status(201).json({
       id: journalId, ref, description, totalDebit, totalCredit,
@@ -237,17 +316,52 @@ financeHardeningRouter.get("/journal-manual", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// JOURNAL MANUAL APPROVAL WORKFLOW — fully wired to lifecycleEngine
+//
+//   draft → pending_review → approved → posted
+//                         \→ rejected  (terminal)
+//
+// Every transition goes through `applyTransition` with statusColumn set to
+// "approvalStatus" so the lifecycle engine validates the source state,
+// writes the UPDATE, records the event_logs row, fires the audit log, and
+// emits on the in-process event bus — all atomically. Hand-rolled UPDATEs
+// for approvalStatus are no longer permitted on this entity.
+// ─────────────────────────────────────────────────────────────────────────────
+
 financeHardeningRouter.patch("/journal-manual/:id/submit", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    const { id } = req.params;
-    const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
-    if (!je) { res.status(404).json({ error: "القيد غير موجود" }); return; }
-    if (je.approvalStatus !== "draft") { res.status(400).json({ error: `لا يمكن إرسال قيد بحالة "${je.approvalStatus}"` }); return; }
-    await rawExecute(`UPDATE journal_entries SET "approvalStatus"='pending_review', "updatedAt"=NOW() WHERE id=$1`, [Number(id)]);
-    res.json({ message: "تم إرسال القيد للمراجعة", approvalStatus: "pending_review" });
+    assertRole(scope, FINANCE_ROLES);
+    const journalId = Number(req.params.id);
+
+    // Fetch ref only for the success message; engine does state validation.
+    const [je] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+      [journalId, scope.companyId]
+    );
+    if (!je) throw new NotFoundError("القيد غير موجود");
+
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: journalId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "journal.submitted_for_review",
+      statusColumn: "approvalStatus",
+      fromStates: ["draft"],
+      toState: "pending_review",
+      extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
+      after: { ref: je.ref },
+    });
+
+    res.json({
+      message: "تم إرسال القيد للمراجعة",
+      approvalStatus: updated.approvalStatus,
+      event: "journal.submitted_for_review",
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Submit manual journal error:");
   }
 });
@@ -255,27 +369,63 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", async (req, res) => {
 financeHardeningRouter.patch("/journal-manual/:id/review", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    const { id } = req.params;
+    assertRole(scope, FINANCE_ROLES);
+    const journalId = Number(req.params.id);
     const { approved, notes } = req.body as any;
-    const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
-    if (!je) { res.status(404).json({ error: "القيد غير موجود" }); return; }
-    if (je.approvalStatus !== "pending_review") { res.status(400).json({ error: `القيد ليس في مرحلة المراجعة` }); return; }
+
+    // Fetch createdBy for the "cannot review your own entry" business rule
+    // plus ref for the success message. State validation still happens in
+    // the engine.
+    const [je] = await rawQuery<any>(
+      `SELECT ref, "createdBy" FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+      [journalId, scope.companyId]
+    );
+    if (!je) throw new NotFoundError("القيد غير موجود");
 
     if (Number(je.createdBy) === scope.activeAssignmentId) {
-      res.status(403).json({ error: "لا يمكن للمنشئ مراجعة قيده الخاص — يجب مراجعة محاسب آخر" });
-      return;
+      throw new ForbiddenError(
+        "لا يمكن للمنشئ مراجعة قيده الخاص — يجب مراجعة محاسب آخر",
+        {
+          fix: "اطلب من محاسب آخر مراجعة هذا القيد",
+          meta: { reviewerAssignmentId: scope.activeAssignmentId, createdBy: je.createdBy },
+        },
+      );
+    }
+
+    if (!approved && !notes) {
+      throw new ValidationError("يجب ذكر سبب الرفض", {
+        field: "notes",
+        fix: "اكتب سبب رفض القيد لإفادة المنشئ",
+      });
     }
 
     const newStatus = approved ? "approved" : "rejected";
-    if (!approved && !notes) { res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return; }
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: journalId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `journal.reviewed_${newStatus}`,
+      statusColumn: "approvalStatus",
+      fromStates: ["pending_review"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
+      setExtras: {
+        reviewedBy: scope.activeAssignmentId,
+        reviewedAt: { raw: "NOW()" },
+        approvalNotes: notes ?? null,
+      },
+      after: { ref: je.ref, notes: notes ?? null, decision: newStatus },
+    });
 
-    await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"=$1, "reviewedBy"=$2, "reviewedAt"=NOW(), "approvalNotes"=$3, "updatedAt"=NOW() WHERE id=$4`,
-      [newStatus, scope.activeAssignmentId, notes ?? null, Number(id)]
-    );
-    res.json({ message: approved ? "تمت المراجعة والموافقة" : "تم رفض القيد", approvalStatus: newStatus });
+    res.json({
+      message: approved ? "تمت المراجعة والموافقة" : "تم رفض القيد",
+      approvalStatus: updated.approvalStatus,
+      event: `journal.reviewed_${newStatus}`,
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Review manual journal error:");
   }
 });
@@ -283,22 +433,52 @@ financeHardeningRouter.patch("/journal-manual/:id/review", async (req, res) => {
 financeHardeningRouter.patch("/journal-manual/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["finance_manager", "general_manager", "owner"], res)) return;
-    const { id } = req.params;
+    assertRole(scope, ["finance_manager", "general_manager", "owner"]);
+    const journalId = Number(req.params.id);
     const { approved, notes } = req.body as any;
-    const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
-    if (!je) { res.status(404).json({ error: "القيد غير موجود" }); return; }
-    if (je.approvalStatus !== "approved" && je.approvalStatus !== "pending_review") {
-      res.status(400).json({ error: `لا يمكن اعتماد قيد بحالة "${je.approvalStatus}"` }); return;
-    }
-    const newStatus = approved ? "approved" : "rejected";
-    if (!approved && !notes) { res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return; }
-    await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"=$1, "approvedBy"=$2, "approvedAt"=NOW(), "approvalNotes"=COALESCE($3,"approvalNotes"), "updatedAt"=NOW() WHERE id=$4`,
-      [newStatus, scope.activeAssignmentId, notes ?? null, Number(id)]
+
+    const [je] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+      [journalId, scope.companyId]
     );
-    res.json({ message: approved ? "تمت الموافقة على القيد" : "تم رفض القيد", approvalStatus: newStatus });
+    if (!je) throw new NotFoundError("القيد غير موجود");
+
+    if (!approved && !notes) {
+      throw new ValidationError("يجب ذكر سبب الرفض", {
+        field: "notes",
+        fix: "اكتب سبب رفض الاعتماد",
+      });
+    }
+
+    const newStatus = approved ? "approved" : "rejected";
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: journalId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `journal.approved_${newStatus}`,
+      statusColumn: "approvalStatus",
+      // Approver can act on a journal that is either pending_review
+      // (pre-approved) or already approved (re-confirm / demote to rejected).
+      fromStates: ["pending_review", "approved"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
+      setExtras: {
+        approvedBy: scope.activeAssignmentId,
+        approvedAt: { raw: "NOW()" },
+        ...(notes ? { approvalNotes: notes } : {}),
+      },
+      after: { ref: je.ref, notes: notes ?? null, decision: newStatus },
+    });
+
+    res.json({
+      message: approved ? "تمت الموافقة على القيد" : "تم رفض القيد",
+      approvalStatus: updated.approvalStatus,
+      event: `journal.approved_${newStatus}`,
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Approve manual journal error:");
   }
 });
@@ -306,24 +486,45 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", async (req, res) => 
 financeHardeningRouter.patch("/journal-manual/:id/post", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["finance_manager", "general_manager", "owner"], res)) return;
-    const { id } = req.params;
-    const [je] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
-    if (!je) { res.status(404).json({ error: "القيد غير موجود" }); return; }
-    if (je.approvalStatus !== "approved") {
-      res.status(400).json({ error: "لا يمكن ترحيل قيد يدوي لم يُعتمد بعد — يجب أن يكون القيد بحالة معتمد" }); return;
-    }
-    await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"='posted', status='posted', "postedAt"=NOW(), "postedBy"=$1, "updatedAt"=NOW() WHERE id=$2`,
-      [scope.activeAssignmentId, Number(id)]
+    assertRole(scope, ["finance_manager", "general_manager", "owner"]);
+    const journalId = Number(req.params.id);
+
+    const [je] = await rawQuery<any>(
+      `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+      [journalId, scope.companyId]
     );
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "journal.posted", entity: "journal_entries", entityId: Number(id),
-      after: { approvalStatus: "posted" },
-    }).catch(console.error);
-    res.json({ message: "تم ترحيل القيد اليدوي بنجاح", approvalStatus: "posted" });
+    if (!je) throw new NotFoundError("القيد غير موجود");
+
+    // Posting flips BOTH approvalStatus='posted' AND status='posted'. The
+    // engine drives the approvalStatus transition (gate check + row update),
+    // and setExtras carries the mirror write to status and the posting
+    // metadata columns. This keeps one atomic UPDATE for the whole flip.
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: journalId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "journal.posted",
+      statusColumn: "approvalStatus",
+      fromStates: ["approved"],
+      toState: "posted",
+      extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
+      setExtras: {
+        status: "posted",
+        postedAt: { raw: "NOW()" },
+        postedBy: scope.activeAssignmentId,
+      },
+      after: { ref: je.ref, postingStatus: "posted" },
+    });
+
+    res.json({
+      message: "تم ترحيل القيد اليدوي بنجاح",
+      approvalStatus: updated.approvalStatus,
+      status: updated.status,
+      event: "journal.posted",
+    });
   } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Post manual journal error:");
   }
 });
@@ -348,7 +549,7 @@ financeHardeningRouter.get("/bank-guarantees", async (req, res) => {
                 ELSE 'active'
               END AS "alertStatus"
        FROM bank_guarantees bg
-       WHERE bg."companyId"=$1
+       WHERE bg."companyId"=$1 AND bg."deletedAt" IS NULL
        ORDER BY bg."expiryDate" ASC`,
       [scope.companyId]
     );
@@ -369,11 +570,16 @@ financeHardeningRouter.get("/bank-guarantees", async (req, res) => {
 financeHardeningRouter.post("/bank-guarantees", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = req.body as any;
     if (!ref || !bank || !beneficiary || !amount || !issueDate || !expiryDate) {
-      res.status(400).json({ error: "رقم الضمان والبنك والجهة المستفيدة والمبلغ والتواريخ مطلوبة" });
-      return;
+      throw new ValidationError(
+        "رقم الضمان والبنك والجهة المستفيدة والمبلغ والتواريخ مطلوبة",
+        {
+          field: !ref ? "ref" : !bank ? "bank" : !beneficiary ? "beneficiary" : !amount ? "amount" : !issueDate ? "issueDate" : "expiryDate",
+          fix: "أكمل جميع الحقول الأساسية للضمان البنكي",
+        },
+      );
     }
     const { insertId } = await rawExecute(
       `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
@@ -381,6 +587,25 @@ financeHardeningRouter.post("/bank-guarantees", async (req, res) => {
       [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM bank_guarantees WHERE id=$1`, [insertId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "bank_guarantee.created",
+      entity: "bank_guarantees",
+      entityId: insertId,
+      details: JSON.stringify({ ref, bank, amount: Number(amount) }),
+    }).catch((err) => pushToDLQ("event", { action: "bank_guarantee.created", entityId: insertId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "bank_guarantees",
+      entityId: insertId,
+      after: { ref, bank, amount: Number(amount), expiryDate },
+    }).catch((err) => console.error("[audit] bank_guarantee.created:", err));
+
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create bank guarantee error:");
@@ -390,7 +615,7 @@ financeHardeningRouter.post("/bank-guarantees", async (req, res) => {
 financeHardeningRouter.patch("/bank-guarantees/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const b = req.body as any;
     const sets: string[] = [`"updatedAt"=NOW()`];
@@ -399,13 +624,37 @@ financeHardeningRouter.patch("/bank-guarantees/:id", async (req, res) => {
     f("bank", b.bank); f("beneficiary", b.beneficiary); f("amount", b.amount);
     f("expiryDate", b.expiryDate); f("status", b.status); f("notes", b.notes);
     f("attachmentUrl", b.attachmentUrl); f("guaranteeType", b.guaranteeType);
-    if (sets.length === 1) { res.status(400).json({ error: "لا توجد تغييرات" }); return; }
+    if (sets.length === 1) {
+      throw new ValidationError("لا توجد تغييرات", {
+        field: "body",
+        fix: "أرسل حقلاً واحداً على الأقل لتحديثه",
+      });
+    }
     params.push(Number(id), scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE bank_guarantees SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE bank_guarantees SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "الضمان غير موجود" }); return; }
+    if (!row) throw new NotFoundError("الضمان غير موجود");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "bank_guarantee.updated",
+      entity: "bank_guarantees",
+      entityId: Number(id),
+      details: JSON.stringify({ fields: Object.keys(b) }),
+    }).catch((err) => pushToDLQ("event", { action: "bank_guarantee.updated", entityId: Number(id) }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "bank_guarantees",
+      entityId: Number(id),
+      after: { fields: Object.keys(b) },
+    }).catch((err) => console.error("[audit] bank_guarantee.updated:", err));
+
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Update bank guarantee error:");
@@ -415,15 +664,168 @@ financeHardeningRouter.patch("/bank-guarantees/:id", async (req, res) => {
 financeHardeningRouter.delete("/bank-guarantees/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    const [row] = await rawQuery<any>(
-      `DELETE FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 RETURNING id`,
-      [Number(req.params.id), scope.companyId]
+    assertRole(scope, FINANCE_ROLES);
+    const guaranteeId = Number(req.params.id);
+
+    const [existing] = await rawQuery<any>(
+      `SELECT id, ref, bank, status, amount FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [guaranteeId, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "الضمان غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("الضمان غير موجود");
+
+    // Refuse delete on active guarantees — they have legal obligation backing.
+    if (existing.status === "active") {
+      throw new ConflictError(
+        "لا يمكن حذف ضمان بنكي ساري — قم بإلغائه أو إنهائه أولاً",
+        {
+          field: "status",
+          fix: "غيّر حالة الضمان إلى cancelled أو released قبل الحذف",
+          meta: { currentStatus: existing.status, ref: existing.ref },
+        },
+      );
+    }
+
+    // Phase 9: bank_guarantees now has a deletedAt column, so DELETE is a
+    // soft-delete. Hard-deleting would orphan any paired journal entries
+    // that referenced the guarantee by id.
+    const [row] = await rawQuery<any>(
+      `UPDATE bank_guarantees SET "deletedAt" = NOW(), "updatedAt" = NOW()
+       WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING id`,
+      [guaranteeId, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الضمان غير موجود");
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "bank_guarantee.deleted",
+      entity: "bank_guarantees",
+      entityId: guaranteeId,
+      details: JSON.stringify({ ref: existing.ref, bank: existing.bank }),
+    }).catch((err) => pushToDLQ("event", { action: "bank_guarantee.deleted", entityId: guaranteeId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "delete",
+      entity: "bank_guarantees",
+      entityId: guaranteeId,
+      after: { ref: existing.ref, bank: existing.bank, amount: Number(existing.amount), softDelete: true },
+    }).catch((err) => console.error("[audit] bank_guarantee.deleted:", err));
+
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete bank guarantee error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BANK GUARANTEE LIFECYCLE — Phase 8.1
+//
+//   active ─┬─► cancelled   (CFO cancels an outstanding guarantee)
+//           └─► released    (guarantee obligation discharged / returned)
+//
+// Before Phase 8.1 the only way to change a bank_guarantees.status was via
+// the generic PATCH /bank-guarantees/:id, which let any caller flip the
+// status without validating the source state. These two dedicated endpoints
+// go through `applyTransition` so the graph is enforced centrally.
+// ─────────────────────────────────────────────────────────────────────────────
+
+financeHardeningRouter.post("/bank-guarantees/:id/cancel", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
+    const guaranteeId = Number(req.params.id);
+    const { reason } = req.body as any;
+    if (!reason || !String(reason).trim()) {
+      throw new ValidationError("سبب الإلغاء مطلوب", {
+        field: "reason",
+        fix: "اكتب سبب إلغاء الضمان البنكي",
+      });
+    }
+
+    const [existing] = await rawQuery<any>(
+      `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [guaranteeId, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الضمان غير موجود");
+
+    // Note: the bank_guarantees table has no dedicated cancelled/released
+    // timestamp columns. The reason is recorded via applyTransition's
+    // `reason` field (which lands in event_logs + audit_logs) and
+    // prepended onto the row's `notes` column. We build the combined
+    // notes here and pass it as a plain parameter so the value is
+    // parameterised rather than interpolated into raw SQL.
+    const combinedNotes = `${existing.notes ?? ""}${existing.notes ? " | " : ""}إلغاء: ${reason}`;
+    const updated = await applyTransition<any>({
+      entity: "bank_guarantees",
+      id: guaranteeId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "bank_guarantee.cancelled",
+      fromStates: ["active"],
+      toState: "cancelled",
+      reason,
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        notes: combinedNotes,
+      },
+      after: { ref: existing.ref, bank: existing.bank, reason },
+    });
+
+    res.json({
+      message: `تم إلغاء الضمان البنكي "${existing.ref}"`,
+      status: updated.status,
+      event: "bank_guarantee.cancelled",
+    });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Cancel bank guarantee error:");
+  }
+});
+
+financeHardeningRouter.post("/bank-guarantees/:id/release", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
+    const guaranteeId = Number(req.params.id);
+    const { notes } = req.body as any;
+
+    const [existing] = await rawQuery<any>(
+      `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [guaranteeId, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الضمان غير موجود");
+
+    // Same note as /cancel above: no dedicated releasedAt column; release
+    // notes are prepended onto the existing `notes` column via a plain
+    // parameterised value (no raw SQL interpolation).
+    const releaseNote = notes ?? "تم التحرير";
+    const combinedNotes = `${existing.notes ?? ""}${existing.notes ? " | " : ""}تحرير: ${releaseNote}`;
+    const updated = await applyTransition<any>({
+      entity: "bank_guarantees",
+      id: guaranteeId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "bank_guarantee.released",
+      fromStates: ["active"],
+      toState: "released",
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        notes: combinedNotes,
+      },
+      after: { ref: existing.ref, bank: existing.bank, notes: notes ?? null },
+    });
+
+    res.json({
+      message: `تم تحرير الضمان البنكي "${existing.ref}"`,
+      status: updated.status,
+      event: "bank_guarantee.released",
+    });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Release bank guarantee error:");
   }
 });
 
@@ -441,7 +843,7 @@ financeHardeningRouter.get("/intercompany", async (req, res) => {
        FROM intercompany_transactions ic
        LEFT JOIN companies fc ON fc.id=ic."fromCompanyId"
        LEFT JOIN companies tc ON tc.id=ic."toCompanyId"
-       WHERE ic."fromCompanyId"=$1 OR ic."toCompanyId"=$1
+       WHERE (ic."fromCompanyId"=$1 OR ic."toCompanyId"=$1) AND ic."deletedAt" IS NULL
        ORDER BY ic."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
@@ -454,20 +856,26 @@ financeHardeningRouter.get("/intercompany", async (req, res) => {
 financeHardeningRouter.post("/intercompany", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const { toCompanyId, amount, description, transactionDate, arAccountCode = "1200", apAccountCode = "2100", revenueAccountCode = "4000", expenseAccountCode = "5000" } = req.body as any;
 
     if (!toCompanyId || !amount) {
-      res.status(400).json({ error: "الشركة المستلمة والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("الشركة المستلمة والمبلغ مطلوبان", {
+        field: !toCompanyId ? "toCompanyId" : "amount",
+        fix: "اختر شركة مستلمة وحدّد مبلغ المعاملة",
+      });
     }
     if (Number(toCompanyId) === scope.companyId) {
-      res.status(400).json({ error: "لا يمكن إنشاء معاملة بين الشركة ونفسها" });
-      return;
+      throw new ValidationError("لا يمكن إنشاء معاملة بين الشركة ونفسها", {
+        field: "toCompanyId",
+        fix: "اختر شركة مختلفة عن الشركة الحالية",
+      });
     }
     if (!scope.allowedCompanies?.includes(Number(toCompanyId))) {
-      res.status(403).json({ error: "ليس لديك صلاحية على الشركة المستلمة" });
-      return;
+      throw new ForbiddenError("ليس لديك صلاحية على الشركة المستلمة", {
+        fix: "تأكد من أن لديك تعييناً نشطاً على الشركة المستلمة",
+        meta: { toCompanyId: Number(toCompanyId), allowedCompanies: scope.allowedCompanies ?? [] },
+      });
     }
 
     const ref = `IC-${Date.now()}`;
@@ -513,6 +921,24 @@ financeHardeningRouter.post("/intercompany", async (req, res) => {
       );
     });
 
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "intercompany.created",
+      entity: "intercompany_transactions",
+      entityId: fromJournalId, // primary fromCompany journal id is the canonical reference
+      details: JSON.stringify({ ref, toCompanyId: Number(toCompanyId), amount: Number(amount), fromJournalId, toJournalId }),
+    }).catch((err) => pushToDLQ("event", { action: "intercompany.created", entityId: fromJournalId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "intercompany_transactions",
+      entityId: fromJournalId,
+      after: { ref, toCompanyId: Number(toCompanyId), amount: Number(amount), txDate },
+    }).catch((err) => console.error("[audit] intercompany.created:", err));
+
     res.status(201).json({
       ref, fromJournalId, toJournalId, amount: Number(amount),
       message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين`,
@@ -541,7 +967,8 @@ financeHardeningRouter.get("/intercompany/consolidation", async (req, res) => {
 
     const intercompanyTotal = await rawQuery<any>(
       `SELECT SUM(amount) AS total FROM intercompany_transactions
-       WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1)) AND status='posted'`,
+       WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1))
+         AND status='posted' AND "deletedAt" IS NULL`,
       [companies]
     );
 
@@ -582,7 +1009,7 @@ financeHardeningRouter.get("/projects", async (req, res) => {
        FROM projects p
        LEFT JOIN journal_entries je ON je."projectId"=p.id AND je."deletedAt" IS NULL
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
-       WHERE p."companyId"=$1
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
        GROUP BY p.id
        ORDER BY p."createdAt" DESC`,
       [scope.companyId]
@@ -596,15 +1023,40 @@ financeHardeningRouter.get("/projects", async (req, res) => {
 financeHardeningRouter.post("/projects", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { name, description, budget, startDate, endDate, branchId, ref } = req.body as any;
-    if (!name) { res.status(400).json({ error: "اسم المشروع مطلوب" }); return; }
+    if (!name) {
+      throw new ValidationError("اسم المشروع مطلوب", {
+        field: "name",
+        fix: "أدخل اسم المشروع",
+      });
+    }
+    const projectRef = ref ?? `PRJ-${Date.now()}`;
     const { insertId } = await rawExecute(
       `INSERT INTO projects ("companyId","branchId",ref,name,description,budget,"startDate","endDate","managerId")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, branchId ?? scope.branchId, ref ?? `PRJ-${Date.now()}`, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
+      [scope.companyId, branchId ?? scope.branchId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1`, [insertId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "finance_project.created",
+      entity: "projects",
+      entityId: insertId,
+      details: JSON.stringify({ ref: projectRef, name, budget: Number(budget ?? 0) }),
+    }).catch((err) => pushToDLQ("event", { action: "finance_project.created", entityId: insertId }, err, scope.companyId));
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "projects",
+      entityId: insertId,
+      after: { ref: projectRef, name, budget: Number(budget ?? 0), startDate, endDate },
+    }).catch((err) => console.error("[audit] finance_project.created:", err));
+
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create project error:");
@@ -614,8 +1066,8 @@ financeHardeningRouter.post("/projects", async (req, res) => {
 financeHardeningRouter.get("/projects/:id/costs", async (req, res) => {
   try {
     const scope = req.scope!;
-    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
-    if (!project) { res.status(404).json({ error: "المشروع غير موجود" }); return; }
+    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    if (!project) throw new NotFoundError("المشروع غير موجود");
 
     const costs = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je."createdAt" AS date,

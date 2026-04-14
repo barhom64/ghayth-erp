@@ -7,29 +7,19 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import {
   emitEvent,
   createAuditLog,
   createJournalEntry,
   initiateApprovalChain,
 } from "../lib/businessHelpers.js";
+import { assertRole } from "../lib/roleGuards.js";
 
 export const custodiesRouter = Router();
 custodiesRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
-
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
-  if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
-    });
-    return false;
-  }
-  return true;
-}
 
 custodiesRouter.get("/custodies", async (req, res) => {
   try {
@@ -290,10 +280,7 @@ custodiesRouter.get("/custodies/:id", async (req, res) => {
       [Number(id), scope.companyId]
     );
 
-    if (!custody) {
-      res.status(404).json({ error: "العهدة غير موجودة" });
-      return;
-    }
+    if (!custody) throw new NotFoundError("العهدة غير موجودة");
 
     const settlements = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description,
@@ -372,12 +359,14 @@ custodiesRouter.get("/custodies/:id", async (req, res) => {
 custodiesRouter.post("/custodies", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { assignmentId, employeeName, amount, description, sourceAccountCode, purpose, expectedReturnDate } = req.body as any;
 
     if (!amount) {
-      res.status(400).json({ error: "المبلغ مطلوب" });
-      return;
+      throw new ValidationError("المبلغ مطلوب", {
+        field: "amount",
+        fix: "أدخل مبلغ العهدة",
+      });
     }
 
     let resolvedAssignmentId = assignmentId ? Number(assignmentId) : null;
@@ -389,13 +378,14 @@ custodiesRouter.post("/custodies", async (req, res) => {
         [resolvedAssignmentId, scope.companyId]
       );
       if (!emp) {
-        res.status(400).json({ error: "الموظف غير موجود" });
-        return;
+        throw new NotFoundError("الموظف غير موجود");
       }
       resolvedEmployeeName = emp.name;
     } else if (!resolvedEmployeeName) {
-      res.status(400).json({ error: "يرجى اختيار الموظف" });
-      return;
+      throw new ValidationError("يرجى اختيار الموظف", {
+        field: "assignmentId",
+        fix: "اختر الموظف من قائمة الموظفين أو أدخل اسمه يدوياً",
+      });
     }
 
     const sourceAcct = sourceAccountCode || "1100";
@@ -462,18 +452,22 @@ custodiesRouter.post("/custodies", async (req, res) => {
 custodiesRouter.post("/custodies/settle", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { custodyRef, amount, description, sourceAccountCode } = req.body as any;
 
     if (!amount || !custodyRef) {
-      res.status(400).json({ error: "مرجع العهدة ومبلغ التسوية مطلوبان" });
-      return;
+      throw new ValidationError("مرجع العهدة ومبلغ التسوية مطلوبان", {
+        field: !custodyRef ? "custodyRef" : "amount",
+        fix: "أدخل مرجع العهدة (CUSTODY-...) ومبلغ التسوية الموجب",
+      });
     }
 
     const settleAmount = Number(amount);
     if (isNaN(settleAmount) || settleAmount <= 0) {
-      res.status(400).json({ error: "مبلغ التسوية يجب أن يكون رقم موجب" });
-      return;
+      throw new ValidationError("مبلغ التسوية يجب أن يكون رقم موجب", {
+        field: "amount",
+        fix: "أدخل مبلغاً أكبر من صفر",
+      });
     }
 
     const [custodyHeader] = await rawQuery<any>(
@@ -483,15 +477,18 @@ custodiesRouter.post("/custodies/settle", async (req, res) => {
       [scope.companyId, custodyRef]
     );
 
-    if (!custodyHeader) {
-      res.status(404).json({ error: "العهدة غير موجودة" });
-      return;
-    }
+    if (!custodyHeader) throw new NotFoundError("العهدة غير موجودة");
 
     const blockedStatuses = ["pending_approval", "draft", "rejected", "returned"];
     if (blockedStatuses.includes(custodyHeader.approvalStatus)) {
-      res.status(400).json({ error: "لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة" });
-      return;
+      throw new ConflictError(
+        "لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة",
+        {
+          field: "approvalStatus",
+          fix: "اعتمد العهدة أولاً قبل تسويتها",
+          meta: { currentStatus: custodyHeader.approvalStatus, blockedStatuses },
+        },
+      );
     }
 
     const custodyEntries = await rawQuery<any>(
@@ -520,10 +517,14 @@ custodiesRouter.post("/custodies/settle", async (req, res) => {
 
     const remaining = originalAmount - settledSoFar;
     if (settleAmount > remaining + 0.01) {
-      res.status(400).json({
-        error: `مبلغ التسوية (${settleAmount}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
-      });
-      return;
+      throw new ConflictError(
+        `مبلغ التسوية (${settleAmount}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
+        {
+          field: "amount",
+          fix: `أدخل مبلغاً لا يتجاوز ${remaining.toFixed(2)}`,
+          meta: { settleAmount, remaining: Number(remaining.toFixed(2)) },
+        },
+      );
     }
 
     const sourceAcct = sourceAccountCode || "1100";
@@ -568,7 +569,7 @@ custodiesRouter.post("/custodies/settle", async (req, res) => {
 custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const custodyId = Number(req.params.id);
     const { amount, description, sourceAccountCode } = req.body as any;
 
@@ -577,26 +578,33 @@ custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'`,
       [custodyId, scope.companyId]
     );
-    if (!custody) {
-      res.status(404).json({ error: "العهدة غير موجودة" });
-      return;
-    }
+    if (!custody) throw new NotFoundError("العهدة غير موجودة");
 
     const blockedStatuses = ["pending_approval", "draft", "rejected", "returned"];
     if (blockedStatuses.includes(custody.approvalStatus)) {
-      res.status(400).json({ error: "لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة" });
-      return;
+      throw new ConflictError(
+        "لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة",
+        {
+          field: "approvalStatus",
+          fix: "اعتمد العهدة أولاً قبل تسويتها",
+          meta: { currentStatus: custody.approvalStatus, blockedStatuses },
+        },
+      );
     }
 
     if (!amount) {
-      res.status(400).json({ error: "مبلغ التسوية مطلوب" });
-      return;
+      throw new ValidationError("مبلغ التسوية مطلوب", {
+        field: "amount",
+        fix: "أدخل مبلغ التسوية",
+      });
     }
 
     const settleAmount = Number(amount);
     if (isNaN(settleAmount) || settleAmount <= 0) {
-      res.status(400).json({ error: "مبلغ التسوية يجب أن يكون رقم موجب" });
-      return;
+      throw new ValidationError("مبلغ التسوية يجب أن يكون رقم موجب", {
+        field: "amount",
+        fix: "أدخل مبلغاً أكبر من صفر",
+      });
     }
 
     const custodyLines = await rawQuery<any>(
@@ -624,10 +632,14 @@ custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
 
     const remaining = originalAmount - settledSoFar;
     if (settleAmount > remaining + 0.01) {
-      res.status(400).json({
-        error: `مبلغ التسوية (${settleAmount}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
-      });
-      return;
+      throw new ConflictError(
+        `مبلغ التسوية (${settleAmount}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
+        {
+          field: "amount",
+          fix: `أدخل مبلغاً لا يتجاوز ${remaining.toFixed(2)}`,
+          meta: { settleAmount, remaining: Number(remaining.toFixed(2)) },
+        },
+      );
     }
 
     const sourceAcct = sourceAccountCode || "1100";
@@ -672,46 +684,72 @@ custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
 custodiesRouter.patch("/custodies/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
-    const { id } = req.params;
+    assertRole(scope, FINANCE_ROLES);
+    const custodyId = Number(req.params.id);
     const { approved, notes } = req.body as any;
 
+    // Fetch ref for the success message + approval_actions audit row.
+    // The engine validates state on the journal_entries row directly.
     const [cust] = await rawQuery<any>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
-      [Number(id), scope.companyId]
+      `SELECT ref FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
+      [custodyId, scope.companyId]
     );
-    if (!cust) { res.status(404).json({ error: "العهدة غير موجودة" }); return; }
+    if (!cust) throw new NotFoundError("العهدة غير موجودة");
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && !notes) {
-      res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return;
+      throw new ValidationError(
+        newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
+        {
+          field: "notes",
+          fix: newStatus === "rejected"
+            ? "اكتب سبب رفض العهدة"
+            : "اكتب سبب إرجاع العهدة لإعادة التقديم",
+        },
+      );
     }
 
-    await rawExecute(
-      `UPDATE journal_entries SET status = $1 WHERE id = $2`,
-      [newStatus, Number(id)]
-    );
+    // Central lifecycle engine: custody approval goes through the shared
+    // `status` column on journal_entries. fromStates=['pending_approval']
+    // ensures the same record can't be decided twice. The onApply hook
+    // writes the approval_actions audit row inside the same transaction
+    // so the approval trail and the state flip are atomic.
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id: custodyId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `custody.${newStatus}`,
+      // custodies typically sit in 'pending_approval' until the approver
+      // acts. `draft` is included as a fallback for custodies that were
+      // created through the bulk-approval chain but never transitioned
+      // through the initiator step.
+      fromStates: ["pending_approval", "draft"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+           VALUES ('custody',$1,$2,$3,$4,$5)`,
+          [custodyId, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+      after: { ref: cust.ref, notes: notes ?? null, decision: newStatus },
+    });
 
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('custody',$1,$2,$3,$4,$5)`,
-        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error("Failed to log approval action:", e); }
-
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: newStatus,
-      entity: "custodies",
-      entityId: Number(id),
-      after: { ref: cust.ref, status: newStatus, notes },
-    }).catch(console.error);
-
-    const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
-    res.json({ message: labels[newStatus] || newStatus, status: newStatus });
+    const labels: Record<string, string> = {
+      approved: "تمت الموافقة",
+      rejected: "تم الرفض",
+      returned: "تم الإرجاع",
+    };
+    res.json({
+      message: labels[newStatus] || newStatus,
+      status: updated.status,
+      event: `custody.${newStatus}`,
+    });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Approve custody error:");
   }
 });

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, validationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { rawExecute, rawQuery } from "../lib/rawdb.js";
 import {
   ensureObligationsTable,
@@ -57,8 +57,10 @@ obligationsRouter.post("/", async (req, res) => {
     const scope = req.scope!;
     const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = req.body as any;
     if (!entityType || !entityId || !obligationType || !title || !dueAt) {
-      validationError(res, "entityType / entityId / obligationType / title / dueAt مطلوبة", "dueAt", "أدخل جميع الحقول المطلوبة");
-      return;
+      throw new ValidationError(
+        "entityType / entityId / obligationType / title / dueAt مطلوبة",
+        { field: "dueAt", fix: "أدخل جميع الحقول المطلوبة" },
+      );
     }
     const id = await registerObligation({
       companyId: scope.companyId,
@@ -103,8 +105,10 @@ obligationsRouter.post("/met-by-entity", async (req, res) => {
     const scope = req.scope!;
     const { entityType, entityId, obligationType } = req.body as any;
     if (!entityType || !entityId) {
-      validationError(res, "entityType و entityId مطلوبان", "entityId", "أدخل الحقلين");
-      return;
+      throw new ValidationError("entityType و entityId مطلوبان", {
+        field: "entityId",
+        fix: "أدخل الحقلين",
+      });
     }
     const n = await markObligationMet(
       scope.companyId,
@@ -140,8 +144,10 @@ obligationsRouter.post("/cancel-by-entity", async (req, res) => {
     const scope = req.scope!;
     const { entityType, entityId, obligationType } = req.body as any;
     if (!entityType || !entityId) {
-      validationError(res, "entityType و entityId مطلوبان", "entityId", "أدخل الحقلين");
-      return;
+      throw new ValidationError("entityType و entityId مطلوبان", {
+        field: "entityId",
+        fix: "أدخل الحقلين",
+      });
     }
     const n = await cancelObligation(
       scope.companyId,

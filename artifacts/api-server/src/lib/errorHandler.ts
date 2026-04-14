@@ -286,19 +286,6 @@ export function classifyDbError(err: unknown): ClassifiedError {
   };
 }
 
-export function validationError(
-  res: any,
-  error: string,
-  field: string,
-  fix: string
-): void {
-  // Legacy helper kept for backwards compatibility with the ~40 call sites
-  // that still use it. New code should `throw new ValidationError(...)`
-  // instead so the response goes through the TypedError → handleRouteError
-  // path and picks up `code: "VALIDATION_ERROR"` automatically.
-  res.status(422).json({ error, code: "VALIDATION_ERROR", field, fix });
-}
-
 export function handleRouteError(err: unknown, res: any, logContext: string): void {
   // Typed errors win — the route handler has already said exactly what the
   // client should see, so we skip DB error classification entirely.
