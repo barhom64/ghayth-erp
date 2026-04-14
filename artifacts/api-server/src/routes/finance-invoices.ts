@@ -4,6 +4,8 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -27,17 +29,43 @@ invoicesRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
+/**
+ * Role gate — throws ForbiddenError so the error reaches handleRouteError
+ * and comes back through the unified { error, code, field, fix } shape.
+ * Callers should `assertRole(scope, FINANCE_ROLES)` — no more res+boolean
+ * dance.
+ */
+function assertRole(scope: any, allowedRoles: string[]): void {
   if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({
-      error: "ليس لديك الصلاحية للقيام بهذا الإجراء",
-      requiredRoles: allowedRoles,
-      yourRole: scope.role,
+    throw new ForbiddenError("ليس لديك الصلاحية للقيام بهذا الإجراء", {
+      fix: `الأدوار المسموحة: ${allowedRoles.join(", ")}`,
+      meta: { requiredRoles: allowedRoles, yourRole: scope.role },
     });
-    return false;
   }
-  return true;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVOICE STATE MACHINE — Phase C.7 Finance audit
+// ─────────────────────────────────────────────────────────────────────────────
+const INVOICE_STATUSES = [
+  "draft", "approved", "rejected", "returned", "sent", "partial", "paid",
+  "overdue", "cancelled", "closed", "posted",
+] as const;
+const INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
+  // Creation → /send to go to `sent`. /payment moves sent → partial → paid.
+  // Approval gate moves draft ↔ approved / rejected / returned.
+  draft:     ["approved", "rejected", "returned", "sent", "cancelled"],
+  approved:  ["sent", "cancelled", "rejected"],
+  returned:  ["draft", "approved", "cancelled"],
+  rejected:  ["draft", "cancelled"],
+  sent:      ["partial", "paid", "overdue", "cancelled"],
+  partial:   ["paid", "overdue", "cancelled"],
+  overdue:   ["partial", "paid", "cancelled"],
+  paid:      ["closed"],   // paid is terminal for payments; /close moves to closed
+  closed:    [],
+  cancelled: [],
+  posted:    [],
+};
 
 const COLLECTION_STAGES = [
   { stage: 1, name: "sms_email_reminder", label: "تذكير SMS + إيميل", daysOverdue: 1 },
@@ -102,7 +130,7 @@ invoicesRouter.get("/invoices", async (req, res) => {
 invoicesRouter.post("/invoices", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const {
       clientId, description, subtotal, total: rawTotal, lines: lineItems,
       vatRate = 15, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
@@ -110,25 +138,55 @@ invoicesRouter.post("/invoices", async (req, res) => {
     } = req.body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
-    if (!clientId) { validationError(res, "العميل مطلوب لإنشاء الفاتورة", "clientId", "حدد العميل الذي ستُصدر له الفاتورة"); return; }
-    if (!branchId && !scope.branchId) { validationError(res, "الفرع مطلوب لإنشاء الفاتورة", "branchId", "حدد الفرع الذي تنتمي إليه الفاتورة"); return; }
+    if (!clientId) {
+      throw new ValidationError("العميل مطلوب لإنشاء الفاتورة", { field: "clientId", fix: "حدد العميل الذي ستُصدر له الفاتورة" });
+    }
+    if (!branchId && !scope.branchId) {
+      throw new ValidationError("الفرع مطلوب لإنشاء الفاتورة", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
+    }
+    // FK pre-check on clientId so the frontend can light up the input.
+    const [clientRow] = await rawQuery<any>(
+      `SELECT id FROM clients WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [clientId, effectiveCompanyId]
+    );
+    if (!clientRow) {
+      throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً مسجلاً في النظام" });
+    }
     if (isTaxLinked) {
       const validInvoiceTypes = ["388", "381", "383"];
       const validTaxCategories = ["S", "Z", "E", "O"];
-      if (invoiceTypeCode && !validInvoiceTypes.includes(invoiceTypeCode)) { res.status(400).json({ error: `نوع الفاتورة غير صالح. القيم المسموحة: ${validInvoiceTypes.join(", ")}` }); return; }
-      if (taxCategoryCode && !validTaxCategories.includes(taxCategoryCode)) { res.status(400).json({ error: `فئة الضريبة غير صالحة. القيم المسموحة: ${validTaxCategories.join(", ")}` }); return; }
+      if (invoiceTypeCode && !validInvoiceTypes.includes(invoiceTypeCode)) {
+        throw new ValidationError(
+          "نوع الفاتورة غير صالح",
+          { field: "invoiceTypeCode", fix: `القيم المسموحة: ${validInvoiceTypes.join(", ")}` }
+        );
+      }
+      if (taxCategoryCode && !validTaxCategories.includes(taxCategoryCode)) {
+        throw new ValidationError(
+          "فئة الضريبة غير صالحة",
+          { field: "taxCategoryCode", fix: `القيم المسموحة: ${validTaxCategories.join(", ")}` }
+        );
+      }
     }
     const parsedTerms = paymentTermsDays != null && paymentTermsDays !== "" ? Number(paymentTermsDays) : null;
-    if (parsedTerms == null && !dueDate) { validationError(res, "شروط الدفع أو تاريخ الاستحقاق مطلوبة", "paymentTermsDays", "حدد شروط الدفع (عدد الأيام) أو تاريخ الاستحقاق"); return; }
-    if (parsedTerms != null && (Number.isNaN(parsedTerms) || parsedTerms < 0)) { validationError(res, "شروط الدفع غير صالحة", "paymentTermsDays", "أدخل عدد أيام صحيح (0 أو أكثر)"); return; }
+    if (parsedTerms == null && !dueDate) {
+      throw new ValidationError("شروط الدفع أو تاريخ الاستحقاق مطلوبة", { field: "paymentTermsDays", fix: "حدد شروط الدفع (عدد الأيام) أو تاريخ الاستحقاق" });
+    }
+    if (parsedTerms != null && (Number.isNaN(parsedTerms) || parsedTerms < 0)) {
+      throw new ValidationError("شروط الدفع غير صالحة", { field: "paymentTermsDays", fix: "أدخل عدد أيام صحيح (0 أو أكثر)" });
+    }
 
     let baseAmount = 0;
     let validatedLines: { description: string; quantity: number; unitPrice: number; lineTotal: number; vatAmount: number; lineGross: number }[] = [];
 
     if (Array.isArray(lineItems) && lineItems.length > 0) {
       for (const line of lineItems) {
-        if (!line.unitPrice || line.unitPrice <= 0) { res.status(400).json({ error: "سعر الوحدة يجب أن يكون أكبر من صفر" }); return; }
-        if (!line.quantity || line.quantity <= 0) { res.status(400).json({ error: "الكمية يجب أن تكون أكبر من صفر" }); return; }
+        if (!line.unitPrice || line.unitPrice <= 0) {
+          throw new ValidationError("سعر الوحدة يجب أن يكون أكبر من صفر", { field: "lines.unitPrice", fix: "أدخل سعراً موجباً لكل بند" });
+        }
+        if (!line.quantity || line.quantity <= 0) {
+          throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "lines.quantity", fix: "أدخل كمية موجبة لكل بند" });
+        }
         const lineTotal = Math.round(Number(line.quantity) * Number(line.unitPrice) * 100) / 100;
         const lineVatRate = line.vatRate != null ? Number(line.vatRate) : Number(vatRate);
         const lineVat = line.vatAmount != null
@@ -141,15 +199,19 @@ invoicesRouter.post("/invoices", async (req, res) => {
       baseAmount = Number(subtotal ?? rawTotal ?? 0);
     }
 
-    if (!baseAmount || baseAmount <= 0) { validationError(res, "لا يمكن إنشاء فاتورة بقيمة صفر أو سالبة", "total", "أدخل مبلغاً موجباً أكبر من صفر للفاتورة"); return; }
+    if (!baseAmount || baseAmount <= 0) {
+      throw new ValidationError("لا يمكن إنشاء فاتورة بقيمة صفر أو سالبة", { field: "total", fix: "أدخل مبلغاً موجباً أكبر من صفر للفاتورة" });
+    }
 
     const invoiceDate = invoiceBodyDate
       ? new Date(invoiceBodyDate).toISOString().split("T")[0]
       : new Date().toISOString().split("T")[0];
     const periodCheck = await checkFinancialPeriodOpen(effectiveCompanyId, invoiceDate);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن إنشاء فاتورة في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(
+        `لا يمكن إنشاء فاتورة في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "date", fix: "اختر تاريخاً ضمن فترة مالية مفتوحة أو اطلب من المدير المالي فتح الفترة" }
+      );
     }
 
     const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
@@ -283,7 +345,7 @@ invoicesRouter.post("/invoices", async (req, res) => {
 invoicesRouter.post("/invoices/:id/send", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
 
     // Read the joined invoice+client view first — we need the contact info to
@@ -321,16 +383,15 @@ invoicesRouter.post("/invoices/:id/send", async (req, res) => {
         setExtras: { sentAt: { raw: "NOW()" } },
         extraWhere: `"deletedAt" IS NULL`,
         after: { ref: invoice.ref, channels, clientName: invoice.clientName },
+        skipUpdatedAt: true,
       });
     } catch (err) {
       const mapped = lifecycleErrorResponse(err);
       if (mapped) {
-        // Preserve the pre-existing error surface (400 "الفاتورة مرسلة مسبقاً"
-        // instead of 409) for backwards compat with UI error handling.
-        if (mapped.status === 409) {
-          res.status(400).json({ error: "الفاتورة مرسلة مسبقاً" });
-          return;
-        }
+        // Surface the typed error directly — the frontend gets the full
+        // { error, code, field, fix } shape and can highlight the status
+        // field. Dropping the old 409→400 downgrade; client code already
+        // handles CONFLICT codes consistently across the app.
         res.status(mapped.status).json(mapped.body);
         return;
       }
@@ -348,12 +409,16 @@ invoicesRouter.post("/invoices/:id/send", async (req, res) => {
 invoicesRouter.post("/invoices/:id/payment", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { amount, method = "bank_transfer" } = req.body as any;
 
-    if (!amount) { res.status(400).json({ error: "المبلغ مطلوب" }); return; }
-    if (Number(amount) <= 0) { res.status(400).json({ error: "يجب أن يكون المبلغ أكبر من صفر" }); return; }
+    if (!amount) {
+      throw new ValidationError("المبلغ مطلوب", { field: "amount", fix: "أدخل مبلغ الدفعة" });
+    }
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      throw new ValidationError("يجب أن يكون المبلغ أكبر من صفر", { field: "amount", fix: "أدخل مبلغاً موجباً" });
+    }
 
     const [cashAccountCode, arAccountCode] = await Promise.all([
       getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
@@ -370,21 +435,21 @@ invoicesRouter.post("/invoices/:id/payment", async (req, res) => {
         [Number(id), scope.companyId]
       );
       const invoice = invRes.rows[0];
-      if (!invoice) throw Object.assign(new Error("الفاتورة غير موجودة"), { statusCode: 404 });
+      if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
-      const lockedStatuses = ["paid", "closed", "posted"];
+      const lockedStatuses = ["paid", "closed", "posted", "cancelled"];
       if (lockedStatuses.includes(invoice.status)) {
-        throw Object.assign(
-          new Error(`لا يمكن تسجيل دفعة على فاتورة بحالة "${invoice.status}" — الفاتورة مُقفلة`),
-          { statusCode: 422 }
+        throw new ConflictError(
+          `لا يمكن تسجيل دفعة على فاتورة بحالة "${invoice.status}" — الفاتورة مُقفلة`,
+          { field: "status", fix: "لا يمكن تسجيل دفعات إضافية بعد الإقفال" }
         );
       }
 
       const remaining = Number(invoice.total) - Number(invoice.paidAmount);
       if (Number(amount) > remaining + 0.01) {
-        throw Object.assign(
-          new Error(`مبلغ الدفع (${Number(amount).toFixed(2)}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`),
-          { statusCode: 422 }
+        throw new ValidationError(
+          `مبلغ الدفع (${Number(amount).toFixed(2)}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
+          { field: "amount", fix: `المبلغ الأقصى المسموح هو ${remaining.toFixed(2)}` }
         );
       }
 
@@ -446,7 +511,7 @@ invoicesRouter.get("/invoices/:id", async (req, res) => {
     const scope = req.scope!;
     const { id } = req.params;
     const numId = Number(id);
-    if (!Number.isInteger(numId) || numId <= 0) { res.status(400).json({ error: "معرّف غير صالح" }); return; }
+    if (!Number.isInteger(numId) || numId <= 0) { throw new ValidationError("معرّف غير صالح"); return; }
     const [invoice] = await rawQuery<any>(
       `SELECT i.*, c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail",
               b.name AS "branchName", b."nameEn" AS "branchNameEn", b."logoUrl" AS "branchLogoUrl",
@@ -472,18 +537,85 @@ invoicesRouter.get("/invoices/:id", async (req, res) => {
 invoicesRouter.patch("/invoices/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = Number(req.params.id);
     const { status, description, dueDate } = req.body as any;
+
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الفاتورة غير موجودة");
+
+    // State machine: lifecycle transitions (draft→sent, sent→paid,
+    // paid→closed) must go through the dedicated endpoints. PATCH is
+    // limited to allowlist edits.
+    if (status !== undefined && status !== existing.status) {
+      if (!INVOICE_STATUSES.includes(status)) {
+        throw new ValidationError(
+          `حالة فاتورة غير صالحة: ${status}`,
+          { field: "status", fix: `اختر من: ${INVOICE_STATUSES.join(", ")}` }
+        );
+      }
+      if (["sent", "paid", "partial"].includes(status)) {
+        throw new ConflictError(
+          `لا يمكن نقل الفاتورة إلى "${status}" عبر PATCH`,
+          { field: "status", fix: "استخدم /invoices/:id/send أو /invoices/:id/payment" }
+        );
+      }
+      const allowedNext = INVOICE_TRANSITIONS[existing.status] ?? [];
+      if (!allowedNext.includes(status)) {
+        throw new ConflictError(
+          `لا يمكن نقل الفاتورة من "${existing.status}" إلى "${status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد (حالة نهائية)"}` }
+        );
+      }
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
     let idx = 1;
-    if (status) { sets.push(`status = $${idx++}`); params.push(status); }
-    if (description !== undefined) { sets.push(`description = $${idx++}`); params.push(description); }
-    if (dueDate !== undefined) { sets.push(`"dueDate" = $${idx++}`); params.push(dueDate); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
-    params.push(Number(id), scope.companyId);
+    if (status !== undefined && status !== existing.status) {
+      sets.push(`status = $${idx++}`); params.push(status);
+      before.status = existing.status; after.status = status;
+    }
+    if (description !== undefined && description !== existing.description) {
+      sets.push(`description = $${idx++}`); params.push(description);
+      before.description = existing.description; after.description = description;
+    }
+    if (dueDate !== undefined && dueDate !== existing.dueDate) {
+      sets.push(`"dueDate" = $${idx++}`); params.push(dueDate);
+      before.dueDate = existing.dueDate; after.dueDate = dueDate;
+    }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتحديث", { fix: "أرسل حقلاً واحداً على الأقل لتعديله" });
+    }
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(`UPDATE invoices SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`, params);
-    if (!row) throw new NotFoundError("الفاتورة غير موجودة");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "invoices",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "status" in after ? "invoice.status_changed" : "invoice.updated",
+      entity: "invoices",
+      entityId: id,
+      before,
+      after,
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Patch invoice error:");
@@ -500,8 +632,10 @@ invoicesRouter.delete("/invoices/:id", async (req, res) => {
     );
     if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
     if (Number(inv.paidAmount) > 0) {
-      res.status(422).json({ error: "لا يمكن حذف فاتورة عليها تحصيلات — قم بعكس التحصيل أولاً" });
-      return;
+      throw new ConflictError(
+        "لا يمكن حذف فاتورة عليها تحصيلات",
+        { field: "paidAmount", fix: "قم بعكس التحصيل أولاً ثم أعد المحاولة" }
+      );
     }
 
     // Reverse the GL balances that were pushed at creation time so AR /
@@ -546,13 +680,26 @@ invoicesRouter.delete("/invoices/:id", async (req, res) => {
 invoicesRouter.patch("/invoices/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
     const [inv] = await rawQuery<any>(`SELECT * FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
-    if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
+    if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
+      throw new ValidationError(
+        newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
+        { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
+      );
+    }
+    // State machine check — approval only valid from draft/returned
+    const allowedFromApproval = INVOICE_TRANSITIONS[inv.status] ?? [];
+    if (!allowedFromApproval.includes(newStatus)) {
+      throw new ConflictError(
+        `لا يمكن ${newStatus === "approved" ? "اعتماد" : newStatus === "rejected" ? "رفض" : "إرجاع"} فاتورة بحالة "${inv.status}"`,
+        { field: "status", fix: `الانتقالات المسموحة: ${allowedFromApproval.length ? allowedFromApproval.join(", ") : "لا يوجد"}` }
+      );
+    }
     await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
@@ -588,7 +735,7 @@ invoicesRouter.patch("/invoices/:id/approve", async (req, res) => {
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Approve invoice error:");
   }
 });
 
@@ -620,33 +767,48 @@ invoicesRouter.get("/collection", async (req, res) => {
     });
     res.json(enriched);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance route error:");
   }
 });
 
 invoicesRouter.post("/collection/:invoiceId/action", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { invoiceId } = req.params;
     const { stage, notes } = req.body as any;
     const [invoice] = await rawQuery<any>(`SELECT id, ref, status, "dueDate", EXTRACT(DAY FROM NOW() - "dueDate"::timestamptz)::int AS "daysOverdue" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(invoiceId), scope.companyId]);
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const requestedStage = Number(stage);
     const stageInfo = COLLECTION_STAGES.find((s) => s.stage === requestedStage);
-    if (!stageInfo) { res.status(400).json({ error: "مرحلة التحصيل غير معرّفة", validStages: COLLECTION_STAGES.map((s) => s.stage) }); return; }
+    if (!stageInfo) {
+      throw new ValidationError(
+        "مرحلة التحصيل غير معرّفة",
+        { field: "stage", fix: `القيم المسموحة: ${COLLECTION_STAGES.map(s => s.stage).join(", ")}`, meta: { validStages: COLLECTION_STAGES.map(s => s.stage) } }
+      );
+    }
     const daysOverdue = Number(invoice.daysOverdue ?? 0);
-    if (daysOverdue < stageInfo.daysOverdue) { res.status(400).json({ error: `هذه المرحلة تتطلب تأخراً ${stageInfo.daysOverdue} يوم على الأقل. التأخر الحالي: ${daysOverdue} يوم`, requiredDaysOverdue: stageInfo.daysOverdue, currentDaysOverdue: daysOverdue }); return; }
+    if (daysOverdue < stageInfo.daysOverdue) {
+      throw new ConflictError(
+        `هذه المرحلة تتطلب تأخراً ${stageInfo.daysOverdue} يوم على الأقل. التأخر الحالي: ${daysOverdue} يوم`,
+        { field: "stage", fix: `انتظر حتى يصبح التأخر ${stageInfo.daysOverdue} يوماً`, meta: { requiredDaysOverdue: stageInfo.daysOverdue, currentDaysOverdue: daysOverdue } }
+      );
+    }
     const [lastStageRecord] = await rawQuery<any>(`SELECT stage FROM invoice_collection_stages WHERE "invoiceId" = $1 ORDER BY id DESC LIMIT 1`, [Number(invoiceId)]);
     const lastStage = lastStageRecord ? Number(lastStageRecord.stage) : 0;
-    if (requestedStage <= lastStage || requestedStage > lastStage + 1) { res.status(400).json({ error: `يجب اتباع المراحل بالتسلسل. المرحلة المتوقعة: ${lastStage + 1}، المطلوب: ${requestedStage}`, expectedStage: lastStage + 1, requestedStage }); return; }
+    if (requestedStage <= lastStage || requestedStage > lastStage + 1) {
+      throw new ConflictError(
+        `يجب اتباع المراحل بالتسلسل. المرحلة المتوقعة: ${lastStage + 1}، المطلوب: ${requestedStage}`,
+        { field: "stage", fix: `اختر المرحلة ${lastStage + 1} التالية مباشرة`, meta: { expectedStage: lastStage + 1, requestedStage } }
+      );
+    }
     if (invoice.status !== "overdue") { await rawExecute(`UPDATE invoices SET status = 'overdue' WHERE id = $1`, [Number(invoiceId)]); }
     await rawExecute(`INSERT INTO invoice_collection_stages ("companyId","invoiceId",stage,"stageName",notes,"performedBy") VALUES ($1,$2,$3,$4,$5,$6)`, [scope.companyId, Number(invoiceId), stageInfo.stage, stageInfo.name, notes ?? null, scope.activeAssignmentId]);
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `collection.${stageInfo.name}`, entity: "invoices", entityId: Number(invoiceId), details: JSON.stringify({ stage: stageInfo.stage, label: stageInfo.label, notes }) }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: `collection.stage_${stage}`, entity: "invoices", entityId: Number(invoiceId), after: { stage: stageInfo.stage, action: stageInfo.name, notes } }).catch(console.error);
     res.json({ message: `تم تسجيل إجراء التحصيل: ${stageInfo.label}`, stage: stageInfo });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance route error:");
   }
 });
 
@@ -659,7 +821,7 @@ invoicesRouter.get("/collection/:invoiceId/history", async (req, res) => {
     const history = await rawQuery<any>(`SELECT ics.*, e.name AS "performedByName" FROM invoice_collection_stages ics LEFT JOIN employee_assignments ea ON ea.id = ics."performedBy" LEFT JOIN employees e ON e.id = ea."employeeId" WHERE ics."invoiceId" = $1 ORDER BY ics.id ASC`, [Number(invoiceId)]);
     res.json(history);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance route error:");
   }
 });
 
@@ -678,7 +840,7 @@ invoicesRouter.get("/receivables", async (req, res) => {
     const overdueAmount = rows.filter((r: any) => r.status === "overdue").reduce((s: number, r: any) => s + Number(r.remainingAmount), 0);
     res.json({ data: rows, summary: { totalReceivable, overdueAmount, count: rows.length } });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance route error:");
   }
 });
 
@@ -699,7 +861,7 @@ invoicesRouter.get("/stats", async (req, res) => {
     );
     res.json({ totalRevenue: Number(stats?.totalRevenue ?? 0), pendingAmount: Number(stats?.pendingAmount ?? 0), overdueAmount: Number(stats?.overdueAmount ?? 0), paidThisMonth: Number(stats?.paidThisMonth ?? 0) });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance route error:");
   }
 });
 
@@ -710,7 +872,7 @@ invoicesRouter.get("/summary", async (req, res) => {
     const [exp] = await rawQuery<any>(`SELECT COUNT(*) AS count, COALESCE(SUM(jl.debit),0) AS total FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL`, [scope.companyId]);
     res.json({ invoicesCount: Number(inv?.count ?? 0), totalRevenue: Number(inv?.total ?? 0), totalPaid: Number(inv?.paid ?? 0), outstanding: Number(inv?.outstanding ?? 0), expensesCount: Number(exp?.count ?? 0), totalExpenses: Number(exp?.total ?? 0) });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance route error:");
   }
 });
 
@@ -747,17 +909,15 @@ invoicesRouter.get("/tax/summary", async (req, res) => {
 invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
     const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
 
     if (!amount || Number(amount) <= 0) {
-      res.status(400).json({ error: "المبلغ مطلوب ويجب أن يكون أكبر من صفر" });
-      return;
+      throw new ValidationError("المبلغ مطلوب ويجب أن يكون أكبر من صفر");
     }
     if (!reason) {
-      res.status(400).json({ error: "سبب الإشعار الدائن مطلوب" });
-      return;
+      throw new ValidationError("سبب الإشعار الدائن مطلوب");
     }
 
     const [invoice] = await rawQuery<any>(
@@ -767,14 +927,12 @@ invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
       [id, scope.companyId]
     );
     if (!invoice || invoice.deletedAt) {
-      res.status(404).json({ error: "الفاتورة غير موجودة" });
-      return;
+      throw new NotFoundError("الفاتورة غير موجودة");
     }
     const creditAmount = Math.round(Number(amount) * 100) / 100;
     const openBalance = Math.round((Number(invoice.total) - Number(invoice.paidAmount)) * 100) / 100;
     if (creditAmount > openBalance + 0.01) {
-      res.status(400).json({ error: `المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})` });
-      return;
+      throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
     }
 
     const memoDateStr = memoDate
@@ -782,8 +940,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
       : new Date().toISOString().slice(0, 10);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن إصدار إشعار دائن في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن إصدار إشعار دائن في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
     // If vatIncluded, split the amount into net + VAT based on invoice vatRate
@@ -904,17 +1061,15 @@ invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
 invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
     const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
 
     if (!amount || Number(amount) <= 0) {
-      res.status(400).json({ error: "المبلغ مطلوب ويجب أن يكون أكبر من صفر" });
-      return;
+      throw new ValidationError("المبلغ مطلوب ويجب أن يكون أكبر من صفر");
     }
     if (!reason) {
-      res.status(400).json({ error: "سبب الإشعار المدين مطلوب" });
-      return;
+      throw new ValidationError("سبب الإشعار المدين مطلوب");
     }
 
     const [invoice] = await rawQuery<any>(
@@ -923,8 +1078,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
       [id, scope.companyId]
     );
     if (!invoice || invoice.deletedAt) {
-      res.status(404).json({ error: "الفاتورة غير موجودة" });
-      return;
+      throw new NotFoundError("الفاتورة غير موجودة");
     }
 
     const chargeAmount = Math.round(Number(amount) * 100) / 100;
@@ -933,8 +1087,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
       : new Date().toISOString().slice(0, 10);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن إصدار إشعار مدين في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن إصدار إشعار مدين في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
     const vatRate = Number(invoice.vatRate ?? 15);
@@ -1131,19 +1284,17 @@ invoicesRouter.get("/bad-debt/preview", async (req, res) => {
 invoicesRouter.post("/bad-debt/post", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { period, asOf, rates, notes } = req.body as any;
 
     const targetPeriod = period || new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
-      res.status(400).json({ error: "صيغة الفترة غير صحيحة (YYYY-MM)" });
-      return;
+      throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)");
     }
     const targetDate = asOf || `${targetPeriod}-28`;
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, targetDate);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن تسجيل مخصص ديون في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن تسجيل مخصص ديون في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
     const ref = `BAD-DEBT-${targetPeriod}`;
@@ -1152,8 +1303,10 @@ invoicesRouter.post("/bad-debt/post", async (req, res) => {
       [scope.companyId, ref]
     );
     if (existing) {
-      res.status(409).json({ error: "تم تسجيل مخصص ديون مشكوك فيها لهذه الفترة مسبقاً", journalId: existing.id });
-      return;
+      throw new ConflictError(
+        "تم تسجيل مخصص ديون مشكوك فيها لهذه الفترة مسبقاً",
+        { field: "period", fix: "استعرض القيد الموجود بدلاً من إعادة التسجيل", meta: { journalId: existing.id } }
+      );
     }
 
     const r = {
@@ -1189,8 +1342,7 @@ invoicesRouter.post("/bad-debt/post", async (req, res) => {
     ) / 100;
 
     if (total <= 0) {
-      res.status(400).json({ error: "لا يوجد مبلغ لمخصص الديون المشكوك فيها" });
-      return;
+      throw new ValidationError("لا يوجد مبلغ لمخصص الديون المشكوك فيها");
     }
 
     const [expenseCode, allowanceCode] = await Promise.all([
@@ -1213,8 +1365,10 @@ invoicesRouter.post("/bad-debt/post", async (req, res) => {
       });
     } catch (je) {
       console.error("Bad debt JE error:", je);
-      res.status(500).json({ error: "فشل تسجيل قيد مخصص الديون المشكوك فيها" });
-      return;
+      throw new IntegrationError(
+        "فشل تسجيل قيد مخصص الديون المشكوك فيها",
+        { field: "journalEntry", fix: "راجع إعدادات الحسابات (5170/1210) ثم أعد المحاولة" }
+      );
     }
 
     emitEvent({
@@ -1246,17 +1400,16 @@ invoicesRouter.post("/bad-debt/post", async (req, res) => {
 invoicesRouter.post("/customer-advances", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = req.body as any;
 
-    if (!clientId) { res.status(400).json({ error: "العميل مطلوب" }); return; }
-    if (!amount || Number(amount) <= 0) { res.status(400).json({ error: "المبلغ مطلوب ويجب أن يكون أكبر من صفر" }); return; }
+    if (!clientId) { throw new ValidationError("العميل مطلوب"); return; }
+    if (!amount || Number(amount) <= 0) { throw new ValidationError("المبلغ مطلوب ويجب أن يكون أكبر من صفر"); return; }
 
     const recvDate = receivedDate || new Date().toISOString().slice(0, 10);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن تسجيل دفعة مقدمة في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن تسجيل دفعة مقدمة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
     const amt = Math.round(Number(amount) * 100) / 100;
@@ -1337,13 +1490,12 @@ invoicesRouter.post("/customer-advances", async (req, res) => {
 invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const advanceId = Number(req.params.id);
     const { invoiceId, amount } = req.body as any;
 
     if (!invoiceId || !amount || Number(amount) <= 0) {
-      res.status(400).json({ error: "الفاتورة والمبلغ مطلوبان" });
-      return;
+      throw new ValidationError("الفاتورة والمبلغ مطلوبان");
     }
     const applyAmt = Math.round(Number(amount) * 100) / 100;
 
@@ -1355,15 +1507,13 @@ invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
         [advanceId, scope.companyId]
       );
     } catch {
-      res.status(404).json({ error: "الدفعة المقدمة غير موجودة" });
-      return;
+      throw new NotFoundError("الدفعة المقدمة غير موجودة");
     }
     if (!advance) throw new NotFoundError("الدفعة المقدمة غير موجودة");
 
     const remaining = Number(advance.amount) - Number(advance.appliedAmount);
     if (applyAmt > remaining + 0.01) {
-      res.status(400).json({ error: `المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})` });
-      return;
+      throw new ValidationError(`المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})`);
     }
 
     const [invoice] = await rawQuery<any>(
@@ -1373,13 +1523,11 @@ invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     if (invoice.clientId !== advance.clientId) {
-      res.status(400).json({ error: "العميل في الفاتورة لا يطابق العميل في الدفعة المقدمة" });
-      return;
+      throw new ValidationError("العميل في الفاتورة لا يطابق العميل في الدفعة المقدمة");
     }
     const invoiceOpen = Number(invoice.total) - Number(invoice.paidAmount);
     if (applyAmt > invoiceOpen + 0.01) {
-      res.status(400).json({ error: `المبلغ يتجاوز الرصيد المفتوح للفاتورة (${invoiceOpen})` });
-      return;
+      throw new ValidationError(`المبلغ يتجاوز الرصيد المفتوح للفاتورة (${invoiceOpen})`);
     }
 
     const [advLiabCode, arCode] = await Promise.all([
@@ -1619,8 +1767,7 @@ invoicesRouter.post("/dunning/send", async (req, res) => {
     await ensureDunningTables();
     const { invoiceIds, sentVia = "manual" } = req.body as any;
     if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
-      res.status(400).json({ error: "invoiceIds مطلوبة (قائمة معرفات الفواتير)" });
-      return;
+      throw new ValidationError("invoiceIds مطلوبة (قائمة معرفات الفواتير)");
     }
 
     const today = new Date().toISOString().slice(0, 10);
@@ -1725,6 +1872,6 @@ invoicesRouter.get("/tax/declarations", async (req, res) => {
     }
     res.json({ data: declarations });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance route error:");
   }
 });

@@ -90,6 +90,8 @@ export interface ApplyTransitionOptions {
   after?: Record<string, unknown>;
   /** Optional notifications fanned out after commit. Failures are logged. */
   notifications?: LifecycleNotification[];
+  /** Skip the auto `"updatedAt" = NOW()` clause (for tables without that column). */
+  skipUpdatedAt?: boolean;
 }
 
 export class LifecycleError extends Error {
@@ -169,9 +171,8 @@ export async function applyTransition<TRow = any>(
         sets.push(`${quoteIdent(col)} = $${params.length}`);
       }
     }
-    // Always bump updatedAt unless the caller already set it.
     const hasExplicitUpdatedAt = setExtras && Object.keys(setExtras).some((k) => k === "updatedAt");
-    if (!hasExplicitUpdatedAt) {
+    if (!hasExplicitUpdatedAt && !opts.skipUpdatedAt) {
       sets.push(`"updatedAt" = NOW()`);
     }
 
@@ -301,12 +302,11 @@ export function assertTransition(
 }
 
 function quoteIdent(ident: string): string {
-  // Very conservative identifier quoting — only allows letters, digits, and
-  // underscores in unquoted form. Any other character forces double-quoting.
-  // This guards against SQL injection via the `entity` argument even though
-  // callers always pass an internal constant.
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(ident)) {
     return `"${ident.replace(/"/g, '""')}"`;
+  }
+  if (/[A-Z]/.test(ident)) {
+    return `"${ident}"`;
   }
   return ident;
 }

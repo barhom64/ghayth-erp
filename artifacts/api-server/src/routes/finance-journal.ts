@@ -4,6 +4,8 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -24,13 +26,32 @@ journalRouter.use(authMiddleware);
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 const PAYROLL_ROLES = ["hr_manager", "finance_manager", "general_manager", "owner"];
 
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
+function assertRole(scope: any, allowedRoles: string[]): void {
   if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({ error: "ليس لديك الصلاحية للقيام بهذا الإجراء", requiredRoles: allowedRoles, yourRole: scope.role });
-    return false;
+    throw new ForbiddenError("ليس لديك الصلاحية للقيام بهذا الإجراء", {
+      fix: `الأدوار المسموحة: ${allowedRoles.join(", ")}`,
+      meta: { requiredRoles: allowedRoles, yourRole: scope.role },
+    });
   }
-  return true;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JOURNAL ENTRY STATE MACHINE — Phase C.7 Finance audit
+// ─────────────────────────────────────────────────────────────────────────────
+const JOURNAL_STATUSES = [
+  "draft", "pending_approval", "approved", "rejected", "returned",
+  "posted", "reversed", "cancelled",
+] as const;
+const JOURNAL_TRANSITIONS: Record<string, readonly string[]> = {
+  draft:            ["pending_approval", "approved", "cancelled", "rejected", "returned"],
+  pending_approval: ["approved", "rejected", "returned", "cancelled"],
+  approved:         ["posted", "cancelled"],
+  returned:         ["draft", "pending_approval", "cancelled"],
+  rejected:         ["draft", "cancelled"],
+  posted:           ["reversed"],
+  reversed:         [],
+  cancelled:        [],
+};
 
 function generateAutoDescription(params: { operationType: string; relatedEntityName?: string; period?: string; branchName?: string; amount?: number; expenseType?: string }): string {
   const { operationType, relatedEntityName, period, branchName, amount, expenseType } = params;
@@ -84,7 +105,7 @@ journalRouter.post("/journal", async (req, res) => {
   try {
     const scope = req.scope!;
     const { ref, description, lines } = req.body as any;
-    if (!lines || !Array.isArray(lines)) { res.status(400).json({ error: "بنود القيد مطلوبة" }); return; }
+    if (!lines || !Array.isArray(lines)) { throw new ValidationError("بنود القيد مطلوبة"); return; }
     const journalId = await createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref: ref ?? `JE-${Date.now()}`, description: description ?? "", lines });
     res.status(201).json({ id: journalId, ref, description, lines });
   } catch (err) {
@@ -128,7 +149,7 @@ journalRouter.get("/expenses", async (req, res) => {
 journalRouter.post("/expenses", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const {
       accountCode, amount, description, period, sourceAccountCode,
       branchId, companyId: bodyCompanyId, departmentId, costCenter, expenseType, subAccountCode,
@@ -141,34 +162,36 @@ journalRouter.post("/expenses", async (req, res) => {
     } = req.body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
-    if (!accountCode) { validationError(res, "لا يمكن صرف بدون حساب محاسبي واضح", "accountCode", "حدد الحساب المحاسبي للمصروف (مثل 5100 رواتب، 5200 وقود)"); return; }
-    if (!amount || Number(amount) <= 0) { validationError(res, "لا يمكن تسجيل مصروف بقيمة صفر أو سالبة", "amount", "أدخل مبلغ المصروف بقيمة موجبة"); return; }
-    if (!branchId && !scope.branchId) { validationError(res, "الفرع مطلوب لتسجيل المصروف", "branchId", "حدد الفرع الذي ينتمي إليه هذا المصروف"); return; }
-    if (!costCenter) { validationError(res, "مركز التكلفة مطلوب لتسجيل المصروف", "costCenter", "حدد مركز التكلفة (مثل: مشروع-001، فرع-الرياض)"); return; }
+    if (!accountCode) { throw new ValidationError("لا يمكن صرف بدون حساب محاسبي واضح", { field: "accountCode", fix: "حدد الحساب المحاسبي للمصروف (مثل 5100 رواتب، 5200 وقود)" }); }
+    if (!amount || Number(amount) <= 0) { throw new ValidationError("لا يمكن تسجيل مصروف بقيمة صفر أو سالبة", { field: "amount", fix: "أدخل مبلغ المصروف بقيمة موجبة" }); }
+    if (!branchId && !scope.branchId) { throw new ValidationError("الفرع مطلوب لتسجيل المصروف", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه هذا المصروف" }); }
+    if (!costCenter) { throw new ValidationError("مركز التكلفة مطلوب لتسجيل المصروف", { field: "costCenter", fix: "حدد مركز التكلفة (مثل: مشروع-001، فرع-الرياض)" }); }
 
-    const [costCenterSettingRow] = await rawQuery<any>(
-      `SELECT value FROM company_settings WHERE "companyId" = $1 AND key = 'costCenterEnabled' LIMIT 1`,
-      [effectiveCompanyId]
-    );
-    const costCenterValidationEnabled = costCenterSettingRow?.value === "true";
+    let costCenterValidationEnabled = false;
+    try {
+      const [costCenterSettingRow] = await rawQuery<any>(
+        `SELECT value FROM company_settings WHERE "companyId" = $1 AND key = 'costCenterEnabled' LIMIT 1`,
+        [effectiveCompanyId]
+      );
+      costCenterValidationEnabled = costCenterSettingRow?.value === "true";
+    } catch { /* table may not exist yet */ }
     if (costCenterValidationEnabled) {
       const [ccRow] = await rawQuery<any>(
         `SELECT id FROM departments WHERE "companyId" = ANY($1) AND (name = $2 OR "nameEn" = $2) LIMIT 1`,
         [[effectiveCompanyId], costCenter]
       );
       if (!ccRow) {
-        validationError(
-          res,
-          `مركز التكلفة "${costCenter}" غير موجود في بيانات الشركة`,
-          "costCenter",
-          "أدخل مركز تكلفة معرّف في إعدادات الأقسام"
-        );
-        return;
+        throw new ValidationError(`مركز التكلفة "${costCenter}" غير موجود في بيانات الشركة`, { field: "costCenter", fix: "أدخل مركز تكلفة معرّف في إعدادات الأقسام" });
       }
     }
 
     const attachCheck = checkAttachmentRequired({ operationType: operationType || expenseType || "expense", amount: Number(amount), hasAttachment: !!attachmentUrl });
-    if (attachCheck.required && !attachmentUrl) { res.status(400).json({ error: attachCheck.reason, field: "attachmentUrl", hint: "ارفع المستند الداعم (فاتورة، إشعار تحويل، وصل استلام) قبل الحفظ" }); return; }
+    if (attachCheck.required && !attachmentUrl) {
+      throw new ValidationError(
+        attachCheck.reason ?? "المرفق مطلوب",
+        { field: "attachmentUrl", fix: "ارفع المستند الداعم (فاتورة، إشعار تحويل، وصل استلام) قبل الحفظ" }
+      );
+    }
 
     const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
     const sourceAcct = sourceAccountCode || "1100";
@@ -179,9 +202,28 @@ journalRouter.post("/expenses", async (req, res) => {
         const budgetAmount = Number(budget.amount);
         const newUsed = Number(budget.used) + Number(amount);
         const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
-        if (utilization > 110) { res.status(400).json({ error: "تجاوز الميزانية أكثر من 110% – رفض نهائي", utilization: Math.round(utilization), status: "rejected" }); return; }
-        if (utilization > 99 && !["owner", "general_manager"].includes(scope.role)) { res.status(403).json({ error: "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط", utilization: Math.round(utilization), status: "blocked_gm" }); return; }
-        if (utilization > 80 && !["finance_manager", "general_manager", "owner"].includes(scope.role)) { res.status(403).json({ error: "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي", utilization: Math.round(utilization), status: "warning_cfo" }); return; }
+        // Budget guardrails:
+        //   >110%  → hard reject (ConflictError 409)
+        //   100-110% → GM-only (ForbiddenError 403)
+        //   80-99%  → CFO-or-above (ForbiddenError 403)
+        if (utilization > 110) {
+          throw new ConflictError(
+            "تجاوز الميزانية أكثر من 110% – رفض نهائي",
+            { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
+          );
+        }
+        if (utilization > 99 && !["owner", "general_manager"].includes(scope.role)) {
+          throw new ForbiddenError(
+            "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
+            { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
+          );
+        }
+        if (utilization > 80 && !["finance_manager", "general_manager", "owner"].includes(scope.role)) {
+          throw new ForbiddenError(
+            "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
+            { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
+          );
+        }
         await rawExecute(`UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`, [Number(amount), effectiveCompanyId, accountCode, targetPeriod]);
       }
     }
@@ -244,14 +286,13 @@ journalRouter.patch("/expenses/:id", async (req, res) => {
     const expenseDate = new Date(existing.createdAt).toISOString().split("T")[0];
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, expenseDate);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن تعديل مصروف في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن تعديل مصروف في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
     const [row] = await rawQuery<any>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`, [description, Number(req.params.id), scope.companyId]);
     if (!row) throw new NotFoundError("المصروف غير موجود");
     res.json(row);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
@@ -263,26 +304,31 @@ journalRouter.delete("/expenses/:id", async (req, res) => {
     await reverseAccountBalances(scope.companyId, row.id);
     res.json({ success: true });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
 journalRouter.patch("/expenses/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
     const [exp] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     if (!exp) throw new NotFoundError("المصروف غير موجود");
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
-    if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
+    if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
+      throw new ValidationError(
+        newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
+        { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
+      );
+    }
     await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('expense',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
@@ -316,7 +362,7 @@ journalRouter.get("/vouchers", async (req, res) => {
 journalRouter.post("/vouchers", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const {
       type, amount, description, payee, accountCode, method = "cash", sourceAccountCode,
       subAccountCode, relatedEntityType, relatedEntityId, relatedEntityName,
@@ -326,14 +372,28 @@ journalRouter.post("/vouchers", async (req, res) => {
       autoDescription, operationType,
     } = req.body as any;
 
-    if (!amount || !type) { res.status(400).json({ error: "النوع والمبلغ مطلوبان" }); return; }
-    if (Number(amount) <= 0) { validationError(res, "لا يمكن إنشاء سند بمبلغ صفر أو سالب", "amount", "أدخل مبلغاً موجباً للسند"); return; }
-    if (!branchId && !scope.branchId) { validationError(res, "الفرع مطلوب لإنشاء السند", "branchId", "حدد الفرع الذي ينتمي إليه هذا السند"); return; }
-    if (!accountCode) { validationError(res, "الحساب المحاسبي مطلوب", "accountCode", "حدد الحساب المحاسبي الرئيسي للسند"); return; }
+    if (!type) {
+      throw new ValidationError("نوع السند مطلوب", { field: "type", fix: "اختر receipt (قبض) أو payment (صرف)" });
+    }
+    if (!amount) {
+      throw new ValidationError("المبلغ مطلوب", { field: "amount", fix: "أدخل مبلغ السند" });
+    }
+    if (Number(amount) <= 0) {
+      throw new ValidationError("لا يمكن إنشاء سند بمبلغ صفر أو سالب", { field: "amount", fix: "أدخل مبلغاً موجباً للسند" });
+    }
+    if (!branchId && !scope.branchId) {
+      throw new ValidationError("الفرع مطلوب لإنشاء السند", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه هذا السند" });
+    }
+    if (!accountCode) {
+      throw new ValidationError("الحساب المحاسبي مطلوب", { field: "accountCode", fix: "حدد الحساب المحاسبي الرئيسي للسند" });
+    }
 
     const voucherAttachCheck = checkAttachmentRequired({ operationType: type === "payment" ? "payment" : "receipt", amount: Number(amount) });
     if (voucherAttachCheck.required && !attachmentUrl) {
-      res.status(400).json({ error: voucherAttachCheck.reason, field: "attachmentUrl", hint: "ارفع وصل الاستلام أو أمر التحويل للسندات الكبيرة" }); return;
+      throw new ValidationError(
+        voucherAttachCheck.reason ?? "المرفق مطلوب",
+        { field: "attachmentUrl", fix: "ارفع وصل الاستلام أو أمر التحويل للسندات الكبيرة" }
+      );
     }
 
     const resolvedSourceAccount = sourceAccountCode || "1100";
@@ -343,12 +403,10 @@ journalRouter.post("/vouchers", async (req, res) => {
       [scope.companyId, resolvedSourceAccount]
     );
     if (!sourceAcctRow) {
-      res.status(400).json({
-        error: `حساب المصدر "${resolvedSourceAccount}" غير موجود في دليل الحسابات`,
-        field: "sourceAccountCode",
-        hint: "استخدم حساباً نقدياً مثل 1100 (الصندوق) أو 1110 (البنك)",
-      });
-      return;
+      throw new ValidationError(
+        `حساب المصدر "${resolvedSourceAccount}" غير موجود في دليل الحسابات`,
+        { field: "sourceAccountCode", fix: "استخدم حساباً نقدياً مثل 1100 (الصندوق) أو 1110 (البنك)" }
+      );
     }
     const cashBankSubtypes = ["cash", "bank", "cash_and_bank"];
     const isCashOrBank =
@@ -356,12 +414,10 @@ journalRouter.post("/vouchers", async (req, res) => {
       cashBankSubtypes.includes(sourceAcctRow.accountSubtype ?? "") ||
       /^11[01]\d/.test(sourceAcctRow.code);
     if (!isCashOrBank) {
-      res.status(400).json({
-        error: `حساب المصدر "${sourceAcctRow.code} - ${sourceAcctRow.name}" ليس حساباً نقدياً أو بنكياً. يجب استخدام حساب نقدي أو بنكي.`,
-        field: "sourceAccountCode",
-        hint: "استخدم حساباً نقدياً مثل 1100 (الصندوق) أو 1110 (البنك)",
-      });
-      return;
+      throw new ValidationError(
+        `حساب المصدر "${sourceAcctRow.code} - ${sourceAcctRow.name}" ليس حساباً نقدياً أو بنكياً`,
+        { field: "sourceAccountCode", fix: "استخدم حساباً نقدياً أو بنكياً (عادةً كود يبدأ بـ 11)" }
+      );
     }
 
     const baseAmount = Number(amount);
@@ -414,7 +470,7 @@ journalRouter.patch("/vouchers/:id", async (req, res) => {
     if (!row) throw new NotFoundError("السند غير موجود");
     res.json(row);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
@@ -426,7 +482,7 @@ journalRouter.delete("/vouchers/:id", async (req, res) => {
     await reverseAccountBalances(scope.companyId, row.id);
     res.json({ success: true });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
@@ -438,7 +494,7 @@ journalRouter.get("/chart-of-accounts", async (req, res) => {
     const accounts = await rawQuery<any>(`SELECT id, code, name, type, "parentCode", status FROM chart_of_accounts WHERE ${where} AND "deletedAt" IS NULL ORDER BY code ASC`, params);
     res.json(accounts);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
@@ -461,7 +517,7 @@ journalRouter.get("/accounts", async (req, res) => {
 journalRouter.post("/accounts", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const b = req.body;
     const r = await rawExecute(`INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode") VALUES ($1,$2,$3,$4,$5)`, [scope.companyId, b.code, b.name, b.type || "asset", b.parentCode]);
     res.status(201).json({ id: r.insertId, ...b });
@@ -473,7 +529,7 @@ journalRouter.post("/accounts", async (req, res) => {
 journalRouter.patch("/accounts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -493,14 +549,24 @@ journalRouter.patch("/accounts/:id", async (req, res) => {
 journalRouter.delete("/accounts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const id = Number(req.params.id);
     const [account] = await rawQuery<any>(`SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!account) throw new NotFoundError("الحساب غير موجود");
     const [hasLines] = await rawQuery<any>(`SELECT COUNT(*)::int AS cnt FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL WHERE jl."accountCode" = $1 AND je."companyId" = $2`, [account.code, scope.companyId]);
-    if (hasLines && hasLines.cnt > 0) { res.status(400).json({ error: `لا يمكن حذف الحساب "${account.name}" لأنه مرتبط بـ ${hasLines.cnt} قيد محاسبي`, linkedEntries: hasLines.cnt }); return; }
+    if (hasLines && hasLines.cnt > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف الحساب "${account.name}" لأنه مرتبط بـ ${hasLines.cnt} قيد محاسبي`,
+        { field: "accountCode", fix: "احذف أو اعكس القيود المرتبطة أولاً", meta: { linkedEntries: hasLines.cnt } }
+      );
+    }
     const [hasChildren] = await rawQuery<any>(`SELECT COUNT(*)::int AS cnt FROM chart_of_accounts WHERE "parentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (hasChildren && hasChildren.cnt > 0) { res.status(400).json({ error: `لا يمكن حذف الحساب "${account.name}" لأنه يحتوي على ${hasChildren.cnt} حساب فرعي`, childAccounts: hasChildren.cnt }); return; }
+    if (hasChildren && hasChildren.cnt > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف الحساب "${account.name}" لأنه يحتوي على ${hasChildren.cnt} حساب فرعي`,
+        { field: "accountCode", fix: "احذف أو انقل الحسابات الفرعية أولاً", meta: { childAccounts: hasChildren.cnt } }
+      );
+    }
     await rawQuery<any>(`UPDATE chart_of_accounts SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 RETURNING id`, [id, scope.companyId]);
     res.json({ message: "تم حذف الحساب" });
   } catch (err) {
@@ -521,22 +587,22 @@ journalRouter.get("/fiscal-periods", async (req, res) => {
     }
     res.json({ data: periods });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
 journalRouter.post("/fiscal-periods/:period/close", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { period } = req.params;
-    if (!/^\d{4}-\d{2}$/.test(period)) { validationError(res, "صيغة الفترة غير صحيحة", "period", "استخدم الصيغة YYYY-MM مثل 2025-01"); return; }
+    if (!/^\d{4}-\d{2}$/.test(period)) { throw new ValidationError("صيغة الفترة غير صحيحة", { field: "period", fix: "استخدم الصيغة YYYY-MM مثل 2025-01" }); }
     const pendingJournals = await rawQuery<any>(`SELECT je.id, je.ref, je.description FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2 AND je.status = 'draft' LIMIT 10`, [scope.companyId, period]);
-    if (pendingJournals.length > 0) { validationError(res, `لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`, "journalEntries", "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية"); return; }
+    if (pendingJournals.length > 0) { throw new ValidationError(`لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`, { field: "journalEntries", fix: "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية" }); }
     const [debitSum] = await rawQuery<any>(`SELECT COALESCE(SUM(jl.debit), 0) AS "totalDebit", COALESCE(SUM(jl.credit), 0) AS "totalCredit" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, period]);
     const totalDebit = Number(debitSum?.totalDebit ?? 0);
     const totalCredit = Number(debitSum?.totalCredit ?? 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) { validationError(res, `لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`, "balance", "تأكد من توازن جميع القيود المحاسبية قبل الإقفال"); return; }
+    if (Math.abs(totalDebit - totalCredit) > 0.01) { throw new ValidationError(`لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`, { field: "balance", fix: "تأكد من توازن جميع القيود المحاسبية قبل الإقفال" }); }
     res.json({ message: `تم إقفال الفترة المالية ${period} بنجاح`, period, totalDebit, totalCredit });
   } catch (err) {
     handleRouteError(err, res, "Close fiscal period error:");
@@ -556,9 +622,9 @@ journalRouter.get("/salary-advances", async (req, res) => {
 journalRouter.post("/salary-advances", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PAYROLL_ROLES, res)) return;
+    assertRole(scope, PAYROLL_ROLES);
     const { employeeName, amount, description, deductMonths = 1, sourceAccountCode } = req.body as any;
-    if (!amount || !employeeName) { res.status(400).json({ error: "اسم الموظف والمبلغ مطلوبان" }); return; }
+    if (!amount || !employeeName) { throw new ValidationError("اسم الموظف والمبلغ مطلوبان"); return; }
     const sourceAcct = sourceAccountCode || "1100";
     const ref = `SALARY-ADV-${Date.now()}`;
     const journalId = await createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, lines: [{ accountCode: "1410", debit: Number(amount), credit: 0 }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
@@ -566,20 +632,20 @@ journalRouter.post("/salary-advances", async (req, res) => {
     if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1`, [journalId]); }
     res.status(201).json({ id: journalId, ref, employeeName, amount, deductMonths, description, approval: approvalResult });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
 journalRouter.patch("/salary-advances/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PAYROLL_ROLES, res)) return;
+    assertRole(scope, PAYROLL_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
     const [entry] = await rawQuery<any>(`SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'SALARY-ADV%'`, [Number(id), scope.companyId]);
     if (!entry) throw new NotFoundError("السلفة غير موجودة");
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
-    if (newStatus === "rejected" && !notes) { res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return; }
+    if (newStatus === "rejected" && !notes) { throw new ValidationError("يجب ذكر سبب الرفض"); return; }
     await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('salary_advance',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
     res.json({ id: Number(id), status: newStatus });
@@ -616,7 +682,7 @@ journalRouter.get("/payments", async (req, res) => {
     const totalPayments = rows.reduce((s: number, r: any) => s + Number(r.amount), 0);
     res.json({ data: rows, summary: { totalPayments, count: rows.length } });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
@@ -628,7 +694,7 @@ journalRouter.get("/financial-requests", async (req, res) => {
     const approved = rows.filter((r: any) => r.status === "approved");
     res.json({ data: rows, summary: { total: rows.length, pending: pending.length, approved: approved.length } });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance journal error:");
   }
 });
 
@@ -640,7 +706,7 @@ journalRouter.get("/journal/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    if (!Number.isFinite(id)) { res.status(400).json({ error: "معرّف القيد غير صالح" }); return; }
+    if (!Number.isFinite(id)) { throw new ValidationError("معرّف القيد غير صالح"); return; }
     const [je] = await rawQuery<any>(
       `SELECT je.*,
               ro.ref AS "reversalOfRef", ro.description AS "reversalOfDescription",
@@ -679,13 +745,12 @@ journalRouter.get("/journal/:id", async (req, res) => {
 journalRouter.post("/journal/:id/reverse", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
-    if (!Number.isFinite(id)) { res.status(400).json({ error: "معرّف القيد غير صالح" }); return; }
+    if (!Number.isFinite(id)) { throw new ValidationError("معرّف القيد غير صالح"); return; }
     const { reason, reverseDate } = req.body as { reason?: string; reverseDate?: string };
     if (!reason || !String(reason).trim()) {
-      validationError(res, "سبب عكس القيد مطلوب", "reason", "أدخل سبب عكس القيد");
-      return;
+      throw new ValidationError("سبب عكس القيد مطلوب", { field: "reason", fix: "أدخل سبب عكس القيد" });
     }
 
     const [original] = await rawQuery<any>(
@@ -694,12 +759,10 @@ journalRouter.post("/journal/:id/reverse", async (req, res) => {
     );
     if (!original) throw new NotFoundError("القيد الأصلي غير موجود");
     if (original.reversedById) {
-      res.status(400).json({ error: `هذا القيد معكوس مسبقاً بالقيد #${original.reversedById}` });
-      return;
+      throw new ValidationError(`هذا القيد معكوس مسبقاً بالقيد #${original.reversedById}`);
     }
     if (original.reversalOfId) {
-      res.status(400).json({ error: "لا يمكن عكس قيد هو أصلاً قيد عاكس" });
-      return;
+      throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
     }
 
     const effectiveDate = reverseDate && /^\d{4}-\d{2}-\d{2}$/.test(reverseDate)
@@ -708,8 +771,7 @@ journalRouter.post("/journal/:id/reverse", async (req, res) => {
 
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, effectiveDate);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن عكس القيد في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن عكس القيد في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
     const originalLines = await rawQuery<any>(
@@ -718,8 +780,7 @@ journalRouter.post("/journal/:id/reverse", async (req, res) => {
       [id]
     );
     if (originalLines.length === 0) {
-      res.status(400).json({ error: "القيد الأصلي لا يحتوي على بنود" });
-      return;
+      throw new ValidationError("القيد الأصلي لا يحتوي على بنود");
     }
 
     const reversedLines = originalLines.map((l: any) => ({
@@ -870,14 +931,13 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
 journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { period } = req.params;
     const dryRun = String(req.query.dryRun ?? "").toLowerCase() === "true";
     const { retainedEarningsAccountCode = "3300", force = false } = (req.body ?? {}) as { retainedEarningsAccountCode?: string; force?: boolean };
 
     if (!/^\d{4}$/.test(period)) {
-      validationError(res, "صيغة السنة غير صحيحة", "period", "استخدم صيغة السنة YYYY مثل 2025");
-      return;
+      throw new ValidationError("صيغة السنة غير صحيحة", { field: "period", fix: "استخدم صيغة السنة YYYY مثل 2025" });
     }
     const year = Number(period);
 
@@ -887,8 +947,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
       [scope.companyId, retainedEarningsAccountCode]
     );
     if (!reAcc) {
-      validationError(res, `حساب الأرباح المحتجزة "${retainedEarningsAccountCode}" غير موجود`, "retainedEarningsAccountCode", "أنشئ الحساب أولاً في شجرة الحسابات");
-      return;
+      throw new ValidationError(`حساب الأرباح المحتجزة "${retainedEarningsAccountCode}" غير موجود`, { field: "retainedEarningsAccountCode", fix: "أنشئ الحساب أولاً في شجرة الحسابات" });
     }
 
     // Verify all 12 periods are closed, unless force=true
@@ -903,20 +962,17 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
       if (!closedSet.has(p)) missing.push(p);
     }
     if (missing.length > 0 && !force && !dryRun) {
-      res.status(400).json({
-        error: `لا يمكن إقفال السنة ${year}: توجد ${missing.length} فترة غير مُقفلة`,
-        missingPeriods: missing,
-        hint: "أقفل الفترات الشهرية أولاً أو استخدم force=true",
-      });
-      return;
+      throw new ConflictError(
+        `لا يمكن إقفال السنة ${year}: توجد ${missing.length} فترة غير مُقفلة`,
+        { field: "period", fix: "أقفل الفترات الشهرية أولاً أو استخدم force=true", meta: { missingPeriods: missing } }
+      );
     }
 
     const { revenues, expenses, totalRevenue, totalExpense, netIncome, lines } =
       await buildYearEndClosingLines(scope.companyId, year, retainedEarningsAccountCode);
 
     if (lines.length === 0) {
-      res.status(400).json({ error: "لا توجد حسابات إيرادات أو مصروفات بأرصدة للسنة المحددة" });
-      return;
+      throw new ValidationError("لا توجد حسابات إيرادات أو مصروفات بأرصدة للسنة المحددة");
     }
 
     if (dryRun) {
@@ -1125,7 +1181,7 @@ async function createOpeningBalanceEntry(params: {
 journalRouter.post("/opening-balances", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { periodStart, lines, force } = req.body as any;
     const result = await createOpeningBalanceEntry({ scope, periodStart, lines, force: !!force });
     if ("error" in result) {
@@ -1141,19 +1197,17 @@ journalRouter.post("/opening-balances", async (req, res) => {
 journalRouter.post("/opening-balances/import-csv", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { periodStart, csv, force } = req.body as { periodStart?: string; csv?: string; force?: boolean };
     if (!csv || typeof csv !== "string") {
-      res.status(400).json({ error: "محتوى CSV مطلوب" });
-      return;
+      throw new ValidationError("محتوى CSV مطلوب");
     }
     const rawLines = csv
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith("#"));
     if (rawLines.length === 0) {
-      res.status(400).json({ error: "ملف CSV فارغ" });
-      return;
+      throw new ValidationError("ملف CSV فارغ");
     }
     // Detect header
     const startIdx = /account/i.test(rawLines[0]) ? 1 : 0;
@@ -1161,15 +1215,13 @@ journalRouter.post("/opening-balances/import-csv", async (req, res) => {
     for (let i = startIdx; i < rawLines.length; i++) {
       const parts = rawLines[i].split(",").map((p) => p.trim());
       if (parts.length < 3) {
-        res.status(400).json({ error: `سطر CSV غير صالح (${i + 1}): يتطلب 3 أعمدة accountCode,debit,credit` });
-        return;
+        throw new ValidationError(`سطر CSV غير صالح (${i + 1}): يتطلب 3 أعمدة accountCode,debit,credit`);
       }
       const [code, d, c] = parts;
       const debit = Number(d || 0);
       const credit = Number(c || 0);
       if (!code || (Number.isNaN(debit) && Number.isNaN(credit))) {
-        res.status(400).json({ error: `سطر CSV غير صالح (${i + 1})` });
-        return;
+        throw new ValidationError(`سطر CSV غير صالح (${i + 1})`);
       }
       parsed.push({ accountCode: code, debit: Number.isNaN(debit) ? 0 : debit, credit: Number.isNaN(credit) ? 0 : credit });
     }

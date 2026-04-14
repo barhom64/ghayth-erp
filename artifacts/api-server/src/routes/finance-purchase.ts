@@ -4,6 +4,8 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -28,12 +30,13 @@ purchaseRouter.use(authMiddleware);
 const PROCUREMENT_ROLES = ["procurement", "finance_manager", "general_manager", "owner"];
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-function requireRole(scope: any, allowedRoles: string[], res: any): boolean {
+function assertRole(scope: any, allowedRoles: string[]): void {
   if (!allowedRoles.includes(scope.role)) {
-    res.status(403).json({ error: "ليس لديك الصلاحية للقيام بهذا الإجراء", requiredRoles: allowedRoles, yourRole: scope.role });
-    return false;
+    throw new ForbiddenError("ليس لديك الصلاحية للقيام بهذا الإجراء", {
+      fix: `الأدوار المسموحة: ${allowedRoles.join(", ")}`,
+      meta: { requiredRoles: allowedRoles, yourRole: scope.role },
+    });
   }
-  return true;
 }
 
 purchaseRouter.get("/purchase-requests", async (req, res) => {
@@ -81,7 +84,7 @@ purchaseRouter.get("/purchase-requests", async (req, res) => {
 purchaseRouter.post("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     // The frontend create-form (purchase-orders-create.tsx) sends
     // `expectedDelivery` + items with `productId`, while the API
     // historically accepted `expectedDate` + items with `itemName`.
@@ -90,10 +93,10 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
     const { items, supplierId, notes } = req.body as any;
     const expectedDate = req.body?.expectedDate ?? req.body?.expectedDelivery ?? null;
 
-    if (!items || !Array.isArray(items) || items.length === 0) { res.status(400).json({ error: "عناصر طلب الشراء مطلوبة" }); return; }
+    if (!items || !Array.isArray(items) || items.length === 0) { throw new ValidationError("عناصر طلب الشراء مطلوبة"); return; }
 
     const totalAmount = items.reduce((sum: number, i: any) => sum + Number(i.quantity ?? 1) * Number(i.unitPrice ?? 0), 0);
-    if (totalAmount <= 0) { res.status(400).json({ error: "إجمالي الطلب يجب أن يكون أكبر من صفر" }); return; }
+    if (totalAmount <= 0) { throw new ValidationError("إجمالي الطلب يجب أن يكون أكبر من صفر"); return; }
 
     // Resolve product names in bulk for any items that only sent a
     // productId so purchase_request_items.itemName reflects the actual
@@ -118,7 +121,7 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
     const ref = `PR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDate")
+      `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery")
        VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8)`,
       [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null]
     );
@@ -144,7 +147,7 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
         );
       }
       await rawExecute(
-        `INSERT INTO purchase_request_items ("requestId","itemName",quantity,"unitPrice","lineTotal",notes)
+        `INSERT INTO purchase_request_items ("requestId",name,quantity,"unitPrice","totalPrice",notes)
          VALUES ${valuesSql.join(",")}`,
         params
       );
@@ -176,7 +179,7 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
 purchaseRouter.patch("/purchase-requests/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -184,7 +187,12 @@ purchaseRouter.patch("/purchase-requests/:id/approve", async (req, res) => {
     if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
-    if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
+    if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
+      throw new ValidationError(
+        newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
+        { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
+      );
+    }
 
     await rawExecute(`UPDATE purchase_requests SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
@@ -225,19 +233,19 @@ purchaseRouter.patch("/purchase-requests/:id/approve", async (req, res) => {
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance purchase error:");
   }
 });
 
 purchaseRouter.post("/purchase-requests/:id/convert", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { id } = req.params;
 
     const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
     if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
-    if (pr.status !== "approved") { res.status(400).json({ error: "يمكن تحويل الطلبات المعتمدة فقط" }); return; }
+    if (pr.status !== "approved") { throw new ValidationError("يمكن تحويل الطلبات المعتمدة فقط"); return; }
 
     const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1`, [Number(id)]);
     const subtotal = Number(pr.totalAmount);
@@ -340,11 +348,11 @@ purchaseRouter.get("/purchase-orders", async (req, res) => {
 purchaseRouter.post("/purchase-orders", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, items } = req.body as any;
 
-    if (!supplierId) { res.status(400).json({ error: "المورد مطلوب" }); return; }
-    if (!totalAmount || Number(totalAmount) <= 0) { res.status(400).json({ error: "المبلغ الإجمالي مطلوب" }); return; }
+    if (!supplierId) { throw new ValidationError("المورد مطلوب"); return; }
+    if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
     const ref = `PO-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
@@ -382,7 +390,7 @@ purchaseRouter.post("/purchase-orders", async (req, res) => {
 purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -390,7 +398,12 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
-    if ((newStatus === "rejected" || newStatus === "returned") && !notes) { res.status(400).json({ error: newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع" }); return; }
+    if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
+      throw new ValidationError(
+        newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
+        { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
+      );
+    }
 
     await rawExecute(`UPDATE purchase_orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
@@ -413,7 +426,7 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance purchase error:");
   }
 });
 
@@ -427,7 +440,7 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
 purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { id } = req.params;
     const { receivedDate, qualityNotes, lines } = req.body as any;
 
@@ -437,15 +450,13 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
     );
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
     if (!["approved", "partially_received"].includes(po.status)) {
-      res.status(400).json({ error: "يمكن استلام الطلبات المعتمدة فقط" });
-      return;
+      throw new ValidationError("يمكن استلام الطلبات المعتمدة فقط");
     }
 
     const receiptDate = receivedDate || new Date().toISOString();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, receiptDate);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن استلام بضاعة في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن استلام بضاعة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
     const poItems = await rawQuery<any>(
@@ -456,8 +467,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
       [Number(id)]
     );
     if (poItems.length === 0) {
-      res.status(400).json({ error: "لا توجد بنود في أمر الشراء" });
-      return;
+      throw new ValidationError("لا توجد بنود في أمر الشراء");
     }
 
     // If no per-line input, treat as full receipt of remaining quantities
@@ -468,12 +478,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
         const poItemId = Number(l.poItemId);
         const qty = Number(l.receivedQty ?? 0);
         const item = poItemMap.get(poItemId);
-        if (!item) { res.status(400).json({ error: `بند غير موجود في أمر الشراء: ${poItemId}` }); return; }
+        if (!item) { throw new ValidationError(`بند غير موجود في أمر الشراء: ${poItemId}`); return; }
         const remaining = Number(item.quantity) - Number(item.receivedQty);
         if (qty <= 0) continue;
         if (qty > remaining + 0.0001) {
-          res.status(400).json({ error: `الكمية المستلمة (${qty}) تتجاوز المتبقي (${remaining}) للبند ${item.itemName}` });
-          return;
+          throw new ValidationError(`الكمية المستلمة (${qty}) تتجاوز المتبقي (${remaining}) للبند ${item.itemName}`);
         }
         inputLines.push({ poItemId, receivedQty: qty, notes: l.notes });
       }
@@ -485,8 +494,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
     }
 
     if (inputLines.length === 0) {
-      res.status(400).json({ error: "لا توجد كميات للاستلام" });
-      return;
+      throw new ValidationError("لا توجد كميات للاستلام");
     }
 
     // Compute totals for this GRN
@@ -717,7 +725,7 @@ purchaseRouter.post("/vendors", async (req, res) => {
   try {
     const scope = (req as any).scope!;
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
-    if (!name) { res.status(400).json({ error: "اسم المورد مطلوب" }); return; }
+    if (!name) { throw new ValidationError("اسم المورد مطلوب"); return; }
     const { insertId } = await rawExecute(`INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null]);
     res.status(201).json({ id: insertId, ...req.body });
   } catch (err) {
@@ -728,9 +736,9 @@ purchaseRouter.post("/vendors", async (req, res) => {
 purchaseRouter.post("/vendors/create", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, PROCUREMENT_ROLES, res)) return;
+    assertRole(scope, PROCUREMENT_ROLES);
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
-    if (!name) { res.status(400).json({ error: "اسم المورد مطلوب" }); return; }
+    if (!name) { throw new ValidationError("اسم المورد مطلوب"); return; }
     const { insertId } = await rawExecute(`INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null]);
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "vendor.created", entity: "suppliers", entityId: insertId, details: JSON.stringify({ name }) }).catch(console.error);
     res.status(201).json({ id: insertId, name, contactPerson, phone, email, taxNumber });
@@ -752,13 +760,13 @@ purchaseRouter.patch("/vendors/:id", async (req, res) => {
     if (email !== undefined) { sets.push(`email = $${idx++}`); params.push(email); }
     if (taxNumber !== undefined) { sets.push(`"taxNumber" = $${idx++}`); params.push(taxNumber); }
     if (category !== undefined) { sets.push(`category = $${idx++}`); params.push(category); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
     params.push(Number(req.params.id), scope.companyId);
     const [row] = await rawQuery<any>(`UPDATE suppliers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`, params);
     if (!row) throw new NotFoundError("المورد غير موجود");
     res.json(row);
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance purchase error:");
   }
 });
 
@@ -769,7 +777,7 @@ purchaseRouter.delete("/vendors/:id", async (req, res) => {
     if (!row) throw new NotFoundError("المورد غير موجود");
     res.json({ success: true });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance purchase error:");
   }
 });
 
@@ -780,7 +788,7 @@ purchaseRouter.get("/commitments", async (req, res) => {
     const totalCommitments = rows.reduce((s: number, r: any) => s + Number(r.amount), 0);
     res.json({ data: rows, summary: { totalCommitments, count: rows.length } });
   } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
+    handleRouteError(err, res, "Finance purchase error:");
   }
 });
 
@@ -799,7 +807,7 @@ purchaseRouter.get("/budget", async (req, res) => {
 purchaseRouter.post("/budget", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const b = req.body;
     const r = await rawExecute(`INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used) VALUES ($1,$2,$3,$4,$5,0)`, [scope.companyId, scope.branchId, b.accountCode, b.period, Number(b.amount)]);
     res.status(201).json({ id: r.insertId, ...b, used: 0 });
@@ -811,7 +819,7 @@ purchaseRouter.post("/budget", async (req, res) => {
 purchaseRouter.patch("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -831,7 +839,7 @@ purchaseRouter.patch("/budget/:id", async (req, res) => {
 purchaseRouter.delete("/budget/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, ["general_manager", "owner"], res)) return;
+    assertRole(scope, ["general_manager", "owner"]);
     const rows = await rawQuery<any>(`DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`, [Number(req.params.id), scope.companyId]);
     if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
     res.json({ message: "تم حذف الميزانية" });
@@ -856,7 +864,7 @@ purchaseRouter.delete("/budget/:id", async (req, res) => {
 purchaseRouter.get("/payment-run/pending", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { cutoffDate, supplierId } = req.query as any;
     const params: any[] = [scope.companyId];
     let where = `po."companyId" = $1 AND po.status = 'invoice_matched'`;
@@ -899,18 +907,16 @@ purchaseRouter.get("/payment-run/pending", async (req, res) => {
 purchaseRouter.post("/payment-run/execute", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = req.body as any;
 
     if (!Array.isArray(poIds) || poIds.length === 0) {
-      res.status(400).json({ error: "يجب اختيار أوامر شراء واحد على الأقل للدفع" });
-      return;
+      throw new ValidationError("يجب اختيار أوامر شراء واحد على الأقل للدفع");
     }
     const payDate = paymentDate || new Date().toISOString().slice(0, 10);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, payDate);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن تنفيذ دفعات في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ConflictError(`لا يمكن تنفيذ دفعات في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
     const poIdNums = poIds.map((x: any) => Number(x)).filter((n: number) => !Number.isNaN(n));
@@ -921,13 +927,11 @@ purchaseRouter.post("/payment-run/execute", async (req, res) => {
       [poIdNums, scope.companyId]
     );
     if (pos.length !== poIdNums.length) {
-      res.status(404).json({ error: "بعض أوامر الشراء غير موجودة" });
-      return;
+      throw new NotFoundError("بعض أوامر الشراء غير موجودة");
     }
     const invalid = pos.filter((p: any) => p.status !== "invoice_matched");
     if (invalid.length > 0) {
-      res.status(400).json({ error: `بعض الأوامر ليست في حالة قابلة للدفع: ${invalid.map((p: any) => p.ref).join(", ")}` });
-      return;
+      throw new ValidationError(`بعض الأوامر ليست في حالة قابلة للدفع: ${invalid.map((p: any) => p.ref).join(", ")}`);
     }
 
     const totalPayment = Math.round(pos.reduce((sum: number, p: any) => sum + Number(p.totalAmount), 0) * 100) / 100;
@@ -1052,7 +1056,7 @@ purchaseRouter.post("/payment-run/execute", async (req, res) => {
 purchaseRouter.get("/payment-run", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireRole(scope, FINANCE_ROLES, res)) return;
+    assertRole(scope, FINANCE_ROLES);
     let rows: any[] = [];
     try {
       rows = await rawQuery<any>(
