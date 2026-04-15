@@ -1,17 +1,18 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery, apiPatch, apiDelete } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, apiPatch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, GitBranch, TrendingUp, TrendingDown, Layers, BookOpen, ChevronDown, ChevronRight, CheckCircle, Search, Edit2, Trash2, Printer } from "lucide-react";
 import { formatCurrency, formatNumber, formatDateAr } from "@/lib/formatters";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { useToast } from "@/hooks/use-toast";
+// R.2 iter 2 — PageShell for the unified layout, ConfirmDeleteDialog
+// for the centralised delete flow with Phase C.7b blockers surfacing.
+import { PageShell } from "@/components/page-shell";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 const typeMap: Record<string, string> = {
   asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات"
@@ -96,15 +97,14 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
 
 export default function AccountsPage() {
   const [, navigate] = useLocation();
-  const qc = useQueryClient();
   const { data, isLoading } = useApiQuery<any>(["accounts"], "/finance/accounts");
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [viewMode, setViewMode] = useState<"tree" | "flat">("tree");
-  const [deleteAccount, setDeleteAccount] = useState<any>(null);
-  const [deleteError, setDeleteError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const { toast } = useToast();
+  // R.2 iter 2 — delete flow routed through ConfirmDeleteDialog. The
+  // dialog owns its own loading / error / blockers state, so the page
+  // only tracks which row is currently being deleted.
+  const [deleteAccount, setDeleteAccount] = useState<{ id: number; code: string; name: string } | null>(null);
 
   const hasActiveSearch = !!(filters.search || filters.type);
 
@@ -243,7 +243,7 @@ export default function AccountsPage() {
           <button onClick={() => handleOpenEdit(acc)} className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600">
             <Edit2 className="h-3.5 w-3.5" />
           </button>
-          <button onClick={() => setDeleteAccount(acc)} className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600">
+          <button onClick={() => setDeleteAccount({ id: acc.id, code: acc.code, name: acc.name })} className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -255,46 +255,58 @@ export default function AccountsPage() {
     navigate(`/finance/accounts/${acc.id}/edit`);
   };
 
-  const handleDelete = async () => {
-    if (!deleteAccount) return;
-    setSaving(true);
-    try {
-      setDeleteError("");
-      await apiDelete(`/finance/accounts/${deleteAccount.id}`);
-      toast({ title: "تم حذف الحساب" });
-      setDeleteAccount(null);
-      qc.invalidateQueries({ queryKey: ["accounts"] });
-    } catch (err: any) {
-      setDeleteError(err?.message || "لا يمكن حذف هذا الحساب");
-    } finally {
-      setSaving(false);
-    }
-  };
+  // R.2 iter 2 — delete is handled by ConfirmDeleteDialog below. The
+  // ad-hoc `handleDelete` + manual `setDeleteError` path used to live
+  // here; it's been replaced by the centralised dialog which:
+  //   • shows the impact preview from `/impact-preview`
+  //   • calls `DELETE /finance/accounts/:id` via `useApiMutation`
+  //   • on `409 CONFLICT` with `meta.blockers` (Phase C.7b delete guard
+  //     for accounts referenced by journal_lines) surfaces the blockers
+  //     list inside the dialog instead of flashing a flat toast
+  //   • invalidates the `accounts` query on success
 
   const handlePrint = () => {
     window.print();
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">شجرة الحسابات</h1>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={handlePrint}>
-            <Printer className="h-4 w-4 me-1" />طباعة
-          </Button>
-          <Button size="sm" variant={viewMode === "tree" ? "default" : "outline"} onClick={() => setViewMode("tree")}>
-            <GitBranch className="h-4 w-4 me-1" />شجري
-          </Button>
-          <Button size="sm" variant={viewMode === "flat" ? "default" : "outline"} onClick={() => setViewMode("flat")}>
-            <Layers className="h-4 w-4 me-1" />مسطح
-          </Button>
-          <Link href="/finance/accounts/create">
-            <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة حساب</Button>
-          </Link>
-        </div>
-      </div>
-
+    <>
+      <PageShell
+        title="شجرة الحسابات"
+        subtitle="دليل الحسابات المحاسبي — عرض شجري أو مسطح مع التصفية والإجراءات السريعة"
+        breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "شجرة الحسابات" }]}
+        loading={isLoading}
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={handlePrint}>
+              <Printer className="h-4 w-4 me-1" />
+              طباعة
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "tree" ? "default" : "outline"}
+              onClick={() => setViewMode("tree")}
+            >
+              <GitBranch className="h-4 w-4 me-1" />
+              شجري
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "flat" ? "default" : "outline"}
+              onClick={() => setViewMode("flat")}
+            >
+              <Layers className="h-4 w-4 me-1" />
+              مسطح
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/finance/accounts/create">
+                <Plus className="h-4 w-4 me-1" />
+                إضافة حساب
+              </Link>
+            </Button>
+          </>
+        }
+      >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg"><Layers className="h-5 w-5 text-blue-600" /></div>
@@ -375,7 +387,7 @@ export default function AccountsPage() {
                 <span className="w-28 text-start">الرصيد</span>
                 <span className="w-16" />
               </div>
-              <div>{tree.map((node: any) => <AccountNode key={node.code || node.id} node={node} level={0} highlightIds={highlightIds} onEdit={handleOpenEdit} onDelete={setDeleteAccount} />)}</div>
+              <div>{tree.map((node: any) => <AccountNode key={node.code || node.id} node={node} level={0} highlightIds={highlightIds} onEdit={handleOpenEdit} onDelete={(n: any) => setDeleteAccount({ id: n.id, code: n.code, name: n.name })} />)}</div>
             </>
           ) : (
             <div className="p-3">
@@ -389,30 +401,27 @@ export default function AccountsPage() {
           )}
         </CardContent>
       </Card>
+      </PageShell>
 
-
-      <AlertDialog open={!!deleteAccount} onOpenChange={(open) => { if (!open) { setDeleteAccount(null); setDeleteError(""); } }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>حذف الحساب — {deleteAccount?.code} {deleteAccount?.name}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteError ? (
-                <span className="text-red-600 font-medium">{deleteError}</span>
-              ) : (
-                "هل أنت متأكد من حذف هذا الحساب؟ لا يمكن التراجع عن هذا الإجراء."
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setDeleteAccount(null); setDeleteError(""); }}>إلغاء</AlertDialogCancel>
-            {!deleteError && (
-              <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-                {saving ? "جاري الحذف..." : "حذف"}
-              </AlertDialogAction>
-            )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+      {/* R.2 iter 2 — canonical delete dialog. When the server refuses
+          with 409 CONFLICT + meta.blockers (accounts with journal
+          lines), the dialog surfaces the blockers inside itself
+          instead of showing a flat error message. */}
+      <ConfirmDeleteDialog
+        open={deleteAccount !== null}
+        onOpenChange={(v) => !v && setDeleteAccount(null)}
+        entity={{
+          type: "chart_of_accounts",
+          id: deleteAccount?.id ?? 0,
+          name: deleteAccount
+            ? `${deleteAccount.code} ${deleteAccount.name}`
+            : "",
+        }}
+        deletePath={`/finance/accounts/${deleteAccount?.id ?? 0}`}
+        invalidateKeys={[["accounts"]]}
+        successMessage="تم حذف الحساب"
+        onDeleted={() => setDeleteAccount(null)}
+      />
+    </>
   );
 }

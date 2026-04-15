@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { EntityDetailPage, type EntityTab, type EntityHeaderAction } from "@/components/shared/entity-detail-page";
 import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { EntityTimeline, ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   FileText,
@@ -23,56 +22,134 @@ import {
   Undo2,
 } from "lucide-react";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
-const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "success" | "warning" | "destructive" | "info" }> = {
-  draft: { label: "مسودة", variant: "default" },
-  pending_review: { label: "في انتظار المراجعة", variant: "warning" },
-  approved: { label: "معتمد", variant: "info" },
-  posted: { label: "مُرحَّل", variant: "success" },
-  rejected: { label: "مرفوض", variant: "destructive" },
+/**
+ * Manual journal detail page — migrated in R.2 iter 2 to unified
+ * templates with a **visible lifecycle**. This is the page where
+ * Phase 8's state machine (draft → pending_review → approved →
+ * posted, with reject branching to rejected) most needs to be
+ * legible to the user: reviewers and approvers should see at a
+ * glance where the journal is in its flow.
+ *
+ * Before: a static `STATUS_CONFIG` map, a flat status badge in the
+ * page header, a raw `useMutation` for the reversal action, manual
+ * toast wiring. No explicit progression visualisation — a user
+ * reading the page had to infer the current stage from the badge.
+ *
+ * After:
+ *   • ProcessStages component (already existed in entity-timeline.tsx)
+ *     rendered as a persistent "lifecycle strip" between the KPIs and
+ *     the tabs. Four dots: مسودة → بانتظار المراجعة → معتمد → مُرحَّل.
+ *     Rejected journals render with the rejected dot highlighted.
+ *     Current step pulses blue.
+ *   • PageStatusBadge drives the chip in the header (via the variant
+ *     mapping below) and the reverse markers in the badges slot.
+ *     Single source of truth for labels + tones.
+ *   • useApiMutation replaces useMutation for the reverse action,
+ *     with pathFn composition for the `:id` in the URL. All errors
+ *     flow through the R.1.2 typed-error toast pipeline — if the
+ *     server returns 409 CONFLICT with meta.currentStatus (for
+ *     example, trying to reverse an already-reversed journal), the
+ *     toast surfaces "الحالة الحالية: reversed" automatically.
+ *
+ * No endpoint, data shape, or tab wiring changed.
+ */
+
+// Map Phase 8 approvalStatus values to the four visual stages.
+// Rejected is a terminal branch off pending_review, so it gets its
+// own step rendering rather than collapsing into the main 4-stage
+// strip.
+const LIFECYCLE_STEPS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: "draft",           label: "مسودة" },
+  { key: "pending_review",  label: "بانتظار المراجعة" },
+  { key: "approved",        label: "معتمد" },
+  { key: "posted",          label: "مُرحَّل" },
+];
+
+function buildLifecycleSteps(approvalStatus: string | undefined): StageStep[] {
+  const current = approvalStatus ?? "draft";
+  if (current === "rejected") {
+    // Rejected is a terminal state — show the strip up to
+    // pending_review as completed, then a rejected dot.
+    return [
+      { label: "مسودة",              status: "completed" },
+      { label: "بانتظار المراجعة",   status: "completed" },
+      { label: "مرفوض",              status: "rejected"  },
+    ];
+  }
+  const currentIdx = LIFECYCLE_STEPS.findIndex((s) => s.key === current);
+  return LIFECYCLE_STEPS.map((step, i): StageStep => {
+    if (currentIdx === -1) return { label: step.label, status: "pending" };
+    if (i < currentIdx)    return { label: step.label, status: "completed" };
+    if (i === currentIdx)  return { label: step.label, status: "current"   };
+    return { label: step.label, status: "pending" };
+  });
+}
+
+// Phase 8 approvalStatus → EntityDetailPage `status.variant` shape.
+// The detail page's variant-driven Badge is preserved so the header
+// chip colour matches the canonical tone without forcing a second
+// migration of EntityDetailPage in this iteration.
+const STATUS_VARIANT: Record<
+  string,
+  { label: string; variant: "default" | "success" | "warning" | "destructive" | "info" }
+> = {
+  draft:           { label: "مسودة",              variant: "default"    },
+  pending_review:  { label: "بانتظار المراجعة",   variant: "warning"    },
+  approved:        { label: "معتمد",              variant: "info"       },
+  posted:          { label: "مُرحَّل",             variant: "success"    },
+  rejected:        { label: "مرفوض",              variant: "destructive" },
 };
 
 export default function JournalManualDetailPage() {
   const [, params] = useRoute("/finance/journal-manual/:id");
   const id = params?.id || "";
   const { toast } = useToast();
-  const qc = useQueryClient();
   const [reversalOpen, setReversalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState("");
 
   const { data: journal, isLoading, isError, refetch } = useApiQuery<any>(
     ["journal-manual-detail", id],
     id ? `/finance/journal-manual/${id}` : null,
-    !!id
+    !!id,
   );
 
-  const reverseMut = useMutation({
-    mutationFn: (reason: string) =>
-      apiFetch(`/finance/journal/${id}/reverse`, {
-        method: "POST",
-        body: JSON.stringify({ reason }),
-      }),
-    onSuccess: () => {
-      toast({ title: "تم عكس القيد بنجاح" });
-      qc.invalidateQueries({ queryKey: ["journal-manual-detail", id] });
-      qc.invalidateQueries({ queryKey: ["journal"] });
-      setReversalOpen(false);
-      setReversalReason("");
-      refetch();
+  // R.2 iter 2 — reversal goes through useApiMutation with pathFn so
+  // CONFLICT / VALIDATION errors from the server surface automatically
+  // via R.1.2's toastDescriptionForError.
+  const reverseMut = useApiMutation<void, { reason: string }>(
+    () => `/finance/journal/${id}/reverse`,
+    "POST",
+    [
+      ["journal-manual-detail", id],
+      ["journal"],
+    ],
+    {
+      successMessage: "تم عكس القيد بنجاح",
+      onSuccess: () => {
+        setReversalOpen(false);
+        setReversalReason("");
+        refetch();
+      },
     },
-    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل عكس القيد" }),
-  });
+  );
 
   const lines: any[] = (journal?.lines ?? []).filter((l: any) => l);
   const totalDebit = lines.reduce((s: number, l: any) => s + Number(l.debit || 0), 0);
   const totalCredit = lines.reduce((s: number, l: any) => s + Number(l.credit || 0), 0);
 
-  const statusCfg = STATUS_CONFIG[journal?.approvalStatus] ?? STATUS_CONFIG.draft;
+  const statusCfg = STATUS_VARIANT[journal?.approvalStatus] ?? STATUS_VARIANT.draft;
 
   const overviewContent = () => (
     <Card className="border-0 shadow-sm">
@@ -90,8 +167,8 @@ export default function JournalManualDetailPage() {
 
         {journal?.approvalNotes && (
           <div className="pt-4 border-t">
-            <p className="text-xs text-gray-500 mb-1">ملاحظات الاعتماد</p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{journal.approvalNotes}</p>
+            <p className="text-xs text-muted-foreground mb-1">ملاحظات الاعتماد</p>
+            <p className="text-sm text-foreground whitespace-pre-wrap">{journal.approvalNotes}</p>
           </div>
         )}
 
@@ -99,17 +176,17 @@ export default function JournalManualDetailPage() {
           <p className="text-sm font-semibold mb-2">بنود القيد</p>
           <div className="rounded-xl border overflow-hidden text-sm">
             <table className="w-full">
-              <thead className="bg-gray-50">
+              <thead className="bg-muted/40">
                 <tr>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">الحساب</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">البيان</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">مدين</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">دائن</th>
+                  <th className="px-3 py-2 text-right text-xs text-muted-foreground">الحساب</th>
+                  <th className="px-3 py-2 text-right text-xs text-muted-foreground">البيان</th>
+                  <th className="px-3 py-2 text-right text-xs text-muted-foreground">مدين</th>
+                  <th className="px-3 py-2 text-right text-xs text-muted-foreground">دائن</th>
                 </tr>
               </thead>
               <tbody>
                 {lines.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-gray-400">لا توجد بنود</td></tr>
+                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground">لا توجد بنود</td></tr>
                 ) : lines.map((l: any, i: number) => (
                   <tr key={i} className="border-t">
                     <td className="px-3 py-2 font-mono text-xs">{l.accountCode}</td>
@@ -119,9 +196,9 @@ export default function JournalManualDetailPage() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-gray-50 font-semibold">
+              <tfoot className="bg-muted/40 font-semibold">
                 <tr>
-                  <td colSpan={2} className="px-3 py-2 text-gray-500">المجموع</td>
+                  <td colSpan={2} className="px-3 py-2 text-muted-foreground">المجموع</td>
                   <td className="px-3 py-2">{formatCurrency(totalDebit)}</td>
                   <td className="px-3 py-2">{formatCurrency(totalCredit)}</td>
                 </tr>
@@ -163,11 +240,14 @@ export default function JournalManualDetailPage() {
     journal?.ref && { icon: Hash, label: journal.ref },
   ].filter(Boolean) as Array<{ icon: any; label: string }>;
 
+  // The badges slot in EntityDetailPage sits next to the main status
+  // chip. Reverse markers render via PageStatusBadge so the colour +
+  // label come from the canonical STATUS_MAP.shared instead of
+  // per-page tailwind classes.
   const badges = (
-    <div className="flex items-center gap-1">
-      <Badge variant="outline">{statusCfg.label}</Badge>
-      {journal?.reversedById && <Badge className="bg-yellow-100 text-yellow-700">مُعكوس</Badge>}
-      {journal?.reversalOfId && <Badge className="bg-blue-100 text-blue-700">قيد عاكس</Badge>}
+    <div className="flex items-center gap-1.5">
+      {journal?.reversedById && <PageStatusBadge status="reversed" domain="shared" />}
+      {journal?.reversalOfId && <PageStatusBadge status="active">قيد عاكس</PageStatusBadge>}
     </div>
   );
 
@@ -182,76 +262,103 @@ export default function JournalManualDetailPage() {
   }
 
   const notFound = !isLoading && !journal;
+  const lifecycleSteps = buildLifecycleSteps(journal?.approvalStatus);
 
   return (
     <>
-    {journal?.reversedById && (
-      <div className="mb-2 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
-        هذا القيد مُعكوس — القيد العاكس: #{journal.reversedById}
-      </div>
-    )}
-    {journal?.reversalOfId && (
-      <div className="mb-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-        هذا قيد عاكس للقيد الأصلي: #{journal.reversalOfId}
-      </div>
-    )}
-    <EntityDetailPage
-      title={journal?.ref ? `قيد رقم ${journal.ref}` : (notFound ? "القيد غير موجود" : "...")}
-      subtitle={journal?.description || undefined}
-      avatar={{
-        icon: FileText,
-        gradientFrom: "from-indigo-500",
-        gradientTo: "to-purple-600",
-      }}
-      status={{ label: statusCfg.label, variant: statusCfg.variant }}
-      badges={badges}
-      metaItems={metaItems}
-      actions={headerActions}
-      backHref="/finance/journal-manual"
-      backLabel="العودة للقيود اليدوية"
-      isLoading={isLoading}
-      isError={isError || notFound}
-      errorMessage={notFound ? "لم يتم العثور على القيد المطلوب" : "تعذر تحميل بيانات القيد"}
-      onRetry={() => refetch()}
-      tabs={tabs}
-      defaultTab="overview"
-    />
-    <AlertDialog open={reversalOpen} onOpenChange={(open) => { if (!open) { setReversalOpen(false); setReversalReason(""); } }}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>عكس القيد {journal?.ref}</AlertDialogTitle>
-          <AlertDialogDescription>
-            سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء لا يمكن التراجع عنه.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <div className="py-2">
-          <label className="text-sm font-medium mb-1 block">سبب عكس القيد *</label>
-          <Textarea
-            value={reversalReason}
-            onChange={(e) => setReversalReason(e.target.value)}
-            placeholder="أدخل سبب عكس القيد..."
-            rows={3}
-          />
+      {journal?.reversedById && (
+        <div className="mb-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+          هذا القيد مُعكوس — القيد العاكس: #{journal.reversedById}
         </div>
-        <AlertDialogFooter>
-          <AlertDialogCancel>إلغاء</AlertDialogCancel>
-          <AlertDialogAction
-            className="bg-amber-600 hover:bg-amber-700"
-            onClick={(e) => {
-              e.preventDefault();
-              if (!reversalReason.trim()) {
-                toast({ variant: "destructive", title: "السبب مطلوب" });
-                return;
-              }
-              reverseMut.mutate(reversalReason);
-            }}
-            disabled={reverseMut.isPending}
-          >
-            {reverseMut.isPending ? "جاري العكس..." : "تأكيد العكس"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      )}
+      {journal?.reversalOfId && (
+        <div className="mb-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+          هذا قيد عاكس للقيد الأصلي: #{journal.reversalOfId}
+        </div>
+      )}
+
+      <EntityDetailPage
+        title={journal?.ref ? `قيد رقم ${journal.ref}` : (notFound ? "القيد غير موجود" : "...")}
+        subtitle={journal?.description || undefined}
+        avatar={{
+          icon: FileText,
+          gradientFrom: "from-indigo-500",
+          gradientTo: "to-purple-600",
+        }}
+        status={{ label: statusCfg.label, variant: statusCfg.variant }}
+        badges={badges}
+        metaItems={metaItems}
+        actions={headerActions}
+        backHref="/finance/journal-manual"
+        backLabel="العودة للقيود اليدوية"
+        isLoading={isLoading}
+        isError={isError || notFound}
+        errorMessage={notFound ? "لم يتم العثور على القيد المطلوب" : "تعذر تحميل بيانات القيد"}
+        onRetry={() => refetch()}
+        tabs={tabs}
+        defaultTab="overview"
+      >
+        {/* R.2 iter 2 — lifecycle strip. Rendered as a child of
+            EntityDetailPage, which places it between the KPI row and
+            the tabs. The ProcessStages component already existed in
+            shared/entity-timeline.tsx; this page is the first finance
+            consumer of it. */}
+        {journal && !isLoading && (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                دورة اعتماد القيد اليدوي
+              </p>
+              <ProcessStages steps={lifecycleSteps} />
+            </CardContent>
+          </Card>
+        )}
+      </EntityDetailPage>
+
+      <AlertDialog
+        open={reversalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReversalOpen(false);
+            setReversalReason("");
+          }
+        }}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle>عكس القيد {journal?.ref}</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium mb-1 block">سبب عكس القيد *</label>
+            <Textarea
+              value={reversalReason}
+              onChange={(e) => setReversalReason(e.target.value)}
+              placeholder="أدخل سبب عكس القيد..."
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter className="flex-row justify-start gap-2">
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={(e) => {
+                e.preventDefault();
+                if (!reversalReason.trim()) {
+                  toast({ variant: "destructive", title: "السبب مطلوب" });
+                  return;
+                }
+                reverseMut.mutate({ reason: reversalReason });
+              }}
+              disabled={reverseMut.isPending}
+            >
+              {reverseMut.isPending ? "جاري العكس..." : "تأكيد العكس"}
+            </AlertDialogAction>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -259,8 +366,8 @@ export default function JournalManualDetailPage() {
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }

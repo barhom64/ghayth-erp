@@ -122,7 +122,12 @@ export function EntityTimeline({ entityType, entityId, maxItems = 20, className 
   );
 }
 
-interface StageStep {
+// R.2 iter 2 — `StageStep` is now exported so callers outside this
+// file can build their own lifecycle strips and pass them to
+// `ProcessStages`. Used by `pages/finance/journal-manual-detail.tsx`
+// to render the Phase 8 approval workflow (draft → pending_review
+// → approved → posted, with rejected as a terminal branch).
+export interface StageStep {
   label: string;
   status: "completed" | "current" | "pending" | "rejected" | "skipped";
   detail?: string;

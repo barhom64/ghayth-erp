@@ -62,6 +62,7 @@ export const STATUS_MAP = {
     draft:                { label: "مسودة",           tone: "muted"    },
     pending:              { label: "قيد الانتظار",    tone: "warning"  },
     pending_approval:     { label: "بانتظار الاعتماد", tone: "warning"  },
+    pending_review:       { label: "بانتظار المراجعة", tone: "warning"  },
     pending_employee:     { label: "بانتظار الموظف",  tone: "warning"  },
     pending_manager:      { label: "بانتظار المدير",  tone: "warning"  },
     pending_gm:           { label: "بانتظار المدير العام", tone: "warning" },
@@ -75,6 +76,18 @@ export const STATUS_MAP = {
     completed:            { label: "مكتمل",           tone: "success"  },
     active:               { label: "نشط",             tone: "success"  },
     inactive:             { label: "غير نشط",         tone: "muted"    },
+    // ── R.2 additions: fiscal / journal / bank-guarantee statuses that
+    // were previously rendered with per-page maps. Adding them to the
+    // shared domain is the right "unification" move: every page that
+    // renders one of these now uses the canonical arabic label + tone
+    // without a local constant map.
+    open:                 { label: "مفتوحة",          tone: "info"     },
+    closed:               { label: "مُغلقة",          tone: "neutral"  },
+    future:               { label: "مستقبلية",        tone: "info"     },
+    posted:               { label: "مُرحَّل",          tone: "success"  },
+    reversed:             { label: "مُعكَس",           tone: "warning"  },
+    released:             { label: "مُحرَّر",          tone: "success"  },
+    // ── end R.2 additions ──
     expired:              { label: "منتهي الصلاحية",  tone: "danger"   },
     archived:             { label: "مؤرشف",           tone: "muted"    },
     escalated:            { label: "مُصعَّد",          tone: "warning"  },
