@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, buildErrorToast, getErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -27,7 +27,7 @@ export default function BankManualMatchPage() {
   const rows = batchDetail?.data?.lines || batchDetail?.lines || [];
   const row = rows.find((r: any) => String(r.id) === params?.rowId);
 
-  const manualMatchMutation = useApiMutation("/finance/bank-reconciliation/manual-match", "POST");
+  const manualMatchMutation = useApiMutation("/finance/bank-reconciliation/manual-match", "POST", undefined, { silent: true });
 
   async function searchJournalLines() {
     if (!jeSearch.trim()) return;
@@ -51,9 +51,9 @@ export default function BankManualMatchPage() {
       setMatchMsg("تمت المطابقة بنجاح");
       toast({ title: "تمت المطابقة بنجاح" });
       setTimeout(() => setLocation("/finance/bank-reconciliation"), 1500);
-    } catch {
-      setMatchMsg("حدث خطأ أثناء المطابقة");
-      toast({ variant: "destructive", title: "حدث خطأ أثناء المطابقة" });
+    } catch (err) {
+      setMatchMsg(getErrorMessage(err));
+      toast(buildErrorToast(err));
     }
   }
 
