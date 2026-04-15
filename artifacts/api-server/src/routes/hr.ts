@@ -1774,6 +1774,24 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const { month } = req.body as { month?: string };
     const targetPeriod = month ?? new Date().toISOString().slice(0, 7);
 
+    // P02-S5-CRIT — every other GL writer in this file (HR accruals at
+    // hr.ts:5082, expense claims, etc.) and across the codebase
+    // (finance-purchase.ts:456 / :777 / :1223) gates the accounting
+    // date through `checkFinancialPeriodOpen` before posting to the
+    // ledger. The payroll runner used to skip the check entirely, so
+    // an HR or finance manager could run payroll for a closed month
+    // and post `PAYROLL-YYYY-MM` to a sealed period — bypassing the
+    // financial close that the controller relies on. Validate before
+    // any DB writes to keep payroll consistent with the rest of the GL.
+    const accrualDate = `${targetPeriod}-01`;
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, accrualDate);
+    if (!periodCheck.open) {
+      res.status(422).json({
+        error: `لا يمكن تشغيل الرواتب في فترة مُقفلة: ${periodCheck.periodName ?? targetPeriod}`,
+      });
+      return;
+    }
+
     // Prevent duplicate runs
     const [existing] = await rawQuery<any>(
       `SELECT id FROM payroll_runs WHERE "companyId" = $1 AND period = $2 AND "deletedAt" IS NULL`,
