@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatDateAr } from "@/lib/formatters";
-import { useApiQuery, useApiMutation, buildErrorToast } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 // Phase A — HR official letters on unified primitives.
@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
@@ -35,9 +34,11 @@ export default function OfficialLettersPage() {
   const [previewLetter, setPreviewLetter] = useState<any>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
   const items = data?.data || [];
-  const { toast } = useToast();
   const [form, setForm] = useState({ employeeId: "", type: "general", subject: "", content: "" });
-  const createMut = useApiMutation("/hr/official-letters", "POST", [["official-letters"]], { silent: true });
+  // HR-U4 — successMessage + onSuccess بدل buildErrorToast اليدوي.
+  const createMut = useApiMutation("/hr/official-letters", "POST", [["official-letters"]], {
+    successMessage: "تم إنشاء الخطاب",
+  });
   const { user } = useAuth();
   const branch = useBranchLetterhead(user?.branchId);
   const { roleLevel } = useAppContext();
@@ -92,15 +93,16 @@ export default function OfficialLettersPage() {
     },
   ];
 
-  const handleSubmit = async () => {
-    try {
-      await createMut.mutateAsync({ ...form, employeeId: Number(form.employeeId) || null });
-      toast({ title: "تم إنشاء الخطاب" });
-      setShowForm(false);
-      setForm({ employeeId: "", type: "general", subject: "", content: "" });
-    } catch (err) {
-      toast(buildErrorToast(err));
-    }
+  const handleSubmit = () => {
+    createMut.mutate(
+      { ...form, employeeId: Number(form.employeeId) || null },
+      {
+        onSuccess: () => {
+          setShowForm(false);
+          setForm({ employeeId: "", type: "general", subject: "", content: "" });
+        },
+      },
+    );
   };
 
   return (

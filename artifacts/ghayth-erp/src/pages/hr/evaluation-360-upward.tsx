@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { ArrowRight, Shield, Lock, EyeOff, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 
 const UPWARD_CRITERIA = [
@@ -63,7 +63,13 @@ export default function Evaluation360UpwardPage() {
   );
   // Use the cycle's participants to build the manager list — they are already company-scoped
   // and visible to the current user. This avoids calling /employees (restricted for employees).
-  const submitMutation = useApiMutation(`/hr/evaluation-cycles/${cycleId}/upward-review`, "POST");
+  // HR-U4 — successMessage + onSuccess بدل try/catch العام.
+  const submitMutation = useApiMutation(
+    `/hr/evaluation-cycles/${cycleId}/upward-review`,
+    "POST",
+    [["evaluation-cycle-detail", cycleId]],
+    { successMessage: "تم إرسال التقييم العكسي" },
+  );
 
   const cycle = cycleData?.cycle;
   // Extract managers from participants list + optionally the initiator
@@ -75,19 +81,20 @@ export default function Evaluation360UpwardPage() {
   );
   const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
 
-  async function handleSubmit() {
-    if (!managerId) { toast.error("الرجاء اختيار المدير المراد تقييمه"); return; }
-    try {
-      await submitMutation.mutateAsync({
+  function handleSubmit() {
+    if (!managerId) {
+      toast({ variant: "destructive", title: "الرجاء اختيار المدير المراد تقييمه" });
+      return;
+    }
+    submitMutation.mutate(
+      {
         managerId: Number(managerId),
         overallScore: avgScore,
         scores,
         comments: comments || null,
-      });
-      setSubmitted(true);
-    } catch (err: any) {
-      toast.error(err?.message || "حدث خطأ أثناء إرسال التقييم");
-    }
+      },
+      { onSuccess: () => setSubmitted(true) },
+    );
   }
 
   if (submitted) {

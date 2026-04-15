@@ -585,7 +585,7 @@ router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req
        WHERE id = $3 AND "companyId" = $4 RETURNING *`,
       [status, scope.activeAssignmentId, Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المهمة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -671,8 +671,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
     );
 
     if (!employee) {
-      res.status(404).json({ error: "الموظف غير موجود" });
-      return;
+      throw new NotFoundError("الموظف غير موجود");
     }
 
     const [tasks, attendance, leaves, trainings, payroll, violations] = await Promise.all([
@@ -1023,7 +1022,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
        WHERE e.id = $1 AND ea."companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!employee) { res.status(404).json({ error: "الموظف غير موجود" }); return; }
+    if (!employee) throw new NotFoundError("الموظف غير موجود");
 
     // Terminating a single employee used to only flip two status
     // columns — leaving a long tail of orphaned work behind: active

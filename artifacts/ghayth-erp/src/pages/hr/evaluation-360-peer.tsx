@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { ArrowRight, Users, Target, CheckCircle, Clock, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { PageShell } from "@/components/page-shell";
 
 const EVAL_CRITERIA = [
@@ -59,25 +58,24 @@ export default function Evaluation360PeerPage() {
     `/hr/evaluation-cycles/${cycleId}`,
     { enabled: !!cycleId }
   );
-  const submitMutation = useApiMutation(`/hr/evaluation-cycles/${cycleId}/peer-evaluation`, "POST");
+  // HR-U4 — successMessage + onSuccess بدل try/catch العام.
+  const submitMutation = useApiMutation(
+    `/hr/evaluation-cycles/${cycleId}/peer-evaluation`,
+    "POST",
+    [["evaluation-cycle-detail", cycleId]],
+    { successMessage: "تم إرسال التقييم بنجاح" },
+  );
 
   const cycle = cycleData?.cycle;
   const systemEval = cycleData?.systemEval;
 
   const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
 
-  async function handleSubmit() {
-    try {
-      await submitMutation.mutateAsync({
-        overallScore: avgScore,
-        scores,
-        comments,
-      });
-      toast.success("تم إرسال التقييم بنجاح");
-      navigate(`/hr/evaluation-360/${cycleId}`);
-    } catch (err: any) {
-      toast.error(err?.message || "حدث خطأ أثناء إرسال التقييم");
-    }
+  function handleSubmit() {
+    submitMutation.mutate(
+      { overallScore: avgScore, scores, comments },
+      { onSuccess: () => navigate(`/hr/evaluation-360/${cycleId}`) },
+    );
   }
 
   return (

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
-import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,7 @@ export default function DisciplineMemoDetailPage() {
     qc.invalidateQueries({ queryKey: ["discipline-memos-stats"] });
   };
 
+  // HR-U4 — استخدام buildErrorToast لعرض عنوان+وصف typed بدل "فشلت العملية" العام.
   const act = async (path: string, body: Record<string, any>, successMsg: string) => {
     setBusy(true);
     try {
@@ -76,11 +77,7 @@ export default function DisciplineMemoDetailPage() {
       toast({ title: successMsg });
       invalidate();
     } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "فشلت العملية",
-        description: getErrorMessage(err),
-      });
+      toast(buildErrorToast(err));
     } finally {
       setBusy(false);
     }

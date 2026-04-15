@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   ForbiddenError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -2088,8 +2089,10 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       });
     } catch (journalErr) {
       console.error("Payroll journal entry failed:", journalErr);
-      res.status(500).json({ error: "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي" });
-      return;
+      // HR-U4 — IntegrationError يمرّ لـ handleRouteError ويصل كـ typed toast.
+      throw new IntegrationError(
+        "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي",
+      );
     }
 
     emitEvent({
@@ -4205,7 +4208,8 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
     // pair without revealing the reviewer's identity
     const crypto = await import("crypto");
     const secret = process.env.JWT_SECRET;
-    if (!secret) return res.status(500).json({ error: "خطأ في إعداد النظام: JWT_SECRET غير مضبوط" });
+    // HR-U4 — IntegrationError للخطأ التشغيلي في إعداد النظام.
+    if (!secret) throw new IntegrationError("خطأ في إعداد النظام: JWT_SECRET غير مضبوط");
     const submissionToken = crypto
       .createHmac("sha256", secret)
       .update(`${scope.userId}:${cycleId}:${managerId}`)
@@ -5184,8 +5188,8 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       });
     } catch (journalErr) {
       console.error("HR accrual journal entry failed:", journalErr);
-      res.status(500).json({ error: "فشل تسجيل قيد الاستحقاقات" });
-      return;
+      // HR-U4 — IntegrationError يمرّ لـ handleRouteError ويصل كـ typed toast.
+      throw new IntegrationError("فشل تسجيل قيد الاستحقاقات");
     }
 
     emitEvent({
