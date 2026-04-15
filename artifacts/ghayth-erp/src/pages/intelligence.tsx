@@ -38,9 +38,7 @@ export default function Intelligence() {
   ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">لوحة الذكاء</h1>
-
+    <PageShell title="لوحة الذكاء" loading={loadingOverview}>
       <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
         {loadingOverview ? [...Array(7)].map((_, i) => <Card key={i}><CardContent className="pt-6"><Skeleton className="h-10 w-full" /></CardContent></Card>) : (
           <>
@@ -119,6 +117,6 @@ export default function Intelligence() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }
