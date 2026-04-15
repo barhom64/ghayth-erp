@@ -1,0 +1,79 @@
+## 🎯 Phase C.8 Warehouse — Code + Pack Delivered (FINAL DOMAIN)
+
+### الحالة الآن
+
+```
+main                                            claude/phase-c8-warehouse
+  b7030e5 (Finance C.7a verified + lifecycle fix)  cd7f0e2 (.gitignore) ← HEAD
+  b44cbaf                                          0c616eb (Warehouse pack docs)
+  0542b57 (Legal C.6)                              b7c0eb3 (Warehouse code)
+  ...                                              b7030e5 ← shared base
+```
+
+### Branch `claude/phase-c8-warehouse`
+
+**Commit 1 — `b7c0eb3` (Warehouse code):** +303/-29 على `warehouse.ts`
+- 2 state machines: PRODUCT (active ↔ inactive → discontinued) + COUNT (draft → in_progress → approved)
+- MOVEMENT_TYPES enum
+- Typed errors في كل validation
+- Overdraw guard على /movements و/transfers (atomic FOR UPDATE)
+- Delete guard على products بمخزون > 0
+- Delete guard على categories بأطفال (products + child categories)
+
+**Commit 2 — `0c616eb` (Verification pack):** `docs/verification/warehouse.md` — 985 سطر، 14 سيناريو
+
+### الـ 14 سيناريو
+
+| # | Test | Expected |
+|---|---|---|
+| 1 | POST product missing name | 422 |
+| 2 | POST product missing sku | 422 |
+| 3 | POST product duplicate sku | 409 |
+| 4 | POST product invalid categoryId (FK) | 422 |
+| 5 | POST product negative costPrice | 422 |
+| 6 | POST product happy path | 201 + event |
+| 7 | PATCH product discontinued→active (terminal) | 409 |
+| 8 | DELETE product currentStock > 0 | 409 |
+| 9 | POST movement missing productId | 422 |
+| 10 | POST movement invalid type enum | 422 |
+| 11 | **POST /movements `out` overdraw** | **409** 🎯 |
+| 12 | **POST /transfers `out` overdraw** | **409** 🎯 |
+| 13 | POST category missing name | 422 |
+| 14 | DELETE category with child products | 409 |
+
+### Tests 11/12 هي الأعلى قيمة
+
+`out` overdraw guard مع `FOR UPDATE` lock داخل `withTransaction` — أقوى guard في كل المحاور لأنه يحمي ضد race conditions في issuance المتزامن. لو فشل، يعني المخزون قد يصير سالب وقت الـ load.
+
+### Static Review verdict
+
+**14/14 متوقع ✅**. Warehouse:
+- لا يستخدم `applyTransition` → الـ b7030e5 quoteIdent fix لا يؤثر هنا
+- لا fleet-style Test 11 gap (لا /products/:id/close أو /movements/:id/cancel)
+- state machine بسيطة (3 حالات)
+
+### Build state
+
+- tsc --noEmit: 0 errors ✅
+- pnpm run build: clean bundle ✅
+- Branch pushed to `origin/claude/phase-c8-warehouse`
+- Working tree: نظيفة ✅
+
+### حالة Phase C النهائية بعد دمج Warehouse
+
+| # | Domain | Status |
+|---|---|---|
+| A | HR | ✅ |
+| C.1 | Support | ✅ 10/10 |
+| C.2 | CRM | ✅ 14/14 |
+| C.3 | Fleet | ✅ 15/15 |
+| C.4 | Property | ✅ 18/18 |
+| C.5 | Projects | ✅ 16/16 |
+| C.6 | Legal | ✅ 14/14 |
+| C.7a | Finance (big 3) | ✅ 14/14 (+ lifecycleEngine fix) |
+| C.7b | Finance (small 7) | ⏸️ Deferred |
+| **C.8** | **Warehouse** | **🎯 awaiting verification** |
+
+**التوقعات بعد دمج C.8:** كل المحاور الأساسية (8/8) ستشترك في نفس المنهجية الموحدة. شغّل الـ pack على Replit، وعندما يرجع 14/14 ✅، fast-forward `claude/phase-c8-warehouse` → main وننتهي من Phase C كلها.
+
+main لا يزال على `b7030e5`. Warehouse ينتظر تقريرك.
