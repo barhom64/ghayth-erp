@@ -329,19 +329,40 @@ function toastDescriptionForError(err: ApiError): string {
   return err.fix ?? err.message;
 }
 
+/**
+ * R.2 iter 2 — `path` accepts either a fixed string or a function that
+ * derives the path from the mutation body. The function form is
+ * required for row-level actions where the URL contains an id taken
+ * from the body (`/finance/journal-manual/:id/submit`). Before this
+ * extension, every page that needed per-row URL composition was
+ * forced to bypass `useApiMutation` and fall back to a hand-rolled
+ * `useMutation` + `apiFetch`, losing the typed-error toast pipeline.
+ *
+ * The `TBody` type also gains a narrowed shape for the function form
+ * so callers get autocomplete on the body fields inside `pathFn`.
+ */
+export type ApiMutationPath<TBody> = string | ((body: TBody) => string);
+
 export function useApiMutation<TData = any, TBody = any>(
-  path: string,
+  path: ApiMutationPath<TBody>,
   method: string = "POST",
   invalidateKeys?: string[][],
   options?: ApiMutationOptions<TData, TBody>
 ) {
   const qc = useQueryClient();
   return useMutation<TData, Error, TBody>({
-    mutationFn: (body: TBody) =>
-      apiFetch<TData>(path, {
+    mutationFn: (body: TBody) => {
+      const url = typeof path === "function" ? path(body) : path;
+      // When the path is a function, the caller owns URL composition
+      // and the body carries the row id (and possibly other fields).
+      // The DELETE / POST / PATCH body is still the same body object
+      // — the function form only affects the URL, never the request
+      // payload.
+      return apiFetch<TData>(url, {
         method,
         body: JSON.stringify(body),
-      }),
+      });
+    },
     onSuccess: (data, body) => {
       invalidateKeys?.forEach((key) => qc.invalidateQueries({ queryKey: key }));
       if (options?.successMessage !== false && options?.successMessage !== undefined) {
