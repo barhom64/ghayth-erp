@@ -11,19 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowRight, Clock, CheckCircle, XCircle, FileText, Ban, Gavel } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 
-const STATUS_STYLES: Record<string, { label: string; color: string }> = {
-  pending_employee: { label: "بانتظار الموظف", color: "bg-blue-100 text-blue-700" },
-  pending_manager: { label: "بانتظار المدير المباشر", color: "bg-indigo-100 text-indigo-700" },
-  pending_gm: { label: "بانتظار المدير العام", color: "bg-purple-100 text-purple-700" },
-  approved: { label: "معتمد", color: "bg-green-100 text-green-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
-  cancelled: { label: "ملغي", color: "bg-gray-100 text-gray-700" },
-  draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
-  expired: { label: "منتهي", color: "bg-gray-100 text-gray-500" },
-};
+// HR-U3 — حُذفت STATUS_STYLES المحلية. حالات المذكرات التأديبية موحّدة في
+// STATUS_MAP.memo + STATUS_MAP.shared (draft/expired).
 
 const INCIDENT_LABELS: Record<string, string> = {
   late: "تأخر",
@@ -99,7 +91,6 @@ export default function DisciplineMemoDetailPage() {
 
   const memo = data.memo;
   const events = data.events ?? [];
-  const statusStyle = STATUS_STYLES[memo.status] ?? { label: memo.status, color: "" };
 
   const totalDeduction =
     Number(memo.appliedDeductionAmount ?? 0) + Number(memo.appliedExtraDeduction ?? 0);
@@ -115,7 +106,7 @@ export default function DisciplineMemoDetailPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Badge className={cn(statusStyle.color, "text-sm px-3 py-1")}>{statusStyle.label}</Badge>
+          <PageStatusBadge status={memo.status} domain="memo" className="text-sm px-3 py-1" />
           <Link href="/hr/discipline/memos">
             <Button variant="ghost" size="sm">
               <ArrowRight className="h-4 w-4 me-1" />

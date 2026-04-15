@@ -108,6 +108,10 @@ export const STATUS_MAP = {
     planned:              { label: "مخطط",            tone: "info"     },
     upcoming:             { label: "قادم",            tone: "info"     },
     enrolled:             { label: "مسجل",            tone: "info"     },
+    // HR onboarding (hr/onboarding-review.tsx): adds "probation" and a
+    // more specific "in_review" label so the computed onboarding status
+    // doesn't need a per-page map anymore.
+    probation:            { label: "فترة التجربة",   tone: "info"     },
   },
 
   // ── HR ─────────────────────────────────────────────────────────────
