@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { useAuth } from "@/lib/auth";
@@ -75,15 +76,11 @@ export default function MySpace() {
   const role = data?.role;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">مساحتي</h1>
-          <p className="text-gray-500 mt-1">
-            مرحباً {user?.name || "موظف"} — {selectedRoleLabel}
-          </p>
-        </div>
-        {role !== "employee" && (
+    <PageShell
+      title="مساحتي"
+      subtitle={`مرحباً ${user?.name || "موظف"} — ${selectedRoleLabel}`}
+      actions={
+        role !== "employee" && (
           <Link href="/action-center">
             <Button variant="outline" className="gap-2">
               <Briefcase className="w-4 h-4" />
@@ -91,8 +88,9 @@ export default function MySpace() {
               <ArrowUpRight className="w-3 h-3" />
             </Button>
           </Link>
-        )}
-      </div>
+        )
+      }
+    >
 
       <AlertsSection overdueItems={overdueItems} expiringSoon={expiringSoon} />
 
@@ -136,6 +134,6 @@ export default function MySpace() {
         />
         <ChangePasswordSection />
       </div>
-    </div>
+    </PageShell>
   );
 }

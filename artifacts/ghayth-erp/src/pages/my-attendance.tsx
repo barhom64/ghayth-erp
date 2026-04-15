@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -51,12 +52,7 @@ export default function MyAttendance() {
   const totalOvertimeMinutes = monthly?.overtimeMinutes ?? records.reduce((sum: number, r: any) => sum + (Number(r.overtimeMinutes) || 0), 0);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto" dir="rtl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">حضوري وانصرافي</h1>
-        <p className="text-gray-500 mt-1">سجل الحضور والانصراف الشهري</p>
-      </div>
-
+    <PageShell title="حضوري وانصرافي" subtitle="سجل الحضور والانصراف الشهري">
       <div className="flex items-center gap-3 mb-6">
         <label className="text-sm font-medium text-gray-700">الشهر:</label>
         <input
@@ -173,6 +169,6 @@ export default function MyAttendance() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

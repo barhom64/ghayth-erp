@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
 import { FileText, Download, Eye, Loader2, FolderOpen, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,12 +22,7 @@ export default function MyDocuments() {
   const documents: any[] = data?.data ?? [];
 
   return (
-    <div className="p-6 max-w-3xl mx-auto" dir="rtl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">مستنداتي</h1>
-        <p className="text-gray-500 mt-1">المستندات والملفات المرتبطة بك</p>
-      </div>
-
+    <PageShell title="مستنداتي" subtitle="المستندات والملفات المرتبطة بك" loading={isLoading}>
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="animate-spin text-primary" size={32} />
@@ -84,6 +80,6 @@ export default function MyDocuments() {
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

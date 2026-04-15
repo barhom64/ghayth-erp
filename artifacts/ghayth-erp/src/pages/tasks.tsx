@@ -1,5 +1,6 @@
 import { useState, Fragment } from "react";
 import { Link, useLocation } from "wouter";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, asList, apiPatch, apiDelete } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -134,14 +135,14 @@ export default function Tasks() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">إدارة المهام</h1>
+    <PageShell
+      title="إدارة المهام"
+      actions={
         <Link href="/tasks/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
         {[
           { label: "إجمالي المهام", value: tasks?.length || 0, color: "text-blue-600" },
@@ -427,6 +428,6 @@ export default function Tasks() {
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة المهمة" data={previewItem} fields={previewFields} />
-    </div>
+    </PageShell>
   );
 }

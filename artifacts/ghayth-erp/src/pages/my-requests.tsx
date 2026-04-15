@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatDateAr } from "@/lib/formatters";
@@ -49,12 +50,7 @@ export default function MyRequests() {
   const leaveRequests: any[] = data?.leaveRequests ?? [];
 
   return (
-    <div className="p-6 max-w-4xl mx-auto" dir="rtl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">طلباتي</h1>
-        <p className="text-gray-500 mt-1">تتبع حالة طلباتك المقدمة</p>
-      </div>
-
+    <PageShell title="طلباتي" subtitle="تتبع حالة طلباتك المقدمة">
       <div className="flex gap-2 mb-6 border-b border-gray-200">
         <button
           onClick={() => setActiveTab("workflow")}
@@ -184,6 +180,6 @@ export default function MyRequests() {
           </div>
         )
       )}
-    </div>
+    </PageShell>
   );
 }

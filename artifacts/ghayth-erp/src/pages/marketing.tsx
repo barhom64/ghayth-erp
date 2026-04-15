@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -270,8 +271,7 @@ function CampaignsTab() {
 
 export default function MarketingPage() {
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">التسويق والمبيعات</h1>
+    <PageShell title="التسويق والمبيعات">
       <Tabs defaultValue="campaigns">
         <TabsList>
           <TabsTrigger value="campaigns"><Megaphone className="h-4 w-4 me-1.5" />الحملات</TabsTrigger>
@@ -284,6 +284,6 @@ export default function MarketingPage() {
           <FunnelTab />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

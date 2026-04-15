@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
 import { Target, Star, TrendingUp, CheckCircle2, Clock, Loader2, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,12 +33,7 @@ export default function MyPerformance() {
   const latestReview = reviews[0];
 
   return (
-    <div className="p-6 max-w-3xl mx-auto" dir="rtl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">تقييمي</h1>
-        <p className="text-gray-500 mt-1">نتائج تقييمات الأداء الخاصة بك</p>
-      </div>
-
+    <PageShell title="تقييمي" subtitle="نتائج تقييمات الأداء الخاصة بك" loading={isLoading}>
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="animate-spin text-primary" size={32} />
@@ -103,6 +99,6 @@ export default function MyPerformance() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

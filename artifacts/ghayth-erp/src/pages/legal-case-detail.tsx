@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -262,17 +263,15 @@ export default function LegalCaseDetail() {
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex items-center gap-3">
+    <PageShell
+      title={caseData.title}
+      subtitle={caseData.caseNumber || undefined}
+      actions={
         <Button variant="ghost" size="icon" onClick={() => setLocation("/legal")}>
           <ArrowRight className="h-5 w-5" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold">{caseData.title}</h1>
-          {caseData.caseNumber && <p className="text-sm text-gray-500 font-mono">{caseData.caseNumber}</p>}
-        </div>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <Card>
@@ -435,7 +434,7 @@ export default function LegalCaseDetail() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }
 
