@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { apiFetch } from "@/lib/api";
-import { useMutation } from "@tanstack/react-query";
+import { useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,32 +34,30 @@ export default function YearEndClosePage() {
   const [preview, setPreview] = useState<YearEndPreview | null>(null);
   const [closed, setClosed] = useState(false);
 
-  const previewMut = useMutation({
-    mutationFn: () =>
-      apiFetch<YearEndPreview>(`/finance/fiscal-periods/${year}/year-end-close?dryRun=true`, {
-        method: "POST",
-        body: JSON.stringify({ retainedEarningsAccountCode, force }),
-      }),
-    onSuccess: (data) => {
-      setPreview(data);
-      setClosed(false);
-    },
-    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل المعاينة" }),
-  });
+  const previewMut = useApiMutation<YearEndPreview, { retainedEarningsAccountCode: string; force: boolean }>(
+    () => `/finance/fiscal-periods/${year}/year-end-close?dryRun=true`,
+    "POST",
+    undefined,
+    {
+      onSuccess: (data) => {
+        setPreview(data);
+        setClosed(false);
+      },
+    }
+  );
 
-  const confirmMut = useMutation({
-    mutationFn: () =>
-      apiFetch<YearEndPreview>(`/finance/fiscal-periods/${year}/year-end-close`, {
-        method: "POST",
-        body: JSON.stringify({ retainedEarningsAccountCode, force }),
-      }),
-    onSuccess: (data) => {
-      setPreview(data);
-      setClosed(true);
-      toast({ title: `تم إقفال السنة ${year} بنجاح` });
-    },
-    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل الإقفال" }),
-  });
+  const confirmMut = useApiMutation<YearEndPreview, { retainedEarningsAccountCode: string; force: boolean }>(
+    () => `/finance/fiscal-periods/${year}/year-end-close`,
+    "POST",
+    undefined,
+    {
+      successMessage: `تم إقفال السنة ${year} بنجاح`,
+      onSuccess: (data) => {
+        setPreview(data);
+        setClosed(true);
+      },
+    }
+  );
 
   const wizardTab = () => (
     <div className="space-y-4">
@@ -96,7 +93,7 @@ export default function YearEndClosePage() {
           </div>
 
           <div className="flex gap-3 pt-4 border-t">
-            <Button variant="outline" onClick={() => previewMut.mutate()} disabled={previewMut.isPending}>
+            <Button variant="outline" onClick={() => previewMut.mutate({ retainedEarningsAccountCode, force })} disabled={previewMut.isPending}>
               <Calculator className="h-4 w-4 me-1" />
               {previewMut.isPending ? "جاري الحساب..." : "معاينة"}
             </Button>
@@ -107,7 +104,7 @@ export default function YearEndClosePage() {
                   return;
                 }
                 if (confirm(`تأكيد إقفال السنة المالية ${year}؟ لا يمكن التراجع عن هذه العملية.`)) {
-                  confirmMut.mutate();
+                  confirmMut.mutate({ retainedEarningsAccountCode, force });
                 }
               }}
               disabled={!preview || confirmMut.isPending || closed}

@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
-import { useQueryClient } from "@tanstack/react-query";
 import { formatDateAr } from "@/lib/formatters";
 import {
   Users, CheckCircle, XCircle, Clock, AlertTriangle, ChevronLeft,
@@ -32,7 +31,6 @@ export default function ManagerBoard() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   const { data: actionData, isLoading: actionLoading, refetch: refetchAction } = useApiQuery<any>(
@@ -82,53 +80,50 @@ export default function ManagerBoard() {
   const lateCount = team.filter((m: any) => m.lateMinutes > 0).length;
   const onLeaveCount = team.filter((m: any) => m.status === "on_leave").length;
 
-  const doApprove = async (item: any) => {
+  type ApprovalBody = { _type: string; _itemId: number; approved: boolean; reason?: string; notes?: string };
+  const endpointFor = (type: string, id: number) => {
+    const map: Record<string, string> = {
+      leave: `/hr/leave-requests/${id}/approve`,
+      advance: `/finance/salary-advances/${id}/approve`,
+      custody: `/finance/custodies/${id}/approve`,
+      letter: `/hr/official-letters/${id}/approve`,
+    };
+    return map[type];
+  };
+  const approvalMut = useApiMutation<any, ApprovalBody>(
+    (body) => endpointFor(body._type, body._itemId),
+    "PATCH",
+    [["action-center"]],
+    {
+      successMessage: false,
+      onSuccess: (_d, body) => {
+        toast({ title: body.approved ? "تم الاعتماد بنجاح" : "تم الرفض" });
+        refetchAction();
+        const key = `${body._type}-${body._itemId}`;
+        setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+      },
+      onError: (_e, body) => {
+        const key = `${body._type}-${body._itemId}`;
+        setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+      },
+    }
+  );
+
+  const doApprove = (item: any) => {
     const key = `${item._type}-${item.id}`;
     setProcessingIds(prev => new Set([...prev, key]));
-    const endpointMap: Record<string, string> = {
-      leave: `/hr/leave-requests/${item.id}/approve`,
-      advance: `/finance/salary-advances/${item.id}/approve`,
-      custody: `/finance/custodies/${item.id}/approve`,
-      letter: `/hr/official-letters/${item.id}/approve`,
-    };
-    try {
-      await apiFetch(endpointMap[item._type], { method: "PATCH", body: JSON.stringify({ approved: true }) });
-      toast({ title: "تم الاعتماد بنجاح" });
-      refetchAction();
-    } catch { toast({ variant: "destructive", title: "فشل في الاعتماد" }); }
-    setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+    approvalMut.mutate({ _type: item._type, _itemId: item.id, approved: true });
   };
 
-  const doReject = async (item: any) => {
+  const doReject = (item: any) => {
     const notes = prompt("سبب الرفض (اختياري):");
-    const key = `${item._type}-${item.id}`;
-    setProcessingIds(prev => new Set([...prev, key]));
-    const endpointMap: Record<string, string> = {
-      leave: `/hr/leave-requests/${item.id}/approve`,
-      advance: `/finance/salary-advances/${item.id}/approve`,
-      custody: `/finance/custodies/${item.id}/approve`,
-      letter: `/hr/official-letters/${item.id}/approve`,
-    };
-    // Different backend routes expect different field names for the
-    // rejection reason: /hr/leave-requests reads `reason`, while the
-    // finance/letter routes destructure `notes`. Send both so we match
-    // whichever the endpoint picks up — and only if the user actually
-    // typed something, otherwise we trip the backend's "reason required"
-    // 400 guard immediately.
     if (!notes) {
       toast({ variant: "destructive", title: "يرجى ذكر سبب الرفض" });
-      setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
       return;
     }
-    try {
-      await apiFetch(endpointMap[item._type], {
-        method: "PATCH",
-        body: JSON.stringify({ approved: false, reason: notes, notes }),
-      });
-      toast({ title: "تم الرفض" });
-      refetchAction();
-    } catch (err: any) { toast({ variant: "destructive", title: "فشل في الرفض", description: err?.message }); }
-    setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+    const key = `${item._type}-${item.id}`;
+    setProcessingIds(prev => new Set([...prev, key]));
+    approvalMut.mutate({ _type: item._type, _itemId: item.id, approved: false, reason: notes, notes });
   };
 
   const tasksDone = tasks.filter((t: any) => t.status === "completed").length;

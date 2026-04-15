@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
-import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,6 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
@@ -33,57 +32,58 @@ const CHANNEL_ICONS: Record<string, any> = {
 };
 
 function IntegrationsList() {
-  const { data: intResp, isLoading, isError, error, refetch } = useApiQuery<any>(["admin-integrations"], "/admin/integrations");
-  const createMut = useApiMutation<unknown, Record<string, any>>("/admin/integrations", "POST", [["admin-integrations"]]);
+  const { data: intResp, isLoading } = useApiQuery<any>(["admin-integrations"], "/admin/integrations");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", type: "email", config: "{}", status: "inactive" });
   const { toast } = useToast();
-  const qc = useQueryClient();
   const integrations = asList(intResp);
 
-  const handleCreate = async () => {
-    try {
-      let parsedConfig = {};
-      try { parsedConfig = JSON.parse(form.config); } catch { toast({ variant: "destructive", title: "خطأ في صيغة الإعدادات" }); return; }
-      await createMut.mutateAsync({ ...form, config: parsedConfig });
-      setForm({ name: "", type: "email", config: "{}", status: "inactive" });
-      setShowForm(false);
-      refetch();
-    } catch { toast({ variant: "destructive", title: "خطأ في الإنشاء" }); }
-  };
+  const createMut = useApiMutation<any, Record<string, any>>(
+    "/admin/integrations",
+    "POST",
+    [["admin-integrations"]],
+    {
+      successMessage: "تم إنشاء التكامل",
+      onSuccess: () => {
+        setForm({ name: "", type: "email", config: "{}", status: "inactive" });
+        setShowForm(false);
+      },
+    }
+  );
+  const toggleMut = useApiMutation<any, { id: number; status: string }>(
+    (body) => `/admin/integrations/${body.id}`,
+    "PATCH",
+    [["admin-integrations"]]
+  );
+  const testMut = useApiMutation<any, { id: number }>(
+    (body) => `/admin/integrations/${body.id}/test`,
+    "POST",
+    [["admin-integrations"]],
+    {
+      successMessage: false,
+      onSuccess: (result: any) => {
+        if (result?.success) toast({ title: "نجح الاختبار" });
+        else toast({ variant: "destructive", title: "فشل الاختبار", description: result?.error });
+      },
+    }
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/admin/integrations/${body.id}`,
+    "DELETE",
+    [["admin-integrations"]],
+    { successMessage: "تم الحذف" }
+  );
 
-  const handleToggleStatus = async (id: number, currentStatus: string) => {
-    const newStatus = currentStatus === "active" ? "inactive" : "active";
-    try {
-      await apiFetch(`/admin/integrations/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: newStatus }),
-      });
-      qc.invalidateQueries({ queryKey: ["admin-integrations"] });
-    } catch { toast({ variant: "destructive", title: "خطأ" }); }
+  const handleCreate = () => {
+    let parsedConfig = {};
+    try { parsedConfig = JSON.parse(form.config); } catch { toast({ variant: "destructive", title: "خطأ في صيغة الإعدادات" }); return; }
+    createMut.mutate({ ...form, config: parsedConfig });
   };
-
-  const handleTest = async (id: number) => {
-    try {
-      const result = await apiFetch(`/admin/integrations/${id}/test`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      if (result.success) {
-        toast({ title: "نجح الاختبار" });
-      } else {
-        toast({ variant: "destructive", title: "فشل الاختبار", description: result.error });
-      }
-      qc.invalidateQueries({ queryKey: ["admin-integrations"] });
-    } catch { toast({ variant: "destructive", title: "خطأ في الاختبار" }); }
+  const handleToggleStatus = (id: number, currentStatus: string) => {
+    toggleMut.mutate({ id, status: currentStatus === "active" ? "inactive" : "active" });
   };
-
-  const handleDelete = async (id: number) => {
-    try {
-      await apiFetch(`/admin/integrations/${id}`, { method: "DELETE" });
-      qc.invalidateQueries({ queryKey: ["admin-integrations"] });
-    } catch { toast({ variant: "destructive", title: "خطأ في الحذف" }); }
-  };
+  const handleTest = (id: number) => testMut.mutate({ id });
+  const handleDelete = (id: number) => deleteMut.mutate({ id });
 
   return (
     <div className="space-y-4">
@@ -182,15 +182,19 @@ function IntegrationLogs() {
   const { data: logsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["admin-int-logs"], "/admin/integration-logs");
   const logs = asList(logsResp);
   const { toast } = useToast();
-  const qc = useQueryClient();
 
-  const handleRetry = async () => {
-    try {
-      const result = await apiFetch("/admin/integration-logs/retry", { method: "POST", body: "{}" });
-      toast({ title: `تمت إعادة المحاولة: ${result.retried} رسالة, نجح: ${result.succeeded}` });
-      qc.invalidateQueries({ queryKey: ["admin-int-logs"] });
-    } catch { toast({ variant: "destructive", title: "خطأ" }); }
-  };
+  const retryMut = useApiMutation<any, Record<string, never>>(
+    "/admin/integration-logs/retry",
+    "POST",
+    [["admin-int-logs"]],
+    {
+      successMessage: false,
+      onSuccess: (result: any) => {
+        toast({ title: `تمت إعادة المحاولة: ${result?.retried ?? 0} رسالة, نجح: ${result?.succeeded ?? 0}` });
+      },
+    }
+  );
+  const handleRetry = () => retryMut.mutate({});
 
   const statusIcon = (status: string) => {
     switch (status) {

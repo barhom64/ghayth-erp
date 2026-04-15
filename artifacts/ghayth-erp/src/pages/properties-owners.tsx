@@ -1,6 +1,5 @@
 import { Link } from "wouter";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,13 +7,10 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
-import { useToast } from "@/hooks/use-toast";
 
 export default function PropertiesOwners() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
-  const { toast } = useToast();
-  const qc = useQueryClient();
 
   const { data: ownersResp, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["property-owners", scopeQueryString],
@@ -27,14 +23,16 @@ export default function PropertiesOwners() {
     searchFields: ["name", "phone", "nationalId", "crNumber"] as any,
   });
 
-  const handleDelete = async (id: number) => {
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/properties/owners/${body.id}`,
+    "DELETE",
+    [["property-owners"]],
+    { successMessage: "تم حذف المالك" }
+  );
+
+  const handleDelete = (id: number) => {
     if (!confirm("هل أنت متأكد من حذف هذا المالك؟")) return;
-    try {
-      await apiFetch(`/properties/owners/${id}`, { method: "DELETE" });
-      toast({ title: "تم حذف المالك" });
-      qc.invalidateQueries({ queryKey: ["property-owners"] });
-      refetch();
-    } catch { toast({ variant: "destructive", title: "حدث خطأ أثناء الحذف" }); }
+    deleteMut.mutate({ id });
   };
 
   const columns: DataTableColumn<any>[] = [

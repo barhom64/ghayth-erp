@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,6 @@ import {
   Trash2, RefreshCw, ArrowRight, AlertCircle, CheckCircle, XCircle,
   BarChart3, Clock, Shield, Webhook, ChevronDown, ChevronUp,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 
 const CHANNEL_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   in_app: { label: "داخلي", icon: <Bell className="h-4 w-4" />, color: "bg-blue-100 text-blue-700" },
@@ -39,8 +37,6 @@ function ChannelBadge({ channel }: { channel: string }) {
 }
 
 function RoutingRulesTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const { data: rulesData } = useApiQuery(["notif-routing-rules"], "/notification-engine/routing-rules");
   const { data: chainsData } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
   const rules = asList(rulesData);
@@ -58,19 +54,19 @@ function RoutingRulesTab() {
     setEditChainId((rule.fallbackChainId as number) ?? null);
   };
 
-  const saveRule = async () => {
-    if (!editId) return;
-    try {
-      await apiFetch(`/notification-engine/routing-rules/${editId}`, {
-        method: "PUT",
-        body: JSON.stringify({ channels: editChannels, priority: editPriority, fallbackChainId: editChainId }),
-      });
-      toast({ title: "تم الحفظ" });
-      qc.invalidateQueries({ queryKey: ["notif-routing-rules"] });
-      setEditId(null);
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+  const saveRuleMut = useApiMutation<any, { id: number; channels: string[]; priority: string; fallbackChainId: number | null }>(
+    (body) => `/notification-engine/routing-rules/${body.id}`,
+    "PUT",
+    [["notif-routing-rules"]],
+    {
+      successMessage: "تم الحفظ",
+      onSuccess: () => setEditId(null),
     }
+  );
+
+  const saveRule = () => {
+    if (!editId) return;
+    saveRuleMut.mutate({ id: editId, channels: editChannels, priority: editPriority, fallbackChainId: editChainId });
   };
 
   return (
@@ -160,8 +156,6 @@ function RoutingRulesTab() {
 }
 
 function TemplatesTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const { data: templatesData } = useApiQuery(["notif-templates"], "/notification-engine/templates");
   const templates = asList(templatesData);
   const [editId, setEditId] = useState<number | null>(null);
@@ -180,48 +174,47 @@ function TemplatesTab() {
     return acc;
   }, {} as Record<string, Array<Record<string, unknown>>>);
 
-  const saveEdit = async () => {
+  const saveEditMut = useApiMutation<any, { id: number; titleTemplate: string | null; bodyTemplate: string }>(
+    (body) => `/notification-engine/templates/${body.id}`,
+    "PUT",
+    [["notif-templates"]],
+    {
+      successMessage: "تم الحفظ",
+      onSuccess: () => setEditId(null),
+    }
+  );
+  const createMut = useApiMutation<any, { templateKey: string; channel: string; titleTemplate: string | null; bodyTemplate: string }>(
+    "/notification-engine/templates",
+    "POST",
+    [["notif-templates"]],
+    {
+      successMessage: "تم إنشاء القالب",
+      onSuccess: () => {
+        setShowNew(false);
+        setNewKey("");
+        setNewChannel("sms");
+        setNewTitle("");
+        setNewBody("");
+      },
+    }
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/notification-engine/templates/${body.id}`,
+    "DELETE",
+    [["notif-templates"]],
+    { successMessage: "تم الحذف" }
+  );
+
+  const saveEdit = () => {
     if (!editId) return;
-    try {
-      await apiFetch(`/notification-engine/templates/${editId}`, {
-        method: "PUT",
-        body: JSON.stringify({ titleTemplate: editTitle || null, bodyTemplate: editBody }),
-      });
-      toast({ title: "تم الحفظ" });
-      qc.invalidateQueries({ queryKey: ["notif-templates"] });
-      setEditId(null);
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
-    }
+    saveEditMut.mutate({ id: editId, titleTemplate: editTitle || null, bodyTemplate: editBody });
   };
-
-  const createTemplate = async () => {
+  const createTemplate = () => {
     if (!newKey || !newBody) return;
-    try {
-      await apiFetch("/notification-engine/templates", {
-        method: "POST",
-        body: JSON.stringify({ templateKey: newKey, channel: newChannel, titleTemplate: newTitle || null, bodyTemplate: newBody }),
-      });
-      toast({ title: "تم إنشاء القالب" });
-      qc.invalidateQueries({ queryKey: ["notif-templates"] });
-      setShowNew(false);
-      setNewKey("");
-      setNewChannel("sms");
-      setNewTitle("");
-      setNewBody("");
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
-    }
+    createMut.mutate({ templateKey: newKey, channel: newChannel, titleTemplate: newTitle || null, bodyTemplate: newBody });
   };
-
-  const deleteTemplate = async (id: number) => {
-    try {
-      await apiFetch(`/notification-engine/templates/${id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      qc.invalidateQueries({ queryKey: ["notif-templates"] });
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
-    }
+  const deleteTemplate = (id: number) => {
+    deleteMut.mutate({ id });
   };
 
   return (
@@ -348,8 +341,6 @@ function TemplatesTab() {
 }
 
 function FallbackChainsTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const { data: chainsData } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
   const chains = asList(chainsData);
   const [showNew, setShowNew] = useState(false);
@@ -367,32 +358,33 @@ function FallbackChainsTab() {
     setNewSteps(updated);
   };
 
-  const createChain = async () => {
-    if (!newName || newSteps.length === 0) return;
-    try {
-      await apiFetch("/notification-engine/fallback-chains", {
-        method: "POST",
-        body: JSON.stringify({ name: newName, description: newDesc, steps: newSteps }),
-      });
-      toast({ title: "تم إنشاء السلسلة" });
-      qc.invalidateQueries({ queryKey: ["notif-fallback-chains"] });
-      setShowNew(false);
-      setNewName("");
-      setNewDesc("");
-      setNewSteps([{ channel: "sms", waitMinutes: 0 }]);
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+  const createMut = useApiMutation<any, { name: string; description: string; steps: Array<{ channel: string; waitMinutes: number }> }>(
+    "/notification-engine/fallback-chains",
+    "POST",
+    [["notif-fallback-chains"]],
+    {
+      successMessage: "تم إنشاء السلسلة",
+      onSuccess: () => {
+        setShowNew(false);
+        setNewName("");
+        setNewDesc("");
+        setNewSteps([{ channel: "sms", waitMinutes: 0 }]);
+      },
     }
-  };
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/notification-engine/fallback-chains/${body.id}`,
+    "DELETE",
+    [["notif-fallback-chains"]],
+    { successMessage: "تم الحذف" }
+  );
 
-  const deleteChain = async (id: number) => {
-    try {
-      await apiFetch(`/notification-engine/fallback-chains/${id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      qc.invalidateQueries({ queryKey: ["notif-fallback-chains"] });
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
-    }
+  const createChain = () => {
+    if (!newName || newSteps.length === 0) return;
+    createMut.mutate({ name: newName, description: newDesc, steps: newSteps });
+  };
+  const deleteChain = (id: number) => {
+    deleteMut.mutate({ id });
   };
 
   return (
@@ -498,8 +490,6 @@ function FallbackChainsTab() {
 }
 
 function WebhooksTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const { data: webhooksData } = useApiQuery(["notif-webhooks"], "/notification-engine/webhooks");
   const webhooks = asList(webhooksData);
   const [showNew, setShowNew] = useState(false);
@@ -508,46 +498,43 @@ function WebhooksTab() {
   const [newSecret, setNewSecret] = useState("");
   const [newEvents, setNewEvents] = useState("*");
 
-  const createWebhook = async () => {
+  const createMut = useApiMutation<any, { name: string; url: string; secret: string | null; events: string[] }>(
+    "/notification-engine/webhooks",
+    "POST",
+    [["notif-webhooks"]],
+    {
+      successMessage: "تم إنشاء خطاف الاستدعاء",
+      onSuccess: () => {
+        setShowNew(false);
+        setNewName("");
+        setNewUrl("");
+        setNewSecret("");
+        setNewEvents("*");
+      },
+    }
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/notification-engine/webhooks/${body.id}`,
+    "DELETE",
+    [["notif-webhooks"]],
+    { successMessage: "تم الحذف" }
+  );
+  const toggleMut = useApiMutation<any, { id: number; isActive: boolean }>(
+    (body) => `/notification-engine/webhooks/${body.id}`,
+    "PUT",
+    [["notif-webhooks"]]
+  );
+
+  const createWebhook = () => {
     if (!newName || !newUrl) return;
-    try {
-      const events = newEvents.split(",").map((e) => e.trim()).filter(Boolean);
-      await apiFetch("/notification-engine/webhooks", {
-        method: "POST",
-        body: JSON.stringify({ name: newName, url: newUrl, secret: newSecret || null, events }),
-      });
-      toast({ title: "تم إنشاء خطاف الاستدعاء" });
-      qc.invalidateQueries({ queryKey: ["notif-webhooks"] });
-      setShowNew(false);
-      setNewName("");
-      setNewUrl("");
-      setNewSecret("");
-      setNewEvents("*");
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
-    }
+    const events = newEvents.split(",").map((e) => e.trim()).filter(Boolean);
+    createMut.mutate({ name: newName, url: newUrl, secret: newSecret || null, events });
   };
-
-  const deleteWebhook = async (id: number) => {
-    try {
-      await apiFetch(`/notification-engine/webhooks/${id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      qc.invalidateQueries({ queryKey: ["notif-webhooks"] });
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
-    }
+  const deleteWebhook = (id: number) => {
+    deleteMut.mutate({ id });
   };
-
-  const toggleWebhook = async (id: number, isActive: boolean) => {
-    try {
-      await apiFetch(`/notification-engine/webhooks/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ isActive: !isActive }),
-      });
-      qc.invalidateQueries({ queryKey: ["notif-webhooks"] });
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
-    }
+  const toggleWebhook = (id: number, isActive: boolean) => {
+    toggleMut.mutate({ id, isActive: !isActive });
   };
 
   return (
@@ -772,8 +759,6 @@ function DeliveryStatsTab() {
 }
 
 function PreferencesTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const { data: prefsData } = useApiQuery(["notif-preferences"], "/notification-engine/preferences");
   const preferences = asList(prefsData?.data);
   const categories: Array<{ eventCategory: string; description: string | null }> = prefsData?.categories ?? [];
@@ -809,22 +794,22 @@ function PreferencesTab() {
     setDirty(true);
   };
 
-  const saveAll = async () => {
-    try {
-      const prefs = Object.entries(localPrefs).map(([category, channels]) => ({
-        category,
-        ...channels,
-      }));
-      await apiFetch("/notification-engine/preferences", {
-        method: "PUT",
-        body: JSON.stringify({ preferences: prefs }),
-      });
-      toast({ title: "تم حفظ التفضيلات" });
-      setDirty(false);
-      qc.invalidateQueries({ queryKey: ["notif-preferences"] });
-    } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+  const saveMut = useApiMutation<any, { preferences: Array<Record<string, any>> }>(
+    "/notification-engine/preferences",
+    "PUT",
+    [["notif-preferences"]],
+    {
+      successMessage: "تم حفظ التفضيلات",
+      onSuccess: () => setDirty(false),
     }
+  );
+
+  const saveAll = () => {
+    const prefs = Object.entries(localPrefs).map(([category, channels]) => ({
+      category,
+      ...channels,
+    }));
+    saveMut.mutate({ preferences: prefs });
   };
 
   const channelCols = [

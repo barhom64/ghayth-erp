@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -12,8 +10,6 @@ import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
 
 export default function IntercompanyPage() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showCreate, setShowCreate] = useState(false);
@@ -29,16 +25,18 @@ export default function IntercompanyPage() {
     `/settings/companies${scopeSuffix}`
   );
 
-  const createMutation = useMutation({
-    mutationFn: (payload: any) => apiFetch("/finance/intercompany", { method: "POST", body: JSON.stringify(payload) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["intercompany"] });
-      toast({ title: "تم تسجيل المعاملة البينية وإنشاء القيدين المحاسبيين" });
-      setShowCreate(false);
-      setForm({ toCompanyId: "", amount: "", description: "", transactionDate: new Date().toISOString().split("T")[0] });
+  const createMutation = useApiMutation<any, any>(
+    "/finance/intercompany",
+    "POST",
+    [["intercompany"]],
+    {
+      successMessage: "تم تسجيل المعاملة البينية وإنشاء القيدين المحاسبيين",
+      onSuccess: () => {
+        setShowCreate(false);
+        setForm({ toCompanyId: "", amount: "", description: "", transactionDate: new Date().toISOString().split("T")[0] });
+      },
     },
-    onError: (e: any) => toast({ variant: "destructive", title: e.message ?? "حدث خطأ" }),
-  });
+  );
 
   const companies = companiesData?.data ?? companiesData ?? [];
 

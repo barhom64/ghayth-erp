@@ -1,32 +1,26 @@
-import { useApiQuery, asList, apiFetch } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { PageShell } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bell, BellDot, Check, Clock, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 
 export default function Notifications() {
   const { data: notifResp, isLoading } = useApiQuery<any>(["notifications"], "/notifications");
   const notifications = asList(notifResp);
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [markingId, setMarkingId] = useState<number | null>(null);
 
-  const handleMarkAsRead = async (id: number) => {
-    setMarkingId(id);
-    try {
-      await apiFetch(`/notifications/${id}/read`, { method: "PATCH" });
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء تحديث الإشعار" });
-    } finally {
-      setMarkingId(null);
-    }
+  const markReadMut = useApiMutation<any, { id: number }>(
+    (body) => `/notifications/${body.id}/read`,
+    "PATCH",
+    [["notifications"]],
+    { successMessage: false }
+  );
+  const markingId = markReadMut.isPending ? markReadMut.variables?.id ?? null : null;
+
+  const handleMarkAsRead = (id: number) => {
+    markReadMut.mutate({ id });
   };
 
   const getPriorityIcon = (priority?: string) => {

@@ -3,8 +3,7 @@ import { Link } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 // Phase A — HR discipline memos on unified primitives.
 import { PageShell } from "@/components/page-shell";
-import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,10 +65,8 @@ export default function DisciplineMemosPage() {
   );
   const { data: stats } = useApiQuery<any>(["discipline-memos-stats"], "/hr/discipline/stats");
   const { toast } = useToast();
-  const qc = useQueryClient();
   const memos = listData?.data ?? [];
   const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     assignmentId: "",
     incidentType: "late",
@@ -92,41 +89,36 @@ export default function DisciplineMemosPage() {
     });
   };
 
-  const submitCreate = async () => {
+  const createMut = useApiMutation<any, Record<string, any>>(
+    "/hr/discipline/memos",
+    "POST",
+    [["discipline-memos"], ["discipline-memos-stats"]],
+    {
+      successMessage: "تم إنشاء المحضر",
+      onSuccess: () => {
+        resetForm();
+        setShowCreate(false);
+      },
+    }
+  );
+  const creating = createMut.isPending;
+
+  const submitCreate = () => {
     if (!form.assignmentId) {
       toast({ variant: "destructive", title: "التعيين مطلوب" });
       return;
     }
-    setCreating(true);
-    try {
-      await apiFetch("/hr/discipline/memos", {
-        method: "POST",
-        body: JSON.stringify({
-          assignmentId: Number(form.assignmentId),
-          incidentType: form.incidentType,
-          incidentDate: form.incidentDate,
-          incidentDurationMinutes: form.incidentDurationMinutes
-            ? Number(form.incidentDurationMinutes)
-            : undefined,
-          absenceDays: form.absenceDays ? Number(form.absenceDays) : undefined,
-          incidentDescription: form.incidentDescription,
-          disruptsOthers: form.disruptsOthers,
-        }),
-      });
-      toast({ title: "تم إنشاء المحضر" });
-      qc.invalidateQueries({ queryKey: ["discipline-memos"] });
-      qc.invalidateQueries({ queryKey: ["discipline-memos-stats"] });
-      resetForm();
-      setShowCreate(false);
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "فشل الإنشاء",
-        description: getErrorMessage(err),
-      });
-    } finally {
-      setCreating(false);
-    }
+    createMut.mutate({
+      assignmentId: Number(form.assignmentId),
+      incidentType: form.incidentType,
+      incidentDate: form.incidentDate,
+      incidentDurationMinutes: form.incidentDurationMinutes
+        ? Number(form.incidentDurationMinutes)
+        : undefined,
+      absenceDays: form.absenceDays ? Number(form.absenceDays) : undefined,
+      incidentDescription: form.incidentDescription,
+      disruptsOthers: form.disruptsOthers,
+    });
   };
 
   const columns: DataTableColumn<Memo>[] = [

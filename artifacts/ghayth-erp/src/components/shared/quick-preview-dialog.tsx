@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 
 export interface PreviewField {
@@ -25,7 +25,7 @@ function renderValue(field: PreviewField, value: any) {
     case "currency":
       return <span className="font-semibold">{formatCurrency(Number(value))}</span>;
     case "status":
-      return <StatusBadge status={value} />;
+      return <PageStatusBadge status={value} />;
     case "badge":
       return <Badge variant="outline">{value}</Badge>;
     default:

@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
@@ -32,24 +30,24 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export default function ProjectCostingPage() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showAddCost, setShowAddCost] = useState(false);
   const [costForm, setCostForm] = useState({ projectId: "", amount: "", description: "", date: new Date().toISOString().split("T")[0], category: "direct" });
 
-  const addCostMutation = useMutation({
-    mutationFn: (payload: any) => apiFetch(`/finance/projects/${payload.projectId}/costs`, { method: "POST", body: JSON.stringify(payload) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects-finance"] });
-      toast({ title: "تم تسجيل التكلفة بنجاح" });
-      setShowAddCost(false);
-      setCostForm({ projectId: "", amount: "", description: "", date: new Date().toISOString().split("T")[0], category: "direct" });
+  const addCostMutation = useApiMutation<any, any>(
+    (body) => `/finance/projects/${body.projectId}/costs`,
+    "POST",
+    [["projects-finance"]],
+    {
+      successMessage: "تم تسجيل التكلفة بنجاح",
+      onSuccess: () => {
+        setShowAddCost(false);
+        setCostForm({ projectId: "", amount: "", description: "", date: new Date().toISOString().split("T")[0], category: "direct" });
+      },
     },
-    onError: (e: any) => toast({ variant: "destructive", title: e.message ?? "حدث خطأ" }),
-  });
+  );
 
   function handleAddCost(e: React.FormEvent) {
     e.preventDefault();

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import DOMPurify from "dompurify";
-import { useApiQuery, asList, apiFetch, ApiError } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList, apiFetch, ApiError } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -264,11 +264,17 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
     setGovEditing(true);
   };
 
-  const govSaveEdit = async () => {
-    await apiFetch(`/employees/${id}`, { method: "PATCH", body: JSON.stringify(govForm) });
-    toast({ title: "تم تحديث البيانات الحكومية" });
-    setGovEditing(false);
-    qc.invalidateQueries({ queryKey: ["employee", id] });
+  const govSaveMut = useApiMutation<any, Record<string, string>>(
+    `/employees/${id}`,
+    "PATCH",
+    [["employee", String(id)]],
+    {
+      successMessage: "تم تحديث البيانات الحكومية",
+      onSuccess: () => setGovEditing(false),
+    }
+  );
+  const govSaveEdit = () => {
+    govSaveMut.mutate(govForm);
   };
   const hrTemplates = asList<any>(templatesResp).filter((t: any) => t.category === "hr" && t.isActive !== false);
 

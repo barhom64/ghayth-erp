@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useSettings } from "@/contexts/settings-context";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { LetterheadHeader } from "@/components/print-layout";
 import type { BranchLetterhead } from "@/components/print-layout";
 import { useAppContext } from "@/contexts/app-context";
@@ -32,7 +31,6 @@ function GeneralSettings() {
   const { data: settingsData, isLoading } = useApiQuery<{ data: { key: string; value: string }[] }>(["settings-general"], "/settings/general");
   const { reload: reloadGlobalSettings } = useSettings();
   const { toast } = useToast();
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     companyName: "",
     companyNameEn: "",
@@ -69,20 +67,22 @@ function GeneralSettings() {
     }
   }, [settingsData]);
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await apiFetch("/settings/general", {
-        method: "PUT",
-        body: JSON.stringify(form),
-      });
-      await reloadGlobalSettings();
-      toast({ title: "تم الحفظ", description: "تم حفظ الإعدادات العامة بنجاح" });
-    } catch (e: any) {
-      toast({ title: "خطأ", description: e.message || "فشل حفظ الإعدادات", variant: "destructive" });
-    } finally {
-      setSaving(false);
+  const saveMut = useApiMutation<any, typeof form>(
+    "/settings/general",
+    "PUT",
+    [["settings-general"]],
+    {
+      successMessage: false,
+      onSuccess: async () => {
+        await reloadGlobalSettings();
+        toast({ title: "تم الحفظ", description: "تم حفظ الإعدادات العامة بنجاح" });
+      },
     }
+  );
+  const saving = saveMut.isPending;
+
+  const handleSave = () => {
+    saveMut.mutate(form);
   };
 
   if (isLoading) {
@@ -112,13 +112,10 @@ function GeneralSettings() {
 function CrudSection({ title, endpoint, queryKey, fields }: {
   title: string; endpoint: string; queryKey: string; fields: { name: string; label: string; required?: boolean }[];
 }) {
-  const { data, refetch } = useApiQuery<any>([queryKey], endpoint);
-  const createMut = useApiMutation<unknown, Record<string, string>>(endpoint, "POST", [[queryKey]]);
-  const { toast } = useToast();
+  const { data } = useApiQuery<any>([queryKey], endpoint);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.name, ""])));
-  const [deleting, setDeleting] = useState<number | null>(null);
   const items = asList(data);
 
   const resetForm = () => {
@@ -126,6 +123,32 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
     setEditingId(null);
     setShowForm(false);
   };
+
+  const createMut = useApiMutation<any, Record<string, string>>(
+    endpoint,
+    "POST",
+    [[queryKey]],
+    {
+      successMessage: `تمت إضافة ${title} بنجاح`,
+      onSuccess: resetForm,
+    }
+  );
+  const updateMut = useApiMutation<any, Record<string, any>>(
+    (body) => `${endpoint}/${body.__id}`,
+    "PUT",
+    [[queryKey]],
+    {
+      successMessage: `تم تعديل ${title} بنجاح`,
+      onSuccess: resetForm,
+    }
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `${endpoint}/${body.id}`,
+    "DELETE",
+    [[queryKey]],
+    { successMessage: "تم الحذف بنجاح" }
+  );
+  const deleting = deleteMut.isPending ? deleteMut.variables?.id ?? null : null;
 
   const handleEdit = (item: any) => {
     const newForm: Record<string, string> = {};
@@ -137,36 +160,16 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
     setShowForm(true);
   };
 
-  const handleSave = async () => {
-    try {
-      if (editingId) {
-        await apiFetch(`${endpoint}/${editingId}`, {
-          method: "PUT",
-          body: JSON.stringify(form),
-        });
-        toast({ title: "تم التعديل", description: `تم تعديل ${title} بنجاح` });
-      } else {
-        await createMut.mutateAsync(form);
-        toast({ title: "تمت الإضافة", description: `تمت إضافة ${title} بنجاح` });
-      }
-      resetForm();
-      refetch();
-    } catch (e: any) {
-      toast({ title: "خطأ", description: e.message || "فشلت العملية", variant: "destructive" });
+  const handleSave = () => {
+    if (editingId) {
+      updateMut.mutate({ ...form, __id: editingId });
+    } else {
+      createMut.mutate(form);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    setDeleting(id);
-    try {
-      await apiFetch(`${endpoint}/${id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف", description: `تم الحذف بنجاح` });
-      refetch();
-    } catch (e: any) {
-      toast({ title: "خطأ", description: e.message || "فشل الحذف", variant: "destructive" });
-    } finally {
-      setDeleting(null);
-    }
+  const handleDelete = (id: number) => {
+    deleteMut.mutate({ id });
   };
 
   return (

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 // Phase A — HR 360° evaluation on unified primitives.
 import { PageShell } from "@/components/page-shell";
-import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Target, TrendingUp, Award, Users, RefreshCw, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -36,7 +35,6 @@ interface Participant {
 }
 
 export default function Evaluation360Page() {
-  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ employeeId: "", period: "", notes: "" });
@@ -45,7 +43,20 @@ export default function Evaluation360Page() {
 
   const { data: cyclesData, isLoading } = useApiQuery<any>(["evaluation-cycles"], "/hr/evaluation-cycles");
   const { data: employeesData } = useApiQuery<any>(["employees-list-360"], "/employees?pageSize=200");
-  const createMutation = useApiMutation("/hr/evaluation-cycles", "POST");
+  const createMutation = useApiMutation<any, any>(
+    "/hr/evaluation-cycles",
+    "POST",
+    [["evaluation-cycles"]],
+    {
+      successMessage: false,
+      onSuccess: () => {
+        setShowCreate(false);
+        setForm({ employeeId: "", period: "", notes: "" });
+        setParticipants([]);
+        toast.success("تم بدء دورة التقييم بنجاح — تم توليد التقرير الآلي");
+      },
+    }
+  );
 
   const cycles = cyclesData?.data || [];
   const employees = employeesData?.data || [];
@@ -80,26 +91,17 @@ export default function Evaluation360Page() {
     setParticipants(participants.filter((p) => p.evaluatorId !== id));
   }
 
-  async function handleCreate() {
+  function handleCreate() {
     if (!form.employeeId || !form.period) {
       toast.error("الرجاء اختيار الموظف وتحديد الفترة");
       return;
     }
-    try {
-      await createMutation.mutateAsync({
-        employeeId: Number(form.employeeId),
-        period: form.period,
-        notes: form.notes,
-        participants: participants.map((p) => ({ evaluatorId: p.evaluatorId, evaluatorRole: p.evaluatorRole })),
-      });
-      qc.invalidateQueries({ queryKey: ["evaluation-cycles"] });
-      setShowCreate(false);
-      setForm({ employeeId: "", period: "", notes: "" });
-      setParticipants([]);
-      toast.success("تم بدء دورة التقييم بنجاح — تم توليد التقرير الآلي");
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err) || "حدث خطأ أثناء بدء دورة التقييم");
-    }
+    createMutation.mutate({
+      employeeId: Number(form.employeeId),
+      period: form.period,
+      notes: form.notes,
+      participants: participants.map((p) => ({ evaluatorId: p.evaluatorId, evaluatorRole: p.evaluatorRole })),
+    });
   }
 
   const kpiCards = [
