@@ -253,14 +253,14 @@ export default function InvoicesPage() {
                     entityType="invoice"
                     entityId={inv.id}
                     approveEndpoint={`/finance/invoices/${inv.id}/approve`}
-                    rejectEndpoint={`/finance/invoices/${inv.id}/approve`}
-                    returnEndpoint={`/finance/invoices/${inv.id}/approve`}
+                    rejectEndpoint={`/finance/invoices/${inv.id}/reject`}
+                    returnEndpoint={`/finance/invoices/${inv.id}/return`}
                     approveMethod="PATCH"
                     rejectMethod="PATCH"
                     returnMethod="PATCH"
-                    approveBody={() => ({ approved: true })}
-                    rejectBody={(r) => ({ approved: false, notes: r })}
-                    returnBody={(r) => ({ approved: "returned", notes: r })}
+                    approveBody={() => ({})}
+                    rejectBody={(r) => ({ notes: r })}
+                    returnBody={(r) => ({ notes: r })}
                     invalidateKeys={[["invoices"]]}
                   />
                 )}
