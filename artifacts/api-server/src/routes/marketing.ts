@@ -1,11 +1,22 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+
+// P02-S3-CRIT — `marketing:*` permissions are seeded for the
+// `general_manager` and `crm_manager` roles in companyBootstrap.ts:195
+// /:204, but every route in this file used to skip the permission
+// gate entirely. Authentication alone meant a junior accountant or a
+// procurement clerk could create, edit, delete, or rewrite the
+// `revenue` field on any campaign in their company — silently
+// fabricating ROI numbers that flow into the `/marketing/stats`
+// dashboard and the `/funnel` BI report. Aligning every route with
+// the same pattern used by fleet/hr/crm/properties.
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/campaigns", async (req, res) => {
+router.get("/campaigns", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
@@ -13,7 +24,7 @@ router.get("/campaigns", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.post("/campaigns", async (req, res) => {
+router.post("/campaigns", requirePermission("marketing:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, description, type, channel, status, budget, spent, startDate, endDate, targetAudience } = req.body;
@@ -25,7 +36,7 @@ router.post("/campaigns", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.get("/campaigns/:id", async (req, res) => {
+router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
@@ -34,7 +45,7 @@ router.get("/campaigns/:id", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.patch("/campaigns/:id", async (req, res) => {
+router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -61,7 +72,7 @@ router.patch("/campaigns/:id", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.delete("/campaigns/:id", async (req, res) => {
+router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -72,7 +83,7 @@ router.delete("/campaigns/:id", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.get("/stats", async (req, res) => {
+router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -100,7 +111,7 @@ router.get("/stats", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.get("/campaigns/:id/roas", async (req, res) => {
+router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -124,7 +135,7 @@ router.get("/campaigns/:id/roas", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.get("/funnel", async (req, res) => {
+router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -150,7 +161,7 @@ router.get("/funnel", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.patch("/campaigns/:id/revenue", async (req, res) => {
+router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -161,7 +172,7 @@ router.patch("/campaigns/:id/revenue", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.get("/templates", async (req, res) => {
+router.get("/templates", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
