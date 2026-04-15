@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 type Project = {
   id: number;
@@ -68,18 +69,18 @@ export default function ProjectCostingPage() {
   }), { budget: 0, actualCost: 0 });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">تكاليف المشاريع</h2>
-          <p className="text-sm text-gray-500 mt-1">متابعة الميزانيات والتكاليف الفعلية لكل مشروع</p>
-        </div>
+    <PageShell
+      title="تكاليف المشاريع"
+      subtitle="متابعة الميزانيات والتكاليف الفعلية لكل مشروع"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تكاليف المشاريع" }]}
+      loading={isLoading}
+      actions={
         <Button onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
           <Plus className="h-4 w-4 ml-2" />
           تسجيل تكلفة
         </Button>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card><CardContent className="p-4">
           <div className="text-sm text-gray-500">عدد المشاريع</div>
@@ -197,6 +198,6 @@ export default function ProjectCostingPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

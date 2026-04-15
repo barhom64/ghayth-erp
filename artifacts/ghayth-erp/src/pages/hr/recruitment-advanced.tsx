@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Briefcase, Users, UserCheck, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 const stageMap: Record<string, { label: string; color: string }> = {
   new: { label: "جديد", color: "bg-blue-100 text-blue-700" },
@@ -26,12 +27,11 @@ export default function RecruitmentAdvancedPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">تحليلات التوظيف المتقدمة</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">إحصائيات ومؤشرات عمليات التوظيف</p>
-      </div>
-
+    <PageShell
+      title="تحليلات التوظيف المتقدمة"
+      subtitle="إحصائيات ومؤشرات عمليات التوظيف"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التوظيف المتقدمة" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "وظائف مفتوحة", value: stats?.openPostings ?? 0, icon: Briefcase, color: "text-blue-600 bg-blue-50" },
@@ -92,6 +92,6 @@ export default function RecruitmentAdvancedPage() {
           </table>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

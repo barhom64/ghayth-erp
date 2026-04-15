@@ -139,7 +139,7 @@ export default function InvoiceDetailPage() {
   const remaining = invoice
     ? Number(invoice.total) - Number(invoice.paidAmount || 0)
     : 0;
-  const branch = invoice ? extractBranchFromResponse(invoice) : null;
+  const branch = invoice ? extractBranchFromResponse(invoice) ?? undefined : undefined;
   const docDate = invoice?.createdAt ? formatDateAr(invoice.createdAt) : "";
   const lifecycleSteps = buildLifecycleSteps(invoice?.status);
 

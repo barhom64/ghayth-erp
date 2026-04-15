@@ -1,6 +1,7 @@
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,14 +38,15 @@ export default function Notifications() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">مركز الإشعارات</h1>
+    <PageShell
+      title="مركز الإشعارات"
+      loading={isLoading}
+      actions={
         <Badge variant="secondary" className="px-3 py-1 text-sm">
           {notifications?.filter((n: any) => !n.isRead).length || 0} إشعار جديد
         </Badge>
-      </div>
-
+      }
+    >
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -122,6 +124,6 @@ export default function Notifications() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

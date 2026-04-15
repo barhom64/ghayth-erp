@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,9 +130,7 @@ export default function Automation() {
   ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">الأتمتة والجدولة</h1>
-
+    <PageShell title="الأتمتة والجدولة" loading={isLoading}>
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Cog className="h-4 w-4" /> المهام المجدولة</CardTitle></CardHeader>
@@ -296,6 +295,6 @@ export default function Automation() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

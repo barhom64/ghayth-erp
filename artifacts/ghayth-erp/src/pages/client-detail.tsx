@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -86,13 +87,11 @@ export default function ClientDetail() {
   const activeServices: any = client.activeServices || {};
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">ملف العميل 360°</h1>
-          <p className="text-lg text-muted-foreground mt-1">{client.name}</p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell
+      title="ملف العميل 360°"
+      subtitle={client.name}
+      actions={
+        <>
           <Badge
             className={cn("text-sm px-3 py-1", CLASSIFICATION_COLORS[client.classification] || "bg-gray-100")}
           >
@@ -101,9 +100,9 @@ export default function ClientDetail() {
           {client.isBlacklisted && (
             <Badge variant="destructive" className="text-sm px-3 py-1">قائمة سوداء</Badge>
           )}
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <QuickStat
           label="إجمالي الفواتير"
@@ -629,7 +628,7 @@ export default function ClientDetail() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }
 

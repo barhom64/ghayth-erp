@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2, Home, Wrench, TrendingUp, DollarSign } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { PageShell } from "@/components/page-shell";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   rented: { label: "مؤجرة", color: "text-green-600", bg: "bg-green-100" },
@@ -26,15 +27,12 @@ export default function OccupancyReportPage() {
   ].filter((d) => d.value > 0);
 
   return (
-    <div className="p-6 space-y-5 max-w-6xl mx-auto" dir="rtl">
-      <div className="flex items-center gap-3">
-        <Building2 className="w-6 h-6 text-primary" />
-        <div>
-          <h1 className="text-xl font-bold">تقرير الإشغال العقاري</h1>
-          <p className="text-sm text-gray-500">نظرة شاملة على حالة الوحدات العقارية</p>
-        </div>
-      </div>
-
+    <PageShell
+      title="تقرير الإشغال العقاري"
+      subtitle="نظرة شاملة على حالة الوحدات العقارية"
+      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { label: "تقرير الإشغال العقاري" }]}
+      loading={isLoading}
+    >
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="border-2 border-primary/20">
           <CardContent className="pt-4 text-center">
@@ -156,6 +154,6 @@ export default function OccupancyReportPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

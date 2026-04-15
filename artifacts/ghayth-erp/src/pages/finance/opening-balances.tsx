@@ -7,6 +7,7 @@ import { Plus, FilePlus } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 interface OpeningBalance {
   id: number;
@@ -85,17 +86,19 @@ export default function OpeningBalancesPage() {
   ];
 
   return (
-    <div className="space-y-4" dir="rtl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الأرصدة الافتتاحية</h1>
+    <PageShell
+      title="الأرصدة الافتتاحية"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الأرصدة الافتتاحية" }]}
+      loading={isLoading}
+      actions={
         <Link href="/finance/opening-balances/create">
           <Button size="sm">
             <Plus className="h-4 w-4 me-1" />
             قيد أرصدة افتتاحية جديد
           </Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
@@ -133,6 +136,6 @@ export default function OpeningBalancesPage() {
         emptyIcon={<FilePlus className="h-10 w-10 mx-auto opacity-30" />}
         searchPlaceholder="بحث بالمرجع أو الوصف..."
       />
-    </div>
+    </PageShell>
   );
 }

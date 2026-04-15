@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -286,14 +287,10 @@ function GeneralLettersTab() {
 
 export default function LettersPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">الخطابات والمراسلات</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">إدارة الخطابات الرسمية للموارد البشرية والمراسلات العامة</p>
-        </div>
-      </div>
-
+    <PageShell
+      title="الخطابات والمراسلات"
+      subtitle="إدارة الخطابات الرسمية للموارد البشرية والمراسلات العامة"
+    >
       <Tabs defaultValue="hr" dir="rtl">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="hr" className="gap-2">
@@ -310,6 +307,6 @@ export default function LettersPage() {
           <GeneralLettersTab />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { PageShell } from "@/components/page-shell";
 
 const defaultCenter: [number, number] = [24.7136, 46.6753];
 
@@ -82,12 +83,11 @@ export default function FieldTrackingPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">التتبع الميداني</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">متابعة مواقع الموظفين الميدانيين</p>
-      </div>
-
+    <PageShell
+      title="التتبع الميداني"
+      subtitle="متابعة مواقع الموظفين الميدانيين"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "التتبع الميداني" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -135,6 +135,6 @@ export default function FieldTrackingPage() {
           </tbody>
         </table>
       </CardContent></Card>
-    </div>
+    </PageShell>
   );
 }

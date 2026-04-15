@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, AlertTriangle, DollarSign, Users, KeyRound, ChevronDown, ChevronRight } from "lucide-react";
 import { formatCurrency, formatNumber , formatDateAr } from "@/lib/formatters";
+import { PageShell } from "@/components/page-shell";
 
 export default function CustodyAgingReportPage() {
   const { data, isLoading } = useApiQuery<any>(["custody-aging-report"], "/finance/custodies/report");
@@ -27,16 +28,20 @@ export default function CustodyAgingReportPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/finance/custodies">
-            <Button variant="ghost" size="sm"><ArrowRight className="h-4 w-4 me-1" />العهد</Button>
-          </Link>
-          <h1 className="text-3xl font-bold tracking-tight">تقرير أعمار العهد</h1>
-        </div>
-      </div>
-
+    <PageShell
+      title="تقرير أعمار العهد"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { href: "/finance/custodies", label: "العهد" },
+        { label: "تقرير أعمار العهد" },
+      ]}
+      loading={isLoading}
+      actions={
+        <Link href="/finance/custodies">
+          <Button variant="ghost" size="sm"><ArrowRight className="h-4 w-4 me-1" />العهد</Button>
+        </Link>
+      }
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-orange-100 rounded-lg"><DollarSign className="h-5 w-5 text-orange-600" /></div>
@@ -164,6 +169,6 @@ export default function CustodyAgingReportPage() {
           })}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

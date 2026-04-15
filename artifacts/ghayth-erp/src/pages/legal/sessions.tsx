@@ -2,6 +2,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 interface Session {
   id: number;
@@ -41,12 +42,13 @@ export default function LegalSessions() {
   const rows = asList(data?.data || data);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Calendar className="h-6 w-6" /> الجلسات القادمة</h1>
-        <p className="text-muted-foreground mt-1">جدول جلسات المحاكم والقضايا</p>
-      </div>
+    <PageShell
+      title="الجلسات القادمة"
+      subtitle="جدول جلسات المحاكم والقضايا"
+      breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الجلسات القادمة" }]}
+      loading={isLoading}
+    >
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </div>
+    </PageShell>
   );
 }

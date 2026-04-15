@@ -5,6 +5,7 @@ import { Shield, Plus } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 export default function InsurancePage() {
   const { data: insuranceResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -26,14 +27,16 @@ export default function InsurancePage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">التأمين</h1>
+    <PageShell
+      title="التأمين"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "التأمين" }]}
+      loading={isLoading}
+      actions={
         <Link href="/fleet/insurance/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة تأمين</Button>
         </Link>
-      </div>
-
+      }
+    >
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالمركبة أو شركة التأمين أو رقم الوثيقة...",
@@ -56,6 +59,6 @@ export default function InsurancePage() {
         emptyAction={{ label: "إضافة تأمين", onClick: () => { window.location.href = "/fleet/insurance/create"; } }}
         noToolbar
       />
-    </div>
+    </PageShell>
   );
 }

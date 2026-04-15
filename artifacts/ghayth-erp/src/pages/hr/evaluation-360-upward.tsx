@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { ArrowRight, Shield, Lock, EyeOff, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PageShell } from "@/components/page-shell";
 
 const UPWARD_CRITERIA = [
   { key: "leadership", label: "القيادة وتوزيع المهام" },
@@ -106,20 +107,16 @@ export default function Evaluation360UpwardPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center gap-3">
+    <PageShell
+      title="التقييم العكسي السري"
+      subtitle={cycle ? `دورة تقييم: ${cycle.period}` : undefined}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/evaluation-360", label: "التقييم 360°" }, { label: "التقييم العكسي السري" }]}
+      actions={
         <Link href={`/hr/evaluation-360/${cycleId}`}>
           <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
         </Link>
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Shield className="w-5 h-5 text-purple-600" />
-            التقييم العكسي السري
-          </h1>
-          {cycle && <p className="text-sm text-gray-500">دورة تقييم: {cycle.period}</p>}
-        </div>
-      </div>
-
+      }
+    >
       {/* Privacy guarantee */}
       <Card className="border-0 shadow-sm bg-purple-50 border border-purple-200">
         <CardContent className="p-4">
@@ -221,6 +218,6 @@ export default function Evaluation360UpwardPage() {
           {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال بشكل سري"}
         </Button>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, TrendingUp, Scale, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 const severityMap: Record<string, { label: string; color: string }> = {
   low: { label: "تنبيه", color: "bg-green-100 text-green-700" },
@@ -31,12 +32,11 @@ export default function PenaltyEscalationPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">تصعيد الجزاءات</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">نظام التصعيد التلقائي للمخالفات المتكررة</p>
-      </div>
-
+    <PageShell
+      title="تصعيد الجزاءات"
+      subtitle="نظام التصعيد التلقائي للمخالفات المتكررة"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تصعيد الجزاءات" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "مخالفات نشطة", value: items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
@@ -106,6 +106,6 @@ export default function PenaltyEscalationPage() {
         })}
         {Object.keys(grouped).length === 0 && <Card><CardContent className="p-8 text-center text-gray-400">لا توجد مخالفات نشطة</CardContent></Card>}
       </div>
-    </div>
+    </PageShell>
   );
 }

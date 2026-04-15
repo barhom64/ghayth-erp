@@ -8,6 +8,7 @@ import { Calendar, CheckCircle, XCircle, Clock, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+import { PageShell } from "@/components/page-shell";
 
 function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => void }) {
   const [showImpact, setShowImpact] = useState(false);
@@ -100,12 +101,11 @@ export default function LeaveManagementPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">إدارة الإجازات</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">اعتماد طلبات الإجازات ومتابعة الأرصدة</p>
-      </div>
-
+    <PageShell
+      title="إدارة الإجازات"
+      subtitle="اعتماد طلبات الإجازات ومتابعة الأرصدة"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الإجازات" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -184,6 +184,6 @@ export default function LeaveManagementPage() {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

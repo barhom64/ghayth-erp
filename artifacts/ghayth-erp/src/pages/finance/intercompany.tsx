@@ -9,6 +9,7 @@ import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Link } from "wouter";
+import { PageShell } from "@/components/page-shell";
 
 export default function IntercompanyPage() {
   const { toast } = useToast();
@@ -93,13 +94,13 @@ export default function IntercompanyPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">المعاملات البينية</h2>
-          <p className="text-sm text-gray-500 mt-1">تسجيل المعاملات المالية بين الشركات مع إنشاء قيود مزدوجة تلقائياً</p>
-        </div>
-        <div className="flex gap-3">
+    <PageShell
+      title="المعاملات البينية"
+      subtitle="تسجيل المعاملات المالية بين الشركات مع إنشاء قيود مزدوجة تلقائياً"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "المعاملات البينية" }]}
+      loading={isLoading}
+      actions={
+        <>
           <Link href="/finance/intercompany/consolidation/create">
             <Button variant="outline">
               <Layers className="h-4 w-4 ml-2" />
@@ -110,9 +111,9 @@ export default function IntercompanyPage() {
             <ArrowLeftRight className="h-4 w-4 ml-2" />
             معاملة جديدة
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
         <div className="font-semibold mb-1">آلية العمل التلقائية</div>
         عند تسجيل معاملة بينية، يُنشئ النظام تلقائياً:
@@ -168,6 +169,6 @@ export default function IntercompanyPage() {
         </div>
       )}
 
-    </div>
+    </PageShell>
   );
 }

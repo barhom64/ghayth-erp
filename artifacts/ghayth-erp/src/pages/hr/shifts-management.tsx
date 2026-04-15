@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Users, Plus, Sun, Moon, Clock, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 export default function ShiftsManagementPage() {
   const { data: shiftsData } = useApiQuery<any>(["shifts"], "/hr/shifts");
@@ -40,12 +41,11 @@ export default function ShiftsManagementPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">إدارة الورديات المتقدمة</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">تعيين الموظفين للورديات وإدارة الجداول</p>
-      </div>
-
+    <PageShell
+      title="إدارة الورديات المتقدمة"
+      subtitle="تعيين الموظفين للورديات وإدارة الجداول"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الورديات المتقدمة" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "الورديات", value: shifts.length, icon: CalendarClock, color: "text-blue-600 bg-blue-50" },
@@ -143,6 +143,6 @@ export default function ShiftsManagementPage() {
           </CardContent></Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

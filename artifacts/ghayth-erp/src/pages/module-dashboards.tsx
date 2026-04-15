@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -430,16 +431,10 @@ const tabConfig = [
 
 export default function ModuleDashboardsPage() {
   return (
-    <div className="p-4 md:p-6 space-y-4" dir="rtl">
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <BarChart3 className="h-5 w-5" /> لوحات مؤشرات المسارات
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          مؤشرات أداء مخصصة لكل مسار تشغيلي
-        </p>
-      </div>
-
+    <PageShell
+      title="لوحات مؤشرات المسارات"
+      subtitle="مؤشرات أداء مخصصة لكل مسار تشغيلي"
+    >
       <Tabs defaultValue="hr" dir="rtl">
         <TabsList className="flex-wrap h-auto gap-1">
           {tabConfig.map(t => (
@@ -455,6 +450,6 @@ export default function ModuleDashboardsPage() {
           </TabsContent>
         ))}
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

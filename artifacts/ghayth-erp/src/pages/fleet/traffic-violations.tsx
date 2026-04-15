@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 const VIOLATION_TYPES: Record<string, string> = {
   speeding: "تجاوز السرعة",
@@ -51,20 +52,16 @@ export default function TrafficViolationsPage() {
   };
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <AlertTriangle className="w-6 h-6 text-orange-500" />
-          <div>
-            <h1 className="text-xl font-bold">المخالفات المرورية</h1>
-            <p className="text-sm text-gray-500">تتبع وإدارة مخالفات مركبات الأسطول</p>
-          </div>
-        </div>
+    <PageShell
+      title="المخالفات المرورية"
+      subtitle="تتبع وإدارة مخالفات مركبات الأسطول"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "المخالفات المرورية" }]}
+      actions={
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> تسجيل مخالفة
         </Button>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{violations.length}</div><div className="text-xs text-gray-500">إجمالي المخالفات</div></CardContent></Card>
         <Card className="border-red-200 bg-red-50/30">
@@ -170,6 +167,6 @@ export default function TrafficViolationsPage() {
           </Card>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { Download, AlertTriangle, Clock, Users } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { PageShell } from "@/components/page-shell";
 
 function csvEscape(val: string): string {
   if (val.includes(",") || val.includes('"') || val.includes("\n")) {
@@ -71,20 +72,19 @@ export default function ArAgingPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Clock className="h-6 w-6 text-orange-500" />
-          تقرير تقادم الذمم المدينة
-        </h1>
-        <div className="flex items-center gap-2 flex-wrap">
+    <PageShell
+      title="تقرير تقادم الذمم المدينة"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تقرير تقادم الذمم المدينة" }]}
+      loading={isLoading}
+      actions={
+        <>
           <DatePicker value={asOfDate} onChange={setAsOfDate} className="w-44" placeholder="تاريخ التقرير" />
           <Button variant="outline" size="sm" onClick={() => exportCSV(clients, `ar-aging-${asOfDate}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         {BUCKETS.map(b => (
           <Card key={b.key}>
@@ -133,13 +133,13 @@ export default function ArAgingPage() {
                 rowKey={(inv) => inv.id}
                 emptyMessage="لا توجد فواتير"
                 columns={[
-                  { key: "ref", header: "المرجع", className: "font-mono text-blue-600 text-xs", render: (inv) => inv.ref },
-                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-gray-500", render: (inv) => inv.dueDate ? formatDateAr(inv.dueDate) : "-" },
-                  { key: "outstanding", header: "المستحق", className: "font-semibold", render: (inv) => formatCurrency(inv.outstanding) },
+                  { key: "ref", header: "المرجع", className: "font-mono text-blue-600 text-xs", render: (inv: any) => inv.ref },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-gray-500", render: (inv: any) => inv.dueDate ? formatDateAr(inv.dueDate) : "-" },
+                  { key: "outstanding", header: "المستحق", className: "font-semibold", render: (inv: any) => formatCurrency(inv.outstanding) },
                   {
                     key: "bucket",
                     header: "الفترة",
-                    render: (inv) => {
+                    render: (inv: any) => {
                       const b = BUCKETS.find(x => x.key === inv.bucket);
                       return <Badge className={b?.color ?? ""}>{b?.label ?? inv.bucket}</Badge>;
                     },
@@ -164,6 +164,6 @@ export default function ArAgingPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

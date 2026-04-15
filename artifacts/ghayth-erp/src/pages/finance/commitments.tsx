@@ -5,6 +5,7 @@ import { FileSignature, DollarSign, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 export default function CommitmentsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["commitments"], "/finance/commitments");
@@ -58,9 +59,11 @@ export default function CommitmentsPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-3xl font-bold tracking-tight">الالتزامات المالية</h1>
-
+    <PageShell
+      title="الالتزامات المالية"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الالتزامات المالية" }]}
+      loading={isLoading}
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
         <Card className="bg-orange-600 text-white"><CardContent className="p-4 flex items-center gap-3">
           <DollarSign className="h-8 w-8 opacity-80" />
@@ -109,6 +112,6 @@ export default function CommitmentsPage() {
         emptyIcon={<FileSignature className="h-6 w-6 text-slate-400" />}
         noToolbar
       />
-    </div>
+    </PageShell>
   );
 }

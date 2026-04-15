@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Wrench, Plus, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -67,24 +68,20 @@ export default function PreventivePlansPage() {
   const dueSoonCount = plans.filter((p: any) => { const d = getDueDays(p.nextServiceDate); return d !== null && d >= 0 && d <= 7; }).length;
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Wrench className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">خطط الصيانة الوقائية</h1>
-            <p className="text-sm text-gray-500">جدولة الصيانة الدورية لمركبات الأسطول</p>
-          </div>
-          <div className="flex gap-2">
-            {overdueCount > 0 && <Badge className="bg-red-100 text-red-700">{overdueCount} متأخر</Badge>}
-            {dueSoonCount > 0 && <Badge className="bg-yellow-100 text-yellow-700">{dueSoonCount} قريب</Badge>}
-          </div>
-        </div>
-        <Button onClick={() => setShowForm(!showForm)} size="sm">
-          <Plus className="w-4 h-4 me-1" /> إضافة خطة
-        </Button>
-      </div>
-
+    <PageShell
+      title="خطط الصيانة الوقائية"
+      subtitle="جدولة الصيانة الدورية لمركبات الأسطول"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "خطط الصيانة الوقائية" }]}
+      actions={
+        <>
+          {overdueCount > 0 && <Badge className="bg-red-100 text-red-700">{overdueCount} متأخر</Badge>}
+          {dueSoonCount > 0 && <Badge className="bg-yellow-100 text-yellow-700">{dueSoonCount} قريب</Badge>}
+          <Button onClick={() => setShowForm(!showForm)} size="sm">
+            <Plus className="w-4 h-4 me-1" /> إضافة خطة
+          </Button>
+        </>
+      }
+    >
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">خطة صيانة وقائية جديدة</CardTitle></CardHeader>
@@ -188,6 +185,6 @@ export default function PreventivePlansPage() {
           );
         })}
       </div>
-    </div>
+    </PageShell>
   );
 }

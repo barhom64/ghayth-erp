@@ -7,6 +7,7 @@ import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 export default function BudgetPage() {
   const { scopeQueryString } = useAppContext();
@@ -89,14 +90,19 @@ export default function BudgetPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الميزانية</h1>
-        <Link href="/finance/budget/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة بند</Button>
-        </Link>
-      </div>
-
+    <PageShell
+      title="الميزانية"
+      subtitle="متابعة المخصصات والمنصرف والمتبقي لكل حساب في كل فترة مالية"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الميزانية" }]}
+      loading={isLoading}
+      actions={
+        <Button size="sm" asChild>
+          <Link href="/finance/budget/create">
+            <Plus className="h-4 w-4 me-1" />إضافة بند
+          </Link>
+        </Button>
+      }
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg"><FileBarChart className="h-5 w-5 text-blue-600" /></div>
@@ -144,6 +150,6 @@ export default function BudgetPage() {
         emptyIcon={<FileBarChart className="h-6 w-6 text-slate-400" />}
         noToolbar
       />
-    </div>
+    </PageShell>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -250,17 +251,10 @@ function IntegrationLogs() {
 
 export default function AdminIntegrations() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-          <Plug className="w-5 h-5 text-indigo-600" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">مركز التكاملات</h1>
-          <p className="text-sm text-gray-500">إدارة قنوات الإرسال والتكاملات الخارجية</p>
-        </div>
-      </div>
-
+    <PageShell
+      title="مركز التكاملات"
+      subtitle="إدارة قنوات الإرسال والتكاملات الخارجية"
+    >
       <Tabs defaultValue="integrations" dir="rtl">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="integrations">التكاملات</TabsTrigger>
@@ -269,6 +263,6 @@ export default function AdminIntegrations() {
         <TabsContent value="integrations"><IntegrationsList /></TabsContent>
         <TabsContent value="logs"><IntegrationLogs /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

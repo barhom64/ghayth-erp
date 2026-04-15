@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -17,8 +18,7 @@ import { usePushNotifications } from "@/hooks/use-push-notifications";
 export default function Communications() {
   const [tab, setTab] = useState("monitor");
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">الاتصالات</h1>
+    <PageShell title="الاتصالات">
       <StatsCards />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-5">
@@ -34,7 +34,7 @@ export default function Communications() {
         <TabsContent value="sms" className="mt-6"><SMSTab /></TabsContent>
         <TabsContent value="pbx" className="mt-6"><PBXTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 

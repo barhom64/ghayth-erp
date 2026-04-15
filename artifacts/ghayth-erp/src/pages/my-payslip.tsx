@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DollarSign, TrendingUp, TrendingDown, FileText, Loader2, Printer } from "lucide-react";
@@ -23,20 +24,18 @@ export default function MyPayslip() {
   const hasData = payslip && (payslip.netSalary || payslip.baseSalary);
 
   return (
-    <div className="p-6 max-w-2xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">كشف راتبي</h1>
-          <p className="text-gray-500 mt-1">عرض مفصّل لراتبك الشهري</p>
-        </div>
-        {hasData && (
+    <PageShell
+      title="كشف راتبي"
+      subtitle="عرض مفصّل لراتبك الشهري"
+      actions={
+        hasData && (
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
             <Printer size={14} />
             طباعة
           </Button>
-        )}
-      </div>
-
+        )
+      }
+    >
       <div className="flex items-center gap-3 mb-6">
         <label className="text-sm font-medium text-gray-700">الفترة:</label>
         <input
@@ -122,6 +121,6 @@ export default function MyPayslip() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

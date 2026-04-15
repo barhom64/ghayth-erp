@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCircle, XCircle, Clock, AlertTriangle, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@/components/page-shell";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   accepted: { label: "مقبولة", color: "text-green-700", bg: "bg-green-100", icon: <CheckCircle className="h-3.5 w-3.5" /> },
@@ -86,19 +87,19 @@ export default function TaxSystemPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">نظام الضرائب والفوترة الإلكترونية</h1>
-        <div className="flex items-center gap-2">
-          {activeTab === "vat" && (
-            <>
-              <span className="text-sm text-gray-500">الفترة:</span>
-              <Input type="month" className="w-44" value={period} onChange={(e) => setPeriod(e.target.value)} />
-            </>
-          )}
-        </div>
-      </div>
-
+    <PageShell
+      title="نظام الضرائب والفوترة الإلكترونية"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "نظام الضرائب والفوترة الإلكترونية" }]}
+      loading={summaryLoading || declLoading}
+      actions={
+        activeTab === "vat" ? (
+          <>
+            <span className="text-sm text-gray-500">الفترة:</span>
+            <Input type="month" className="w-44" value={period} onChange={(e) => setPeriod(e.target.value)} />
+          </>
+        ) : undefined
+      }
+    >
       <div className="flex gap-2 border-b pb-2">
         <button
           onClick={() => setActiveTab("vat")}
@@ -324,6 +325,6 @@ export default function TaxSystemPage() {
           </Card>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

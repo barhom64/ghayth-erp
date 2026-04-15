@@ -10,6 +10,7 @@ import { ArrowRightLeft, Plus, CheckCircle, XCircle, Clock, ChevronDown, Chevron
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ApprovalActions } from "@/components/approval-actions";
+import { PageShell } from "@/components/page-shell";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: "معلق", color: "bg-yellow-100 text-yellow-700" },
@@ -48,21 +49,19 @@ export default function TransfersPage() {
   const pendingCount = transfers.filter((t: any) => t.status === "pending").length;
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ArrowRightLeft className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">نقل الموظفين</h1>
-            <p className="text-sm text-gray-500">إدارة طلبات نقل الموظفين بين الفروع والأقسام</p>
-          </div>
+    <PageShell
+      title="نقل الموظفين"
+      subtitle="إدارة طلبات نقل الموظفين بين الفروع والأقسام"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "نقل الموظفين" }]}
+      actions={
+        <>
           {pendingCount > 0 && <Badge className="bg-yellow-100 text-yellow-700">{pendingCount} بانتظار الموافقة</Badge>}
-        </div>
-        <Button onClick={() => setShowForm(!showForm)} size="sm">
-          <Plus className="w-4 h-4 me-1" /> طلب نقل جديد
-        </Button>
-      </div>
-
+          <Button onClick={() => setShowForm(!showForm)} size="sm">
+            <Plus className="w-4 h-4 me-1" /> طلب نقل جديد
+          </Button>
+        </>
+      }
+    >
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">طلب نقل موظف</CardTitle></CardHeader>
@@ -165,6 +164,6 @@ export default function TransfersPage() {
           </Card>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar, Plus, Trash2, Edit2, Save, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 const TYPES: Record<string, string> = {
   national: "وطنية",
@@ -74,16 +75,13 @@ export default function PublicHolidaysPage() {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="p-6 space-y-4 max-w-4xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Calendar className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">تقويم الإجازات الرسمية</h1>
-            <p className="text-sm text-gray-500">إدارة العطل الرسمية والأيام المميزة</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageShell
+      title="تقويم الإجازات الرسمية"
+      subtitle="إدارة العطل الرسمية والأيام المميزة"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تقويم الإجازات الرسمية" }]}
+      loading={isLoading}
+      actions={
+        <>
           <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
             <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -95,9 +93,9 @@ export default function PublicHolidaysPage() {
           <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false }); }} size="sm">
             <Plus className="w-4 h-4 me-1" /> إضافة عطلة
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2">
@@ -180,6 +178,6 @@ export default function PublicHolidaysPage() {
           </Card>
         ))
       )}
-    </div>
+    </PageShell>
   );
 }

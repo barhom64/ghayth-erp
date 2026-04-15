@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Vault, Plus, RotateCcw, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 export default function DepositsPage() {
   const [showForm, setShowForm] = useState(false);
@@ -54,20 +55,16 @@ export default function DepositsPage() {
   };
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Vault className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">ودائع الضمان</h1>
-            <p className="text-sm text-gray-500">إدارة ودائع ضمان المستأجرين</p>
-          </div>
-        </div>
+    <PageShell
+      title="ودائع الضمان"
+      subtitle="إدارة ودائع ضمان المستأجرين"
+      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { label: "ودائع الضمان" }]}
+      actions={
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> تسجيل وديعة
         </Button>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{deposits.length}</div><div className="text-xs text-gray-500">إجمالي الودائع</div></CardContent></Card>
         <Card className="border-blue-200 bg-blue-50/30">
@@ -160,6 +157,6 @@ export default function DepositsPage() {
           </Card>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

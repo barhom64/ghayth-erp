@@ -10,6 +10,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Building2, Plus, TrendingDown, Calculator, CheckCircle } from "lucide-react";
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { PageShell } from "@/components/page-shell";
 
 export default function FixedAssetsPage() {
   const [showCreate, setShowCreate] = useState(false);
@@ -77,13 +78,12 @@ export default function FixedAssetsPage() {
   const totalAccDep = assets.reduce((s: number, a: any) => s + Number(a.accumulatedDepreciation ?? 0), 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Building2 className="h-6 w-6 text-indigo-600" />
-          الأصول الثابتة والإهلاك
-        </h1>
-        <div className="flex gap-2">
+    <PageShell
+      title="الأصول الثابتة والإهلاك"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الأصول الثابتة والإهلاك" }]}
+      loading={isLoading}
+      actions={
+        <>
           <Link href="/finance/fixed-assets/batch-depreciate">
             <Button variant="outline" size="sm">
               <TrendingDown className="h-4 w-4 me-2" />إهلاك دفعي
@@ -92,9 +92,9 @@ export default function FixedAssetsPage() {
           <Button onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 me-1" />أصل جديد
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div className="grid gap-3 grid-cols-3">
         <Card><CardContent className="p-4 text-center">
           <p className="text-xs text-gray-500">التكلفة الإجمالية</p>
@@ -249,6 +249,6 @@ export default function FixedAssetsPage() {
           </Card>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

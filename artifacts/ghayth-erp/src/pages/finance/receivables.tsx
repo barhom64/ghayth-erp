@@ -8,6 +8,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 export default function ReceivablesPage() {
   const { scopeQueryString } = useAppContext();
@@ -78,9 +79,11 @@ export default function ReceivablesPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-3xl font-bold tracking-tight">المقبوضات (الذمم المدينة)</h1>
-
+    <PageShell
+      title="المقبوضات (الذمم المدينة)"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "المقبوضات (الذمم المدينة)" }]}
+      loading={isLoading}
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card className="bg-blue-600 text-white"><CardContent className="p-4 flex items-center gap-3">
           <DollarSign className="h-8 w-8 opacity-80" />
@@ -136,6 +139,6 @@ export default function ReceivablesPage() {
         emptyIcon={<ArrowDownCircle className="h-6 w-6 text-slate-400" />}
         noToolbar
       />
-    </div>
+    </PageShell>
   );
 }

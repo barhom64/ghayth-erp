@@ -4,6 +4,7 @@ import { ArrowUpCircle, DollarSign, Calendar, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 export default function PaymentsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["payments"], "/finance/payments");
@@ -44,14 +45,12 @@ export default function PaymentsPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">المدفوعات</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          عرض تجميعي لجميع سندات الصرف — لإنشاء سند جديد استخدم صفحة <a href="/finance/vouchers" className="text-primary underline underline-offset-2">السندات</a>
-        </p>
-      </div>
-
+    <PageShell
+      title="المدفوعات"
+      subtitle="عرض تجميعي لجميع سندات الصرف — لإنشاء سند جديد استخدم صفحة السندات"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "المدفوعات" }]}
+      loading={isLoading}
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
         <Card className="bg-red-600 text-white"><CardContent className="p-4 flex items-center gap-3">
           <DollarSign className="h-8 w-8 opacity-80" />
@@ -94,6 +93,6 @@ export default function PaymentsPage() {
         emptyIcon={<ArrowUpCircle className="h-6 w-6 text-slate-400" />}
         noToolbar
       />
-    </div>
+    </PageShell>
   );
 }

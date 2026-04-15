@@ -11,6 +11,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Upload, CheckCircle, XCircle, RefreshCw, Landmark, Link2 } from "lucide-react";
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { PageShell } from "@/components/page-shell";
 
 export default function BankReconciliationPage() {
   const [activeBatch, setActiveBatch] = useState<string | null>(null);
@@ -114,14 +115,10 @@ export default function BankReconciliationPage() {
   const unmatchedRows = rows.filter((r: any) => r.matchStatus !== "matched");
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Landmark className="h-6 w-6 text-blue-600" />
-          التسوية البنكية
-        </h1>
-      </div>
-
+    <PageShell
+      title="التسوية البنكية"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "التسوية البنكية" }]}
+    >
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader><CardTitle className="text-base">استيراد كشف بنكي </CardTitle></CardHeader>
@@ -280,6 +277,6 @@ export default function BankReconciliationPage() {
         </div>
       )}
 
-    </div>
+    </PageShell>
   );
 }

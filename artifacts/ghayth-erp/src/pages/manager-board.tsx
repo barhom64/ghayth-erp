@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -135,22 +136,17 @@ export default function ManagerBoard() {
   const tasksPct = tasks.length > 0 ? Math.round((tasksDone / tasks.length) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Briefcase className="w-8 h-8 text-blue-600" />
-            لوحة المدير
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">إشراف على الفريق والطلبات المعلقة واتخاذ قرارات سريعة</p>
-        </div>
+    <PageShell
+      title="لوحة المدير"
+      subtitle="إشراف على الفريق والطلبات المعلقة واتخاذ قرارات سريعة"
+      actions={
         <Link href="/action-center">
           <Button variant="outline" size="sm" className="gap-1">
             مركز القرارات الكامل <ArrowUpRight className="w-3 h-3" />
           </Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "طلبات معلقة", value: allPending.length, color: "bg-orange-50 text-orange-700", icon: Clock },
@@ -393,7 +389,7 @@ export default function ManagerBoard() {
       </Card>
 
       <DelegationBoard delegationsData={delegationsData} />
-    </div>
+    </PageShell>
   );
 }
 

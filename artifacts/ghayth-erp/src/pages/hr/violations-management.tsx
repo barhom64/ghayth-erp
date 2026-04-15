@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 const severityMap: Record<string, { label: string; color: string }> = {
   low: { label: "منخفض", color: "bg-green-100 text-green-700" },
@@ -100,12 +101,11 @@ export default function ViolationsManagementPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">إدارة المخالفات المتقدمة</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">تحليل وإدارة المخالفات مع التصعيد التلقائي</p>
-      </div>
-
+    <PageShell
+      title="إدارة المخالفات المتقدمة"
+      subtitle="تحليل وإدارة المخالفات مع التصعيد التلقائي"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة المخالفات المتقدمة" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
@@ -169,6 +169,6 @@ export default function ViolationsManagementPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

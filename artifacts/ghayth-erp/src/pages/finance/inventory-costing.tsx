@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Package, Calculator, TrendingUp, CheckCircle, Info } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+import { PageShell } from "@/components/page-shell";
 
 export default function InventoryCostingPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -105,14 +106,11 @@ export default function InventoryCostingPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Package className="h-6 w-6 text-teal-600" />
-          تقييم المخزون بالمتوسط المرجح
-        </h1>
-      </div>
-
+    <PageShell
+      title="تقييم المخزون بالمتوسط المرجح"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تقييم المخزون بالمتوسط المرجح" }]}
+      loading={isLoading}
+    >
       <div className="grid gap-3 grid-cols-3">
         <Card><CardContent className="p-4 text-center">
           <p className="text-xs text-gray-500">عدد المنتجات</p>
@@ -228,6 +226,6 @@ export default function InventoryCostingPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

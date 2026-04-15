@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calculator, DollarSign, Calendar, User } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 const TERMINATION_TYPES: Record<string, string> = {
   end_of_service: "إنهاء خدمة من قبل صاحب العمل",
@@ -36,15 +37,13 @@ export default function GratuityPage() {
   const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(n);
 
   return (
-    <div className="p-6 space-y-4 max-w-3xl mx-auto" dir="rtl">
-      <div className="flex items-center gap-3">
-        <Calculator className="w-6 h-6 text-primary" />
-        <div>
-          <h1 className="text-xl font-bold">حساب مكافأة نهاية الخدمة</h1>
-          <p className="text-sm text-gray-500">وفق نظام العمل السعودي — المادة 84</p>
-        </div>
-      </div>
-
+    <PageShell
+      title="حساب مكافأة نهاية الخدمة"
+      subtitle="وفق نظام العمل السعودي — المادة 84"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "حساب مكافأة نهاية الخدمة" }]}
+      loading={isLoading}
+      contentClassName="space-y-4 max-w-3xl mx-auto"
+    >
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">بيانات الحساب</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
@@ -162,6 +161,6 @@ export default function GratuityPage() {
           </ul>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

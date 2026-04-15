@@ -3,6 +3,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import { TrendingUp, TrendingDown, DollarSign, Calendar, AlertCircle } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 function ForecastCard({ label, days, data }: { label: string; days: string; data: any }) {
   const net = data?.net ?? 0;
@@ -56,12 +57,12 @@ export default function CashFlowForecastPage() {
   const isWarning = projected90 < 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">توقعات التدفق النقدي</h2>
-        <p className="text-sm text-gray-500 mt-1">تحليل التدفقات النقدية المتوقعة خلال 30 و60 و90 يوم القادمة بناءً على الفواتير والمستحقات</p>
-      </div>
-
+    <PageShell
+      title="توقعات التدفق النقدي"
+      subtitle="تحليل التدفقات النقدية المتوقعة خلال 30 و60 و90 يوم القادمة بناءً على الفواتير والمستحقات"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "توقعات التدفق النقدي" }]}
+      loading={isLoading}
+    >
       {isLoading ? (
         <div className="text-center py-16 text-gray-400">جاري تحميل البيانات...</div>
       ) : (
@@ -148,6 +149,6 @@ export default function CashFlowForecastPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

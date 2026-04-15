@@ -2,6 +2,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 interface KBArticle {
   id: number;
@@ -29,12 +30,13 @@ export default function KnowledgeBase() {
   const rows = asList(data?.data || data);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><BookOpen className="h-6 w-6" /> قاعدة المعرفة</h1>
-        <p className="text-muted-foreground mt-1">مقالات ومواد تعليمية لحل المشاكل الشائعة</p>
-      </div>
+    <PageShell
+      title="قاعدة المعرفة"
+      subtitle="مقالات ومواد تعليمية لحل المشاكل الشائعة"
+      breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "قاعدة المعرفة" }]}
+      loading={isLoading}
+    >
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </div>
+    </PageShell>
   );
 }

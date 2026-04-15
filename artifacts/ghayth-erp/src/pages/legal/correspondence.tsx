@@ -3,6 +3,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Mail } from "lucide-react";
 import { useLocation } from "wouter";
+import { PageShell } from "@/components/page-shell";
 
 interface LegalCase {
   id: number;
@@ -27,11 +28,12 @@ export default function LegalCorrespondence() {
   const [, navigate] = useLocation();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Mail className="h-6 w-6" /> المراسلات القانونية</h1>
-        <p className="text-muted-foreground mt-1">اختر قضية لعرض مراسلاتها — سجل المراسلات والخطابات القانونية</p>
-      </div>
+    <PageShell
+      title="المراسلات القانونية"
+      subtitle="اختر قضية لعرض مراسلاتها — سجل المراسلات والخطابات القانونية"
+      breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "المراسلات القانونية" }]}
+      loading={isLoading}
+    >
       <DataTable
         columns={columns}
         data={cases}
@@ -40,6 +42,6 @@ export default function LegalCorrespondence() {
         error={error}
         onRowClick={(row) => navigate(`/legal/cases/${row.id}`)}
       />
-    </div>
+    </PageShell>
   );
 }

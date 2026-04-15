@@ -4,6 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@/components/page-shell";
 
 export default function FleetMaintenancePage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-maintenance"], "/fleet/maintenance");
@@ -18,13 +19,16 @@ export default function FleetMaintenancePage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">صيانة المركبات</h1>
+    <PageShell
+      title="صيانة المركبات"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "صيانة المركبات" }]}
+      loading={isLoading}
+      actions={
         <Link href="/fleet/maintenance/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة صيانة</Button>
         </Link>
-      </div>
+      }
+    >
       <DataTable
         columns={columns}
         data={items}
@@ -35,6 +39,6 @@ export default function FleetMaintenancePage() {
         searchPlaceholder="بحث بالمركبة أو النوع أو الورشة..."
         emptyMessage="لا توجد سجلات صيانة"
       />
-    </div>
+    </PageShell>
   );
 }

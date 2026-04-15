@@ -10,6 +10,7 @@ import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "نقدي",
@@ -130,19 +131,19 @@ export default function VouchersPage() {
   const totalPayments = payments.reduce((s: number, v: any) => s + Number(v.amount || 0), 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">السندات</h1>
-          <p className="text-sm text-gray-500 mt-0.5">توثيق حركات النقد (قبض وصرف) — السندات تختلف عن <a href="/finance/expenses" className="text-primary underline underline-offset-2">المصروفات</a> المرتبطة بالميزانية</p>
-        </div>
+    <PageShell
+      title="السندات"
+      subtitle="توثيق حركات النقد (قبض وصرف) — السندات تختلف عن المصروفات المرتبطة بالميزانية"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "السندات" }]}
+      loading={isLoading}
+      actions={
         <Link href="/finance/vouchers/create">
           <Button size="sm">
             <Plus className="h-4 w-4 me-1" />سند جديد
           </Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg"><FileText className="h-5 w-5 text-blue-600" /></div>
@@ -266,6 +267,6 @@ export default function VouchersPage() {
           );
         }}
       />
-    </div>
+    </PageShell>
   );
 }

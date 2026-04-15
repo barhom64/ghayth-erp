@@ -9,6 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { ArrowRight, Users, Target, CheckCircle, Clock, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PageShell } from "@/components/page-shell";
 
 const EVAL_CRITERIA = [
   { key: "technical_skills", label: "المهارات التقنية والمهنية" },
@@ -80,17 +81,16 @@ export default function Evaluation360PeerPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center gap-3">
+    <PageShell
+      title="تقييم المدير / الزملاء"
+      subtitle={cycle ? `الموظف: ${cycle.employeeName} · ${cycle.period}` : undefined}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/evaluation-360", label: "التقييم 360°" }, { label: "تقييم الزملاء" }]}
+      actions={
         <Link href={`/hr/evaluation-360/${cycleId}`}>
           <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
         </Link>
-        <div>
-          <h1 className="text-xl font-bold">تقييم المدير / الزملاء</h1>
-          {cycle && <p className="text-sm text-gray-500">الموظف: {cycle.employeeName} · {cycle.period}</p>}
-        </div>
-      </div>
-
+      }
+    >
       {/* Identity note */}
       <Card className="border-0 shadow-sm bg-slate-50 border border-slate-200">
         <CardContent className="p-4 flex items-start gap-3">
@@ -187,6 +187,6 @@ export default function Evaluation360PeerPage() {
           {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال التقييم"}
         </Button>
       </div>
-    </div>
+    </PageShell>
   );
 }

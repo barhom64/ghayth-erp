@@ -2,6 +2,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Network, Briefcase, MapPin, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 export default function OrganizationPage() {
   const { data: depts } = useApiQuery<any>(["departments"], "/settings/departments");
@@ -17,12 +18,11 @@ export default function OrganizationPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">الهيكل التنظيمي</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">عرض الأقسام والإدارات والمناصب</p>
-      </div>
-
+    <PageShell
+      title="الهيكل التنظيمي"
+      subtitle="عرض الأقسام والإدارات والمناصب"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "الهيكل التنظيمي" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -92,6 +92,6 @@ export default function OrganizationPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

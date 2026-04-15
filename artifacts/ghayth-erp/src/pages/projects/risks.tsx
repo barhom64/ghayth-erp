@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ShieldAlert, Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 const RISK_LEVEL_COLORS: Record<string, string> = {
   low: "bg-green-100 text-green-700",
@@ -67,24 +68,20 @@ export default function RisksPage() {
   const highCount = risks.filter((r: any) => r.riskLevel === "high").length;
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ShieldAlert className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">مخاطر المشاريع</h1>
-            <p className="text-sm text-gray-500">تسجيل وإدارة مخاطر المشاريع وخطط التخفيف</p>
-          </div>
-          <div className="flex gap-1">
-            {criticalCount > 0 && <Badge className="bg-red-100 text-red-700">{criticalCount} حرج</Badge>}
-            {highCount > 0 && <Badge className="bg-orange-100 text-orange-700">{highCount} عالٍ</Badge>}
-          </div>
-        </div>
-        <Button onClick={() => setShowForm(!showForm)} size="sm" disabled={!projectId}>
-          <Plus className="w-4 h-4 me-1" /> إضافة مخاطرة
-        </Button>
-      </div>
-
+    <PageShell
+      title="مخاطر المشاريع"
+      subtitle="تسجيل وإدارة مخاطر المشاريع وخطط التخفيف"
+      breadcrumbs={[{ href: "/projects", label: "المشاريع" }, { label: "مخاطر المشاريع" }]}
+      actions={
+        <>
+          {criticalCount > 0 && <Badge className="bg-red-100 text-red-700">{criticalCount} حرج</Badge>}
+          {highCount > 0 && <Badge className="bg-orange-100 text-orange-700">{highCount} عالٍ</Badge>}
+          <Button onClick={() => setShowForm(!showForm)} size="sm" disabled={!projectId}>
+            <Plus className="w-4 h-4 me-1" /> إضافة مخاطرة
+          </Button>
+        </>
+      }
+    >
       <div className="flex items-center gap-2">
         <Label>المشروع:</Label>
         <Select value={projectId} onValueChange={setProjectId}>
@@ -186,6 +183,6 @@ export default function RisksPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }
