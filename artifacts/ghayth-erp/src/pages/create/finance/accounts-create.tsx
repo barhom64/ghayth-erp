@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { useApiMutation } from "@/lib/api";
+import { useApiMutation, buildErrorToast } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,7 @@ const INITIAL = { code: "", name: "", type: "asset", parentCode: "" };
 export default function AccountsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/finance/accounts", "POST", [["accounts"]]);
+  const createMut = useApiMutation("/finance/accounts", "POST", [["accounts"]], { silent: true });
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
 
   const handleSubmit = async () => {
@@ -25,8 +25,8 @@ export default function AccountsCreate() {
       clearDraft();
       toast({ title: "تم إضافة الحساب" });
       setLocation("/finance/accounts");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast(buildErrorToast(err));
     }
   };
 

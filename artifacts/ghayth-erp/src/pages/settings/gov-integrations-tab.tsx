@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -91,8 +91,8 @@ export function GovIntegrationsTab() {
       });
       refetch();
       toast({ title: item.enabled ? "تم تعطيل النظام" : "تم تفعيل النظام" });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast(buildErrorToast(err));
     }
   };
 
