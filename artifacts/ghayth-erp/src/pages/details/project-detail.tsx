@@ -16,6 +16,7 @@ import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 const PROJECT_TABS = [
   { key: "overview", label: "نظرة عامة", icon: FolderKanban },
@@ -151,30 +152,37 @@ export default function ProjectDetail() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/projects"><Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button></Link>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-          {project.clientName && <p className="text-gray-500 mt-1">{project.clientName}</p>}
+    <PageShell
+      title={project.name || "المشروع"}
+      subtitle={project.clientName || undefined}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/projects", label: "المشاريع" }]}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={statusColors[project.status] || "bg-gray-100 text-gray-700"}>{statusLabels[project.status] || project.status}</Badge>
+          {project.isSlipping && (
+            <Badge className="bg-red-100 text-red-700 flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" /> متأخر
+            </Badge>
+          )}
+          <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+          {deleting ? (
+            <div className="flex gap-2">
+              <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
+              <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+          )}
+          <Link href="/projects">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-        <Badge className={statusColors[project.status] || "bg-gray-100 text-gray-700"}>{statusLabels[project.status] || project.status}</Badge>
-        {project.isSlipping && (
-          <Badge className="bg-red-100 text-red-700 flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> متأخر
-          </Badge>
-        )}
-        <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
-        {deleting ? (
-          <div className="flex gap-2">
-            <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
-          </div>
-        ) : (
-          <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
-        )}
-      </div>
-
+      }
+    >
       {editing && (
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل المشروع</CardTitle></CardHeader>
@@ -361,6 +369,6 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

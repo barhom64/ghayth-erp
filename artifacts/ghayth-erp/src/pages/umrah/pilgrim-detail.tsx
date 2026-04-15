@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Save, User, Calendar, AlertTriangle } from "lucide-react";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@/components/page-shell";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "لم يصل" },
@@ -24,7 +25,7 @@ const STATUS_OPTIONS = [
 export default function PilgrimDetail() {
   const [, params] = useRoute("/umrah/pilgrims/:id");
   const id = params?.id || "";
-  const { data, refetch } = useApiQuery<any>(["umrah-pilgrim", id], `/umrah/pilgrims/${id}`);
+  const { data, refetch, isLoading } = useApiQuery<any>(["umrah-pilgrim", id], `/umrah/pilgrims/${id}`);
   const [newStatus, setNewStatus] = useState("");
   const { toast } = useToast();
 
@@ -62,21 +63,14 @@ export default function PilgrimDetail() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/umrah/pilgrims">
-          <Button variant="ghost" size="sm" className="gap-1">
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">{data.fullName}</h1>
-            <PageStatusBadge status={data.status} />
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">{data.passportNumber} • {data.nationality}</p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell
+      title={data.fullName || "المعتمر"}
+      subtitle={`${data.passportNumber || ""}${data.nationality ? ` • ${data.nationality}` : ""}`}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/umrah", label: "العمرة" }]}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <PageStatusBadge status={data.status} />
           <Select value={newStatus} onValueChange={setNewStatus}>
             <SelectTrigger className="w-[150px]"><SelectValue placeholder="تغيير الحالة" /></SelectTrigger>
             <SelectContent>
@@ -86,9 +80,15 @@ export default function PilgrimDetail() {
           <Button onClick={updateStatus} disabled={!newStatus} className="gap-2">
             <Save className="h-4 w-4" />تحديث
           </Button>
+          <Link href="/umrah/pilgrims">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-      </div>
-
+      }
+    >
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><User className="h-4 w-4" />البيانات الشخصية</CardTitle></CardHeader>
@@ -147,6 +147,6 @@ export default function PilgrimDetail() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

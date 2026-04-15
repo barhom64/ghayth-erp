@@ -13,6 +13,7 @@ import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { PageShell } from "@/components/page-shell";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
@@ -41,16 +42,17 @@ export default function PurchaseOrderDetailPage() {
   const docDate = po.createdAt ? formatDateAr(po.createdAt) : "";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/finance/purchase-orders">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-          </Link>
-          <h1 className="text-3xl font-bold tracking-tight">أمر شراء {po.ref || `#${po.id}`}</h1>
+    <PageShell
+      title={`أمر شراء ${po.ref || `#${po.id}`}`}
+      subtitle={po.supplierName || undefined}
+      loading={isLoading}
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { href: "/finance/purchase-orders", label: "طلبات الشراء" },
+      ]}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
           <PageStatusBadge status={po.status} />
-        </div>
-        <div className="flex gap-2">
           <Link href={`/finance/purchase-orders/create?copyFrom=${id}`}>
             <Button variant="outline" size="sm" className="gap-1">
               <Copy className="h-4 w-4" />نسخ
@@ -61,9 +63,15 @@ export default function PurchaseOrderDetailPage() {
             onPreview={() => setShowPreview(true)}
             onPrint={() => directPrint(printContainerRef.current, `أمر شراء ${po.ref || po.id}`)}
           />
+          <Link href="/finance/purchase-orders">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-      </div>
-
+      }
+    >
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3 text-gray-500"><User className="h-4 w-4" /><span className="text-sm">المورد</span></div>
@@ -273,6 +281,6 @@ export default function PurchaseOrderDetailPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

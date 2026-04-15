@@ -1,15 +1,14 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowRight, Crown, Save } from "lucide-react";
+import { Crown, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function OwnersCreate() {
   const [, setLocation] = useLocation();
@@ -34,30 +33,16 @@ export default function OwnersCreate() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/properties/owners">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">إضافة مالك جديد</h1>
-            <p className="text-gray-500 text-sm mt-1">تسجيل مالك عقار في النظام</p>
-          </div>
-        </div>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          <Save className="h-4 w-4" /> {saving ? "جاري الحفظ..." : "حفظ المالك"}
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Crown className="h-5 w-5 text-amber-500" /> بيانات المالك
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <CreatePageLayout
+      title="إضافة مالك جديد"
+      subtitle="تسجيل مالك عقار في النظام"
+      backPath="/properties/owners"
+    >
+      <div className="space-y-6">
+        <h3 className="flex items-center gap-2 text-lg font-semibold">
+          <Crown className="h-5 w-5 text-amber-500" /> بيانات المالك
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>نوع المالك</Label>
               <Select value={form.ownerType} onValueChange={v => setForm({ ...form, ownerType: v })}>
@@ -137,21 +122,18 @@ export default function OwnersCreate() {
             </div>
           </div>
 
-          <div>
-            <Label>ملاحظات</Label>
-            <Textarea className="mt-1" rows={3} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-          </div>
-        </CardContent>
-      </Card>
+        <div>
+          <Label>ملاحظات</Label>
+          <Textarea className="mt-1" rows={3} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+        </div>
+      </div>
 
-      <div className="flex justify-end gap-3">
-        <Link href="/properties/owners">
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={() => setLocation("/properties/owners")}>إلغاء</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           <Save className="h-4 w-4" /> {saving ? "جاري الحفظ..." : "حفظ المالك"}
         </Button>
       </div>
-    </div>
+    </CreatePageLayout>
   );
 }

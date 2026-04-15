@@ -11,6 +11,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ArrowRight, ShoppingCart, User, Phone, Calendar, Package, FileText } from "lucide-react";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { PageShell } from "@/components/page-shell";
 
 export default function StoreOrderDetailPage() {
   const [, params] = useRoute("/store/orders/:id");
@@ -43,21 +44,27 @@ export default function StoreOrderDetailPage() {
   const docDate = order.createdAt ? formatDateAr(order.createdAt) : "";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/store">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-          </Link>
-          <h1 className="text-3xl font-bold tracking-tight">طلب {order.orderNumber || `#${order.id}`}</h1>
+    <PageShell
+      title={`طلب ${order.orderNumber || `#${order.id}`}`}
+      subtitle={order.customerName || undefined}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/store", label: "المتجر" }]}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
           <PageStatusBadge status={order.status} />
+          <PrintActions
+            onPreview={() => setShowPreview(true)}
+            onPrint={() => directPrint(printContainerRef.current, `طلب ${order.orderNumber || order.id}`)}
+          />
+          <Link href="/store">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-        <PrintActions
-          onPreview={() => setShowPreview(true)}
-          onPrint={() => directPrint(printContainerRef.current, `طلب ${order.orderNumber || order.id}`)}
-        />
-      </div>
-
+      }
+    >
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3 text-gray-500"><User className="h-4 w-4" /><span className="text-sm">بيانات العميل</span></div>
@@ -226,6 +233,6 @@ export default function StoreOrderDetailPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

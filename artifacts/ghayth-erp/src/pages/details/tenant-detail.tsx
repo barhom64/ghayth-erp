@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Users2 },
@@ -58,35 +59,28 @@ export default function TenantDetail() {
   const totalPaid = payments.filter((p: any) => p.status === "paid").reduce((s: number, p: any) => s + Number(p.paidAmount || 0), 0);
   const overduePayments = payments.filter((p: any) => p.status !== "paid" && new Date(p.dueDate) < new Date());
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
-        <Link href="/properties/tenants"><Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button></Link>
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-12 h-12 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-lg font-bold shrink-0">
-            {(tenant.name || "?")[0]}
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight truncate">{tenant.name}</h1>
-            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-              {tenant.phone && (
-                <a href={`tel:${tenant.phone}`} className="text-sm text-blue-600 flex items-center gap-1 hover:underline">
-                  <Phone className="h-3 w-3" /> {tenant.phone}
-                </a>
-              )}
-              {tenant.email && (
-                <a href={`mailto:${tenant.email}`} className="text-sm text-gray-500 flex items-center gap-1 hover:underline">
-                  <Mail className="h-3 w-3" /> {tenant.email}
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-        {activeContract && (
-          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">مستأجر نشط</Badge>
-        )}
-      </div>
+  const subtitleBits = [tenant.phone, tenant.email].filter(Boolean).join(" • ");
 
+  return (
+    <PageShell
+      title={tenant.name || "المستأجر"}
+      subtitle={subtitleBits || undefined}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { href: "/properties/tenants", label: "المستأجرون" }]}
+      actions={
+        <div className="flex items-center gap-2">
+          {activeContract && (
+            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">مستأجر نشط</Badge>
+          )}
+          <Link href="/properties/tenants">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
+        </div>
+      }
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
@@ -276,6 +270,6 @@ export default function TenantDetail() {
           ? <EntityTimeline entityType="tenant" entityId={Number(id)} />
           : <div className="text-center py-8 text-gray-400 text-sm">السجل الزمني غير متاح لمستأجري العقود القديمة</div>
       )}
-    </div>
+    </PageShell>
   );
 }

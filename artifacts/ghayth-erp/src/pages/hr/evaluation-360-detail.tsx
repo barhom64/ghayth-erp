@@ -9,6 +9,7 @@ import {
   CheckCircle, Clock, Star, AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 function ScoreCircle({ score, label, color = "blue" }: { score: number | null; label: string; color?: string }) {
   const colorMap: Record<string, string> = {
@@ -155,27 +156,31 @@ export default function Evaluation360DetailPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/hr/evaluation-360">
-          <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold">
-            تقييم 360° — {cycle.employeeName}
-          </h1>
-          <p className="text-sm text-gray-500">{cycle.period} · {cycle.jobTitle}</p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell
+      title={`تقييم 360° — ${cycle.employeeName}`}
+      subtitle={`${cycle.period} · ${cycle.jobTitle}`}
+      loading={isLoading}
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { href: "/hr/evaluation-360", label: "تقييم 360" },
+      ]}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
           <Link href={`/hr/evaluation-360/${cycleId}/peer`}>
             <Button variant="outline" size="sm"><Users className="w-4 h-4 me-1" />إضافة تقييم مدير/زميل</Button>
           </Link>
           <Link href={`/hr/evaluation-360/${cycleId}/upward`}>
             <Button variant="outline" size="sm"><Shield className="w-4 h-4 me-1" />تقييم عكسي سري</Button>
           </Link>
+          <Link href="/hr/evaluation-360">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-      </div>
-
+      }
+    >
       {/* Tab Navigation */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
         {tabs.map((t) => (
@@ -475,6 +480,6 @@ export default function Evaluation360DetailPage() {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

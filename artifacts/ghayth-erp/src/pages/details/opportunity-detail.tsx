@@ -19,6 +19,7 @@ import type { LucideIcon } from "lucide-react";
 import { ArrowRight, Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check, Clock, FileText as FileTextIcon } from "lucide-react";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityDocuments } from "@/components/shared/entity-documents";
+import { PageShell } from "@/components/page-shell";
 
 export default function OpportunityDetail() {
   const [, params] = useRoute("/crm/:id");
@@ -116,29 +117,36 @@ export default function OpportunityDetail() {
   const probability = Number(opportunity.probability) || 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/crm"><Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button></Link>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">{opportunity.title}</h1>
-          <p className="text-gray-500 mt-1">{opportunity.clientName || opportunity.contactName || "-"}</p>
+    <PageShell
+      title={opportunity.title || "الفرصة"}
+      subtitle={opportunity.clientName || opportunity.contactName || undefined}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/crm", label: "العملاء" }]}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <PageStatusBadge status={opportunity.stage} />
+          <PrintActions
+            onPreview={() => setShowPreview(true)}
+            onPrint={() => directPrint(printContainerRef.current, `عرض سعر - ${opportunity.title}`)}
+          />
+          <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+          {deleting ? (
+            <div className="flex gap-2">
+              <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
+              <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+          )}
+          <Link href="/crm">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-        <PageStatusBadge status={opportunity.stage} />
-        <PrintActions
-          onPreview={() => setShowPreview(true)}
-          onPrint={() => directPrint(printContainerRef.current, `عرض سعر - ${opportunity.title}`)}
-        />
-        <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
-        {deleting ? (
-          <div className="flex gap-2">
-            <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
-          </div>
-        ) : (
-          <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
-        )}
-      </div>
-
+      }
+    >
       {editing && (
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل الفرصة</CardTitle></CardHeader>
@@ -342,6 +350,6 @@ export default function OpportunityDetail() {
           </div>
         </PrintDocument>
       </div>
-    </div>
+    </PageShell>
   );
 }

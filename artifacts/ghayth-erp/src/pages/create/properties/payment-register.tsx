@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowRight, Save, Banknote } from "lucide-react";
+import { Save, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function PaymentRegisterPage() {
   const [, params] = useRoute("/properties/payments/:paymentId/pay") as [boolean, { paymentId: string }];
@@ -62,33 +62,17 @@ export default function PaymentRegisterPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/properties/payments">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">تسجيل دفعة إيجار</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              {payment ? `${payment.tenantName} — ${formatCurrency(payment.amount)}` : "تحميل..."}
-            </p>
-          </div>
-        </div>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          <Save className="h-4 w-4" /> {saving ? "جاري التسجيل..." : "تسجيل الدفعة"}
-        </Button>
-      </div>
-
+    <CreatePageLayout
+      title="تسجيل دفعة إيجار"
+      subtitle={payment ? `${payment.tenantName} — ${formatCurrency(payment.amount)}` : "تحميل..."}
+      backPath="/properties/payments"
+    >
       {payment && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Banknote className="h-5 w-5 text-emerald-500" /> بيانات الدفعة
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-blue-50 rounded-lg p-4 text-sm space-y-1">
+        <div className="space-y-4">
+          <h3 className="flex items-center gap-2 text-lg font-semibold">
+            <Banknote className="h-5 w-5 text-emerald-500" /> بيانات الدفعة
+          </h3>
+          <div className="bg-blue-50 rounded-lg p-4 text-sm space-y-1">
               <p>المستأجر: <strong>{payment.tenantName}</strong></p>
               <p>الوحدة: <strong>{payment.unitNumber || "—"}</strong></p>
               <p>تاريخ الاستحقاق: <strong>{formatDateAr(payment.dueDate)}</strong></p>
@@ -139,18 +123,15 @@ export default function PaymentRegisterPage() {
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </div>
       )}
 
-      <div className="flex justify-end gap-3">
-        <Link href="/properties/payments">
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={() => setLocation("/properties/payments")}>إلغاء</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           <Save className="h-4 w-4" /> {saving ? "جاري التسجيل..." : "تسجيل الدفعة"}
         </Button>
       </div>
-    </div>
+    </CreatePageLayout>
   );
 }

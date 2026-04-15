@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Headphones, User, MessageSquare, Send, Trash2, Clock, FileText } from "lucide-react";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityDocuments } from "@/components/shared/entity-documents";
+import { PageShell } from "@/components/page-shell";
 
 export default function TicketDetail() {
   const [, params] = useRoute("/support/:id");
@@ -106,26 +107,31 @@ export default function TicketDetail() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/support"><Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button></Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">{ticket.ref || `TKT-${id}`}</h1>
-            <Badge className={priorityMap[ticket.priority]?.color || "bg-gray-100 text-gray-700"}>{priorityMap[ticket.priority]?.label || ticket.priority}</Badge>
-          </div>
-          <p className="text-gray-500 mt-1">{ticket.title}</p>
+    <PageShell
+      title={ticket.ref || `TKT-${id}`}
+      subtitle={ticket.title || undefined}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/support", label: "الدعم" }]}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={priorityMap[ticket.priority]?.color || "bg-gray-100 text-gray-700"}>{priorityMap[ticket.priority]?.label || ticket.priority}</Badge>
+          {deleting ? (
+            <div className="flex gap-2">
+              <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
+              <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+          )}
+          <Link href="/support">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-        {deleting ? (
-          <div className="flex gap-2">
-            <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
-          </div>
-        ) : (
-          <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
-        )}
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card>
@@ -206,6 +212,6 @@ export default function TicketDetail() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

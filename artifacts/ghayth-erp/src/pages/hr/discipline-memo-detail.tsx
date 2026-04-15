@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowRight, Clock, CheckCircle, XCircle, FileText, Ban, Gavel } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 const STATUS_STYLES: Record<string, { label: string; color: string }> = {
   pending_employee: { label: "بانتظار الموظف", color: "bg-blue-100 text-blue-700" },
@@ -104,26 +105,26 @@ export default function DisciplineMemoDetailPage() {
     Number(memo.appliedDeductionAmount ?? 0) + Number(memo.appliedExtraDeduction ?? 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <Link
-            href="/hr/discipline/memos"
-            className="text-sm text-muted-foreground hover:underline inline-flex items-center gap-1"
-          >
-            <ArrowRight className="w-4 h-4 rotate-180" />
-            العودة إلى قائمة المحاضر
+    <PageShell
+      title={memo.memoNumber || "المحضر"}
+      subtitle={`محضر استفسار بشأن ${INCIDENT_LABELS[memo.incidentType] ?? memo.incidentType}`}
+      loading={isLoading}
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { href: "/hr/discipline-memos", label: "المخالفات" },
+      ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge className={cn(statusStyle.color, "text-sm px-3 py-1")}>{statusStyle.label}</Badge>
+          <Link href="/hr/discipline/memos">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight mt-1">
-            {memo.memoNumber}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            محضر استفسار بشأن {INCIDENT_LABELS[memo.incidentType] ?? memo.incidentType}
-          </p>
         </div>
-        <Badge className={cn(statusStyle.color, "text-sm px-3 py-1")}>{statusStyle.label}</Badge>
-      </div>
-
+      }
+    >
       <div className="grid md:grid-cols-3 gap-4">
         <Card className="md:col-span-2">
           <CardHeader>
@@ -412,6 +413,6 @@ export default function DisciplineMemoDetailPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
