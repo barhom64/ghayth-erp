@@ -26,7 +26,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline, ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 /**
  * Invoice detail page — migrated in R.4 iter 4 to the unified template
@@ -299,7 +299,7 @@ export default function InvoiceDetailPage() {
                       <h3 className="font-semibold text-sm">
                         ربط هيئة الزكاة والضريبة والجمارك
                       </h3>
-                      <PageStatusBadge status={zs || "pending"} domain="zatca" />
+                      <PageStatusBadge status={zs ?? "pending"} domain="zatca" />
                     </div>
                     {invoice.zatcaUuid && (
                       <p className="text-xs text-muted-foreground mt-1 font-mono">
@@ -605,7 +605,7 @@ export default function InvoiceDetailPage() {
             </div>
             <div style={{ fontSize: "7pt", color: "#777", marginTop: "20px" }}>
               {invoice.zatcaUuid && <p>المعرف الفريد: {invoice.zatcaUuid}</p>}
-              {invoice.zatcaStatus && <p>حالة الربط مع هيئة الزكاة: {invoice.zatcaStatus}</p>}
+              {invoice.zatcaStatus && <p>حالة الربط مع هيئة الزكاة: {resolveStatus(invoice.zatcaStatus, "zatca")?.label ?? invoice.zatcaStatus}</p>}
             </div>
           </div>
         )}
@@ -662,7 +662,7 @@ export default function InvoiceDetailPage() {
               </div>
               <div style={{ fontSize: "7pt", color: "#777", marginTop: "20px" }}>
                 {invoice.zatcaUuid && <p>المعرّف الفريد: {invoice.zatcaUuid}</p>}
-                {invoice.zatcaStatus && <p>حالة الهيئة: {invoice.zatcaStatus}</p>}
+                {invoice.zatcaStatus && <p>حالة الهيئة: {resolveStatus(invoice.zatcaStatus, "zatca")?.label ?? invoice.zatcaStatus}</p>}
               </div>
             </div>
           )}

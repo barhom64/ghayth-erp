@@ -113,7 +113,7 @@ export default function InvoicesPage() {
         inv.isTaxLinked ? (
           <span className="inline-flex items-center gap-1">
             <Zap className="h-3 w-3 text-muted-foreground" />
-            <PageStatusBadge status={inv.zatcaStatus || "pending"} domain="zatca" />
+            <PageStatusBadge status={inv.zatcaStatus ?? "pending"} domain="zatca" />
           </span>
         ) : (
           <span className="text-xs text-gray-300">—</span>
