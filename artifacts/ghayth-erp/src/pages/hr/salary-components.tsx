@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 export default function SalaryComponentsPage() {
   const { data } = useApiQuery<any>(["salary-components"], "/hr/salary-components");
@@ -72,7 +73,16 @@ export default function SalaryComponentsPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="مكونات الرواتب"
+      subtitle="إدارة البدلات والخصومات والمكونات الراتبية"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "مكونات الرواتب" }]}
+      actions={
+        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+          <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
+        </Button>
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "إجمالي المكونات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
@@ -92,16 +102,6 @@ export default function SalaryComponentsPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">مكونات الرواتب</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">إدارة البدلات والخصومات والمكونات الراتبية</p>
-        </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
-          <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
-        </Button>
       </div>
 
       <AdvancedFilters
@@ -152,6 +152,6 @@ export default function SalaryComponentsPage() {
         emptyMessage="لا توجد مكونات رواتب"
         pageSize={20}
       />
-    </div>
+    </PageShell>
   );
 }

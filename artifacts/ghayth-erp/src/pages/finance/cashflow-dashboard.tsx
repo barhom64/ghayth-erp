@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 function formatCurrency(val: number | string | undefined): string {
   const n = Number(val) || 0;
@@ -73,23 +74,20 @@ export default function CashflowDashboard() {
   const periodLabels: Record<string, string> = { month: "الشهر الحالي", quarter: "الربع الحالي", year: "العام الحالي" };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-8 h-8 text-emerald-600" />
-            لوحة التدفق النقدي
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">مراقبة التدفقات المالية ومقارنة الميزانية بالفعلي</p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell
+      title="لوحة التدفق النقدي"
+      subtitle="مراقبة التدفقات المالية ومقارنة الميزانية بالفعلي"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "لوحة التدفق النقدي" }]}
+      loading={summaryLoading}
+      actions={
+        <>
           <Button variant="outline" size="sm" onClick={() => refetchSummary()}><RefreshCw className="h-3.5 w-3.5 me-1" />تحديث</Button>
           <Link href="/finance">
             <Button variant="outline" size="sm" className="gap-1">الوحدة المالية <ArrowUpRight className="w-3 h-3" /></Button>
           </Link>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div className="flex gap-2">
         {(["month", "quarter", "year"] as const).map(p => (
           <button key={p} onClick={() => setPeriod(p)}
@@ -410,6 +408,6 @@ export default function CashflowDashboard() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -5,6 +5,7 @@ import { ClipboardCheck, Clock, CheckCircle, DollarSign } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 export default function FinancialRequestsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["financial-requests"], "/finance/financial-requests");
@@ -60,9 +61,11 @@ export default function FinancialRequestsPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-3xl font-bold tracking-tight">الطلبات المالية</h1>
-
+    <PageShell
+      title="الطلبات المالية"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الطلبات المالية" }]}
+      loading={isLoading}
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg"><ClipboardCheck className="h-5 w-5 text-blue-600" /></div>
@@ -116,6 +119,6 @@ export default function FinancialRequestsPage() {
         emptyIcon={<ClipboardCheck className="h-6 w-6 text-slate-400" />}
         noToolbar
       />
-    </div>
+    </PageShell>
   );
 }

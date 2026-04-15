@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 type LifecycleAction = "activate" | "suspend" | "terminate";
 
@@ -241,12 +242,11 @@ export default function EmployeeActivationPage() {
   const cfg = pending ? ACTION_CONFIG[pending.action] : null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">تفعيل / تعليق الموظفين</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">إدارة دورة حياة الموظفين: تفعيل، تعليق، وإنهاء الخدمة</p>
-      </div>
-
+    <PageShell
+      title="تفعيل / تعليق الموظفين"
+      subtitle="إدارة دورة حياة الموظفين: تفعيل، تعليق، وإنهاء الخدمة"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تفعيل / تعليق الموظفين" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -319,6 +319,6 @@ export default function EmployeeActivationPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

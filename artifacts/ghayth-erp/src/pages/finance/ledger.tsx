@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, BookOpen, Download, Printer } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 
@@ -52,24 +53,21 @@ export default function LedgerPage() {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
+    <PageShell
+      title={`دفتر أستاذ — ${account?.name || code}`}
+      subtitle={code}
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { href: "/finance/accounts", label: "دليل الحسابات" },
+        { label: `دفتر أستاذ — ${account?.name || code}` },
+      ]}
+      loading={isLoading}
+      actions={
+        <>
           <Link href="/finance/accounts">
             <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
           </Link>
-          <div>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-600" />
-              دفتر أستاذ — {account?.name || code}
-            </h3>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="font-mono text-sm text-gray-500">{code}</span>
-              {account && <Badge variant="outline">{typeMap[account.type] || account.type}</Badge>}
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2 items-center flex-wrap">
+          {account && <Badge variant="outline">{typeMap[account.type] || account.type}</Badge>}
           <DatePicker value={startDate} onChange={setStartDate} className="w-40" placeholder="من" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-40" placeholder="إلى" />
           <Button variant="outline" size="sm" onClick={() => window.print()}>
@@ -78,9 +76,9 @@ export default function LedgerPage() {
           <Button variant="outline" size="sm" onClick={() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runningBalance"], `ledger-${code}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div className="grid gap-3 grid-cols-4">
         <Card><CardContent className="p-4 text-center">
           <p className="text-xs text-gray-500">عدد القيود</p>
@@ -172,6 +170,6 @@ export default function LedgerPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

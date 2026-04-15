@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { Download, AlertTriangle, Clock, Building2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { PageShell } from "@/components/page-shell";
 
 function csvEscape(val: string): string {
   if (val.includes(",") || val.includes('"') || val.includes("\n")) {
@@ -71,20 +72,19 @@ export default function ApAgingPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Clock className="h-6 w-6 text-blue-500" />
-          تقرير تقادم الذمم الدائنة
-        </h1>
-        <div className="flex items-center gap-2 flex-wrap">
+    <PageShell
+      title="تقرير تقادم الذمم الدائنة"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تقرير تقادم الذمم الدائنة" }]}
+      loading={isLoading}
+      actions={
+        <>
           <DatePicker value={asOfDate} onChange={setAsOfDate} className="w-44" placeholder="تاريخ التقرير" />
           <Button variant="outline" size="sm" onClick={() => exportCSV(suppliers, `ap-aging-${asOfDate}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         {BUCKETS.map(b => (
           <Card key={b.key}>
@@ -137,13 +137,13 @@ export default function ApAgingPage() {
                 rowKey={(po) => po.id}
                 emptyMessage="لا توجد أوامر"
                 columns={[
-                  { key: "ref", header: "المرجع", className: "font-mono text-blue-600 text-xs", render: (po) => po.ref },
-                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-gray-500", render: (po) => po.dueDate ? formatDateAr(po.dueDate) : "-" },
-                  { key: "outstanding", header: "المستحق", className: "font-semibold", render: (po) => formatCurrency(po.outstanding) },
+                  { key: "ref", header: "المرجع", className: "font-mono text-blue-600 text-xs", render: (po: any) => po.ref },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-gray-500", render: (po: any) => po.dueDate ? formatDateAr(po.dueDate) : "-" },
+                  { key: "outstanding", header: "المستحق", className: "font-semibold", render: (po: any) => formatCurrency(po.outstanding) },
                   {
                     key: "bucket",
                     header: "الفترة",
-                    render: (po) => {
+                    render: (po: any) => {
                       const b = BUCKETS.find(x => x.key === po.bucket);
                       return <Badge className={b?.color ?? ""}>{b?.label ?? po.bucket}</Badge>;
                     },
@@ -154,6 +154,6 @@ export default function ApAgingPage() {
           );
         }}
       />
-    </div>
+    </PageShell>
   );
 }

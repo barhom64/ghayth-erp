@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, CheckCircle, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 const stageStatus: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "معلق", color: "bg-yellow-100 text-yellow-700", icon: Clock },
@@ -29,12 +30,11 @@ export default function ApprovalChainsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">سلاسل الموافقات</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">إعداد مسارات الاعتماد ومراحل الموافقة</p>
-      </div>
-
+    <PageShell
+      title="سلاسل الموافقات"
+      subtitle="إعداد مسارات الاعتماد ومراحل الموافقة"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "سلاسل الموافقات" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -82,6 +82,6 @@ export default function ApprovalChainsPage() {
           </tbody>
         </table>
       </CardContent></Card>
-    </div>
+    </PageShell>
   );
 }

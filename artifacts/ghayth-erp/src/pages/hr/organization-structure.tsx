@@ -2,6 +2,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Network, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 export default function OrganizationStructurePage() {
   const { data: depts } = useApiQuery<any>(["departments"], "/settings/departments");
@@ -10,12 +11,11 @@ export default function OrganizationStructurePage() {
   const employees = empData?.data || [];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">الهيكل التنظيمي المفصل</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">عرض شجري للأقسام والمسؤولين والعلاقات التنظيمية</p>
-      </div>
-
+    <PageShell
+      title="الهيكل التنظيمي المفصل"
+      subtitle="عرض شجري للأقسام والمسؤولين والعلاقات التنظيمية"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "الهيكل التنظيمي المفصل" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "الأقسام", value: departments.length, icon: Building2, color: "text-blue-600 bg-blue-50" },
@@ -76,6 +76,6 @@ export default function OrganizationStructurePage() {
           {departments.length === 0 && <p className="text-gray-400 py-8">لم يتم إعداد الأقسام بعد</p>}
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

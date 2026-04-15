@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 export default function ShiftsPage() {
   const { data, refetch } = useApiQuery<any>(["shifts"], "/hr/shifts");
@@ -48,7 +49,16 @@ export default function ShiftsPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="إدارة الورديات"
+      subtitle="تنظيم وجدولة ورديات العمل"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الورديات" }]}
+      actions={
+        <Link href="/hr/shifts/create">
+          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة وردية</Button>
+        </Link>
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -63,16 +73,6 @@ export default function ShiftsPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">إدارة الورديات</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">تنظيم وجدولة ورديات العمل</p>
-        </div>
-        <Link href="/hr/shifts/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة وردية</Button>
-        </Link>
       </div>
 
       <Tabs defaultValue="shifts" dir="rtl">
@@ -163,6 +163,6 @@ export default function ShiftsPage() {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

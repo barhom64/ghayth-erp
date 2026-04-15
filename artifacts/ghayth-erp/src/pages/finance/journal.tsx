@@ -1,51 +1,76 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Plus, ScrollText, ArrowLeftRight, Undo2 } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
+
+/**
+ * Journal entries list — migrated in R.5 iter 5 to the unified template
+ * stack. This is the central ledger page showing every GL entry (not
+ * just manual journals which live in journal-manual.tsx — that's the
+ * one with the approval workflow; this page is the posted GL view).
+ *
+ * Before: raw <h1>, raw `useMutation` for the reverse action with
+ * manual `useToast`+`useQueryClient` plumbing, ad-hoc balanced/reversed
+ * chips with literal tailwind color classes.
+ *
+ * After: PageShell + `useApiMutation(pathFn)` for the reverse action +
+ * PageStatusBadge (shared: reversed) for the reversed marker.
+ *
+ * The inline "reversal reason" AlertDialog is preserved — it's a
+ * one-off form that doesn't fit ConfirmDeleteDialog's shape (it's a
+ * POST with a required `reason`, not a DELETE).
+ */
 
 export default function JournalPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["journal", scopeQueryString], `/finance/journal${scopeSuffix}`);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
+    ["journal", scopeQueryString],
+    `/finance/journal${scopeSuffix}`,
+  );
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [reversalTarget, setReversalTarget] = useState<any>(null);
   const [reversalReason, setReversalReason] = useState("");
   const { toast } = useToast();
-  const qc = useQueryClient();
-  const reverseMut = useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      apiFetch(`/finance/journal/${id}/reverse`, {
-        method: "POST",
-        body: JSON.stringify({ reason }),
-      }),
-    onSuccess: () => {
-      toast({ title: "تم عكس القيد بنجاح" });
-      qc.invalidateQueries({ queryKey: ["journal"] });
-      setReversalTarget(null);
-      setReversalReason("");
+
+  const reverseMut = useApiMutation<void, { id: number; reason: string }>(
+    (body) => `/finance/journal/${body.id}/reverse`,
+    "POST",
+    [["journal"]],
+    {
+      successMessage: "تم عكس القيد بنجاح",
+      onSuccess: () => {
+        setReversalTarget(null);
+        setReversalReason("");
+      },
     },
-    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل عكس القيد" }),
-  });
+  );
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref"],
-    dateField: "",
+    dateField: "createdAt",
   });
 
   const columns: DataTableColumn<any>[] = [
@@ -53,13 +78,19 @@ export default function JournalPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (j) => <span className="font-mono text-blue-600 text-xs">{j.ref || `JE-${j.id}`}</span>,
+      render: (j) => (
+        <span className="font-mono text-blue-600 text-xs">{j.ref || `JE-${j.id}`}</span>
+      ),
     },
     {
       key: "createdAt",
       header: "التاريخ",
       sortable: true,
-      render: (j) => <span className="text-gray-500 text-xs">{j.createdAt ? formatDateAr(j.createdAt) : "-"}</span>,
+      render: (j) => (
+        <span className="text-muted-foreground text-xs">
+          {j.createdAt ? formatDateAr(j.createdAt) : "-"}
+        </span>
+      ),
     },
     {
       key: "description",
@@ -73,7 +104,7 @@ export default function JournalPage() {
       render: (j) => {
         const lines = (j.lines || []).filter((l: any) => l && l.accountCode);
         const totalD = lines.reduce((s: number, l: any) => s + Number(l.debit || 0), 0);
-        return <span className="text-sm text-gray-700">{formatCurrency(totalD)}</span>;
+        return <span className="text-sm text-foreground">{formatCurrency(totalD)}</span>;
       },
     },
     {
@@ -85,12 +116,14 @@ export default function JournalPage() {
         const totalC = lines.reduce((s: number, l: any) => s + Number(l.credit || 0), 0);
         const isBalanced = Math.abs(totalD - totalC) < 0.01;
         return (
-          <div className="flex items-center gap-1">
-            <Badge className={isBalanced ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+          <div className="flex items-center gap-1 flex-wrap">
+            <PageStatusBadge status={isBalanced ? "active" : "rejected"}>
               {isBalanced ? "متوازن" : "غير متوازن"}
-            </Badge>
-            {j.reversedById && <Badge className="bg-yellow-100 text-yellow-700">مُعكوس</Badge>}
-            {j.reversalOfId && <Badge className="bg-blue-100 text-blue-700">قيد عاكس</Badge>}
+            </PageStatusBadge>
+            {j.reversedById && <PageStatusBadge status="reversed" />}
+            {j.reversalOfId && (
+              <PageStatusBadge status="active">قيد عاكس</PageStatusBadge>
+            )}
           </div>
         );
       },
@@ -123,27 +156,54 @@ export default function JournalPage() {
   }, 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">القيود اليومية</h1>
-        <Link href="/finance/journal/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />قيد جديد</Button>
-        </Link>
-      </div>
-
+    <PageShell
+      title="القيود اليومية"
+      subtitle="دفتر اليومية العام — كل القيود المُرحَّلة مع إمكانية عكس قيد مُرحَّل"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "القيود اليومية" }]}
+      loading={isLoading}
+      actions={
+        <Button size="sm" asChild>
+          <Link href="/finance/journal/create">
+            <Plus className="h-4 w-4 me-1" />
+            قيد جديد
+          </Link>
+        </Button>
+      }
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><ScrollText className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">إجمالي القيود</p><p className="text-xl font-bold">{formatNumber(totalEntries)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg"><ArrowLeftRight className="h-5 w-5 text-green-600" /></div>
-          <div><p className="text-xs text-gray-500">إجمالي الحركات</p><p className="text-xl font-bold">{formatCurrency(totalDebit)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-purple-100 rounded-lg"><ScrollText className="h-5 w-5 text-purple-600" /></div>
-          <div><p className="text-xs text-gray-500">قيد مزدوج</p><p className="text-xl font-bold text-purple-600">نشط</p></div>
-        </CardContent></Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
+              <ScrollText className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">إجمالي القيود</p>
+              <p className="text-xl font-bold">{formatNumber(totalEntries)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 border border-emerald-100">
+              <ArrowLeftRight className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">إجمالي الحركات</p>
+              <p className="text-xl font-bold">{formatCurrency(totalDebit)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100">
+              <ScrollText className="h-5 w-5 text-violet-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">قيد مزدوج</p>
+              <p className="text-xl font-bold text-violet-600">نشط</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <AdvancedFilters
@@ -153,11 +213,17 @@ export default function JournalPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((filtered || []) as any[], [
-          { key: "ref", label: "المرجع" },
-          { key: "description", label: "الوصف" },
-          { key: "createdAt", label: "التاريخ" },
-        ], "القيود_اليومية")}
+        onExportCSV={() =>
+          exportToCSV(
+            (filtered || []) as any[],
+            [
+              { key: "ref", label: "المرجع" },
+              { key: "description", label: "الوصف" },
+              { key: "createdAt", label: "التاريخ" },
+            ],
+            "القيود_اليومية",
+          )
+        }
         resultCount={filtered?.length}
       />
 
@@ -181,18 +247,28 @@ export default function JournalPage() {
           return (
             <div className="bg-gray-50 px-6 py-3">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-500"><th className="py-1 text-start">الحساب</th><th className="py-1 text-start">مدين</th><th className="py-1 text-start">دائن</th></tr></thead>
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th className="py-1 text-start">الحساب</th>
+                    <th className="py-1 text-start">مدين</th>
+                    <th className="py-1 text-start">دائن</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {lines.map((l: any, i: number) => (
                     <tr key={i} className="border-t border-gray-200">
                       <td className="py-1.5 font-mono text-sm">{l.accountCode}</td>
-                      <td className="py-1.5 text-green-600 font-medium">{Number(l.debit || 0) > 0 ? formatCurrency(l.debit) : "-"}</td>
-                      <td className="py-1.5 text-red-600 font-medium">{Number(l.credit || 0) > 0 ? formatCurrency(l.credit) : "-"}</td>
+                      <td className="py-1.5 text-emerald-600 font-medium">
+                        {Number(l.debit || 0) > 0 ? formatCurrency(l.debit) : "-"}
+                      </td>
+                      <td className="py-1.5 text-red-600 font-medium">
+                        {Number(l.credit || 0) > 0 ? formatCurrency(l.credit) : "-"}
+                      </td>
                     </tr>
                   ))}
                   <tr className="border-t-2 border-gray-300 font-bold">
                     <td className="py-1.5">المجموع</td>
-                    <td className="py-1.5 text-green-700">{formatCurrency(totalD)}</td>
+                    <td className="py-1.5 text-emerald-700">{formatCurrency(totalD)}</td>
                     <td className="py-1.5 text-red-700">{formatCurrency(totalC)}</td>
                   </tr>
                 </tbody>
@@ -202,12 +278,23 @@ export default function JournalPage() {
         }}
       />
 
-      <AlertDialog open={!!reversalTarget} onOpenChange={(open) => { if (!open) { setReversalTarget(null); setReversalReason(""); } }}>
+      <AlertDialog
+        open={!!reversalTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReversalTarget(null);
+            setReversalReason("");
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>عكس القيد {reversalTarget?.ref || `JE-${reversalTarget?.id}`}</AlertDialogTitle>
+            <AlertDialogTitle>
+              عكس القيد {reversalTarget?.ref || `JE-${reversalTarget?.id}`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء لا يمكن التراجع عنه.
+              سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء
+              لا يمكن التراجع عنه.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">
@@ -229,7 +316,10 @@ export default function JournalPage() {
                   toast({ variant: "destructive", title: "السبب مطلوب" });
                   return;
                 }
-                reverseMut.mutate({ id: reversalTarget.id, reason: reversalReason });
+                reverseMut.mutate({
+                  id: reversalTarget.id,
+                  reason: reversalReason,
+                });
               }}
               disabled={reverseMut.isPending}
             >
@@ -238,6 +328,6 @@ export default function JournalPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

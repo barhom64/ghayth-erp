@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -309,12 +310,10 @@ export default function ActionCenter() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">مركز القرارات</h1>
-          <p className="text-gray-500 mt-1">المعاملات والقرارات التي تنتظر اعتمادك</p>
-        </div>
+    <PageShell
+      title="مركز القرارات"
+      subtitle="المعاملات والقرارات التي تنتظر اعتمادك"
+      actions={
         <Link href="/my-space">
           <Button variant="outline" className="gap-2">
             <User className="w-4 h-4" />
@@ -322,8 +321,9 @@ export default function ActionCenter() {
             <ArrowUpRight className="w-3 h-3" />
           </Button>
         </Link>
-      </div>
-
+      }
+      contentClassName="space-y-6"
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className={cn(
           "rounded-xl p-4 border-2 text-center",
@@ -615,6 +615,6 @@ export default function ActionCenter() {
           </Card>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }

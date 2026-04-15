@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ClipboardList, Plus, CheckCircle, Clock, Star } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 const TYPES: Record<string, string> = {
   move_in: "دخول مستأجر",
@@ -65,20 +66,16 @@ export default function InspectionsPage() {
   };
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ClipboardList className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">فحص الوحدات العقارية</h1>
-            <p className="text-sm text-gray-500">جدولة وتتبع عمليات فحص الوحدات</p>
-          </div>
-        </div>
+    <PageShell
+      title="فحص الوحدات العقارية"
+      subtitle="جدولة وتتبع عمليات فحص الوحدات"
+      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { label: "فحص الوحدات العقارية" }]}
+      actions={
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> جدولة فحص
         </Button>
-      </div>
-
+      }
+    >
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">جدولة فحص جديد</CardTitle></CardHeader>
@@ -167,6 +164,6 @@ export default function InspectionsPage() {
           </Card>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

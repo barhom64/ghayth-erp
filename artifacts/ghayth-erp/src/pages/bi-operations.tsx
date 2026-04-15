@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -458,17 +459,15 @@ export default function BiOperationsPage() {
   const [departmentId, setDepartmentId] = useState("");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">تحليل الأداء التشغيلي</h1>
-          <p className="text-muted-foreground text-sm mt-1">تحليل شامل للاختناقات والإنتاجية وأداء العمليات</p>
-        </div>
+    <PageShell
+      title="تحليل الأداء التشغيلي"
+      subtitle="تحليل شامل للاختناقات والإنتاجية وأداء العمليات"
+      actions={
         <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
           <Printer className="w-4 h-4" /> طباعة
         </Button>
-      </div>
-
+      }
+    >
       <Card className="border-0 shadow-sm print:hidden">
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -509,6 +508,6 @@ export default function BiOperationsPage() {
         <TabsContent value="completion"><CompletionTimeTab from={from} to={to} departmentId={departmentId} /></TabsContent>
         <TabsContent value="trend"><TrendTab from={from} to={to} departmentId={departmentId} /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

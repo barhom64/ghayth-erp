@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -342,17 +343,15 @@ function MonthlyReportTab() {
 
 export default function BiAdminReportsPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">التقارير الإدارية</h1>
-          <p className="text-muted-foreground text-sm mt-1">تقارير يومية وأسبوعية وشهرية شاملة</p>
-        </div>
+    <PageShell
+      title="التقارير الإدارية"
+      subtitle="تقارير يومية وأسبوعية وشهرية شاملة"
+      actions={
         <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
           <Printer className="w-4 h-4" /> طباعة التقرير
         </Button>
-      </div>
-
+      }
+    >
       <Tabs defaultValue="daily" dir="rtl">
         <TabsList className="grid w-full grid-cols-3 print:hidden">
           <TabsTrigger value="daily" className="gap-1"><Calendar className="w-4 h-4" /> يومي</TabsTrigger>
@@ -363,6 +362,6 @@ export default function BiAdminReportsPage() {
         <TabsContent value="weekly"><WeeklyReportTab /></TabsContent>
         <TabsContent value="monthly"><MonthlyReportTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

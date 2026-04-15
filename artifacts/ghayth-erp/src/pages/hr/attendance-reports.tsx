@@ -8,6 +8,7 @@ import { Clock, Users, AlertTriangle, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 export default function AttendanceReportsPage() {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -60,15 +61,12 @@ export default function AttendanceReportsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">تقارير الحضور والانصراف</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">تقارير شهرية وتفصيلية عن الحضور والتأخير</p>
-        </div>
-        <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />
-      </div>
-
+    <PageShell
+      title="تقارير الحضور والانصراف"
+      subtitle="تقارير شهرية وتفصيلية عن الحضور والتأخير"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تقارير الحضور والانصراف" }]}
+      actions={<Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -122,6 +120,6 @@ export default function AttendanceReportsPage() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

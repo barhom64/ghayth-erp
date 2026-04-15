@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target, TrendingUp, Award, BarChart3, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 export default function PerformanceAdvancedPage() {
   const { data } = useApiQuery<any>(["performance"], "/hr/performance");
@@ -21,12 +22,11 @@ export default function PerformanceAdvancedPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">تحليلات الأداء المتقدمة</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">تحليل مؤشرات الأداء والمقارنات المعيارية</p>
-      </div>
-
+    <PageShell
+      title="تحليلات الأداء المتقدمة"
+      subtitle="تحليل مؤشرات الأداء والمقارنات المعيارية"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات الأداء المتقدمة" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "إجمالي التقييمات", value: items.length, icon: Target, color: "text-blue-600 bg-blue-50" },
@@ -95,6 +95,6 @@ export default function PerformanceAdvancedPage() {
           </table>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

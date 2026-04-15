@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 export default function TrainingAdvancedPage() {
   const { data: statsData } = useApiQuery<any>(["training-stats"], "/training/stats");
@@ -16,12 +17,11 @@ export default function TrainingAdvancedPage() {
     ? Math.round((stats.completedEnrollments / stats.totalEnrollments) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">تحليلات التدريب المتقدمة</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">متابعة فعالية البرامج التدريبية ونتائجها</p>
-      </div>
-
+    <PageShell
+      title="تحليلات التدريب المتقدمة"
+      subtitle="متابعة فعالية البرامج التدريبية ونتائجها"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التدريب المتقدمة" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "إجمالي البرامج", value: stats.totalPrograms ?? programs.length, icon: BookOpen, color: "text-blue-600 bg-blue-50" },
@@ -83,6 +83,6 @@ export default function TrainingAdvancedPage() {
           </table>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

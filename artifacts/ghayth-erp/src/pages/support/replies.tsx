@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { MessageSquare, Clock, CheckCircle2, User, Search, Loader2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery } from "@/lib/api";
+import { PageShell } from "@/components/page-shell";
 
 interface Reply {
   id: number;
@@ -63,9 +64,11 @@ export default function SupportReplies() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">ردود الدعم الفني</h1>
-
+    <PageShell
+      title="ردود الدعم الفني"
+      breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "ردود الدعم الفني" }]}
+      loading={isLoading}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => {
           const Icon = c.icon;
@@ -118,6 +121,6 @@ export default function SupportReplies() {
           </table>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

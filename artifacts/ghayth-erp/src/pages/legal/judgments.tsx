@@ -3,6 +3,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 interface Judgment {
   id: number;
@@ -44,17 +45,18 @@ export default function LegalJudgments() {
   const outstanding = data?.outstanding || 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><CheckCircle className="h-6 w-6" /> الأحكام القضائية</h1>
-        <p className="text-muted-foreground mt-1">سجل الأحكام الصادرة والتقارير المالية</p>
-      </div>
+    <PageShell
+      title="الأحكام القضائية"
+      subtitle="سجل الأحكام الصادرة والتقارير المالية"
+      breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الأحكام القضائية" }]}
+      loading={isLoading}
+    >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">إجمالي المبالغ</p><p className="text-xl font-bold">{Number(totalAmount).toLocaleString("ar-SA")} ر.س</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-green-600">{Number(totalPaid).toLocaleString("ar-SA")} ر.س</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-red-600">{Number(outstanding).toLocaleString("ar-SA")} ر.س</p></CardContent></Card>
       </div>
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </div>
+    </PageShell>
   );
 }

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Target, Plus, BookOpen, TrendingUp, CheckCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   planned: { label: "مخططة", color: "bg-blue-100 text-blue-700" },
@@ -63,20 +64,16 @@ export default function IDPPage() {
   };
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Target className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">خطط التطوير الفردي</h1>
-            <p className="text-sm text-gray-500">تخطيط مسارات التطوير والنمو الوظيفي للموظفين</p>
-          </div>
-        </div>
+    <PageShell
+      title="خطط التطوير الفردي"
+      subtitle="تخطيط مسارات التطوير والنمو الوظيفي للموظفين"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "خطط التطوير الفردي" }]}
+      actions={
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> خطة جديدة
         </Button>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold">{stats.total}</div><div className="text-xs text-gray-500">إجمالي الخطط</div></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold text-yellow-600">{stats.inProgress}</div><div className="text-xs text-gray-500">جارية</div></CardContent></Card>
@@ -179,6 +176,6 @@ export default function IDPPage() {
           );
         })}
       </div>
-    </div>
+    </PageShell>
   );
 }

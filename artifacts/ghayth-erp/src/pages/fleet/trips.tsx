@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Plus } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 
 export default function TripsPage() {
   const [, navigate] = useLocation();
@@ -27,17 +28,17 @@ export default function TripsPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">الرحلات</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">جدول رحلات الأسطول ومتابعتها</p>
-        </div>
+    <PageShell
+      title="الرحلات"
+      subtitle="جدول رحلات الأسطول ومتابعتها"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "الرحلات" }]}
+      loading={isLoading}
+      actions={
         <Link href="/fleet/trips/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />رحلة جديدة</Button>
         </Link>
-      </div>
-
+      }
+    >
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالسائق أو المركبة أو الوجهة...",
@@ -65,6 +66,6 @@ export default function TripsPage() {
         noToolbar
         onRowClick={(t) => navigate(`/fleet/trips/${t.id}`)}
       />
-    </div>
+    </PageShell>
   );
 }

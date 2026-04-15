@@ -1,3 +1,4 @@
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,14 +32,6 @@ function formatUptime(seconds: number): string {
 export default function AdminMonitoring() {
   const { data: health, isLoading, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   const services = health?.services || {};
   const memUsage = health?.memoryUsage || {};
   const counts = health?.counts || {};
@@ -48,22 +41,21 @@ export default function AdminMonitoring() {
   const recentErrors = health?.recentErrors || [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
-            <Activity className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">مركز المراقبة</h1>
-            <p className="text-sm text-gray-500">مراقبة صحة النظام والخدمات</p>
-          </div>
-        </div>
+    <PageShell
+      title="مركز المراقبة"
+      subtitle="مراقبة صحة النظام والخدمات"
+      loading={isLoading}
+      actions={
         <Button variant="outline" size="sm" onClick={() => refetch()}>
           <RefreshCw className="h-4 w-4 me-1" />تحديث
         </Button>
-      </div>
-
+      }
+    >
+      {isLoading && !health ? (
+        <div className="flex items-center justify-center min-h-[40vh]">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (<>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className={cn("border-0 shadow-sm", services.api?.status === "healthy" ? "bg-green-50/50" : "bg-red-50/50")}>
           <CardContent className="p-4 flex items-center gap-3">
@@ -240,6 +232,7 @@ export default function AdminMonitoring() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </>)}
+    </PageShell>
   );
 }

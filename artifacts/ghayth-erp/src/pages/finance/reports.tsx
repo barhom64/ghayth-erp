@@ -16,6 +16,7 @@ import {
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { MultiExportButton } from "@/components/shared/export-buttons";
+import { PageShell } from "@/components/page-shell";
 
 function exportCSV(rows: any[], headers: string[], filename: string) {
   if (!rows.length) return;
@@ -46,18 +47,16 @@ export default function FinancialReportsPage() {
   ].filter(Boolean).join("&");
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <FileBarChart className="h-6 w-6 text-blue-600" />
-          التقارير المالية المتقدمة
-        </h1>
-        <div className="flex gap-2 items-center flex-wrap">
+    <PageShell
+      title="التقارير المالية المتقدمة"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "التقارير المالية المتقدمة" }]}
+      actions={
+        <>
           <DatePicker value={startDate} onChange={setStartDate} className="w-40" placeholder="من" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-40" placeholder="إلى" />
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex flex-wrap gap-1 h-auto">
           <TabsTrigger value="trial-balance" className="text-xs"><Scale className="h-3.5 w-3.5 me-1" />ميزان المراجعة</TabsTrigger>
@@ -83,7 +82,7 @@ export default function FinancialReportsPage() {
         <TabsContent value="budget-variance"><BudgetVariance /></TabsContent>
         <TabsContent value="entity-statement"><EntityStatement startDate={startDate} endDate={endDate} /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 

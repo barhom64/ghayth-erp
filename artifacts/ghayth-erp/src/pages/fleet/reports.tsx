@@ -4,6 +4,7 @@ import { BarChart3, Car, Fuel, Wrench, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery } from "@/lib/api";
 import { ExportButton, MultiExportButton } from "@/components/shared/export-buttons";
+import { PageShell } from "@/components/page-shell";
 
 export default function FleetReports() {
   const { data: stats } = useApiQuery<any>(["fleet-stats"], "/fleet/stats");
@@ -17,17 +18,18 @@ export default function FleetReports() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">تقارير الأسطول</h1>
+    <PageShell
+      title="تقارير الأسطول"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "تقارير الأسطول" }]}
+      actions={
         <MultiExportButton
           exports={[
             { endpoint: "/export/excel/fleet", filename: "fleet-report.xlsx", type: "excel", label: "تصدير إكسل" },
             { endpoint: "/export/pdf/fleet-trips", filename: "fleet-trips.pdf", type: "pdf", label: "تصدير ملف طباعي للرحلات" },
           ]}
         />
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -67,6 +69,6 @@ export default function FleetReports() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

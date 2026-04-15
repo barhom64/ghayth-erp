@@ -1,4 +1,5 @@
 import { useState, Fragment } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { Link, useLocation } from "wouter";
 
@@ -129,19 +130,20 @@ export default function Clients() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">إدارة العملاء</h1>
-        {canManage && (
+    <PageShell
+      title="إدارة العملاء"
+      loading={isLoading}
+      actions={
+        canManage && (
           <Link href="/clients/create">
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
               إضافة عميل
             </Button>
           </Link>
-        )}
-      </div>
-
+        )
+      }
+    >
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث عن عميل...",
@@ -206,6 +208,6 @@ export default function Clients() {
       />
 
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة العميل" data={previewItem} fields={previewFields} />
-    </div>
+    </PageShell>
   );
 }

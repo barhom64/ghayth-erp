@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Pencil, RefreshCw, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PageShell } from "@/components/page-shell";
 
 const SECTION_LABELS: Record<string, string> = {
   work_time: "مخالفات تتعلق بمواعيد العمل",
@@ -150,22 +151,18 @@ export default function DisciplineRegulationPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">لائحة الانضباط الوظيفي</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            الكتالوج الحي للمخالفات والجزاءات — سارية من{" "}
-            <span className="font-medium">{data?.effectiveFrom ?? "2024-10-01"}</span>
-            {" "}({total} مادة)
-          </p>
-        </div>
+    <PageShell
+      title="لائحة الانضباط الوظيفي"
+      subtitle={`الكتالوج الحي للمخالفات والجزاءات — سارية من ${data?.effectiveFrom ?? "2024-10-01"} (${total} مادة)`}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "لائحة الانضباط الوظيفي" }]}
+      loading={isLoading}
+      actions={
         <Button variant="outline" onClick={reseedDefaults} disabled={reseeding}>
           <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
           استنساخ اللائحة الافتراضية
         </Button>
-      </div>
-
+      }
+    >
       <Tabs defaultValue="work_time" dir="rtl">
         <TabsList>
           {Object.entries(SECTION_LABELS).map(([key, label]) => (
@@ -267,6 +264,6 @@ export default function DisciplineRegulationPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

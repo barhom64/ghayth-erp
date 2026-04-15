@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 export default function FuelPage() {
   const { scopeQueryString } = useAppContext();
@@ -21,17 +22,17 @@ export default function FuelPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">استهلاك الوقود</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">سجلات تعبئة وقود المركبات</p>
-        </div>
+    <PageShell
+      title="استهلاك الوقود"
+      subtitle="سجلات تعبئة وقود المركبات"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "استهلاك الوقود" }]}
+      loading={isLoading}
+      actions={
         <Link href="/fleet/fuel/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />تسجيل تعبئة</Button>
         </Link>
-      </div>
-
+      }
+    >
       <DataTable
         columns={columns}
         data={items}
@@ -42,6 +43,6 @@ export default function FuelPage() {
         searchPlaceholder="بحث بالمركبة..."
         emptyMessage="لا توجد سجلات وقود"
       />
-    </div>
+    </PageShell>
   );
 }

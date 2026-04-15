@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, FileText, Clock, User } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 const DOC_LABELS: Record<string, string> = {
   work_permit: "تصريح عمل",
@@ -42,17 +43,14 @@ export default function ExpiringDocumentsPage() {
   const expiredCount = allDocs.filter((d: any) => Number(d.daysLeft) <= 0).length;
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <AlertTriangle className="w-6 h-6 text-orange-500" />
-          <div>
-            <h1 className="text-xl font-bold">متابعة الوثائق المنتهية</h1>
-            <p className="text-sm text-gray-500">تتبع تصاريح العمل، الإقامات، جوازات السفر والعقود</p>
-          </div>
+    <PageShell
+      title="متابعة الوثائق المنتهية"
+      subtitle="تتبع تصاريح العمل، الإقامات، جوازات السفر والعقود"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "متابعة الوثائق المنتهية" }]}
+      loading={isLoading}
+      actions={
+        <>
           {criticalCount > 0 && <Badge className="bg-red-100 text-red-700">{criticalCount} حرج</Badge>}
-        </div>
-        <div className="flex gap-2">
           <Select value={days} onValueChange={setDays}>
             <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -69,9 +67,9 @@ export default function ExpiringDocumentsPage() {
               {Object.entries(DOC_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {expiredCount > 0 && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -134,6 +132,6 @@ export default function ExpiringDocumentsPage() {
           })}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { BarChart2, Flag, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-gray-300",
@@ -65,15 +66,12 @@ export default function GanttPage() {
   const totalDays = Math.max(30, (projectEnd.getTime() - projectStart.getTime()) / (24 * 3600 * 1000));
 
   return (
-    <div className="p-6 space-y-4 max-w-7xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BarChart2 className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">مخطط غانت</h1>
-            <p className="text-sm text-gray-500">الجدول الزمني التفاعلي للمشروع</p>
-          </div>
-        </div>
+    <PageShell
+      title="مخطط غانت"
+      subtitle="الجدول الزمني التفاعلي للمشروع"
+      breadcrumbs={[{ href: "/projects", label: "المشاريع" }, { label: "مخطط غانت" }]}
+      loading={isLoading}
+      actions={
         <div className="flex items-center gap-2">
           <Label>المشروع:</Label>
           <Select value={projectId} onValueChange={setProjectId}>
@@ -83,8 +81,8 @@ export default function GanttPage() {
             </SelectContent>
           </Select>
         </div>
-      </div>
-
+      }
+    >
       {!projectId && (
         <Card><CardContent className="py-12 text-center text-gray-400">اختر مشروعاً لعرض مخطط غانت</CardContent></Card>
       )}
@@ -170,6 +168,6 @@ export default function GanttPage() {
           )}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

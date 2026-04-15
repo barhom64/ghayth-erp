@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Users, UserCheck, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 const stageMap: Record<string, { label: string; color: string }> = {
   new: { label: "جديد", color: "bg-blue-100 text-blue-700" },
@@ -36,12 +37,11 @@ export default function ApplicationListPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">قائمة المتقدمين</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">متابعة طلبات التوظيف ومراحل الفرز</p>
-      </div>
-
+    <PageShell
+      title="قائمة المتقدمين"
+      subtitle="متابعة طلبات التوظيف ومراحل الفرز"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "قائمة المتقدمين" }]}
+    >
       <div className="grid grid-cols-3 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -103,6 +103,6 @@ export default function ApplicationListPage() {
           </tbody>
         </table>
       </CardContent></Card>
-    </div>
+    </PageShell>
   );
 }

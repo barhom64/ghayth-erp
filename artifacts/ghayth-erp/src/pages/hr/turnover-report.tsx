@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TrendingDown, Users, DollarSign, BarChart3, PieChart } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart as RechartsPie, Pie } from "recharts";
+import { PageShell } from "@/components/page-shell";
 
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
@@ -26,8 +27,6 @@ export default function TurnoverReportPage() {
 
   const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
 
-  if (isLoading) return <div className="p-6 text-center text-gray-400">جاري تحميل التقرير...</div>;
-
   const monthlyData = (data?.byMonth || []).map((m: any) => ({
     name: MONTHS_AR[m.month - 1],
     count: m.count,
@@ -42,15 +41,12 @@ export default function TurnoverReportPage() {
   const deptData = (data?.byDepartment || []).sort((a: any, b: any) => b.count - a.count).slice(0, 6);
 
   return (
-    <div className="p-6 space-y-5 max-w-6xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <TrendingDown className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">تقرير دوران الموظفين</h1>
-            <p className="text-sm text-gray-500">تحليل معدل الدوران الوظيفي والتكاليف المرتبطة</p>
-          </div>
-        </div>
+    <PageShell
+      title="تقرير دوران الموظفين"
+      subtitle="تحليل معدل الدوران الوظيفي والتكاليف المرتبطة"
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تقرير دوران الموظفين" }]}
+      loading={isLoading}
+      actions={
         <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
           <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -59,8 +55,8 @@ export default function TurnoverReportPage() {
             ))}
           </SelectContent>
         </Select>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4">
@@ -184,6 +180,6 @@ export default function TurnoverReportPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

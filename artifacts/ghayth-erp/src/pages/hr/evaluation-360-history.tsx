@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 function ScoreDot({ score }: { score: number | null | undefined }) {
   if (score == null) return <span className="text-gray-400">-</span>;
@@ -33,21 +34,17 @@ export default function Evaluation360HistoryPage() {
   const maxScore = 100;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
+    <PageShell
+      title="تاريخ التقييمات"
+      subtitle={employee ? `${employee.name} · ${employee.jobTitle}` : undefined}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/evaluation-360", label: "التقييم 360°" }, { label: "تاريخ التقييمات" }]}
+      loading={isLoading}
+      actions={
         <Link href="/hr/evaluation-360">
           <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
         </Link>
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-600" />
-            تاريخ التقييمات
-          </h1>
-          {employee && <p className="text-sm text-gray-500">{employee.name} · {employee.jobTitle}</p>}
-        </div>
-      </div>
-
-      {isLoading && <div className="p-8 text-center text-gray-400">جارٍ التحميل...</div>}
+      }
+    >
 
       {!isLoading && history.length === 0 && (
         <Card>
@@ -123,6 +120,6 @@ export default function Evaluation360HistoryPage() {
           </tbody>
         </table>
       </div>
-    </div>
+    </PageShell>
   );
 }

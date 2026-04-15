@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
@@ -290,21 +291,17 @@ export default function ActivityLogPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Activity className="w-7 h-7 text-blue-600" />
-            سجل الحركات والنشاطات
-          </h1>
-          <p className="text-gray-500 mt-1">جميع العمليات والتغييرات عبر وحدات النظام مع تفاصيل التغييرات</p>
-        </div>
+    <PageShell
+      title="سجل الحركات والنشاطات"
+      subtitle="جميع العمليات والتغييرات عبر وحدات النظام مع تفاصيل التغييرات"
+      loading={isLoading}
+      actions={
         <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
           <RefreshCw className="w-4 h-4" />
           تحديث
         </Button>
-      </div>
-
+      }
+    >
       {activeAlerts.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {activeAlerts.map((alert) => (
@@ -511,6 +508,6 @@ export default function ActivityLogPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

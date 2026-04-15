@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { BarChart3, Car, TrendingUp, DollarSign, Fuel, Wrench, Shield, AlertTriangle } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
+import { PageShell } from "@/components/page-shell";
 
 const COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 
@@ -32,15 +33,12 @@ export default function TCOPage() {
   ].filter((d) => d.value > 0) : [];
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center gap-3 mb-4">
-        <BarChart3 className="w-6 h-6 text-primary" />
-        <div>
-          <h1 className="text-xl font-bold">تحليل التكلفة الكلية للمركبة</h1>
-          <p className="text-sm text-gray-500">تكلفة التملك الإجمالية</p>
-        </div>
-      </div>
-
+    <PageShell
+      title="تحليل التكلفة الكلية للمركبة"
+      subtitle="تكلفة التملك الإجمالية"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "تحليل التكلفة الكلية للمركبة" }]}
+      loading={isLoading}
+    >
       <div className="flex items-center gap-2">
         <Label>اختر مركبة:</Label>
         <Select value={vehicleId} onValueChange={setVehicleId}>
@@ -160,6 +158,6 @@ export default function TCOPage() {
           </Card>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

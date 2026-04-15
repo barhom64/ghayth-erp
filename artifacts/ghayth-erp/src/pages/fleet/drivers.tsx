@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
+import { PageShell } from "@/components/page-shell";
 
 export default function DriversPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
@@ -68,13 +69,16 @@ export default function DriversPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">السائقين</h1>
+    <PageShell
+      title="السائقين"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "السائقين" }]}
+      loading={isLoading}
+      actions={
         <Link href="/fleet/drivers/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة سائق</Button>
         </Link>
-      </div>
+      }
+    >
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {[
           { label: "إجمالي السائقين", value: items.length, icon: Users, color: "text-blue-600 bg-blue-50" },
@@ -121,6 +125,6 @@ export default function DriversPage() {
         }}
       />
       <QuickPreviewDialog open={!!previewDriver} onOpenChange={() => setPreviewDriver(null)} title="تفاصيل السائق" data={previewDriver} fields={driverFields} />
-    </div>
+    </PageShell>
   );
 }
