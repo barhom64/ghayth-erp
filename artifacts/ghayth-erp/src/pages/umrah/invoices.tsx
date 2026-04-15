@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -27,7 +27,7 @@ export default function UmrahInvoices() {
       await apiFetch("/umrah/agent-invoices/generate", { method: "POST", body: JSON.stringify({ agentId: Number(genAgent), seasonId: Number(genSeason) }) });
       toast({ title: "تم إنشاء الفاتورة" });
       refetch();
-    } catch (err: any) { toast({ variant: "destructive", title: err?.error || "خطأ" }); }
+    } catch (err) { toast(buildErrorToast(err)); }
   };
 
   const filteredItems = items.filter((inv: any) => {
