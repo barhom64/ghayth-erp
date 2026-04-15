@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -73,7 +73,7 @@ export function LinkedTasks({ entityType, entityId }: LinkedTasksProps) {
                       {priorityLabels[task.priority] || task.priority}
                     </Badge>
                   </td>
-                  <td className="p-3"><StatusBadge status={task.status} /></td>
+                  <td className="p-3"><PageStatusBadge status={task.status} /></td>
                   <td className="p-3 text-gray-500">{task.assigneeName || "-"}</td>
                   <td className="p-3 text-gray-500">
                     {task.scheduledStart
