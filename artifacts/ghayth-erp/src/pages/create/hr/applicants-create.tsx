@@ -32,7 +32,12 @@ const INITIAL = {
 export default function ApplicantsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/recruitment/applications", "POST", [["applicants"]]);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/recruitment/applications", "POST", [["applicants"]], {
+    successMessage: "تم إضافة المتقدم بنجاح",
+  });
   const { data: jobsData } = useApiQuery<{ data: any[] }>(["jobs"], "/recruitment/postings");
   const jobs = jobsData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
@@ -44,7 +49,7 @@ export default function ApplicantsCreate() {
 
   const selectedJob = jobs.find((j: any) => String(j.id) === form.postingId);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.postingId) {
       toast({ variant: "destructive", title: "يرجى اختيار الوظيفة" });
       return;
@@ -53,8 +58,8 @@ export default function ApplicantsCreate() {
       toast({ variant: "destructive", title: "اسم المتقدم مطلوب" });
       return;
     }
-    try {
-      await createMut.mutateAsync({
+    createMut.mutate(
+      {
         postingId: Number(form.postingId),
         applicantName: form.applicantName,
         email: form.email || undefined,
@@ -67,13 +72,14 @@ export default function ApplicantsCreate() {
         expectedSalary: form.expectedSalary ? Number(form.expectedSalary) : undefined,
         currentCompany: form.currentCompany || undefined,
         rating: form.rating ? Number(form.rating) : undefined,
-      });
-      clearDraft();
-      toast({ title: "تم إضافة المتقدم بنجاح" });
-      setLocation("/hr/recruitment");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المتقدم" });
-    }
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/recruitment");
+        },
+      },
+    );
   };
 
   return (

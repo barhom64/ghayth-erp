@@ -2229,7 +2229,7 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
       [scope.companyId, finalEmployeeId, period, overallScore ?? 0, finalScores, finalComments, status ?? "pending"]
     );
     res.status(201).json({ id: insertId, ...req.body });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Create performance review error:"); }
 });
 
 router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) => {
@@ -2306,7 +2306,7 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
       [scope.companyId, name, type ?? "fixed", category ?? "allowance", value ?? 0, taxable ?? true]
     );
     res.status(201).json({ id: insertId, ...req.body });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
 
 router.get("/approval-chains", requirePermission("hr:read"), async (req, res) => {
@@ -2697,7 +2697,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
     await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(updated || { message: "تم التحديث" });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Update violation error:"); }
 });
 
 router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => {
@@ -2727,7 +2727,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Update shift error:"); }
 });
 
 router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) => {
@@ -2735,7 +2735,7 @@ router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) =>
     const scope = req.scope!;
     await rawExecute(`DELETE FROM shifts WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
     res.json({ message: "تم حذف الوردية" });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Delete shift error:"); }
 });
 
 router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) => {
@@ -2774,7 +2774,7 @@ router.post("/shift-assignments", requirePermission("hr:create"), async (req, re
       [assignmentId, shiftId, startDate, endDate ?? null]
     );
     res.status(201).json({ id: insertId });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Create shift-assignment error:"); }
 });
 
 router.get("/official-letters", requirePermission("hr:read"), async (req, res) => {
@@ -2854,7 +2854,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
     }).catch(console.error);
 
     res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
 });
 
 router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res) => {

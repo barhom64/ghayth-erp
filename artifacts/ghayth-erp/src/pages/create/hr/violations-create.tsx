@@ -38,7 +38,12 @@ const INITIAL = {
 export default function ViolationsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/hr/violations", "POST", [["violations"]]);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/hr/violations", "POST", [["violations"]], {
+    successMessage: "تم إضافة المخالفة بنجاح",
+  });
   const { data: empData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = empData?.data || [];
 
@@ -51,7 +56,7 @@ export default function ViolationsCreate() {
 
   const selectedEmployee = employees.find((e: any) => String(e.assignmentId || e.id) === form.assignmentId);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.assignmentId) {
       toast({ variant: "destructive", title: "يرجى اختيار الموظف" });
       return;
@@ -64,8 +69,8 @@ export default function ViolationsCreate() {
       toast({ variant: "destructive", title: "وصف المخالفة مطلوب" });
       return;
     }
-    try {
-      await createMut.mutateAsync({
+    createMut.mutate(
+      {
         assignmentId: Number(form.assignmentId),
         type: form.type,
         description: form.description,
@@ -76,13 +81,14 @@ export default function ViolationsCreate() {
         location: form.location || undefined,
         actionTaken: form.actionTaken || undefined,
         ...(attachments.length > 0 ? { attachments } : {}),
-      });
-      clearDraft();
-      toast({ title: "تم إضافة المخالفة بنجاح" });
-      setLocation("/hr/violations");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المخالفة" });
-    }
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/violations");
+        },
+      },
+    );
   };
 
   return (

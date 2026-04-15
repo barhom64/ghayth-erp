@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery, ApiError } from "@/lib/api";
+import { useApiMutation, useApiQuery, ApiError, buildErrorToast } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,7 +114,9 @@ export default function EmployeesCreate() {
           description: err.fix ?? err.message,
         });
       } else {
-        toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الموظف" });
+        // HR-U2 — بدّلنا toast العام بـ buildErrorToast حتى يعرض
+        // رسالة مكتوبة (code + description) للمستخدم بدلاً من "حدث خطأ".
+        toast(buildErrorToast(err));
       }
     }
   };
