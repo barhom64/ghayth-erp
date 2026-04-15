@@ -898,6 +898,18 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
   } catch (err) { handleRouteError(err, res, "Create milestone error:"); }
 });
 
+// P02-S5-HIGH — milestone PATCH used to validate only `companyId`, but
+// every other milestone/risk route on this file (POST /:id/milestones,
+// GET /:id/milestones, GET /:id/risks, POST /:id/risks, plus tasks,
+// time-entries, costs etc.) goes through `assertProjectAccess` so a
+// `projects_manager` can only mutate projects they manage and an
+// `employee` only projects they have a task on. The PATCH bypass let
+// any user with `projects:update` permission rewrite milestones on
+// every project in the company (status transitions, completion dates),
+// which in turn calls `markObligationMet` → triggers the obligation-
+// driven invoice/delivery workflow on projects they shouldn't touch.
+// Re-route through `assertProjectAccess(existing.projectId, scope)`
+// after the company-scoped lookup so the same role gates apply.
 router.patch("/milestones/:milestoneId", requirePermission("projects:update"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -907,6 +919,7 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المعلم غير موجود");
+    await assertProjectAccess(existing.projectId, scope);
     const b = req.body;
 
     if (b.status !== undefined && b.status !== existing.status) {
@@ -990,6 +1003,11 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
 });
 
+// P02-S5-HIGH — same bypass as milestone PATCH above. Risk PATCH only
+// validated `companyId`, letting any `projects:update` user rewrite
+// probability / impact / mitigation / status on risks across every
+// project in the company — including projects the caller's role does
+// not have read access to via `assertProjectAccess`.
 router.patch("/risks/:riskId", requirePermission("projects:update"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -999,6 +1017,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
       [id, scope.companyId]
     );
     if (!existingRisk) throw new NotFoundError("المخاطرة غير موجودة");
+    await assertProjectAccess(existingRisk.projectId, scope);
     const b = req.body;
 
     if (b.status !== undefined && b.status !== existingRisk.status) {
