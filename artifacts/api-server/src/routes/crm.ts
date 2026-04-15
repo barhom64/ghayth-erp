@@ -809,9 +809,28 @@ router.get("/opportunities/:id/related", requirePermission("crm:read"), async (r
   } catch (err) { handleRouteError(err, res, "Related opportunities error:"); }
 });
 
+// P02-CRIT3 — both activity routes used to take `:id` from the URL
+// and run straight at `crm_activities`, which is keyed only by
+// `opportunityId` (no companyId on the activities table itself). The
+// `crm:read` / `crm:create` permission gates only verified the
+// caller has CRM perms in *some* company, not that the opportunity
+// they're addressing lives in their company. So a CRM user in
+// company A could read every CRM note/call/task on company B's
+// pipeline by guessing IDs (read leak) and could spam fake
+// activities or false trails on competitors' opportunities (write
+// leak). Fixed by pre-validating the opportunity exists in the
+// caller's scope — same pattern used by routes 257/687/742 in this
+// file for the opportunity PATCH/DELETE side.
 router.get("/opportunities/:id/activities", requirePermission("crm:read"), async (req, res) => {
   try {
-    const rows = await rawQuery<any>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC`, [Number(req.params.id)]);
+    const scope = req.scope!;
+    const oppId = Number(req.params.id);
+    const [opp] = await rawQuery<any>(
+      `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [oppId, scope.companyId]
+    );
+    if (!opp) throw new NotFoundError("الفرصة غير موجودة");
+    const rows = await rawQuery<any>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC`, [oppId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "CRM activities error:"); }
 });
@@ -820,9 +839,15 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
   try {
     const scope = req.scope!;
     const b = req.body;
+    const oppId = Number(req.params.id);
+    const [opp] = await rawQuery<any>(
+      `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [oppId, scope.companyId]
+    );
+    if (!opp) throw new NotFoundError("الفرصة غير موجودة");
     const { insertId } = await rawExecute(
       `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,$2,$3,$4,$5)`,
-      [Number(req.params.id), b.type, b.description, b.scheduledAt, scope.userId]
+      [oppId, b.type, b.description, b.scheduledAt, scope.userId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM crm_activities WHERE id=$1`, [insertId]);
     res.status(201).json(row);
