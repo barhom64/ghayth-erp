@@ -148,6 +148,17 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// P02-S4-HIGH — `POST /:id/versions` used to read documents with the
+// `("companyId"=$2 OR "companyId" IS NULL)` filter (so global system
+// documents passed the precheck) and then UPDATE by raw `id` with no
+// scope filter at all. That meant any tenant's user with the
+// `documents:create` permission could POST a new version against a
+// global system document and rewrite its `fileName`/`storageKey`/
+// `mimeType` — redirecting every other tenant's downloads of that
+// system document to attacker-controlled storage. Tightening both the
+// precheck and the UPDATE to caller's company only; new versions of
+// global/system documents must be created as company-owned documents
+// via the regular create flow, not by mutating shared rows.
 router.post("/:id/versions", requirePermission("documents:create"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
@@ -155,7 +166,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
     const { fileName, fileSize, mimeType, storageKey, notes } = req.body;
 
     const [doc] = await rawQuery<any>(
-      `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`,
       [docId, scope.companyId]
     );
     if (!doc) { res.status(404).json({ error: "المستند غير موجود" }); return; }
@@ -169,11 +180,11 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
     );
 
     await rawExecute(
-      `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6`,
-      [newVersion, fileName, fileSize, mimeType, storageKey, docId]
+      `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+      [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
     );
 
-    const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
+    const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [docId, scope.companyId]);
     res.json(updated);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
