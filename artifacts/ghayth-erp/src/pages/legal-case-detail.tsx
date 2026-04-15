@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { STATUSES } from "@/lib/constants";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -279,11 +279,11 @@ export default function LegalCaseDetail() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <p className="text-xs text-gray-400 mb-1">الحالة</p>
-                  <StatusBadge status={caseData.status} />
+                  <PageStatusBadge status={caseData.status} />
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 mb-1">الأولوية</p>
-                  <StatusBadge status={caseData.priority} />
+                  <PageStatusBadge status={caseData.priority} />
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 mb-1">نوع القضية</p>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ClipboardCheck, Plus, Eye } from "lucide-react";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -45,7 +45,7 @@ export function AuditsTab() {
     { key: "title", header: "العنوان", sortable: true, render: (a) => <span className="font-medium">{a.title}</span> },
     { key: "auditorName", header: "المدقق", sortable: true, render: (a) => <span className="text-muted-foreground">{a.auditorName || "-"}</span> },
     { key: "scope", header: "النطاق", sortable: true, render: (a) => <span className="max-w-[200px] truncate inline-block">{a.scope || "-"}</span> },
-    { key: "status", header: "الحالة", sortable: true, render: (a) => <StatusBadge status={a.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (a) => <PageStatusBadge status={a.status} /> },
     {
       key: "actions", header: "إجراءات",
       render: (a) => (

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, X, CheckCircle, KeySquare, Eye, EyeOff, ToggleLeft, ToggleRight } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { ROLE_OPTIONS } from "./shared";
 
 export function UsersTab() {
@@ -196,7 +196,7 @@ export function UsersTab() {
                       ) : <span className="text-gray-400 text-xs">—</span>}
                     </td>
                     <td className="p-3"><Badge variant="outline" className="text-xs">{roleLabel(u.role)}</Badge></td>
-                    <td className="p-3"><StatusBadge status={u.status || (u.isActive ? "active" : "inactive")} /></td>
+                    <td className="p-3"><PageStatusBadge status={u.status || (u.isActive ? "active" : "inactive")} /></td>
                     <td className="p-3 text-xs text-gray-400">{u.lastLoginAt ? formatDateAr(u.lastLoginAt) : "لم يسجل بعد"}</td>
                     <td className="p-3">
                       <div className="flex gap-1">

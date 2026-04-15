@@ -2,7 +2,7 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
@@ -162,7 +162,7 @@ export default function AdminMonitoring() {
                           ) : (
                             <XCircle className="w-3 h-3 text-gray-400" />
                           )}
-                          {job.lastStatus && <StatusBadge status={job.lastStatus} />}
+                          {job.lastStatus && <PageStatusBadge status={job.lastStatus} />}
                         </div>
                         {job.lastError && <p className="text-[10px] text-red-500 mt-0.5 truncate max-w-[150px]">{job.lastError}</p>}
                       </td>
@@ -192,7 +192,7 @@ export default function AdminMonitoring() {
                   {recentCronLogs.map((log: any, i: number) => (
                     <tr key={i} className="border-b hover:bg-gray-50">
                       <td className="p-2 font-medium text-xs">{log.jobName}</td>
-                      <td className="p-2"><StatusBadge status={log.status} /></td>
+                      <td className="p-2"><PageStatusBadge status={log.status} /></td>
                       <td className="p-2 text-xs">{log.duration ? `${log.duration}ms` : "-"}</td>
                       <td className="p-2 text-xs">{formatDateAr(log.createdAt)}</td>
                     </tr>

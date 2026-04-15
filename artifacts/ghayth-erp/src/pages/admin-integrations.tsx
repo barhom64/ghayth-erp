@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -142,7 +142,7 @@ function IntegrationsList() {
                       <p className="text-xs text-gray-500">{CHANNEL_LABELS[intg.type] || intg.type}</p>
                     </div>
                   </div>
-                  <StatusBadge status={intg.status} />
+                  <PageStatusBadge status={intg.status} />
                 </div>
 
                 <div className="text-xs text-gray-500 space-y-1 mb-3">
@@ -211,7 +211,7 @@ function IntegrationLogs() {
         <div>
           <div className="flex items-center gap-1">
             {statusIcon(log.status)}
-            <StatusBadge status={log.status} />
+            <PageStatusBadge status={log.status} />
           </div>
           {log.errorMessage && <p className="text-xs text-red-500 mt-1 truncate max-w-[200px]">{log.errorMessage}</p>}
         </div>

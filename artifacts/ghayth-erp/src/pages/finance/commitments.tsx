@@ -1,6 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { FileSignature, DollarSign, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -54,7 +54,7 @@ export default function CommitmentsPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (c) => <StatusBadge status={c.status} />,
+      render: (c) => <PageStatusBadge status={c.status} />,
     },
   ];
 

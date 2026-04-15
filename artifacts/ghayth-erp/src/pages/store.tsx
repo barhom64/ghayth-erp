@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShoppingCart, Package, Plus, X, DollarSign, Eye } from "lucide-react";
@@ -56,7 +56,7 @@ function ProductsTab() {
     { key: "sku", header: "رمز المنتج", sortable: true, render: (p) => <span className="text-muted-foreground font-mono">{p.sku || "-"}</span> },
     { key: "price", header: "السعر", sortable: true, render: (p) => formatCurrency(Number(p.price) || 0) },
     { key: "quantity", header: "الكمية", sortable: true, render: (p) => p.quantity },
-    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <PageStatusBadge status={p.status} /> },
     {
       key: "actions", header: "إجراءات",
       render: (p) => (
@@ -172,7 +172,7 @@ function OrdersTab() {
     { key: "customerName", header: "العميل", sortable: true, render: (o) => <span className="font-medium">{o.customerName}</span> },
     { key: "totalAmount", header: "المبلغ", sortable: true, render: (o) => <span className="font-bold">{formatCurrency(Number(o.totalAmount) || 0)}</span> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (o) => formatDateAr(o.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (o) => <StatusBadge status={o.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (o) => <PageStatusBadge status={o.status} /> },
     {
       key: "actions", header: "إجراءات",
       render: (o) => (

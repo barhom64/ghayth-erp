@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useApiQuery, asList } from "@/lib/api";
@@ -29,12 +29,12 @@ export default function Intelligence() {
   const taskColumns: DataTableColumn<any>[] = [
     { key: "title", header: "المهمة", sortable: true, render: (t) => <span className="font-medium">{t.title}</span> },
     { key: "assigneeName", header: "المسؤول", sortable: true, render: (t) => t.assigneeName || "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (t) => <StatusBadge status={t.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (t) => <PageStatusBadge status={t.status} /> },
   ];
   const attendColumns: DataTableColumn<any>[] = [
     { key: "employeeName", header: "الموظف", sortable: true, render: (a) => <span className="font-medium">{a.employeeName}</span> },
     { key: "checkIn", header: "وقت الدخول", sortable: true, ltr: true, render: (a) => a.checkIn || "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (a) => <StatusBadge status={a.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (a) => <PageStatusBadge status={a.status} /> },
   ];
 
   return (
@@ -68,7 +68,7 @@ export default function Intelligence() {
                 <div key={a.id} className={`p-3 rounded-lg border ${a.severity === 'critical' ? 'bg-rose-50 border-rose-200' : a.severity === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm">{a.title}</span>
-                    <StatusBadge status={a.severity} />
+                    <PageStatusBadge status={a.severity} />
                   </div>
                   {a.description && <p className="text-xs text-muted-foreground mt-1">{a.description}</p>}
                 </div>

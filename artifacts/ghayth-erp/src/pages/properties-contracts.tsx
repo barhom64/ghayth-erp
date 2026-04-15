@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { TagFilterSelect, useTagFilter, EntityTags } from "@/components/shared/entity-tags";
 import { EntityComments } from "@/components/shared/entity-comments";
@@ -273,7 +273,7 @@ export default function PropertiesContracts() {
     { key: "endDate", header: "إلى", sortable: true, className: "text-xs", render: (c) => formatDateAr(c.endDate) },
     { key: "monthlyRent", header: "الإيجار", sortable: true, className: "font-bold", render: (c) => formatCurrency(c.monthlyRent || 0) },
     { key: "paymentFrequency", header: "الدورة", sortable: true, className: "text-xs", render: (c) => FREQ_LABELS[c.paymentFrequency] || "—" },
-    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <PageStatusBadge status={c.status} /> },
     {
       key: "details",
       header: "تفاصيل",

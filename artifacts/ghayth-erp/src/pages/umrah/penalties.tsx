@@ -1,6 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AlertTriangle, DollarSign, Clock } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
@@ -37,7 +37,7 @@ export default function UmrahPenalties() {
     { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
     { key: "daysOverstayed", header: "أيام التأخر" },
     { key: "amount", header: "المبلغ (ريال)", render: (p) => <span className="font-bold text-red-600">{Number(p.amount).toLocaleString()}</span> },
-    { key: "status", header: "الحالة", render: (p) => <StatusBadge status={p.status} /> },
+    { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
   ];
 
   return (

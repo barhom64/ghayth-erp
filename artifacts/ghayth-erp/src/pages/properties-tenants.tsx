@@ -4,7 +4,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import {
@@ -188,7 +188,7 @@ export default function PropertiesTenants() {
                       {t.contracts?.slice(0, 3).map((c: any, i: number) => (
                         <p key={i} className="text-xs text-gray-600">
                           {c.unitNumber} — {formatDateAr(c.startDate)} ← {formatDateAr(c.endDate)}
-                          <StatusBadge status={c.status} />
+                          <PageStatusBadge status={c.status} />
                         </p>
                       ))}
                     </div>

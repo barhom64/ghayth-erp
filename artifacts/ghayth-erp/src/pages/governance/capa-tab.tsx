@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable } from "@/components/ui/data-table";
 import { CheckCircle2, Plus, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -111,7 +111,7 @@ export function CAPATab() {
               { key: "finding", header: "الملاحظة", sortable: true, searchable: true, render: (item) => <span className="font-medium max-w-[200px] truncate inline-block">{item.finding}</span> },
               { key: "responsiblePerson", header: "المسؤول", sortable: true, searchable: true, render: (item) => <span>{item.responsiblePerson || "-"}</span> },
               { key: "dueDate", header: "الاستحقاق", sortable: true, render: (item) => item.dueDate ? formatDateAr(item.dueDate) : "-" },
-              { key: "status", header: "الحالة", sortable: true, render: (item) => <StatusBadge status={item.status} /> },
+              { key: "status", header: "الحالة", sortable: true, render: (item) => <PageStatusBadge status={item.status} /> },
               {
                 key: "actions", header: "إجراءات",
                 render: (item) => (

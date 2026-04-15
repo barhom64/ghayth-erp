@@ -3,7 +3,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
@@ -142,7 +142,7 @@ export default function UmrahDashboard() {
                 { key: "passportNumber", header: "الجواز" },
                 { key: "nationality", header: "الجنسية" },
                 { key: "actualArrival", header: "تاريخ الوصول", render: (r) => r.actualArrival ? new Date(r.actualArrival).toLocaleDateString("ar-SA") : "-" },
-                { key: "status", header: "الحالة", render: (r) => <StatusBadge status={r.status} /> },
+                { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
               ] as DataTableColumn<any>[]}
               data={dash?.recentArrivals || []}
               noToolbar

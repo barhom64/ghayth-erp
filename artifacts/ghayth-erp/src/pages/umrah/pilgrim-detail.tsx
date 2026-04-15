@@ -4,7 +4,7 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Save, User, Calendar, AlertTriangle } from "lucide-react";
@@ -72,7 +72,7 @@ export default function PilgrimDetail() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">{data.fullName}</h1>
-            <StatusBadge status={data.status} />
+            <PageStatusBadge status={data.status} />
           </div>
           <p className="text-sm text-muted-foreground mt-1">{data.passportNumber} • {data.nationality}</p>
         </div>
@@ -123,7 +123,7 @@ export default function PilgrimDetail() {
                   { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
                   { key: "daysOverstayed", header: "أيام التأخر", render: (p) => `${p.daysOverstayed} يوم` },
                   { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold text-red-600">{Number(p.amount).toLocaleString()} ريال</span> },
-                  { key: "status", header: "الحالة", render: (p) => <StatusBadge status={p.status} /> },
+                  { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
                 ] as DataTableColumn<any>[]}
                 data={data.penalties}
                 noToolbar

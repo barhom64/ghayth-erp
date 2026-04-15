@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -404,7 +404,7 @@ export default function ClientDetail() {
                               <p className="font-medium text-sm">{item.ref}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <StatusBadge status={item.status} />
+                              <PageStatusBadge status={item.status} />
                               {item.detail && (
                                 <span className="text-xs text-muted-foreground">{item.detail}</span>
                               )}
@@ -443,7 +443,7 @@ export default function ClientDetail() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <StatusBadge status={inv.status} />
+                      <PageStatusBadge status={inv.status} />
                       <span className="font-bold">{formatCurrency(Number(inv.total || 0))}</span>
                       <span className="text-xs text-muted-foreground">
                         مدفوع: {formatCurrency(Number(inv.paidAmount || 0))}
@@ -494,7 +494,7 @@ export default function ClientDetail() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <StatusBadge status={opp.status || opp.stage} />
+                      <PageStatusBadge status={opp.status || opp.stage} />
                       <span className="font-bold">{formatCurrency(Number(opp.value || 0))}</span>
                     </div>
                   </div>
@@ -522,7 +522,7 @@ export default function ClientDetail() {
                       <p className="text-xs text-muted-foreground font-mono">{t.ref}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <StatusBadge status={t.status} />
+                      <PageStatusBadge status={t.status} />
                       <PriorityBadge priority={t.priority} />
                     </div>
                   </div>
@@ -553,7 +553,7 @@ export default function ClientDetail() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <StatusBadge status={p.status} />
+                      <PageStatusBadge status={p.status} />
                       {p.budget > 0 && <span className="font-bold text-sm">{formatCurrency(Number(p.budget))}</span>}
                       {p.progress !== undefined && p.progress !== null && (
                         <span className="text-xs text-muted-foreground">{p.progress}%</span>
@@ -587,7 +587,7 @@ export default function ClientDetail() {
                         <Badge variant="outline" className="text-xs">
                           {msg.channel === "whatsapp" ? "واتساب" : msg.channel === "sms" ? "رسالة نصية" : msg.channel}
                         </Badge>
-                        <StatusBadge status={msg.status} />
+                        <PageStatusBadge status={msg.status} />
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {msg.createdAt ? formatDateAr(msg.createdAt) : ""}

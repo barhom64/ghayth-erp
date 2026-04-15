@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable } from "@/components/ui/data-table";
 import { Activity, Plus, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -108,7 +108,7 @@ export function ComplianceActionsTab() {
               { key: "regulation", header: "اللائحة", sortable: true, searchable: true, render: (item) => <span className="text-muted-foreground">{item.regulation || "-"}</span> },
               { key: "owner", header: "المسؤول", sortable: true, searchable: true, render: (item) => <span>{item.owner || "-"}</span> },
               { key: "dueDate", header: "تاريخ الاستحقاق", sortable: true, render: (item) => item.dueDate ? formatDateAr(item.dueDate) : "-" },
-              { key: "status", header: "الحالة", sortable: true, render: (item) => <StatusBadge status={item.status} /> },
+              { key: "status", header: "الحالة", sortable: true, render: (item) => <PageStatusBadge status={item.status} /> },
               {
                 key: "actions", header: "إجراءات",
                 render: (item) => (

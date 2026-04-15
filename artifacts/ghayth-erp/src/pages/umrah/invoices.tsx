@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -120,7 +120,7 @@ export default function UmrahInvoices() {
           { key: "servicesTotal", header: "الخدمات (ريال)", render: (inv) => Number(inv.servicesTotal).toLocaleString() },
           { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-red-600">{Number(inv.penaltiesTotal).toLocaleString()}</span> },
           { key: "total", header: "الإجمالي (ريال)", render: (inv) => <span className="font-bold">{Number(inv.total).toLocaleString()}</span> },
-          { key: "status", header: "الحالة", render: (inv) => <StatusBadge status={inv.status} /> },
+          { key: "status", header: "الحالة", render: (inv) => <PageStatusBadge status={inv.status} /> },
         ] as DataTableColumn<any>[]}
         data={filteredItems}
         isLoading={isLoading}

@@ -7,7 +7,7 @@ import { STATUSES } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -123,7 +123,7 @@ export default function OpportunityDetail() {
           <h1 className="text-3xl font-bold tracking-tight">{opportunity.title}</h1>
           <p className="text-gray-500 mt-1">{opportunity.clientName || opportunity.contactName || "-"}</p>
         </div>
-        <StatusBadge status={opportunity.stage} />
+        <PageStatusBadge status={opportunity.stage} />
         <PrintActions
           onPreview={() => setShowPreview(true)}
           onPrint={() => directPrint(printContainerRef.current, `عرض سعر - ${opportunity.title}`)}
@@ -203,7 +203,7 @@ export default function OpportunityDetail() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-sm">{a.description}</span>
-                        <StatusBadge status={a.status || "pending"} />
+                        <PageStatusBadge status={a.status || "pending"} />
                       </div>
                       <p className="text-xs text-gray-500 mt-1">{at?.label || a.type} • {a.scheduledAt ? formatDateAr(a.scheduledAt) : a.createdAt ? formatDateAr(a.createdAt) : "-"}</p>
                     </div>

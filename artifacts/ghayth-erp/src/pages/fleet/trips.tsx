@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -24,7 +24,7 @@ export default function TripsPage() {
     { key: "vehiclePlate", header: "المركبة", sortable: true, render: (t) => t.vehiclePlate || "-" },
     { key: "origin", header: "من / إلى", sortable: true, render: (t) => <span className="text-gray-500">{t.origin} → {t.destination}</span> },
     { key: "distance", header: "المسافة", sortable: true, render: (t) => `${t.distance} كم` },
-    { key: "status", header: "الحالة", sortable: true, render: (t) => <StatusBadge status={t.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (t) => <PageStatusBadge status={t.status} /> },
   ];
 
   return (
