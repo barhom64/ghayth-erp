@@ -3,7 +3,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { Banknote, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -31,7 +31,7 @@ export default function PropertiesPayments() {
     { key: "dueDate", header: "تاريخ الاستحقاق", sortable: true, render: (p) => formatDateAr(p.dueDate) },
     { key: "amount", header: "المبلغ", sortable: true, render: (p) => formatCurrency(p.amount || 0) },
     { key: "paidAmount", header: "المدفوع", sortable: true, className: "text-emerald-600", render: (p) => formatCurrency(p.paidAmount || 0) },
-    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <PageStatusBadge status={p.status} /> },
     {
       key: "action",
       header: "إجراء",

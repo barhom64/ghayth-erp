@@ -6,7 +6,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -477,7 +477,7 @@ function CommLogTab() {
     { key: "fromNumber", header: "من", sortable: true, ltr: true, render: (l) => l.fromNumber || "-" },
     { key: "toNumber", header: "إلى", sortable: true, ltr: true, render: (l) => l.toNumber || "-" },
     { key: "subject", header: "الموضوع", sortable: true, render: (l) => <span className="max-w-[200px] truncate inline-block">{l.subject || "-"}</span> },
-    { key: "status", header: "الحالة", sortable: true, render: (l) => <StatusBadge status={l.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status} /> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => formatDateAr(l.createdAt) },
     { key: "actions", header: "إجراء", render: (l) => l.relatedType ? <Badge variant="outline" className="text-[10px]">{l.relatedType}</Badge> : <ConvertCommButton logEntry={l} onSuccess={() => refetch()} /> },
   ];
@@ -527,7 +527,7 @@ function WhatsAppTab() {
     { key: "phone", header: "الرقم", sortable: true, ltr: true, render: (m) => m.phone || m.recipientPhone || "-" },
     { key: "recipientName", header: "المستلم", sortable: true, render: (m) => m.recipientName || "-" },
     { key: "message", header: "الرسالة", sortable: true, render: (m) => <span className="max-w-[300px] truncate inline-block">{m.message}</span> },
-    { key: "status", header: "الحالة", sortable: true, render: (m) => <StatusBadge status={m.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (m) => <PageStatusBadge status={m.status} /> },
     { key: "externalId", header: "معرف خارجي", render: (m) => <span className="text-xs text-gray-400">{m.externalId || "-"}</span> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (m) => formatDateAr(m.createdAt) },
   ];
@@ -584,7 +584,7 @@ function SMSTab() {
   const columns: DataTableColumn<any>[] = [
     { key: "recipientPhone", header: "الرقم", sortable: true, ltr: true, render: (m) => m.recipientPhone || "-" },
     { key: "message", header: "الرسالة", sortable: true, render: (m) => <span className="max-w-[300px] truncate inline-block">{m.message}</span> },
-    { key: "status", header: "الحالة", sortable: true, render: (m) => <StatusBadge status={m.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (m) => <PageStatusBadge status={m.status} /> },
     { key: "externalId", header: "معرف خارجي", render: (m) => <span className="text-xs text-gray-400">{m.externalId || "-"}</span> },
     { key: "attemptCount", header: "عدد المحاولات", align: "center", render: (m) => m.attemptCount ?? 0 },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (m) => formatDateAr(m.createdAt) },
@@ -640,7 +640,7 @@ function PBXTab() {
     { key: "calledNumber", header: "المستقبل", sortable: true, ltr: true, render: (c) => c.calledNumber || "-" },
     { key: "direction", header: "الاتجاه", sortable: true, render: (c) => c.direction === 'inbound' ? 'وارد' : 'صادر' },
     { key: "duration", header: "المدة", sortable: true, render: (c) => c.duration ? `${Math.floor(c.duration/60)}:${String(c.duration%60).padStart(2,'0')}` : "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <PageStatusBadge status={c.status} /> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (c) => formatDateAr(c.createdAt) },
   ];
 

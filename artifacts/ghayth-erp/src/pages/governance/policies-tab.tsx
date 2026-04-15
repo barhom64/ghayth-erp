@@ -3,7 +3,7 @@ import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { FileCheck, Plus, Eye, GitBranch } from "lucide-react";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -83,7 +83,7 @@ export function PoliciesTab() {
       ),
     },
     { key: "effectiveDate", header: "تاريخ النفاذ", sortable: true, render: (p) => p.effectiveDate ? formatDateAr(p.effectiveDate) : "-" },
-    { key: "status", header: "الحالة", sortable: true, render: (p) => <StatusBadge status={p.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (p) => <PageStatusBadge status={p.status} /> },
     {
       key: "actions", header: "إجراءات",
       render: (p) => (

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Building2, Home, Plus, ArrowRight, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -130,7 +130,7 @@ export default function BuildingDetail() {
                       <p className="font-bold text-sm">{u.unitNumber}</p>
                       <p className="text-xs text-gray-400">{u.type === "apartment" ? "شقة" : u.type === "villa" ? "فيلا" : u.type === "office" ? "مكتب" : u.type === "shop" ? "محل" : u.type}</p>
                     </div>
-                    <StatusBadge status={u.status} />
+                    <PageStatusBadge status={u.status} />
                   </div>
                   <div className="grid grid-cols-3 gap-1 text-center mt-3">
                     <div>

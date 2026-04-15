@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
 
@@ -82,7 +82,7 @@ export default function UmrahSeasons() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <StatusBadge status={s.status} />
+                <PageStatusBadge status={s.status} />
                 {s.status === "open" && (
                   <Button variant="outline" size="sm" onClick={() => closeSeason(s.id)}>إغلاق الموسم</Button>
                 )}

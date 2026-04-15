@@ -25,13 +25,13 @@ export function ComplianceDashboardTab() {
               <CardContent>
                 <DataTable
                   columns={[
-                    { key: "module", header: "الوحدة", sortable: true, searchable: true, render: (m) => <span className="font-medium">{m.module}</span> },
-                    { key: "compliant", header: "ممتثل", sortable: true, render: (m) => <span className="text-green-700">{m.compliant}</span> },
-                    { key: "nonCompliant", header: "غير ممتثل", sortable: true, render: (m) => <span className="text-red-700">{m.nonCompliant}</span> },
-                    { key: "partial", header: "جزئي", sortable: true, render: (m) => <span className="text-amber-700">{m.partial}</span> },
+                    { key: "module", header: "الوحدة", sortable: true, searchable: true, render: (m: any) => <span className="font-medium">{m.module}</span> },
+                    { key: "compliant", header: "ممتثل", sortable: true, render: (m: any) => <span className="text-green-700">{m.compliant}</span> },
+                    { key: "nonCompliant", header: "غير ممتثل", sortable: true, render: (m: any) => <span className="text-red-700">{m.nonCompliant}</span> },
+                    { key: "partial", header: "جزئي", sortable: true, render: (m: any) => <span className="text-amber-700">{m.partial}</span> },
                     {
                       key: "rate", header: "معدل الامتثال", sortable: true,
-                      render: (m) => (
+                      render: (m: any) => (
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 bg-gray-100 rounded-full">
                             <div className="h-2 bg-green-500 rounded-full" style={{ width: `${m.rate || 0}%` }} />
@@ -42,7 +42,7 @@ export function ComplianceDashboardTab() {
                     },
                   ]}
                   data={dash.byModule || []}
-                  rowKey={(m) => m.module}
+                  rowKey={(m: any) => m.module}
                   noToolbar
                   pageSize={0}
                 />

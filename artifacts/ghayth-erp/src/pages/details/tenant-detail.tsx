@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import {
@@ -223,7 +223,7 @@ export default function TenantDetail() {
                       <td className="p-3 text-gray-500">{formatDateAr(c.startDate)}</td>
                       <td className="p-3 text-gray-500">{formatDateAr(c.endDate)}</td>
                       <td className="p-3 font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</td>
-                      <td className="p-3"><StatusBadge status={c.status} /></td>
+                      <td className="p-3"><PageStatusBadge status={c.status} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -255,7 +255,7 @@ export default function TenantDetail() {
                       <td className="p-3 text-gray-500">{formatDateAr(p.dueDate)}</td>
                       <td className="p-3 font-bold">{formatCurrency(Number(p.amount || 0))}</td>
                       <td className="p-3 text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</td>
-                      <td className="p-3"><StatusBadge status={p.status} /></td>
+                      <td className="p-3"><PageStatusBadge status={p.status} /></td>
                     </tr>
                   ))}
                 </tbody>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AlertTriangle, Plus, Eye } from "lucide-react";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -44,9 +44,9 @@ export function RisksTab() {
 
   const columns: DataTableColumn<any>[] = [
     { key: "title", header: "الخطر", sortable: true, render: (r) => <span className="font-medium">{r.title}</span> },
-    { key: "severity", header: "الشدة", sortable: true, render: (r) => <StatusBadge status={r.severity} /> },
+    { key: "severity", header: "الشدة", sortable: true, render: (r) => <PageStatusBadge status={r.severity} /> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <StatusBadge status={r.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} /> },
     {
       key: "actions", header: "إجراءات",
       render: (r) => (

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   Building, FileText, Banknote, Wrench, Users, Clock, DollarSign,
   ArrowRight, AlertTriangle, CheckCircle, XCircle, Info, Pencil,
@@ -478,7 +478,7 @@ export default function UnitDetail() {
                         </div>
                         <div className="text-right">
                           <p className={cn("font-bold text-xs", paid ? "text-green-700" : "text-gray-700")}>{formatCurrency(Number(p.amount || 0))}</p>
-                          <StatusBadge status={p.status} />
+                          <PageStatusBadge status={p.status} />
                         </div>
                       </div>
                     );
@@ -506,7 +506,7 @@ export default function UnitDetail() {
                           <p className="text-sm font-medium">{c.tenantName}</p>
                           <p className="text-xs text-gray-500">{formatDateAr(c.startDate)} → {formatDateAr(c.endDate)}</p>
                         </div>
-                        <StatusBadge status={c.status} />
+                        <PageStatusBadge status={c.status} />
                       </div>
                     </div>
                   ))}
@@ -545,7 +545,7 @@ export default function UnitDetail() {
                       <td className="p-3 text-gray-500">{formatDateAr(c.endDate)}</td>
                       <td className="p-3 font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</td>
                       <td className="p-3 text-emerald-600">{formatCurrency(Number(c.totalPaid || 0))}</td>
-                      <td className="p-3"><StatusBadge status={c.status} /></td>
+                      <td className="p-3"><PageStatusBadge status={c.status} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -580,7 +580,7 @@ export default function UnitDetail() {
                         <td className="p-3 text-red-600">{formatDateAr(p.dueDate)}</td>
                         <td className="p-3 font-bold">{formatCurrency(Number(p.amount || 0))}</td>
                         <td className="p-3 text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</td>
-                        <td className="p-3"><StatusBadge status={p.status} /></td>
+                        <td className="p-3"><PageStatusBadge status={p.status} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -616,7 +616,7 @@ export default function UnitDetail() {
                         <td className="p-3 text-gray-500">{formatDateAr(p.dueDate)}</td>
                         <td className="p-3 font-bold">{formatCurrency(Number(p.amount || 0))}</td>
                         <td className="p-3 text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</td>
-                        <td className="p-3"><StatusBadge status={p.status} /></td>
+                        <td className="p-3"><PageStatusBadge status={p.status} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -654,8 +654,8 @@ export default function UnitDetail() {
                       <tr key={m.id} className="border-b hover:bg-gray-50">
                         <td className="p-3 font-medium">{m.category || "-"}</td>
                         <td className="p-3 text-gray-500 max-w-xs truncate">{m.description || "-"}</td>
-                        <td className="p-3"><StatusBadge status={m.priority} /></td>
-                        <td className="p-3"><StatusBadge status={m.status} /></td>
+                        <td className="p-3"><PageStatusBadge status={m.priority} /></td>
+                        <td className="p-3"><PageStatusBadge status={m.status} /></td>
                         <td className="p-3 text-gray-500">{m.actualCost != null ? `${Number(m.actualCost).toLocaleString("ar-SA")} ر.س` : "-"}</td>
                         <td className="p-3 text-gray-500">
                           {materials.length > 0 ? (

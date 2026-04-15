@@ -366,19 +366,19 @@ function FinancialLegalTab() {
                   data={report.recentJudgments || []}
                   emptyMessage="لا توجد أحكام"
                   columns={[
-                    { key: "caseTitle", header: "القضية", className: "font-medium", render: (j) => j.caseTitle || `قضية #${j.caseId}` },
-                    { key: "judgmentDate", header: "تاريخ الحكم", render: (j) => j.judgmentDate ? formatDateAr(j.judgmentDate) : "-" },
+                    { key: "caseTitle", header: "القضية", className: "font-medium", render: (j: any) => j.caseTitle || `قضية #${j.caseId}` },
+                    { key: "judgmentDate", header: "تاريخ الحكم", render: (j: any) => j.judgmentDate ? formatDateAr(j.judgmentDate) : "-" },
                     {
                       key: "verdict",
                       header: "النتيجة",
-                      render: (j) => (
+                      render: (j: any) => (
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${j.verdict === 'win' ? 'bg-green-100 text-green-700' : j.verdict === 'loss' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
                           {j.verdict === 'win' ? 'ربح' : j.verdict === 'loss' ? 'خسارة' : j.verdict || "-"}
                         </span>
                       ),
                     },
-                    { key: "amount", header: "المبلغ", render: (j) => formatCurrency(j.amount || 0) },
-                    { key: "paidAmount", header: "المدفوع", render: (j) => formatCurrency(j.paidAmount || 0) },
+                    { key: "amount", header: "المبلغ", render: (j: any) => formatCurrency(j.amount || 0) },
+                    { key: "paidAmount", header: "المدفوع", render: (j: any) => formatCurrency(j.paidAmount || 0) },
                   ]}
                 />
               </CardContent>

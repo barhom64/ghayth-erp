@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { ApprovalActions } from "@/components/approval-actions";
 import { Wrench, Plus } from "lucide-react";
@@ -34,8 +34,8 @@ export default function PropertiesMaintenance() {
     { key: "buildingName", header: "المبنى", sortable: true, render: (r) => r.buildingName || "-" },
     { key: "category", header: "الفئة", sortable: true, render: (r) => r.category || "-" },
     { key: "description", header: "الوصف", sortable: true, className: "max-w-[200px] truncate" },
-    { key: "priority", header: "الأولوية", sortable: true, render: (r) => <StatusBadge status={r.priority} /> },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <StatusBadge status={r.status} /> },
+    { key: "priority", header: "الأولوية", sortable: true, render: (r) => <PageStatusBadge status={r.priority} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} /> },
     {
       key: "action",
       header: "إجراء",

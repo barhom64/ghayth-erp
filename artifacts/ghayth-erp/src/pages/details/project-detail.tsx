@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo, CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle, BookOpen, CheckSquare, FileText, Clock } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityDocuments } from "@/components/shared/entity-documents";

@@ -4,7 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -50,7 +50,7 @@ export default function StoreOrderDetailPage() {
             <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
           </Link>
           <h1 className="text-3xl font-bold tracking-tight">طلب {order.orderNumber || `#${order.id}`}</h1>
-          <StatusBadge status={order.status} />
+          <PageStatusBadge status={order.status} />
         </div>
         <PrintActions
           onPreview={() => setShowPreview(true)}

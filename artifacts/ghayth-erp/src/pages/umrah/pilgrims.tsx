@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus } from "lucide-react";
 import { Link } from "wouter";
@@ -60,7 +60,7 @@ export default function UmrahPilgrims() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (p) => <StatusBadge status={p.status} />,
+      render: (p) => <PageStatusBadge status={p.status} />,
     },
   ];
 

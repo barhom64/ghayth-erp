@@ -4,7 +4,7 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery, asList, apiPatch, apiDelete } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { CheckSquare, Calendar, Building2, Phone, Plus, User, Pencil, Trash2, Check, X, PlayCircle, CheckCircle2, Loader2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
@@ -264,7 +264,7 @@ export default function Tasks() {
                             {priorityLabels[task.priority] || task.priority}
                           </span>
                         </td>
-                        <td className="p-3"><StatusBadge status={task.status} /></td>
+                        <td className="p-3"><PageStatusBadge status={task.status} /></td>
                         <td className="p-3 text-muted-foreground">
                           {task.scheduledStart
                             ? new Date(task.scheduledStart).toLocaleString("ar-SA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })

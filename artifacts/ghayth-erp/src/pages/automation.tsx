@@ -3,7 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -104,7 +104,7 @@ export default function Automation() {
     },
     { key: "triggerReason", header: "سبب التفعيل", sortable: true, render: (l) => <span className="max-w-[250px] truncate inline-block text-sm">{l.triggerReason}</span> },
     { key: "actionTaken", header: "الإجراء", sortable: true, render: (l) => <span className="max-w-[200px] truncate inline-block text-sm">{l.actionTaken}</span> },
-    { key: "status", header: "الحالة", sortable: true, render: (l) => <StatusBadge status={l.status || "success"} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status || "success"} /> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => <span className="text-sm">{formatDateAr(l.createdAt)}</span> },
   ];
 
@@ -113,7 +113,7 @@ export default function Automation() {
     { key: "description", header: "الوصف", sortable: true, render: (j) => <span className="max-w-[200px] truncate inline-block text-muted-foreground">{j.description || "-"}</span> },
     { key: "schedule", header: "الجدول", sortable: true, render: (j) => <span className="font-mono text-xs">{j.schedule || "-"}</span> },
     { key: "lastRunAt", header: "آخر تشغيل", sortable: true, render: (j) => formatDateAr(j.lastRunAt) },
-    { key: "lastStatus", header: "الحالة", sortable: true, render: (j) => <StatusBadge status={j.lastStatus || "idle"} /> },
+    { key: "lastStatus", header: "الحالة", sortable: true, render: (j) => <PageStatusBadge status={j.lastStatus || "idle"} /> },
     { key: "isActive", header: "نشط", render: (j) => <Switch checked={j.isActive} onCheckedChange={() => handleToggle(j.id)} /> },
     {
       key: "actions", header: "الإجراءات",
@@ -123,7 +123,7 @@ export default function Automation() {
 
   const logColumns: DataTableColumn<any>[] = [
     { key: "jobName", header: "المهمة", sortable: true, render: (l) => <span className="font-medium">{l.jobName}</span> },
-    { key: "status", header: "الحالة", sortable: true, render: (l) => <StatusBadge status={l.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status} /> },
     { key: "duration", header: "المدة", sortable: true, render: (l) => l.duration ? `${l.duration} مللي ثانية` : "-" },
     { key: "result", header: "النتيجة", sortable: true, render: (l) => <span className="max-w-[200px] truncate inline-block">{l.result || l.error || "-"}</span> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => formatDateAr(l.createdAt) },

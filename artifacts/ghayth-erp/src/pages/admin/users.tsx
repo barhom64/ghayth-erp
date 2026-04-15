@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { roleKeyColors } from "@/contexts/app-context";
 
 const ROLE_OPTIONS = [
@@ -365,7 +365,7 @@ export default function AdminUsersPage() {
                         {roleLabel(u.role)}
                       </Badge>
                     </td>
-                    <td className="p-3"><StatusBadge status={u.status || (u.isActive ? "active" : "inactive")} /></td>
+                    <td className="p-3"><PageStatusBadge status={u.status || (u.isActive ? "active" : "inactive")} /></td>
                     <td className="p-3 text-xs text-gray-400">{u.lastLoginAt ? formatDateAr(u.lastLoginAt) : "لم يسجل بعد"}</td>
                     <td className="p-3">
                       {failedCount > 0 ? (

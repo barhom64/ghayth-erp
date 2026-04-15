@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,7 @@ export default function UmrahAgents() {
     { key: "country", header: "البلد", sortable: true, searchable: true },
     { key: "phone", header: "الهاتف", searchable: true },
     { key: "profitMargin", header: "نسبة الربح", sortable: true, render: (a) => `${a.profitMargin}%` },
-    { key: "status", header: "الحالة", sortable: true, render: (a) => <StatusBadge status={a.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (a) => <PageStatusBadge status={a.status} /> },
   ];
 
   return (

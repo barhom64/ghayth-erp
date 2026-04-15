@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { ArrowRight, Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, CheckCircle, XCircle, Info, Banknote, FileText, Clock } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -470,7 +470,7 @@ export default function VehicleDetail() {
                         <td className="p-2 text-xs">{m.type || m.description || "-"}</td>
                         <td className="p-2 text-xs">{formatDateAr(m.scheduledDate || m.createdAt)}</td>
                         <td className="p-2 text-xs font-bold">{formatCurrency(Number(m.cost || 0))}</td>
-                        <td className="p-2"><StatusBadge status={m.status} /></td>
+                        <td className="p-2"><PageStatusBadge status={m.status} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -542,7 +542,7 @@ export default function VehicleDetail() {
                       </div>
                       <div className="text-right flex items-center gap-2">
                         <p className="font-bold text-xs">{formatCurrency(Number(m.cost || 0))}</p>
-                        <StatusBadge status={m.status} />
+                        <PageStatusBadge status={m.status} />
                       </div>
                     </div>
                   ))}
@@ -632,7 +632,7 @@ export default function VehicleDetail() {
                         <td className="p-3 font-mono" dir="ltr">{Number(t.distance || 0).toFixed(1)} km</td>
                         <td className="p-3">{formatCurrency(Number(t.cost || 0))}</td>
                         <td className="p-3 text-gray-500">{t.driverName || "-"}</td>
-                        <td className="p-3"><StatusBadge status={t.status} /></td>
+                        <td className="p-3"><PageStatusBadge status={t.status} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -667,7 +667,7 @@ export default function VehicleDetail() {
                       <td className="p-3 text-gray-500">{m.serviceDate ? formatDateAr(m.serviceDate) : "-"}</td>
                       <td className="p-3">{Number(m.cost) > 0 ? `${formatCurrency(Number(m.cost))}` : "-"}</td>
                       <td className="p-3 font-mono" dir="ltr">{m.mileageAtService ? `${Number(m.mileageAtService).toLocaleString()} km` : "-"}</td>
-                      <td className="p-3"><StatusBadge status={m.status} /></td>
+                      <td className="p-3"><PageStatusBadge status={m.status} /></td>
                     </tr>
                   ))}
                 </tbody>

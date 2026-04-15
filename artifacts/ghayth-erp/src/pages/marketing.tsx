@@ -4,7 +4,7 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Megaphone, Plus, DollarSign, Eye, TrendingUp, Users, BarChart2, Target } from "lucide-react";
@@ -167,7 +167,7 @@ function CampaignsTab() {
       },
     },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (c) => formatDateAr(c.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (c) => <StatusBadge status={c.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (c) => <PageStatusBadge status={c.status} /> },
     {
       key: "actions",
       header: "إجراءات",

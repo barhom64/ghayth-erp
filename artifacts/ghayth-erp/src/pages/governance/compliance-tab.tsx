@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Shield, Plus, Eye } from "lucide-react";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -45,7 +45,7 @@ export function ComplianceTab() {
     { key: "regulation", header: "اللائحة", sortable: true, render: (i) => <span className="font-medium">{i.regulation}</span> },
     { key: "responsiblePerson", header: "المسؤول", sortable: true, render: (i) => <span className="text-muted-foreground">{i.responsiblePerson || "-"}</span> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (i) => formatDateAr(i.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (i) => <StatusBadge status={i.status} /> },
+    { key: "status", header: "الحالة", sortable: true, render: (i) => <PageStatusBadge status={i.status} /> },
     {
       key: "actions", header: "إجراءات",
       render: (i) => (

@@ -1,6 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { ClipboardCheck, Clock, CheckCircle, DollarSign } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -56,7 +56,7 @@ export default function FinancialRequestsPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (r) => <StatusBadge status={r.status} />,
+      render: (r) => <PageStatusBadge status={r.status} />,
     },
   ];
 
