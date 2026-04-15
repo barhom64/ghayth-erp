@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -83,22 +84,18 @@ export default function DailyClose() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Shield className="w-6 h-6 text-indigo-500" />
-            الإقفال اليومي
-          </h1>
-          <p className="text-gray-500 mt-1">تحقق من اكتمال جميع العمليات قبل إغلاق اليوم — {closeDate}</p>
-        </div>
+    <PageShell
+      title="الإقفال اليومي"
+      subtitle={`تحقق من اكتمال جميع العمليات قبل إغلاق اليوم — ${closeDate}`}
+      loading={isLoading}
+      actions={
         <Link href="/operations-center">
           <Button variant="ghost" size="sm" className="gap-1 text-xs">
             مركز العمليات <ChevronLeft className="w-3 h-3" />
           </Button>
         </Link>
-      </div>
-
+      }
+    >
       {closedToday && (
         <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border-2 border-green-200">
           <Lock className="w-6 h-6 text-green-600" />
@@ -205,6 +202,6 @@ export default function DailyClose() {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

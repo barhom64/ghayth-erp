@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { PageShell } from "@/components/page-shell";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -380,8 +381,7 @@ export default function DocumentsPage() {
   const s = stats || {};
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">إدارة المستندات</h1>
+    <PageShell title="إدارة المستندات">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { label: "إجمالي المستندات", value: s.totalDocuments || 0, icon: FileText, color: "text-blue-600 bg-blue-50" },
@@ -410,6 +410,6 @@ export default function DocumentsPage() {
         <TabsContent value="folders"><FoldersTab /></TabsContent>
         <TabsContent value="templates"><TemplatesTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

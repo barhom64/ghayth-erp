@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { PageShell } from "@/components/page-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield, FileCheck, AlertTriangle, ClipboardCheck, CheckCircle2, Activity } from "lucide-react";
 import { StatsCards } from "./governance/stats-cards";
@@ -14,11 +15,10 @@ export default function GovernancePage() {
   const { data: stats } = useApiQuery<any>(["gov-stats"], "/governance/stats");
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">الحوكمة والامتثال</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">إدارة السياسات والمخاطر والتدقيق والامتثال</p>
-      </div>
+    <PageShell
+      title="الحوكمة والامتثال"
+      subtitle="إدارة السياسات والمخاطر والتدقيق والامتثال"
+    >
       <StatsCards stats={stats} />
       <Tabs defaultValue="policies" dir="rtl">
         <TabsList className="grid w-full grid-cols-6">
@@ -41,6 +41,6 @@ export default function GovernancePage() {
         <TabsContent value="actions"><ComplianceActionsTab /></TabsContent>
         <TabsContent value="capa"><CAPATab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

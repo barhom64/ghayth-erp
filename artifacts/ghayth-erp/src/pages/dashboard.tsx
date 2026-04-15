@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
+import { PageShell } from "@/components/page-shell";
 import { useAuth } from "@/lib/auth";
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
@@ -280,18 +281,10 @@ export default function Dashboard() {
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {getRoleGreeting()}
-          </h1>
-          <p className="text-gray-500 mt-1">
-            مرحبا، {user?.name || "مستخدم"} - {getSubGreeting()}
-          </p>
-        </div>
-      </div>
-
+    <PageShell
+      title={getRoleGreeting()}
+      subtitle={`مرحبا، ${user?.name || "مستخدم"} - ${getSubGreeting()}`}
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <CommandCard
           title="مهامي اليوم"
@@ -869,6 +862,6 @@ export default function Dashboard() {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

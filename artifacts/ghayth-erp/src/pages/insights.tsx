@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -96,15 +97,12 @@ export default function Insights() {
 
   if (loadingSummary) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Brain className="h-8 w-8 text-purple-600" /> رؤى ذكية
-        </h1>
+      <PageShell title="رؤى ذكية" loading>
         <div className="grid gap-4 md:grid-cols-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
         </div>
         <Skeleton className="h-96 w-full" />
-      </div>
+      </PageShell>
     );
   }
 
@@ -144,17 +142,15 @@ export default function Insights() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Brain className="h-8 w-8 text-purple-600" /> رؤى ذكية
-        </h1>
+    <PageShell
+      title="رؤى ذكية"
+      actions={
         <Button variant="outline" size="sm" onClick={handleRecalculate} disabled={recalculating}>
           <RefreshCw className={`h-4 w-4 me-2 ${recalculating ? "animate-spin" : ""}`} />
           تحديث التحليل
         </Button>
-      </div>
-
+      }
+    >
       {/* Overview KPIs */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -514,6 +510,6 @@ export default function Insights() {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
