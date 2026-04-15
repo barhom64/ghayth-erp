@@ -657,6 +657,19 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Create project task error:"); }
 });
 
+// P02-S6-HIGH — same bypass as the milestone/risk PATCH fix in #39:
+// task PATCH used to validate only the task's parent project belongs
+// to the caller's company, but skipped `assertProjectAccess`. Every
+// other task route (POST /:id/tasks at line 571, time-entries, costs,
+// resources, milestones, risks) goes through `assertProjectAccess`
+// which enforces per-role gates: a `projects_manager` can only mutate
+// projects they manage and an `employee` only projects they have a
+// task on. The PATCH bypass let any user with `projects:update` mark
+// other managers' tasks "done", set actualHours, and rewrite progress
+// across every project in the company — driving false project KPIs,
+// auto-billing on done-state, and obligation completion. Re-route
+// through `assertProjectAccess(existingTask.projectId, scope)` so the
+// per-role gates apply.
 router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -670,6 +683,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       [taskId, scope.companyId]
     );
     if (!existingTask) throw new NotFoundError("المهمة غير موجودة");
+    await assertProjectAccess(existingTask.projectId, scope);
 
     // State machine for task status transitions
     if (b.status !== undefined && b.status !== existingTask.status) {
