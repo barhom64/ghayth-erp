@@ -26,7 +26,7 @@ function ProductsTab() {
   const [filters, setFilters] = useFilters();
   const filteredProducts = applyFilters(items, filters, {
     searchFields: ["name", "sku", "category"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
   const pageSize = 20;
@@ -144,7 +144,7 @@ function OrdersTab() {
   const [filters, setFilters] = useFilters();
   const filteredOrders = applyFilters(items, filters, {
     searchFields: ["customerName", "orderNumber"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
 

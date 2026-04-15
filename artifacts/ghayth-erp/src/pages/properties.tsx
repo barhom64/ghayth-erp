@@ -28,7 +28,7 @@ export default function Properties() {
   const [filters, setFilters] = useFilters();
   const filtered = applyFilters(units, filters, {
     searchFields: ["unitNumber", "buildingName"],
-    statusField: "status",
+    statusField: "",
   });
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({

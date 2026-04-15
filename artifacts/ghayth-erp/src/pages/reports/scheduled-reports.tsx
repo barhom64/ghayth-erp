@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, useApiMutation, buildErrorToast } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +43,7 @@ export default function ScheduledReportsPage() {
     isActive: true,
   });
 
-  const createMut = useApiMutation("/scheduled-reports", "POST", [["scheduled-reports"]], { silent: true });
+  const createMut = useApiMutation("/scheduled-reports", "POST", [["scheduled-reports"]]);
 
   const handleSubmit = async () => {
     if (!form.title || !form.recipients) {
@@ -66,8 +66,8 @@ export default function ScheduledReportsPage() {
       toast({ title: "تم إنشاء جدولة التقرير" });
       setShowForm(false);
       setForm({ reportType: "trial-balance", title: "", frequency: "weekly", recipients: "", isActive: true });
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch {
+      toast({ variant: "destructive", title: "حدث خطأ" });
     }
   };
 
@@ -198,8 +198,8 @@ export default function ScheduledReportsPage() {
 
 function ScheduledReportCard({ item }: { item: any }) {
   const { toast } = useToast();
-  const deleteMut = useDeleteMutation(`/scheduled-reports/${item.id}`, "DELETE", [["scheduled-reports"]], { silent: true });
-  const toggleMut = useDeleteMutation(`/scheduled-reports/${item.id}`, "PATCH", [["scheduled-reports"]], { silent: true });
+  const deleteMut = useDeleteMutation(`/scheduled-reports/${item.id}`, "DELETE", [["scheduled-reports"]]);
+  const toggleMut = useDeleteMutation(`/scheduled-reports/${item.id}`, "PATCH", [["scheduled-reports"]]);
 
   const reportType = REPORT_TYPES.find((r) => r.value === item.reportType);
   const Icon = reportType?.icon || FileSpreadsheet;
@@ -208,16 +208,16 @@ function ScheduledReportCard({ item }: { item: any }) {
     try {
       await deleteMut.mutateAsync({});
       toast({ title: "تم حذف الجدولة" });
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch {
+      toast({ variant: "destructive", title: "حدث خطأ" });
     }
   };
 
   const handleToggle = async (v: boolean) => {
     try {
       await toggleMut.mutateAsync({ isActive: v });
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch {
+      toast({ variant: "destructive", title: "حدث خطأ" });
     }
   };
 

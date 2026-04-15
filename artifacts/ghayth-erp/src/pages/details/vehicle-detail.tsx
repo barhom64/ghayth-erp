@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -147,8 +147,8 @@ export default function VehicleDetail() {
       setEditing(false);
       qc.invalidateQueries({ queryKey: ["vehicle-detail", id] });
       qc.invalidateQueries({ queryKey: ["vehicles"] });
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch {
+      toast({ variant: "destructive", title: "حدث خطأ" });
     }
   };
 
@@ -157,8 +157,8 @@ export default function VehicleDetail() {
       await apiFetch(`/fleet/vehicles/${id}`, { method: "DELETE" });
       toast({ title: "تم حذف المركبة" });
       navigate("/fleet");
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch {
+      toast({ variant: "destructive", title: "حدث خطأ" });
     }
   };
 

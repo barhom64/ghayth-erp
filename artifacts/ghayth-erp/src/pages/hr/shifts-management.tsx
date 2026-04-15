@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, useApiMutation, buildErrorToast } from "@/lib/api";
+import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,7 @@ export default function ShiftsManagementPage() {
 
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignForm, setAssignForm] = useState({ assignmentId: "", shiftId: "", startDate: "" });
-  const assignMut = useApiMutation("/hr/shift-assignments", "POST", [["shift-assignments"]], { silent: true });
+  const assignMut = useApiMutation("/hr/shift-assignments", "POST", [["shift-assignments"]]);
 
   const handleAssign = async () => {
     try {
@@ -35,8 +35,8 @@ export default function ShiftsManagementPage() {
       toast({ title: "تم تعيين الوردية" });
       setShowAssignForm(false);
       setAssignForm({ assignmentId: "", shiftId: "", startDate: "" });
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch (err: unknown) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 

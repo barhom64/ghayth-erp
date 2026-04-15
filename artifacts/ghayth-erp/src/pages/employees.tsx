@@ -85,7 +85,7 @@ export default function Employees() {
   const total = employeesResponse?.total || 0;
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("employee");
   const preFiltered = applyFilters(employees || [], filters, {
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((e: any) => tagFilteredIds.has(e.id)) : preFiltered;

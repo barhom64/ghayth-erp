@@ -74,7 +74,7 @@ function OpportunitiesTab() {
 
   const filtered = applyFilters(opportunities, filters, {
     searchFields: ["title", "contactName", "clientName"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
 

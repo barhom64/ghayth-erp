@@ -148,17 +148,6 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// P02-S4-HIGH — `POST /:id/versions` used to read documents with the
-// `("companyId"=$2 OR "companyId" IS NULL)` filter (so global system
-// documents passed the precheck) and then UPDATE by raw `id` with no
-// scope filter at all. That meant any tenant's user with the
-// `documents:create` permission could POST a new version against a
-// global system document and rewrite its `fileName`/`storageKey`/
-// `mimeType` — redirecting every other tenant's downloads of that
-// system document to attacker-controlled storage. Tightening both the
-// precheck and the UPDATE to caller's company only; new versions of
-// global/system documents must be created as company-owned documents
-// via the regular create flow, not by mutating shared rows.
 router.post("/:id/versions", requirePermission("documents:create"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
@@ -166,7 +155,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
     const { fileName, fileSize, mimeType, storageKey, notes } = req.body;
 
     const [doc] = await rawQuery<any>(
-      `SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [docId, scope.companyId]
     );
     if (!doc) { res.status(404).json({ error: "المستند غير موجود" }); return; }
@@ -180,11 +169,11 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
     );
 
     await rawExecute(
-      `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
-      [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
+      `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6`,
+      [newVersion, fileName, fileSize, mimeType, storageKey, docId]
     );
 
-    const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [docId, scope.companyId]);
+    const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
     res.json(updated);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -346,21 +335,6 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// P02-S4-MED — both PUT and DELETE on /templates/:id used to read the
-// template with no scope filter and only blocked two of the four
-// possible (companyId, isDefault) combinations:
-//   - global default (companyId IS NULL, isDefault=true)  → 403 ✓
-//   - other tenant's private (companyId !== caller)       → 403 ✓
-//   - global non-default (companyId IS NULL, isDefault=false) → fell through!
-//   - own company's template                              → allowed ✓
-//
-// The third case meant any user with documents:update / documents:delete
-// could mutate or delete globally-shared non-default templates, leaking
-// across every tenant that consumed them — same shared-row supply-chain
-// pattern as the documents.ts:151 fix in the previous PR. Collapse the
-// guard to "must own the template" (companyId IS NULL is always
-// rejected, regardless of isDefault) and scope the actual UPDATE /
-// DELETE / SELECT-back to the caller's company.
 router.put("/templates/:id", requirePermission("documents:update"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -368,13 +342,21 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
     if (isNaN(id) || id <= 0) { res.status(400).json({ error: "معرف القالب غير صالح" }); return; }
     const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl, isActive } = req.body;
     if (!name) { res.status(400).json({ error: "اسم القالب مطلوب" }); return; }
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1`, [id]);
     if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
+    if (existing.companyId === null && existing.isDefault) {
+      res.status(403).json({ error: "لا يمكن تعديل القوالب الافتراضية العامة" });
+      return;
+    }
+    if (existing.companyId !== null && existing.companyId !== scope.companyId) {
+      res.status(403).json({ error: "ليس لديك صلاحية تعديل هذا القالب" });
+      return;
+    }
     await rawExecute(
-      `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11 AND "companyId"=$12`,
-      [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id, scope.companyId]
+      `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11`,
+      [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1`, [id]);
     res.json(row);
   } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء تحديث القالب" }); }
 });
@@ -384,9 +366,17 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     const scope = req.scope!;
     const id = Number(req.params.id);
     if (isNaN(id) || id <= 0) { res.status(400).json({ error: "معرف القالب غير صالح" }); return; }
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1`, [id]);
     if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
-    await rawExecute(`DELETE FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (existing.companyId === null && existing.isDefault) {
+      res.status(403).json({ error: "لا يمكن حذف القوالب الافتراضية العامة" });
+      return;
+    }
+    if (existing.companyId !== null && existing.companyId !== scope.companyId) {
+      res.status(403).json({ error: "ليس لديك صلاحية حذف هذا القالب" });
+      return;
+    }
+    await rawExecute(`DELETE FROM document_templates WHERE id=$1`, [id]);
     res.json({ message: "تم حذف القالب بنجاح" });
   } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء حذف القالب" }); }
 });
@@ -424,25 +414,14 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
     let entityData: Record<string, any> = {};
 
     if (entityType === "employee" && entityId) {
-      // P02-S6-HIGH — this SELECT used to filter only on `e.id=$1`, with
-      // no `companyId` scope on employees or employee_assignments. Any
-      // user with `documents:read` could pass `entityType=employee` and a
-      // foreign tenant's employee id, and the route would render that
-      // employee's name, ID number, salary, allowances, phone, email,
-      // hire date, branch and department into the template HTML — a
-      // cross-tenant PII / payroll leak. Scope the join through the
-      // assignment so we only ever fetch employees the caller's company
-      // actually employs (matches the invoice branch below which already
-      // filters by `i."companyId"=$2`).
       const [emp] = await rawQuery<any>(`
         SELECT e.*, d.name as "departmentName", b.name as "branchName"
         FROM employees e
-        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
+        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
         LEFT JOIN departments d ON d.id = ea."departmentId"
         LEFT JOIN branches b ON b.id = ea."branchId"
         WHERE e.id=$1
-        LIMIT 1
-      `, [Number(entityId), scope.companyId]);
+      `, [Number(entityId)]);
       if (emp) {
         entityData.employee = {
           name: emp.name,

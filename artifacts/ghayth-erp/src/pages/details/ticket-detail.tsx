@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,8 +69,8 @@ export default function TicketDetail() {
       toast({ title: "تم إرسال الرد" });
       setNewReply("");
       qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch {
+      toast({ variant: "destructive", title: "حدث خطأ" });
     }
     setSending(false);
   };
@@ -84,8 +84,8 @@ export default function TicketDetail() {
       toast({ title: "تم تحديث الحالة" });
       qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
       qc.invalidateQueries({ queryKey: ["tickets"] });
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch {
+      toast({ variant: "destructive", title: "حدث خطأ" });
     }
   };
 
@@ -94,8 +94,8 @@ export default function TicketDetail() {
       await apiFetch(`/support/tickets/${id}`, { method: "DELETE" });
       toast({ title: "تم حذف التذكرة" });
       navigate("/support");
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch {
+      toast({ variant: "destructive", title: "حدث خطأ" });
     }
   };
 

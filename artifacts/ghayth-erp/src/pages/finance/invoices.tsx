@@ -113,7 +113,7 @@ export default function InvoicesPage() {
         inv.isTaxLinked ? (
           <span className="inline-flex items-center gap-1">
             <Zap className="h-3 w-3 text-muted-foreground" />
-            <PageStatusBadge status={inv.zatcaStatus ?? "pending"} domain="zatca" />
+            <PageStatusBadge status={inv.zatcaStatus || "pending"} domain="zatca" />
           </span>
         ) : (
           <span className="text-xs text-gray-300">—</span>
@@ -253,14 +253,14 @@ export default function InvoicesPage() {
                     entityType="invoice"
                     entityId={inv.id}
                     approveEndpoint={`/finance/invoices/${inv.id}/approve`}
-                    rejectEndpoint={`/finance/invoices/${inv.id}/reject`}
-                    returnEndpoint={`/finance/invoices/${inv.id}/return`}
+                    rejectEndpoint={`/finance/invoices/${inv.id}/approve`}
+                    returnEndpoint={`/finance/invoices/${inv.id}/approve`}
                     approveMethod="PATCH"
                     rejectMethod="PATCH"
                     returnMethod="PATCH"
-                    approveBody={() => ({})}
-                    rejectBody={(r) => ({ notes: r })}
-                    returnBody={(r) => ({ notes: r })}
+                    approveBody={() => ({ approved: true })}
+                    rejectBody={(r) => ({ approved: false, notes: r })}
+                    returnBody={(r) => ({ approved: "returned", notes: r })}
                     invalidateKeys={[["invoices"]]}
                   />
                 )}

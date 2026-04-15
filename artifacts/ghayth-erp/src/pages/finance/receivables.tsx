@@ -20,7 +20,7 @@ export default function ReceivablesPage() {
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "clientName"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
 

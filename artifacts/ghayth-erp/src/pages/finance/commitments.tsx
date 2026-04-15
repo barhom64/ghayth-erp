@@ -15,7 +15,7 @@ export default function CommitmentsPage() {
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "vendorName"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
 

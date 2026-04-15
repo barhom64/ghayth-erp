@@ -1239,28 +1239,16 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", async (req, res) =>
       throw new NotFoundError("أمر الشراء غير موجود");
     }
 
-    // P02-S3-MED — was missing both the period-open check that every
-    // other GL-posting route in this file uses (lines 456, 777) AND
-    // the await on the journal entry. The status update happened
-    // first, then `createJournalEntry(...).catch(console.error)`
-    // dropped any failure on the floor, so a closed-period rejection
-    // (or a missing AP/Cash account) left the PO marked
-    // `payment_scheduled` with zero matching journal entries — a
-    // ghost scheduled payment invisible to the accountant until
-    // month-end reconciliation refused to balance.
-    //
-    // Now: validate the period first, await the JE post so any
-    // failure throws, and only then move the PO to
-    // payment_scheduled. If the JE fails, the status stays put and
-    // the user sees a typed error.
-    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, paymentDate);
-    if (!periodCheck.open) {
-      throw new ConflictError(
-        `لا يمكن جدولة دفعة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`
-      );
-    }
+    await rawExecute(
+      `UPDATE purchase_orders
+       SET status = 'payment_scheduled',
+           notes = CONCAT(COALESCE(notes,''), $1)
+       WHERE id = $2`,
+      [` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`, Number(id)]
+    );
 
-    await createJournalEntry({
+    // Create a scheduled journal entry for the payment
+    createJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -1270,15 +1258,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", async (req, res) =>
         { accountCode: "2100", debit: Number(amount), credit: 0 },
         { accountCode: "1100", debit: 0, credit: Number(amount) },
       ],
-    });
-
-    await rawExecute(
-      `UPDATE purchase_orders
-       SET status = 'payment_scheduled',
-           notes = CONCAT(COALESCE(notes,''), $1)
-       WHERE id = $2`,
-      [` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`, Number(id)]
-    );
+    }).catch(console.error);
 
     emitEvent({
       companyId: scope.companyId,

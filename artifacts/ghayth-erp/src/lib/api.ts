@@ -186,56 +186,6 @@ export function getErrorMessage(err: unknown): string {
   return String(err);
 }
 
-/**
- * Build a `toast()` payload for any caught error in a catch block.
- *
- * This is the escape hatch for the handful of places that can't use
- * `useApiMutation` (raw async handlers, multi-step flows, legacy pages
- * still being migrated). It reuses the exact same title/description
- * logic that `useApiMutation` applies internally, so a catch-block
- * caller ends up with the same UX as the hook path:
- *
- *   • Typed `ApiError` → Arabic title keyed on `err.code`
- *     (`VALIDATION_ERROR` → "البيانات غير صالحة", `CONFLICT` → "لا يمكن
- *     تنفيذ هذه العملية الآن", `FORBIDDEN` → "غير مصرح بهذه العملية",
- *     `NOT_FOUND` → "السجل غير موجود", `INTEGRATION_ERROR` → "خدمة
- *     خارجية متعطّلة") and a description that surfaces
- *     `meta.blockers` / `meta.currentStatus` / `meta.requiredRoles` /
- *     `err.fix` / `err.message` in that priority order.
- *
- *   • Plain `Error` / unknown → "حدث خطأ" title with
- *     `getErrorMessage(err)` as description.
- *
- * Usage:
- *
- *   } catch (err) {
- *     toast(buildErrorToast(err));
- *   }
- *
- * Prefer `useApiMutation` for new code. This helper exists so the 22
- * legacy catch blocks that used to toast the literal string "حدث خطأ"
- * can surface the real typed-error detail without a full mutation
- * migration. See Operational Review H2.
- */
-export function buildErrorToast(err: unknown): {
-  variant: "destructive";
-  title: string;
-  description: string;
-} {
-  if (err instanceof ApiError) {
-    return {
-      variant: "destructive",
-      title: toastTitleForCode(err.code),
-      description: toastDescriptionForError(err),
-    };
-  }
-  return {
-    variant: "destructive",
-    title: "حدث خطأ",
-    description: getErrorMessage(err),
-  };
-}
-
 export function asList<T = any>(resp: { data?: T[] } | T[] | unknown): T[] {
   if (Array.isArray((resp as { data?: T[] })?.data)) return (resp as { data: T[] }).data;
   if (Array.isArray(resp)) return resp as T[];

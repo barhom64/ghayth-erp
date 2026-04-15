@@ -176,16 +176,6 @@ export const STATUS_MAP = {
   // inline with hand-rolled tailwind classes on every invoice list
   // row. Moved here so the arabic label + tone come from the same
   // source as every other status chip in the app.
-  //
-  // L2 follow-up: as of today only `accepted` and `submitted` are
-  // written by the server — `finance-zatca.ts:539,623` runs in
-  // simulation mode and emits one of those two depending on the
-  // configured environment. `pending` is the UI default before the
-  // invoice is enqueued (`zatcaStatus ?? "pending"` in the badge
-  // call sites). `rejected` and `error` are forward-compat entries
-  // for the real ZATCA webhook handler — keep them so the UI is
-  // ready when the live integration lands. Remove them only if the
-  // integration is descoped.
   zatca: {
     pending:              { label: "معلقة",          tone: "warning"  },
     submitted:            { label: "مُرسَلة",         tone: "info"     },

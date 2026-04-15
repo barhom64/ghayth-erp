@@ -17,24 +17,6 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { useAppContext } from "@/contexts/app-context";
 
 
-// P02-M1 — `new Date(...).toISOString().slice(0, 10)` converts the
-// local Date to UTC, so for users in positive UTC offsets (Saudi
-// Arabia is UTC+3) the last day of the month is shifted back one
-// day. The Excel export then silently excludes the final day's
-// attendance — payroll-relevant data. Compute the end date as a
-// pure string instead so it stays in the user's local calendar.
-function monthEndDate(month: string): string {
-  const [yearStr, monthStr] = month.split("-");
-  const year = parseInt(yearStr, 10);
-  const monthNum = parseInt(monthStr, 10);
-  // `new Date(year, monthNum, 0)` returns the last day of the
-  // previous month index — i.e. the last day of the selected month
-  // because monthNum is 1-based and the Date constructor is 0-based.
-  // We only read .getDate() so the local-time anchor is irrelevant.
-  const lastDay = new Date(year, monthNum, 0).getDate();
-  return `${yearStr}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
-}
-
 const PENALTY_LEVELS: Record<number, { label: string; color: string; bg: string }> = {
   1: { label: "تنبيه شفهي", color: "text-yellow-700", bg: "bg-yellow-50" },
   2: { label: "إنذار كتابي أول", color: "text-orange-700", bg: "bg-orange-50" },
@@ -225,7 +207,7 @@ export default function AttendancePage() {
           filename="attendance.xlsx"
           type="excel"
           label="تصدير Excel"
-          params={{ startDate: `${month}-01`, endDate: monthEndDate(month) }}
+          params={{ startDate: `${month}-01`, endDate: new Date(parseInt(month.split("-")[0]), parseInt(month.split("-")[1]), 0).toISOString().slice(0, 10) }}
         />
       }
     >

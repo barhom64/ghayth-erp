@@ -620,40 +620,6 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet trips error:"); }
 });
 
-// Operational Review M4 — dedicated trip lookup.
-// The trip-detail page used to fetch the entire `/trips` list and
-// filter client-side, which is wasteful on large fleets and breaks
-// silently if the trip lives outside the current page's window. This
-// endpoint returns a single row with the same JOIN shape so the
-// detail UI can hydrate from one round-trip.
-//
-// M4 follow-up: route through `buildScopedWhere` with
-// `enforceBranchScope: true` so branch_manager users can't fetch
-// trips from sibling branches inside their company by guessing the
-// id — the matching list endpoint above applies the same guard.
-router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, {
-      companyColumn: 't."companyId"',
-      branchColumn: 't."branchId"',
-      enforceBranchScope: true,
-    });
-    const [row] = await rawQuery<any>(
-      `SELECT t.*, v."plateNumber", d.name AS "driverName"
-         FROM fleet_trips t
-         LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
-         LEFT JOIN fleet_drivers d ON d.id = t."driverId"
-        WHERE ${where} AND t.id = $${nextParamIndex} AND t."deletedAt" IS NULL`,
-      [...params, id],
-    );
-    if (!row) throw new NotFoundError("الرحلة غير موجودة");
-    res.json({ data: row });
-  } catch (err) { handleRouteError(err, res, "Fleet trip detail error:"); }
-});
-
 router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;

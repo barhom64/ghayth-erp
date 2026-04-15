@@ -15,7 +15,7 @@ export default function FinancialRequestsPage() {
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "supplierName", "requestedByName"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
 

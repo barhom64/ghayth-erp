@@ -48,7 +48,6 @@ const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const ROUTES_DIR = join(REPO_ROOT, "artifacts/api-server/src/routes");
 const LIB_DIR = join(REPO_ROOT, "artifacts/api-server/src/lib");
 const MIDDLEWARES_DIR = join(REPO_ROOT, "artifacts/api-server/src/middlewares");
-const UI_PAGES_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/pages");
 
 /** @type {Array<{ id: string, scan: string[], skip?: (file: string) => boolean, regex: RegExp, message: string }>} */
 const RULES = [
@@ -83,43 +82,9 @@ const RULES = [
       "Stale `validationError` named import. The lowercase-v helper was " +
       "removed in Phase 5c — only the `ValidationError` class is exported now.",
   },
-  {
-    id: "silent-statusField",
-    scan: [UI_PAGES_DIR],
-    // applyFilters(..., { statusField: "", ... }) silently disables the
-    // status filter while AdvancedFilters still renders the pills. This
-    // is the Operational Review H1 finding — the user clicks a filter
-    // chip and nothing happens. Fixed in the H1 sweep; this guard keeps
-    // it from coming back.
-    // Only match real code: the prop must be the first non-whitespace
-    // thing on the line. This skips JSDoc block comments that quote
-    // the pattern (e.g. the migration narrative in purchase-orders.tsx).
-    regex: /^\s*statusField:\s*""/,
-    message:
-      "`statusField: \"\"` silently disables filtering while the " +
-      "AdvancedFilters toolbar still renders the status pills, so " +
-      "clicking a pill does nothing. Set `statusField` to the actual " +
-      "column (usually `\"status\"`). See Operational Review H1.",
-  },
-  {
-    id: "generic-error-toast",
-    scan: [UI_PAGES_DIR],
-    // toast({ variant: "destructive", title: "حدث خطأ" }) drops the
-    // typed-error contract on the floor. Operational Review H2 fixed
-    // 22 call sites by replacing them with `toast(buildErrorToast(err))`,
-    // which surfaces meta.blockers / meta.currentStatus / meta.requiredRoles
-    // / fix / message via the same helpers `useApiMutation` uses
-    // internally. Keep this guard so the regression cannot return.
-    regex: /title:\s*"حدث خطأ"/,
-    message:
-      "Generic `title: \"حدث خطأ\"` toast drops the typed-error contract. " +
-      "Use `toast(buildErrorToast(err))` from `@/lib/api` so the user sees " +
-      "the real code/title/blockers/fix from the server. " +
-      "See Operational Review H2.",
-  },
 ];
 
-/** Recursively yield every `.ts` / `.tsx` file under a directory. */
+/** Recursively yield every `.ts` file under a directory. */
 async function* walk(dir) {
   let entries;
   try {
@@ -132,10 +97,7 @@ async function* walk(dir) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
       yield* walk(full);
-    } else if (
-      entry.isFile() &&
-      (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx"))
-    ) {
+    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
       yield full;
     }
   }

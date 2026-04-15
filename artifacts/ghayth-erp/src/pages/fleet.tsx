@@ -59,7 +59,7 @@ function VehiclesTab() {
 
   const filtered = applyFilters(vehicles, filters, {
     searchFields: ["plateNumber", "make", "model", "driverName"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
 
@@ -228,7 +228,7 @@ function DriversTab() {
 
   const filtered = applyFilters(drivers, filters, {
     searchFields: ["name", "phone", "licenseNumber"],
-    statusField: "status",
+    statusField: "",
   });
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
@@ -334,7 +334,7 @@ function TripsTab() {
 
   const filtered = applyFilters(trips, filters, {
     searchFields: ["plateNumber", "driverName"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
 
@@ -403,7 +403,7 @@ function MaintenanceTab() {
 
   const filtered = applyFilters(records, filters, {
     searchFields: ["plateNumber", "description"],
-    statusField: "status",
+    statusField: "",
     dateField: "",
   });
 

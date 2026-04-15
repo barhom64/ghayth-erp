@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -80,8 +80,8 @@ export default function UnitStatusChangePage() {
       qc.invalidateQueries({ queryKey: ["unit-detail", id] });
       qc.invalidateQueries({ queryKey: ["property-units"] });
       setLocation(`/properties/${id}`);
-    } catch (err) {
-      toast(buildErrorToast(err));
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: err.message });
     } finally {
       setConfirming(false);
     }
