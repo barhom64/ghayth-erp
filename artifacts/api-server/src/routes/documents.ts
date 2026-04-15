@@ -346,6 +346,21 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// P02-S4-MED — both PUT and DELETE on /templates/:id used to read the
+// template with no scope filter and only blocked two of the four
+// possible (companyId, isDefault) combinations:
+//   - global default (companyId IS NULL, isDefault=true)  → 403 ✓
+//   - other tenant's private (companyId !== caller)       → 403 ✓
+//   - global non-default (companyId IS NULL, isDefault=false) → fell through!
+//   - own company's template                              → allowed ✓
+//
+// The third case meant any user with documents:update / documents:delete
+// could mutate or delete globally-shared non-default templates, leaking
+// across every tenant that consumed them — same shared-row supply-chain
+// pattern as the documents.ts:151 fix in the previous PR. Collapse the
+// guard to "must own the template" (companyId IS NULL is always
+// rejected, regardless of isDefault) and scope the actual UPDATE /
+// DELETE / SELECT-back to the caller's company.
 router.put("/templates/:id", requirePermission("documents:update"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -353,21 +368,13 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
     if (isNaN(id) || id <= 0) { res.status(400).json({ error: "معرف القالب غير صالح" }); return; }
     const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl, isActive } = req.body;
     if (!name) { res.status(400).json({ error: "اسم القالب مطلوب" }); return; }
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1`, [id]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
-    if (existing.companyId === null && existing.isDefault) {
-      res.status(403).json({ error: "لا يمكن تعديل القوالب الافتراضية العامة" });
-      return;
-    }
-    if (existing.companyId !== null && existing.companyId !== scope.companyId) {
-      res.status(403).json({ error: "ليس لديك صلاحية تعديل هذا القالب" });
-      return;
-    }
     await rawExecute(
-      `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11`,
-      [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id]
+      `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11 AND "companyId"=$12`,
+      [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id, scope.companyId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء تحديث القالب" }); }
 });
@@ -377,17 +384,9 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     const scope = req.scope!;
     const id = Number(req.params.id);
     if (isNaN(id) || id <= 0) { res.status(400).json({ error: "معرف القالب غير صالح" }); return; }
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1`, [id]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
-    if (existing.companyId === null && existing.isDefault) {
-      res.status(403).json({ error: "لا يمكن حذف القوالب الافتراضية العامة" });
-      return;
-    }
-    if (existing.companyId !== null && existing.companyId !== scope.companyId) {
-      res.status(403).json({ error: "ليس لديك صلاحية حذف هذا القالب" });
-      return;
-    }
-    await rawExecute(`DELETE FROM document_templates WHERE id=$1`, [id]);
+    await rawExecute(`DELETE FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف القالب بنجاح" });
   } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء حذف القالب" }); }
 });
