@@ -663,14 +663,34 @@ router.delete("/kb/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "KB delete error:"); }
 });
 
+// P02-S4-CRIT — `/kb/:id/feedback` used to UPDATE kb_articles by raw `id`
+// with no scope filter and no pre-check, so any authenticated user from
+// any tenant could enumerate IDs and pump `helpful` / `notHelpful` for
+// every other company's KB articles — poisoning the analytics that drive
+// the support dashboard and the KB ranking. Aligning with the GET /kb/:id
+// scope pattern at line 612: validate the article is visible to the
+// caller (own company OR global) before incrementing, and scope the
+// UPDATE the same way.
 router.post("/kb/:id/feedback", async (req, res) => {
   try {
+    const scope = req.scope!;
     const id = Number(req.params.id);
     const { helpful } = req.body;
+    const [row] = await rawQuery<any>(
+      `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المقالة غير موجودة");
     if (helpful === true || helpful === 'true') {
-      await rawExecute(`UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1`, [id]);
+      await rawExecute(
+        `UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+        [id, scope.companyId]
+      );
     } else {
-      await rawExecute(`UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1`, [id]);
+      await rawExecute(
+        `UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+        [id, scope.companyId]
+      );
     }
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "KB feedback error:"); }
