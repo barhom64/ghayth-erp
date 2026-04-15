@@ -41,7 +41,7 @@ export default function Projects() {
 
   const filtered = applyFilters(projects, filters, {
     searchFields: ["name", "clientName"],
-    statusField: "",
+    statusField: "status",
     dateField: "",
   });
 

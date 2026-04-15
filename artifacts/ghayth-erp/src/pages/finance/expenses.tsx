@@ -58,7 +58,7 @@ export default function ExpensesPage() {
 
   const preFiltered = applyFilters(items as Record<string, any>[], filters, {
     searchFields: ["description", "accountName", "ref", "operationType", "costCenter"],
-    statusField: "",
+    statusField: "status",
     dateField: "",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((i: any) => tagFilteredIds.has(i.id)) : preFiltered;
