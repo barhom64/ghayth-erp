@@ -71,6 +71,7 @@ export default function JournalPage() {
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref"],
     dateField: "createdAt",
+    statusField: "status",
   });
 
   const columns: DataTableColumn<any>[] = [
@@ -210,6 +211,11 @@ export default function JournalPage() {
         config={{
           searchPlaceholder: "بحث بالوصف أو المرجع...",
           showDateRange: true,
+          statuses: [
+            { value: "posted", label: "مرحَّل" },
+            { value: "pending_approval", label: "قيد الاعتماد" },
+            { value: "rejected", label: "مرفوض" },
+          ],
         }}
         values={filters}
         onChange={setFilters}
