@@ -1,17 +1,17 @@
 import { useState } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowRight, Save, Star, Plus, X } from "lucide-react";
+import { Save, Star, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function Evaluation360Create() {
   const [, setLocation] = useLocation();
@@ -68,29 +68,17 @@ export default function Evaluation360Create() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/hr/evaluation-360">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">بدء دورة تقييم جديدة</h1>
-            <p className="text-gray-500 text-sm mt-1">تقييم 360° — تقييم شامل متعدد الأطراف</p>
-          </div>
-        </div>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          <Save className="h-4 w-4" /> {saving ? "جارٍ البدء..." : "بدء دورة التقييم"}
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+    <CreatePageLayout
+      title="بدء دورة تقييم جديدة"
+      subtitle="تقييم 360° — تقييم شامل متعدد الأطراف"
+      backPath="/hr/evaluation-360"
+    >
+      <div className="space-y-6">
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
             <Star className="h-5 w-5 text-amber-500" /> بيانات التقييم
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+          </h3>
+          <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>الموظف <span className="text-red-500">*</span></Label>
@@ -112,15 +100,13 @@ export default function Evaluation360Create() {
             <Label>ملاحظات</Label>
             <Textarea className="mt-1" placeholder="ملاحظات اختيارية..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3} />
           </div>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">المقيِّمون (مدراء وزملاء)</CardTitle>
-          <p className="text-xs text-gray-400">أضف من سيُشاركون في تقييم هذا الموظف — يمكن تخطي هذه الخطوة وإضافتهم لاحقاً</p>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <div className="border-t pt-4">
+          <h3 className="text-lg font-semibold">المقيِّمون (مدراء وزملاء)</h3>
+          <p className="text-xs text-gray-400 mb-3">أضف من سيُشاركون في تقييم هذا الموظف — يمكن تخطي هذه الخطوة وإضافتهم لاحقاً</p>
+          <div className="space-y-4">
           <div className="flex gap-2">
             <Select value={addingParticipant.evaluatorId} onValueChange={v => setAddingParticipant({ ...addingParticipant, evaluatorId: v })}>
               <SelectTrigger className="flex-1 text-sm"><SelectValue placeholder="اختر موظفاً" /></SelectTrigger>
@@ -163,17 +149,16 @@ export default function Evaluation360Create() {
           <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-700">
             عند بدء الدورة سيتولد تلقائياً <strong>تقرير أداء آلي</strong> يشمل: الحضور، إنجاز المهام، الالتزام بالمواعيد، رضا العملاء وجودة التوثيق.
           </div>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </div>
 
-      <div className="flex justify-end gap-3">
-        <Link href="/hr/evaluation-360">
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={() => setLocation("/hr/evaluation-360")}>إلغاء</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           <Save className="h-4 w-4" /> {saving ? "جارٍ البدء..." : "بدء دورة التقييم"}
         </Button>
       </div>
-    </div>
+    </CreatePageLayout>
   );
 }

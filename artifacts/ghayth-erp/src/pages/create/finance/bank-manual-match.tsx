@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { ArrowRight, Search, Link2 } from "lucide-react";
+import { Search, Link2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function BankManualMatchPage() {
   const [, params] = useRoute("/finance/bank-reconciliation/manual-match/:batchId/:rowId") as [boolean, { batchId: string; rowId: string }];
@@ -58,42 +58,29 @@ export default function BankManualMatchPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/finance/bank-reconciliation">
-          <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">مطابقة يدوية</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {row ? `${row.description || `سطر #${row.id}`}` : "تحميل..."}
-          </p>
-        </div>
-      </div>
-
-      {row && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+    <CreatePageLayout
+      title="مطابقة يدوية"
+      subtitle={row ? (row.description || `سطر #${row.id}`) : "تحميل..."}
+      backPath="/finance/bank-reconciliation"
+    >
+      <div className="space-y-6">
+        {row && (
+          <div>
+            <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
               <Link2 className="h-5 w-5 text-blue-500" /> بيانات السطر البنكي
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
             <div className="bg-gray-50 p-4 rounded-lg flex flex-wrap gap-6 text-sm">
               <span>المبلغ: <strong>{formatCurrency(Number(row.amount))}</strong></span>
               <span>النوع: <strong>{row.type === "debit" ? "مدين" : "دائن"}</strong></span>
               <span>التاريخ: <strong>{row.statementDate ? formatDateAr(row.statementDate) : "-"}</strong></span>
               <span>الوصف: <strong>{row.description || "-"}</strong></span>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">البحث في القيود المحاسبية</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <div className="border-t pt-4">
+          <h3 className="text-base font-semibold mb-3">البحث في القيود المحاسبية</h3>
+          <div className="space-y-4">
           <div className="flex gap-2">
             <Input
               placeholder="ابحث بالمرجع أو الوصف..."
@@ -172,14 +159,15 @@ export default function BankManualMatchPage() {
               {matchMsg}
             </p>
           )}
-        </CardContent>
-      </Card>
+          </div>
+        </div>
 
-      <div className="flex justify-end">
-        <Link href="/finance/bank-reconciliation">
-          <Button variant="outline">العودة للتسوية البنكية</Button>
-        </Link>
+        <div className="flex justify-end pt-2">
+          <Button variant="outline" onClick={() => setLocation("/finance/bank-reconciliation")}>
+            العودة للتسوية البنكية
+          </Button>
+        </div>
       </div>
-    </div>
+    </CreatePageLayout>
   );
 }

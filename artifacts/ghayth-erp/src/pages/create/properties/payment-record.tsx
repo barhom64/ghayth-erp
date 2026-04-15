@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
-import { useLocation, useRoute, Link } from "wouter";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useLocation, useRoute } from "wouter";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowRight, Save, CreditCard } from "lucide-react";
+import { Save, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function PaymentRecord() {
   const [, params] = useRoute("/properties/contracts/:contractId/pay/:installmentId") as [boolean, { contractId: string; installmentId: string }];
@@ -55,32 +55,16 @@ export default function PaymentRecord() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/properties/contracts">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">تسجيل دفعة</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              {installment ? `القسط رقم ${installment.installmentNumber} — المبلغ: ${formatCurrency(installment.amount)}` : "تحميل..."}
-            </p>
-          </div>
-        </div>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          <Save className="h-4 w-4" /> {saving ? "جاري التسجيل..." : "تأكيد الدفع"}
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <CreditCard className="h-5 w-5 text-blue-500" /> بيانات الدفعة
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {installment && (
+    <CreatePageLayout
+      title="تسجيل دفعة"
+      subtitle={installment ? `القسط رقم ${installment.installmentNumber} — المبلغ: ${formatCurrency(installment.amount)}` : "تحميل..."}
+      backPath="/properties/contracts"
+    >
+      <div className="space-y-4">
+        <h3 className="flex items-center gap-2 text-lg font-semibold">
+          <CreditCard className="h-5 w-5 text-blue-500" /> بيانات الدفعة
+        </h3>
+        {installment && (
             <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
               <p>تاريخ الاستحقاق: <strong>{formatDateAr(installment.dueDate)}</strong></p>
               <p>المبلغ المطلوب: <strong>{formatCurrency(installment.amount)}</strong></p>
@@ -108,17 +92,14 @@ export default function PaymentRecord() {
               <Input className="mt-1" value={form.receiptNumber} onChange={e => setForm({ ...form, receiptNumber: e.target.value })} dir="ltr" />
             </div>
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
-      <div className="flex justify-end gap-3">
-        <Link href="/properties/contracts">
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={() => setLocation("/properties/contracts")}>إلغاء</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           <Save className="h-4 w-4" /> {saving ? "جاري التسجيل..." : "تأكيد الدفع"}
         </Button>
       </div>
-    </div>
+    </CreatePageLayout>
   );
 }

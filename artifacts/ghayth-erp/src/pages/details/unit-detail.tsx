@@ -19,6 +19,7 @@ import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },
@@ -140,23 +141,30 @@ export default function UnitDetail() {
 
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
-        <Link href="/properties"><Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button></Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight truncate">
-            وحدة {unit.unitNumber}
-          </h1>
-          <p className="text-gray-500 mt-0.5 text-sm">{unit.buildingName || "-"} {unit.address ? `— ${unit.address}` : ""}</p>
+    <PageShell
+      title={`وحدة ${unit.unitNumber}`}
+      subtitle={`${unit.buildingName || "-"}${unit.address ? ` — ${unit.address}` : ""}`}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/properties", label: "العقارات" }]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-gray-100 text-gray-700")}>
+            {STATUS_LABELS[unit.status] || unit.status}
+          </Badge>
+          <Link href={`/properties/${id}/status`}>
+            <Button variant="outline" size="sm" className="gap-1">
+              <Pencil className="h-3.5 w-3.5" /> تغيير الحالة
+            </Button>
+          </Link>
+          <Link href="/properties">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-        <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-gray-100 text-gray-700")}>
-          {STATUS_LABELS[unit.status] || unit.status}
-        </Badge>
-        <Link href={`/properties/${id}/status`}><Button variant="outline" size="sm" className="gap-1">
-          <Pencil className="h-3.5 w-3.5" /> تغيير الحالة
-        </Button></Link>
-      </div>
-
+      }
+    >
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -697,7 +705,7 @@ export default function UnitDetail() {
         </Card>
       )}
 
-    </div>
+    </PageShell>
   );
 }
 

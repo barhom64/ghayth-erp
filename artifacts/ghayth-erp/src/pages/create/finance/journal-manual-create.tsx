@@ -1,14 +1,13 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
-import { ArrowRight } from "lucide-react";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 type JournalLine = { accountCode: string; description: string; debit: number; credit: number };
 
@@ -72,26 +71,13 @@ export default function JournalManualCreatePage() {
   }
 
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex items-center gap-3">
-        <Link href="/finance/journal-manual">
-          <Button variant="ghost">
-            <ArrowRight className="h-4 w-4 me-1" />
-            العودة
-          </Button>
-        </Link>
-        <div>
-          <h2 className="text-2xl font-bold">إنشاء قيد يدوي جديد</h2>
-          <p className="text-sm text-gray-500 mt-1">أنشئ قيداً يدوياً بحالة مسودة، ثم أرسله للمراجعة والاعتماد</p>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>بيانات القيد</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+    <CreatePageLayout
+      title="إنشاء قيد يدوي جديد"
+      subtitle="أنشئ قيداً يدوياً بحالة مسودة، ثم أرسله للمراجعة والاعتماد"
+      backPath="/finance/journal-manual"
+    >
+      <div dir="rtl">
+        <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1">البيان *</label>
@@ -178,16 +164,13 @@ export default function JournalManualCreatePage() {
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <Link href="/finance/journal-manual">
-                <Button type="button" variant="outline">إلغاء</Button>
-              </Link>
+              <Button type="button" variant="outline" onClick={() => navigate("/finance/journal-manual")}>إلغاء</Button>
               <Button type="submit" disabled={createMutation.isPending || !isBalanced}>
                 {createMutation.isPending ? "جاري الإنشاء..." : "إنشاء القيد"}
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
-    </div>
+      </div>
+    </CreatePageLayout>
   );
 }

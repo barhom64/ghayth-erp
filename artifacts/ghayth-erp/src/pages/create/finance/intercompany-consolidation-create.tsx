@@ -1,10 +1,7 @@
-import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/formatters";
-import { ArrowRight } from "lucide-react";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function IntercompanyConsolidationCreatePage() {
   const { scopeQueryString } = useAppContext();
@@ -18,25 +15,14 @@ export default function IntercompanyConsolidationCreatePage() {
   const consolidation = consolidationData;
 
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex items-center gap-3">
-        <Link href="/finance/intercompany">
-          <Button variant="ghost">
-            <ArrowRight className="h-4 w-4 me-1" />
-            العودة
-          </Button>
-        </Link>
+    <CreatePageLayout
+      title="القوائم المالية الموحدة"
+      subtitle="عرض القوائم المالية الموحدة وحذف المعاملات البينية"
+      backPath="/finance/intercompany"
+    >
+      <div dir="rtl">
+        <h3 className="text-lg font-semibold mb-3">نتائج التوحيد</h3>
         <div>
-          <h2 className="text-2xl font-bold">القوائم المالية الموحدة</h2>
-          <p className="text-sm text-gray-500 mt-1">عرض القوائم المالية الموحدة وحذف المعاملات البينية</p>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>نتائج التوحيد</CardTitle>
-        </CardHeader>
-        <CardContent>
           {loadingConsolidation ? (
             <div className="text-center py-8 text-gray-500">جاري تحميل البيانات...</div>
           ) : consolidation ? (
@@ -93,8 +79,8 @@ export default function IntercompanyConsolidationCreatePage() {
           ) : (
             <div className="text-center py-8 text-gray-400">لا توجد بيانات توحيد متاحة</div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </CreatePageLayout>
   );
 }

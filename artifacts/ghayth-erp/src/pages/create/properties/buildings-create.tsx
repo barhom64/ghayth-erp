@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowRight, Building2, Save } from "lucide-react";
+import { Building2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function BuildingsCreate() {
   const [, setLocation] = useLocation();
@@ -48,30 +48,16 @@ export default function BuildingsCreate() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/properties/buildings">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">إضافة مبنى جديد</h1>
-            <p className="text-gray-500 text-sm mt-1">تسجيل مبنى أو مجمع في النظام</p>
-          </div>
-        </div>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          <Save className="h-4 w-4" /> {saving ? "جاري الحفظ..." : "حفظ المبنى"}
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Building2 className="h-5 w-5 text-blue-500" /> بيانات المبنى
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <CreatePageLayout
+      title="إضافة مبنى جديد"
+      subtitle="تسجيل مبنى أو مجمع في النظام"
+      backPath="/properties/buildings"
+    >
+      <div className="space-y-6">
+        <h3 className="flex items-center gap-2 text-lg font-semibold">
+          <Building2 className="h-5 w-5 text-blue-500" /> بيانات المبنى
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>اسم المبنى <span className="text-red-500">*</span></Label>
               <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="برج X / مجمع Y" />
@@ -182,17 +168,14 @@ export default function BuildingsCreate() {
             <Label>وصف</Label>
             <Input className="mt-1" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="وصف اختياري..." />
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
-      <div className="flex justify-end gap-3">
-        <Link href="/properties/buildings">
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={() => setLocation("/properties/buildings")}>إلغاء</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           <Save className="h-4 w-4" /> {saving ? "جاري الحفظ..." : "حفظ المبنى"}
         </Button>
       </div>
-    </div>
+    </CreatePageLayout>
   );
 }

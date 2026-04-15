@@ -17,6 +17,7 @@ import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
@@ -171,28 +172,37 @@ export default function VehicleDetail() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/fleet"><Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button></Link>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">{vehicle.make} {vehicle.model} {vehicle.year}</h1>
-          <p className="text-gray-500 mt-1 font-mono">{vehicle.plateNumber}</p>
+    <PageShell
+      title={`${vehicle.make || ""} ${vehicle.model || ""} ${vehicle.year || ""}`.trim() || "المركبة"}
+      subtitle={vehicle.plateNumber || undefined}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }]}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={statusMap[vehicle.status]?.color || "bg-gray-100 text-gray-700"}>{statusMap[vehicle.status]?.label || vehicle.status}</Badge>
+          <Link href={`/fleet/${id}/status`}>
+            <Button variant="outline" size="sm" className="gap-1">
+              <Pencil className="h-4 w-4" />تغيير الحالة
+            </Button>
+          </Link>
+          <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+          {deleting ? (
+            <div className="flex gap-2">
+              <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
+              <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+          )}
+          <Link href="/fleet">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
         </div>
-        <Badge className={statusMap[vehicle.status]?.color || "bg-gray-100 text-gray-700"}>{statusMap[vehicle.status]?.label || vehicle.status}</Badge>
-        <Link href={`/fleet/${id}/status`}><Button variant="outline" size="sm" className="gap-1">
-          <Pencil className="h-4 w-4" />تغيير الحالة
-        </Button></Link>
-        <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
-        {deleting ? (
-          <div className="flex gap-2">
-            <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
-          </div>
-        ) : (
-          <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
-        )}
-      </div>
-
+      }
+    >
       {editing && (
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل المركبة</CardTitle></CardHeader>
@@ -762,7 +772,7 @@ export default function VehicleDetail() {
 
       {id && <EntityDocuments entityType="vehicle" entityId={id} />}
 
-    </div>
+    </PageShell>
   );
 }
 

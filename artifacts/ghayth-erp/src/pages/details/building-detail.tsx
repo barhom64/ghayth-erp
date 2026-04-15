@@ -10,6 +10,7 @@ import { Building2, Home, Plus, ArrowRight, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 export default function BuildingDetail() {
   const [, params] = useRoute("/properties/buildings/:id");
@@ -52,23 +53,28 @@ export default function BuildingDetail() {
   const availableUnits = units.filter((u: any) => u.status === "available").length;
   const occupancy = totalUnits > 0 ? Math.round((rentedUnits / totalUnits) * 100) : 0;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
-        <Link href="/properties/buildings"><Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button></Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight truncate">{building.name}</h1>
-          <p className="text-gray-500 text-sm mt-0.5">
-            {building.city && <span>{building.city}</span>}
-            {building.address && <span> — {building.address}</span>}
-            {building.floors && <span> — {building.floors} طوابق</span>}
-          </p>
-        </div>
-        <Badge variant="outline">
-          {building.type === "residential" ? "سكني" : building.type === "commercial" ? "تجاري" : building.type === "mixed" ? "مختلط" : building.type}
-        </Badge>
-      </div>
+  const subtitleParts = [building.city, building.address, building.floors && `${building.floors} طوابق`].filter(Boolean).join(" — ");
 
+  return (
+    <PageShell
+      title={building.name}
+      subtitle={subtitleParts || undefined}
+      loading={isLoading}
+      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { href: "/properties/buildings", label: "المباني" }]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">
+            {building.type === "residential" ? "سكني" : building.type === "commercial" ? "تجاري" : building.type === "mixed" ? "مختلط" : building.type}
+          </Badge>
+          <Link href="/properties/buildings">
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة
+            </Button>
+          </Link>
+        </div>
+      }
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm bg-blue-50/50">
           <CardContent className="p-4 text-center">
@@ -152,6 +158,6 @@ export default function BuildingDetail() {
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

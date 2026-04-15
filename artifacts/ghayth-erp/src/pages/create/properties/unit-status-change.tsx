@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { CreatePageLayout } from "@/components/create-page-layout";
 
 const STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
@@ -91,25 +91,16 @@ export default function UnitStatusChangePage() {
   if (!unit) return <div className="text-center py-20 text-gray-400">الوحدة غير موجودة</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href={`/properties/${id}`}>
-          <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">تغيير حالة الوحدة</h1>
-          <p className="text-gray-500 text-sm mt-1">{unit.unitNumber || unit.name || `وحدة #${id}`}</p>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Pencil className="h-5 w-5 text-blue-500" /> تغيير الحالة
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <p className="text-sm text-gray-500">
+    <CreatePageLayout
+      title="تغيير حالة الوحدة"
+      subtitle={unit.unitNumber || unit.name || `وحدة #${id}`}
+      backPath={`/properties/${id}`}
+    >
+      <div className="space-y-5">
+        <h3 className="flex items-center gap-2 text-lg font-semibold">
+          <Pencil className="h-5 w-5 text-blue-500" /> تغيير الحالة
+        </h3>
+        <p className="text-sm text-gray-500">
             الحالة الحالية: <Badge className={cn("border", STATUS_COLORS[unit.status])}>{STATUS_LABELS[unit.status] || unit.status}</Badge>
           </p>
 
@@ -170,13 +161,10 @@ export default function UnitStatusChangePage() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
-      <div className="flex justify-end gap-3">
-        <Link href={`/properties/${id}`}>
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={() => setLocation(`/properties/${id}`)}>إلغاء</Button>
         <Button
           disabled={!selectedNewStatus || !impactData || !impactData.canProceed || confirming}
           onClick={applyStatusChange}
@@ -184,6 +172,6 @@ export default function UnitStatusChangePage() {
           {confirming ? "جاري التطبيق..." : "تطبيق التغيير"}
         </Button>
       </div>
-    </div>
+    </CreatePageLayout>
   );
 }
