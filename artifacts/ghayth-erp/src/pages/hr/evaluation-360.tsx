@@ -5,7 +5,7 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,13 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Target, TrendingUp, Award, Users, RefreshCw, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-
-const statusMap: Record<string, { label: string; color: string }> = {
-  open: { label: "مفتوح", color: "bg-gray-100 text-gray-700" },
-  in_progress: { label: "جارٍ", color: "bg-yellow-100 text-yellow-700" },
-  completed: { label: "مكتمل", color: "bg-green-100 text-green-700" },
-  closed: { label: "مغلق", color: "bg-blue-100 text-blue-700" },
-};
 
 function ScoreBadge({ score }: { score: number | null | undefined }) {
   if (score == null) return <span className="text-gray-400 text-sm">-</span>;
@@ -176,9 +169,7 @@ export default function Evaluation360Page() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-semibold">{cycle.employeeName}</span>
                       {cycle.empNumber && <span className="text-xs text-gray-400">{cycle.empNumber}</span>}
-                      <Badge className={cn("text-xs", statusMap[cycle.status]?.color)}>
-                        {statusMap[cycle.status]?.label || cycle.status}
-                      </Badge>
+                      <PageStatusBadge status={cycle.status} className="text-xs" />
                     </div>
                     <p className="text-sm text-gray-500">الفترة: {cycle.period}</p>
                   </div>

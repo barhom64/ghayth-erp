@@ -3,7 +3,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatCurrency } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
@@ -20,13 +20,6 @@ type Project = {
   budgetRemaining: number;
   startDate?: string;
   endDate?: string;
-};
-
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  active: { label: "نشط", color: "green" },
-  completed: { label: "مكتمل", color: "blue" },
-  cancelled: { label: "ملغي", color: "red" },
-  on_hold: { label: "موقوف", color: "yellow" },
 };
 
 export default function ProjectCostingPage() {
@@ -116,7 +109,6 @@ export default function ProjectCostingPage() {
                 <div>الاستخدام</div>
               </div>
               {list.map((row) => {
-                const cfg = STATUS_MAP[row.status] ?? { label: row.status, color: "gray" };
                 const pct = row.budget > 0 ? Math.min(100, Math.round((row.actualCost / row.budget) * 100)) : 0;
                 return (
                   <div
@@ -128,7 +120,7 @@ export default function ProjectCostingPage() {
                     <div>
                       <span className="text-blue-600 hover:underline font-medium text-right">{row.name}</span>
                     </div>
-                    <div><Badge variant="outline" className={`bg-${cfg.color}-100 text-${cfg.color}-700`}>{cfg.label}</Badge></div>
+                    <div><PageStatusBadge status={row.status} domain="project" /></div>
                     <div>{formatCurrency(row.budget)}</div>
                     <div>{formatCurrency(row.actualCost)}</div>
                     <div><span className={row.budgetRemaining < 0 ? "text-red-600 font-semibold" : "text-green-700"}>{formatCurrency(row.budgetRemaining)}</span></div>

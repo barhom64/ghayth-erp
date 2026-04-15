@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ClipboardCheck, ListTodo, GitBranch, Plus, X, Calendar, DollarSign,
@@ -37,13 +38,15 @@ const categoryLabels: Record<string, string> = {
   legal: "القانونية",
 };
 
-const statusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: "معلق", color: "bg-yellow-100 text-yellow-700" },
-  approved: { label: "موافق", color: "bg-green-100 text-green-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
-  in_review: { label: "قيد المراجعة", color: "bg-blue-100 text-blue-700" },
-  returned: { label: "مُعاد", color: "bg-orange-100 text-orange-700" },
-};
+// Request status options — PageStatusBadge renders the chip; this
+// list just supplies dropdown/label text.
+const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "pending",   label: "معلق"          },
+  { value: "approved",  label: "موافق"         },
+  { value: "rejected",  label: "مرفوض"         },
+  { value: "in_review", label: "قيد المراجعة"  },
+  { value: "returned",  label: "مُعاد"         },
+];
 
 const priorityMap: Record<string, string> = { low: "منخفض", medium: "متوسط", high: "عالي", critical: "حرج" };
 
@@ -221,7 +224,7 @@ function RequestsList() {
     { key: "title", label: "العنوان" },
     { key: "description", label: "الوصف" },
     { key: "priority", label: "الأولوية", type: "select" as const, options: [{ value: "low", label: "منخفض" }, { value: "medium", label: "متوسط" }, { value: "high", label: "عالي" }, { value: "critical", label: "حرج" }] },
-    { key: "status", label: "الحالة", type: "select" as const, options: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })) },
+    { key: "status", label: "الحالة", type: "select" as const, options: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
   ];
 
   const handleSubmit = async () => {
@@ -276,8 +279,8 @@ function RequestsList() {
           onChange={(e) => setFilterStatus(e.target.value)}
         >
           <option value="">جميع الحالات</option>
-          {Object.entries(statusMap).map(([k, v]) => (
-            <option key={k} value={k}>{v.label} ({statusCounts[k] || 0})</option>
+          {STATUS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label} ({statusCounts[o.value] || 0})</option>
           ))}
         </select>
         <select
@@ -382,7 +385,7 @@ function RequestsList() {
                         <span className="text-xs text-gray-300">—</span>
                       )}
                     </td>
-                    <td className="p-3"><Badge className={statusMap[r.status]?.color || ""}>{statusMap[r.status]?.label || r.status}</Badge></td>
+                    <td className="p-3"><PageStatusBadge status={r.status} /></td>
                     <td className="p-3">
                       <ApprovalActions
                         entityType="request"

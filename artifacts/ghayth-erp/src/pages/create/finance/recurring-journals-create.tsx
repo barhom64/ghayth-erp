@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +25,6 @@ const emptyLine = (): TemplateLine => ({ accountCode: "", description: "", debit
 
 export default function RecurringJournalsCreatePage() {
   const [, setLocation] = useLocation();
-  const qc = useQueryClient();
   const { toast } = useToast();
 
   const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
@@ -44,16 +42,15 @@ export default function RecurringJournalsCreatePage() {
   const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
   const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01;
 
-  const createMut = useMutation({
-    mutationFn: (body: any) =>
-      apiFetch("/finance/recurring-journals", { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["recurring-journals"] });
-      toast({ title: "تم إنشاء القيد الدوري" });
-      setLocation("/finance/recurring-journals");
+  const createMut = useApiMutation<unknown, any>(
+    "/finance/recurring-journals",
+    "POST",
+    [["recurring-journals"]],
+    {
+      successMessage: "تم إنشاء القيد الدوري",
+      onSuccess: () => setLocation("/finance/recurring-journals"),
     },
-    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل الحفظ" }),
-  });
+  );
 
   function updateLine(idx: number, field: keyof TemplateLine, value: string) {
     setLines((prev) => {

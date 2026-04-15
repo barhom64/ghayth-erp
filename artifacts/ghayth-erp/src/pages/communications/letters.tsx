@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Mail, Send, Inbox, FileText, Search, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
@@ -12,14 +13,6 @@ import { useApiQuery, asList } from "@/lib/api";
 const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
   inbound: { label: "وارد", color: "bg-blue-100 text-blue-700" },
   outbound: { label: "صادر", color: "bg-green-100 text-green-700" },
-};
-
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  sent: { label: "مرسل", color: "bg-green-100 text-green-700" },
-  delivered: { label: "تم التسليم", color: "bg-emerald-100 text-emerald-700" },
-  queued: { label: "في الانتظار", color: "bg-yellow-100 text-yellow-700" },
-  received: { label: "مستلم", color: "bg-blue-100 text-blue-700" },
-  failed: { label: "فشل", color: "bg-red-100 text-red-700" },
 };
 
 export default function CommunicationsLetters() {
@@ -96,9 +89,7 @@ export default function CommunicationsLetters() {
                   <td className="p-3 text-gray-500">{l.toNumber || l.fromNumber || "-"}</td>
                   <td className="p-3 text-gray-500">{l.createdAt ? formatDateAr(l.createdAt) : "-"}</td>
                   <td className="p-3">
-                    <Badge className={STATUS_MAP[l.status]?.color || "bg-gray-100 text-gray-700"}>
-                      {STATUS_MAP[l.status]?.label || l.status}
-                    </Badge>
+                    <PageStatusBadge status={l.status} />
                   </td>
                 </tr>
               ))}

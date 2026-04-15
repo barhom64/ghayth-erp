@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,12 +27,6 @@ const CATEGORIES = [
   { value: "legal", label: "قانونية" },
   { value: "other", label: "أخرى" },
 ];
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-  draft: { label: "مسودة", color: "bg-gray-100 text-gray-700", icon: Clock },
-  approved: { label: "معتمد", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
-  cancelled: { label: "ملغي", color: "bg-red-100 text-red-700", icon: XCircle },
-};
 
 const CATEGORY_EFFECTS: Record<string, { icon: string; approvedEffect: string; severity: "info" | "warning" | "success" }> = {
   contracts: { icon: "📜", approvedEffect: "اعتماد العقد يُنشئ التزاماً قانونياً ومالياً رسمياً للشركة", severity: "warning" },
@@ -52,14 +47,7 @@ function formatSize(bytes: number) {
 }
 
 function StatusBadgeDoc({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
-  const Icon = cfg.icon;
-  return (
-    <Badge className={cn("gap-1", cfg.color)}>
-      <Icon className="h-3 w-3" />
-      {cfg.label}
-    </Badge>
-  );
+  return <PageStatusBadge status={status || "draft"} />;
 }
 
 function CategoryBadge({ category }: { category: string }) {
