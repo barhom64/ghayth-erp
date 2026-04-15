@@ -149,6 +149,26 @@ export const STATUS_MAP = {
     opening:              { label: "أرصدة افتتاحية",  tone: "info"     },
     closing:              { label: "قيد إقفال",       tone: "info"     },
   },
+  custody: {
+    active:               { label: "نشطة",            tone: "info"     },
+    partial:              { label: "مسوّاة جزئياً",   tone: "progress" },
+    settled:              { label: "مسوّاة",          tone: "success"  },
+    pending:              { label: "بانتظار الموافقة", tone: "warning"  },
+    rejected:             { label: "مرفوضة",          tone: "danger"   },
+    returned:             { label: "مُرجعة",          tone: "warning"  },
+    overdue:              { label: "متأخرة",          tone: "danger"   },
+  },
+  // R.3 — ZATCA e-invoice integration statuses. Previously rendered
+  // inline with hand-rolled tailwind classes on every invoice list
+  // row. Moved here so the arabic label + tone come from the same
+  // source as every other status chip in the app.
+  zatca: {
+    pending:              { label: "معلقة",          tone: "warning"  },
+    submitted:            { label: "مُرسَلة",         tone: "info"     },
+    accepted:             { label: "مقبولة",          tone: "success"  },
+    rejected:             { label: "مرفوضة",          tone: "danger"   },
+    error:                { label: "خطأ",             tone: "danger"   },
+  },
 
   // ── Legal ──────────────────────────────────────────────────────────
   legal_case: {

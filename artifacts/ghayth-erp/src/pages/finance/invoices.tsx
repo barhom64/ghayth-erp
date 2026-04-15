@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, Receipt, DollarSign, AlertTriangle, CheckCircle, Eye, ExternalLink, ChevronDown, ChevronUp, Copy, Zap } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { CollectionStages } from "@/components/shared/entity-timeline";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -31,10 +30,15 @@ export default function InvoicesPage() {
   const items = data?.data || [];
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("invoice");
+  // R.3 — statusField was empty string so the AdvancedFilters status
+  // pills never actually filtered the list. The pills still rendered
+  // in the toolbar but clicking them had no effect. Fixing it here so
+  // the status filter is honoured and matches the custodies +
+  // bank-guarantees pages migrated in the same iteration.
   const preFiltered = applyFilters(items, filters, {
     searchFields: ["ref", "clientName"],
-    statusField: "",
-    dateField: "",
+    statusField: "status",
+    dateField: "dueDate",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((i: any) => tagFilteredIds.has(i.id)) : preFiltered;
 
@@ -101,14 +105,19 @@ export default function InvoicesPage() {
     {
       key: "zatca",
       header: "هيئة الزكاة",
-      render: (inv) => inv.isTaxLinked ? (
-        <Badge className={`text-xs gap-1 ${inv.zatcaStatus === "accepted" ? "bg-green-100 text-green-700" : (inv.zatcaStatus === "rejected" || inv.zatcaStatus === "error") ? "bg-red-100 text-red-700" : inv.zatcaStatus === "submitted" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>
-          <Zap className="h-3 w-3" />
-          {inv.zatcaStatus === "accepted" ? "مقبولة" : inv.zatcaStatus === "rejected" ? "مرفوضة" : inv.zatcaStatus === "error" ? "خطأ" : inv.zatcaStatus === "submitted" ? "مرسلة" : "معلقة"}
-        </Badge>
-      ) : (
-        <span className="text-xs text-gray-300">—</span>
-      ),
+      // R.3 — zatca chip previously used a hand-rolled ternary ladder
+      // of tailwind classes. Now sourced from STATUS_MAP.zatca via the
+      // canonical PageStatusBadge; the lightning icon sits next to the
+      // badge as a visual marker that this is the ZATCA column.
+      render: (inv) =>
+        inv.isTaxLinked ? (
+          <span className="inline-flex items-center gap-1">
+            <Zap className="h-3 w-3 text-muted-foreground" />
+            <PageStatusBadge status={inv.zatcaStatus || "pending"} domain="zatca" />
+          </span>
+        ) : (
+          <span className="text-xs text-gray-300">—</span>
+        ),
     },
     {
       key: "actions",
@@ -146,8 +155,9 @@ export default function InvoicesPage() {
   return (
     <PageShell
       title="الفواتير"
-      subtitle="إدارة فواتير العملاء والمتابعة"
-      breadcrumbs={[{ href: "/finance", label: "المالية" }]}
+      subtitle="إدارة فواتير العملاء، المتابعة، الاعتماد، والتكامل مع هيئة الزكاة"
+      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الفواتير" }]}
+      loading={isLoading}
       actions={
         <Link href="/finance/invoices/create">
           <Button size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</Button>
@@ -227,7 +237,11 @@ export default function InvoicesPage() {
         onRetry={() => refetch()}
         emptyMessage="لا توجد فواتير"
         emptyIcon={<Receipt className="h-6 w-6 text-slate-400" />}
-        rowClassName={(inv) => selectedIds.has(inv.id) ? "bg-blue-50/50" : undefined}
+        rowClassName={(inv) => {
+          if (selectedIds.has(inv.id)) return "bg-blue-50/50";
+          if (inv.status === "overdue") return "bg-red-50/30";
+          return undefined;
+        }}
         noToolbar
         renderRowExtras={(inv) => {
           if (expandedId !== inv.id) return null;
