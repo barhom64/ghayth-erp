@@ -620,6 +620,29 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet trips error:"); }
 });
 
+// Operational Review M4 — dedicated trip lookup.
+// The trip-detail page used to fetch the entire `/trips` list and
+// filter client-side, which is wasteful on large fleets and breaks
+// silently if the trip lives outside the current page's window. This
+// endpoint returns a single row with the same JOIN shape so the
+// detail UI can hydrate from one round-trip.
+router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT t.*, v."plateNumber", d.name AS "driverName"
+         FROM fleet_trips t
+         LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
+         LEFT JOIN fleet_drivers d ON d.id = t."driverId"
+        WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!row) throw new NotFoundError("الرحلة غير موجودة");
+    res.json({ data: row });
+  } catch (err) { handleRouteError(err, res, "Fleet trip detail error:"); }
+});
+
 router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;

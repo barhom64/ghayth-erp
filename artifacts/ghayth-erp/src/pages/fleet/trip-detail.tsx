@@ -32,14 +32,16 @@ export default function TripDetailPage() {
   const [, navigate] = useLocation();
   const id = params?.id || "";
 
-  // TODO: prefer dedicated GET /fleet/trips/:id endpoint — currently fetches list and filters
-  const { data: tripsResp, isLoading, isError, refetch } = useApiQuery<any>(
+  // Operational Review M4 — was fetching the entire `/fleet/trips`
+  // list and filtering client-side, which broke quietly on large
+  // fleets and pulled megabytes per detail page load. Now hits the
+  // dedicated `/fleet/trips/:id` endpoint added in the same PR.
+  const { data: tripResp, isLoading, isError, refetch } = useApiQuery<any>(
     ["fleet-trip", id],
-    id ? `/fleet/trips` : null,
+    id ? `/fleet/trips/${id}` : null,
     !!id
   );
-  const allTrips: any[] = tripsResp?.data || [];
-  const trip = useMemo(() => allTrips.find((t) => String(t.id) === String(id)) || null, [allTrips, id]);
+  const trip = tripResp?.data || null;
 
   // Fuel logs — try filter param, fallback to client-side filter
   // TODO: prefer a dedicated /fleet/fuel?tripId= filter
