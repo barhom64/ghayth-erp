@@ -1,119 +1,251 @@
 import { useState, useRef } from "react";
 import { useRoute, Link } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Printer, Banknote, FileText, DollarSign, Calendar, User, Phone, Mail, BookOpen, Copy, Zap, CheckCircle, Clock, XCircle, Send } from "lucide-react";
+import {
+  ArrowRight,
+  Banknote,
+  FileText,
+  DollarSign,
+  Calendar,
+  User,
+  Phone,
+  Mail,
+  BookOpen,
+  Copy,
+  Zap,
+  Send,
+} from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
-import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { getCurrencySymbol, formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { EntityTimeline, ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
+
+/**
+ * Invoice detail page — migrated in R.4 iter 4 to the unified template
+ * stack with a **visible payment lifecycle**.
+ *
+ * Before: raw <h1> + back-button row, `StatusBadge` shim, two raw
+ * `apiFetch` + `useToast` + `useQueryClient` manual mutations (one
+ * for payment recording, one for ZATCA submit), a hand-rolled ZATCA
+ * banner with its own tailwind color ladder that duplicated the
+ * invoices list chip, and no visible lifecycle strip — users had to
+ * read the status chip to understand where a payment was in its
+ * progression.
+ *
+ * After:
+ *   • PageShell with breadcrumbs + back + actions + PageStatusBadge
+ *   • ProcessStages strip showing the payment progression:
+ *     draft → pending → جزئي → مدفوعة. Void/cancelled render as a
+ *     terminal branch. This is the first non-journal finance detail
+ *     page to expose a visible lifecycle.
+ *   • Payment recording + ZATCA submit migrated to `useApiMutation`
+ *     with `pathFn` composition, so VALIDATION_ERROR with field /
+ *     CONFLICT with meta.currentStatus / FORBIDDEN with
+ *     meta.requiredRoles flow through R.1.2's typed-error toast
+ *     pipeline automatically — no more "حدث خطأ" swallowing the real
+ *     server reason
+ *   • ZATCA banner chip uses PageStatusBadge with the `zatca` domain
+ *     added in R.3 (same source as the list page chip)
+ *   • StatusBadge shim import removed
+ *
+ * The print modal + print document are preserved verbatim — they're
+ * large, orthogonal, and out of scope for the template unification.
+ */
+
+const PAYMENT_LIFECYCLE: ReadonlyArray<{ key: string; label: string }> = [
+  { key: "draft",          label: "مسودة"       },
+  { key: "pending",        label: "قيد الانتظار" },
+  { key: "partially_paid", label: "مدفوعة جزئياً" },
+  { key: "paid",           label: "مدفوعة"      },
+];
+
+// Map the many invoice status values to a slot on the four-step strip.
+// Terminal states (void, cancelled) render as a single red/grey dot.
+function buildLifecycleSteps(status: string | undefined): StageStep[] {
+  const s = status ?? "draft";
+  if (s === "void" || s === "cancelled") {
+    return [
+      { label: "مسودة",       status: "completed" },
+      { label: "ملغاة",       status: "rejected"  },
+    ];
+  }
+  // Treat both `sent` and `pending` as the middle "awaiting payment" stage.
+  const normalised =
+    s === "sent" ? "pending" :
+    s === "partial" ? "partially_paid" :
+    s === "overdue" ? "pending" :
+    s;
+  const currentIdx = PAYMENT_LIFECYCLE.findIndex((x) => x.key === normalised);
+  return PAYMENT_LIFECYCLE.map((step, i): StageStep => {
+    if (currentIdx === -1) return { label: step.label, status: "pending" };
+    if (i < currentIdx)    return { label: step.label, status: "completed" };
+    if (i === currentIdx)  return { label: step.label, status: "current" };
+    return { label: step.label, status: "pending" };
+  });
+}
 
 export default function InvoiceDetailPage() {
   const [, params] = useRoute("/finance/invoices/:id");
   const id = params?.id;
-  const { data: invoice, isLoading } = useApiQuery<any>(["invoice-detail", id || ""], `/finance/invoices/${id}`, !!id);
+  const { data: invoice, isLoading, isError, refetch } = useApiQuery<any>(
+    ["invoice-detail", id || ""],
+    id ? `/finance/invoices/${id}` : null,
+    !!id,
+  );
   const [showPayment, setShowPayment] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [zatcaSubmitting, setZatcaSubmitting] = useState(false);
   const printContainerRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
-  const qc = useQueryClient();
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
-    </div>
+  // R.4 iter 4 — both mutations now flow through useApiMutation so
+  // typed errors (VALIDATION_ERROR with field, CONFLICT with meta,
+  // FORBIDDEN with requiredRoles) surface through R.1.2's toast
+  // pipeline automatically. The old handlers swallowed the server's
+  // structured detail into a generic "حدث خطأ" toast.
+  const paymentMut = useApiMutation<unknown, { amount: number; method: string }>(
+    () => `/finance/invoices/${id}/payment`,
+    "POST",
+    [
+      ["invoice-detail", id || ""],
+      ["invoices"],
+      ["finance-stats"],
+    ],
+    {
+      successMessage: "تم تسجيل الدفعة",
+      onSuccess: () => setShowPayment(false),
+    },
   );
 
-  if (!invoice) return (
-    <div className="text-center py-12">
-      <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">الفاتورة غير موجودة</p>
-      <Link href="/finance/invoices"><Button variant="outline" className="mt-4">العودة للفواتير</Button></Link>
-    </div>
+  const zatcaMut = useApiMutation<{ message?: string }, Record<string, never>>(
+    () => `/finance/zatca/invoice/${id}/submit`,
+    "POST",
+    [["invoice-detail", id || ""]],
+    {
+      successMessage: "تم الإرسال لهيئة الزكاة",
+    },
   );
 
-  const lines = invoice.lines || [];
-  const payments = invoice.payments || [];
-  const journalEntries = invoice.journalEntries || [];
-  const remaining = Number(invoice.total) - Number(invoice.paidAmount || 0);
-  const branch = extractBranchFromResponse(invoice);
-  const docDate = invoice.createdAt ? formatDateAr(invoice.createdAt) : "";
+  const notFound = !isLoading && !invoice;
+  const lines = invoice?.lines || [];
+  const payments = invoice?.payments || [];
+  const journalEntries = invoice?.journalEntries || [];
+  const remaining = invoice
+    ? Number(invoice.total) - Number(invoice.paidAmount || 0)
+    : 0;
+  const branch = invoice ? extractBranchFromResponse(invoice) : null;
+  const docDate = invoice?.createdAt ? formatDateAr(invoice.createdAt) : "";
+  const lifecycleSteps = buildLifecycleSteps(invoice?.status);
 
-  const handleRecordPayment = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleRecordPayment = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const amount = parseFloat(fd.get("amount") as string);
     const method = fd.get("method") as string;
     if (!amount || !method) return;
-
-    try {
-      await apiFetch(`/finance/invoices/${id}/payment`, {
-        method: "POST",
-        body: JSON.stringify({ amount, method }),
-      });
-      toast({ title: "تم تسجيل الدفعة" });
-      setShowPayment(false);
-      qc.invalidateQueries({ queryKey: ["invoice-detail", id] });
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["finance-stats"] });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
-    }
+    paymentMut.mutate({ amount, method });
   };
 
-  const handleZatcaSubmit = async () => {
-    setZatcaSubmitting(true);
-    try {
-      const result = await apiFetch<any>(`/finance/zatca/invoice/${id}/submit`, { method: "POST", body: JSON.stringify({}) });
-      toast({ title: "تم الإرسال", description: result.message });
-      qc.invalidateQueries({ queryKey: ["invoice-detail", id] });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "خطأ في الإرسال لهيئة الزكاة", description: e.message || "فشل إرسال الفاتورة للهيئة" });
-    } finally {
-      setZatcaSubmitting(false);
-    }
+  const handleZatcaSubmit = () => {
+    zatcaMut.mutate({});
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <PageShell
+      title={invoice?.ref ? `فاتورة ${invoice.ref}` : notFound ? "الفاتورة غير موجودة" : "..."}
+      subtitle={invoice?.clientName || undefined}
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { href: "/finance/invoices", label: "الفواتير" },
+        { label: invoice?.ref || "التفاصيل" },
+      ]}
+      loading={isLoading}
+      actions={
+        <div className="flex items-center gap-2">
+          {invoice?.status && <PageStatusBadge status={invoice.status} domain="invoice" />}
           <Link href="/finance/invoices">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="sm">
+              <ArrowRight className="h-4 w-4 me-1" />
+              العودة للفواتير
+            </Button>
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight">فاتورة {invoice.ref}</h1>
-          <StatusBadge status={invoice.status} />
-        </div>
-        <div className="flex gap-2">
           <Link href={`/finance/invoices/create?copyFrom=${id}`}>
             <Button variant="outline" size="sm" className="gap-1">
-              <Copy className="h-4 w-4" />نسخ
+              <Copy className="h-4 w-4" />
+              نسخ
             </Button>
           </Link>
-          {remaining > 0 && (
-            <Button variant="outline" onClick={() => setShowPayment(!showPayment)}>
-              <Banknote className="h-4 w-4 me-1" />تسجيل دفعة
+          {invoice && remaining > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
+              <Banknote className="h-4 w-4 me-1" />
+              تسجيل دفعة
             </Button>
           )}
-          <ExportButton endpoint={`/export/pdf/invoice/${id}`} filename={`invoice-${id}.pdf`} type="pdf" label="ملف طباعي" />
-          <PrintActions
-            onPreview={() => setShowPreview(true)}
-            onPrint={() => directPrint(printContainerRef.current, `فاتورة ${invoice.ref}`)}
-          />
+          {invoice && (
+            <>
+              <ExportButton
+                endpoint={`/export/pdf/invoice/${id}`}
+                filename={`invoice-${id}.pdf`}
+                type="pdf"
+                label="ملف طباعي"
+              />
+              <PrintActions
+                onPreview={() => setShowPreview(true)}
+                onPrint={() =>
+                  directPrint(printContainerRef.current, `فاتورة ${invoice.ref}`)
+                }
+              />
+            </>
+          )}
         </div>
-      </div>
+      }
+    >
+      {notFound && (
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground">
+            <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>الفاتورة غير موجودة</p>
+            <Link href="/finance/invoices">
+              <Button variant="outline" className="mt-4">
+                العودة للفواتير
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {isError && !notFound && (
+        <Card>
+          <CardContent className="p-8 text-center text-red-600">
+            تعذر تحميل بيانات الفاتورة
+            <Button
+              variant="outline"
+              className="mt-3 block mx-auto"
+              onClick={() => refetch()}
+            >
+              إعادة المحاولة
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {invoice && !notFound && (<>
+      {/* Visible payment lifecycle strip — the first non-journal
+          finance detail page to expose this pattern. */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">
+            دورة الدفع
+          </p>
+          <ProcessStages steps={lifecycleSteps} />
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4">
@@ -152,46 +284,62 @@ export default function InvoiceDetailPage() {
 
       {invoice.isTaxLinked && (() => {
         const zs = invoice.zatcaStatus;
-        const isSuccess = zs === "accepted";
         const isFailed = zs === "rejected" || zs === "error";
-        const isSubmitted = zs === "submitted";
         const canRetry = !zs || isFailed;
-        const borderColor = isSuccess ? "border-green-200 bg-green-50/30" : isFailed ? "border-red-200 bg-red-50/30" : isSubmitted ? "border-blue-200 bg-blue-50/30" : "border-yellow-200 bg-yellow-50/30";
-        const iconBg = isSuccess ? "bg-green-100" : isFailed ? "bg-red-100" : isSubmitted ? "bg-blue-100" : "bg-yellow-100";
-        const iconColor = isSuccess ? "text-green-600" : isFailed ? "text-red-600" : isSubmitted ? "text-blue-600" : "text-yellow-600";
-        const badgeCls = isSuccess ? "bg-green-100 text-green-700" : isFailed ? "bg-red-100 text-red-700" : isSubmitted ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700";
-        const badgeText = zs === "accepted" ? "مقبولة" : zs === "rejected" ? "مرفوضة" : zs === "error" ? "خطأ" : zs === "submitted" ? "مرسلة" : "معلّقة — لم تُرسل بعد";
         return (
-        <Card className={`border ${borderColor}`}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${iconBg}`}>
-                  <Zap className={`h-5 w-5 ${iconColor}`} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-sm">ربط هيئة الزكاة والضريبة والجمارك</h3>
-                    <Badge className={`text-xs ${badgeCls}`}>{badgeText}</Badge>
+          <Card className="border">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100">
+                    <Zap className="h-5 w-5 text-indigo-600" />
                   </div>
-                  {invoice.zatcaUuid && <p className="text-xs text-gray-500 mt-1 font-mono">المعرف الفريد: {invoice.zatcaUuid}</p>}
-                  {invoice.zatcaHash && <p className="text-xs text-gray-400 mt-0.5 font-mono">البصمة: {invoice.zatcaHash.substring(0, 24)}...</p>}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-sm">
+                        ربط هيئة الزكاة والضريبة والجمارك
+                      </h3>
+                      <PageStatusBadge status={zs || "pending"} domain="zatca" />
+                    </div>
+                    {invoice.zatcaUuid && (
+                      <p className="text-xs text-muted-foreground mt-1 font-mono">
+                        المعرف الفريد: {invoice.zatcaUuid}
+                      </p>
+                    )}
+                    {invoice.zatcaHash && (
+                      <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                        البصمة: {invoice.zatcaHash.substring(0, 24)}...
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {invoice.zatcaQrCode && (
+                    <img
+                      src={invoice.zatcaQrCode}
+                      alt="رمز الاستجابة السريعة لهيئة الزكاة"
+                      className="w-16 h-16 border rounded"
+                    />
+                  )}
+                  {canRetry && (
+                    <Button
+                      size="sm"
+                      onClick={handleZatcaSubmit}
+                      disabled={zatcaMut.isPending}
+                      className="gap-1"
+                    >
+                      <Send className="h-4 w-4" />
+                      {zatcaMut.isPending
+                        ? "جاري الإرسال..."
+                        : isFailed
+                          ? "إعادة الإرسال"
+                          : "إرسال للهيئة"}
+                    </Button>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                {invoice.zatcaQrCode && (
-                  <img src={invoice.zatcaQrCode} alt="رمز الاستجابة السريعة لهيئة الزكاة" className="w-16 h-16 border rounded" />
-                )}
-                {canRetry && (
-                  <Button size="sm" onClick={handleZatcaSubmit} disabled={zatcaSubmitting} className="gap-1">
-                    <Send className="h-4 w-4" />
-                    {zatcaSubmitting ? "جاري الإرسال..." : isFailed ? "إعادة الإرسال" : "إرسال للهيئة"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
         );
       })()}
 
@@ -214,8 +362,12 @@ export default function InvoiceDetailPage() {
                   <option value="cheque">شيك</option>
                 </select>
               </div>
-              <Button type="submit">تسجيل</Button>
-              <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>إلغاء</Button>
+              <Button type="submit" disabled={paymentMut.isPending}>
+                {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>
+                إلغاء
+              </Button>
             </form>
           </CardContent>
         </Card>
@@ -516,6 +668,7 @@ export default function InvoiceDetailPage() {
           )}
         </PrintDocument>
       </div>
-    </div>
+      </>)}
+    </PageShell>
   );
 }
