@@ -77,7 +77,7 @@ export default function Tasks() {
   const tasks = asList(tasksResp);
   const preFiltered = applyFilters(tasks, filters, {
     searchFields: ["title", "assigneeName", "description"],
-    statusField: "",
+    statusField: "status",
     dateField: "",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
