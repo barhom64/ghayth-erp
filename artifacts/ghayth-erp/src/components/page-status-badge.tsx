@@ -149,6 +149,15 @@ export const STATUS_MAP = {
     opening:              { label: "أرصدة افتتاحية",  tone: "info"     },
     closing:              { label: "قيد إقفال",       tone: "info"     },
   },
+  custody: {
+    active:               { label: "نشطة",            tone: "info"     },
+    partial:              { label: "مسوّاة جزئياً",   tone: "progress" },
+    settled:              { label: "مسوّاة",          tone: "success"  },
+    pending:              { label: "بانتظار الموافقة", tone: "warning"  },
+    rejected:             { label: "مرفوضة",          tone: "danger"   },
+    returned:             { label: "مُرجعة",          tone: "warning"  },
+    overdue:              { label: "متأخرة",          tone: "danger"   },
+  },
 
   // ── Legal ──────────────────────────────────────────────────────────
   legal_case: {
