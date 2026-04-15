@@ -20,6 +20,25 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
+// Operational Review M3 — error details cell formatter.
+// audit_logs.details is JSONB, so the raw value is usually an object
+// like `{ message, code, field, fix, ... }`. Dumping it through
+// `JSON.stringify` left the operator looking at truncated raw JSON
+// like `{"code":"VALIDATION","field":"…` instead of a sentence. We
+// pull a human field if we can find one, otherwise fall back to the
+// stringified form so nothing is silently dropped.
+function formatErrorDetails(details: unknown): string {
+  if (details == null) return "-";
+  if (typeof details === "string") return details;
+  if (typeof details === "object") {
+    const obj = details as Record<string, unknown>;
+    const human = obj.message ?? obj.error ?? obj.reason ?? obj.detail;
+    if (typeof human === "string" && human.trim()) return human;
+    return JSON.stringify(details);
+  }
+  return String(details);
+}
+
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
@@ -219,14 +238,22 @@ export default function AdminMonitoring() {
                 <th className="p-2 text-start">التاريخ</th>
               </tr></thead>
               <tbody>
-                {recentErrors.map((err: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="p-2 font-medium text-xs text-red-600">{err.action}</td>
-                    <td className="p-2 text-xs">{err.entity || "-"}</td>
-                    <td className="p-2 text-xs max-w-[300px] truncate">{typeof err.details === "object" ? JSON.stringify(err.details) : err.details || "-"}</td>
-                    <td className="p-2 text-xs">{formatDateAr(err.createdAt)}</td>
-                  </tr>
-                ))}
+                {recentErrors.map((err: any, i: number) => {
+                  const detailsText = formatErrorDetails(err.details);
+                  return (
+                    <tr key={i} className="border-b hover:bg-gray-50">
+                      <td className="p-2 font-medium text-xs text-red-600">{err.action}</td>
+                      <td className="p-2 text-xs">{err.entity || "-"}</td>
+                      <td
+                        className="p-2 text-xs max-w-[300px] truncate"
+                        title={typeof err.details === "object" ? JSON.stringify(err.details, null, 2) : String(err.details ?? "")}
+                      >
+                        {detailsText}
+                      </td>
+                      <td className="p-2 text-xs">{formatDateAr(err.createdAt)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </CardContent>
