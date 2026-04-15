@@ -492,11 +492,24 @@ router.put("/system-controls", requirePermission("settings:write"), async (req, 
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// P02-CRIT1 — both endpoints used to ignore the caller's company
+// scope entirely. The GET listed `SELECT DISTINCT` across the global
+// user_roles table, so a `settings:read` user in company A could see
+// every roleKey/label/modules combination in use anywhere on the
+// platform. The PUT then ran `UPDATE … WHERE "roleKey"=$1` with no
+// scope clause, so saving the role-permissions form in company A
+// rewrote the modules JSON for every user with that roleKey across
+// every other company on the system — silent cross-tenant
+// permission rewrite. Migration 063 added the companyId column on
+// user_roles for exactly this reason; the rest of the codebase
+// (admin.ts:95, :167, :363, :195) already scopes inserts/deletes
+// the same way. These two routes were the last hold-outs.
 router.get("/role-modules", requirePermission("settings:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const roles = await rawQuery(
-      `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles ORDER BY level DESC`
+      `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles WHERE "companyId" = $1 ORDER BY level DESC`,
+      [scope.companyId]
     );
     res.json({ data: roles });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -504,12 +517,13 @@ router.get("/role-modules", requirePermission("settings:read"), async (req, res)
 
 router.put("/role-modules/:roleKey", requirePermission("settings:write"), async (req, res) => {
   try {
+    const scope = req.scope!;
     const { roleKey } = req.params;
     const { modules } = req.body;
     if (!Array.isArray(modules)) { res.status(400).json({ error: "modules يجب أن يكون مصفوفة" }); return; }
     await rawExecute(
-      `UPDATE user_roles SET modules=$1 WHERE "roleKey"=$2`,
-      [JSON.stringify(modules), roleKey]
+      `UPDATE user_roles SET modules=$1 WHERE "roleKey"=$2 AND "companyId"=$3`,
+      [JSON.stringify(modules), roleKey, scope.companyId]
     );
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
