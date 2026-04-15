@@ -1088,16 +1088,32 @@ router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), a
       [countId, scope.companyId]
     );
 
-    // Attach batch/lot details for each product to support lot-level counting
-    for (const item of items) {
-      const batches = await rawQuery<any>(
-        `SELECT id, "batchNumber", quantity, "unitCost", "receivedDate"
+    // P02-MED1 — used to fire one batch query per product inside a
+    // for-loop, so a count with 100 items did 101 round-trips. Real
+    // warehouse counts run in the hundreds; the page would visibly
+    // hang while the loop drained the connection pool. Now fetch
+    // every relevant batch in a single IN-clause query and group
+    // client-side, so the route runs in 2 queries regardless of
+    // item count.
+    const productIds = items.map((it: any) => Number(it.productId)).filter((id: number) => Number.isFinite(id));
+    const batchesByProduct = new Map<number, any[]>();
+    if (productIds.length > 0) {
+      const placeholders = productIds.map((_, i) => `$${i + 1}`).join(",");
+      const allBatches = await rawQuery<any>(
+        `SELECT id, "productId", "batchNumber", quantity, "unitCost", "receivedDate"
          FROM warehouse_stock_batches
-         WHERE "productId"=$1 AND quantity > 0
+         WHERE "productId" IN (${placeholders}) AND quantity > 0
          ORDER BY "receivedDate" ASC`,
-        [item.productId]
+        productIds
       );
-      item.batches = batches;
+      for (const batch of allBatches) {
+        const pid = Number(batch.productId);
+        if (!batchesByProduct.has(pid)) batchesByProduct.set(pid, []);
+        batchesByProduct.get(pid)!.push(batch);
+      }
+    }
+    for (const item of items) {
+      item.batches = batchesByProduct.get(Number(item.productId)) ?? [];
     }
 
     res.json({ data: items, total: items.length });
