@@ -8,6 +8,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
@@ -82,7 +83,16 @@ const DEPOSIT_TRANSITIONS: Record<string, readonly string[]> = {
   forfeited:      [],
 };
 
-router.get("/units", async (req, res) => {
+// P02-CRIT2 — `property:*` permissions exist in rbacCatalog and are
+// seeded in role_permissions for `property_manager` / `general_manager`
+// / `owner`, but the unit endpoints below never enforced them. Any
+// authenticated user — junior accountant, sales rep, anyone with a
+// login — could list, create, update, or soft-delete property units
+// in their company. Owner role still bypasses all checks via the
+// short-circuit in requirePermission, so legitimate workflows are
+// unaffected. Aligning these five routes with the established
+// requirePermission pattern used by fleet, hr, crm, etc.
+router.get("/units", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, search, buildingId } = req.query as any;
@@ -114,7 +124,7 @@ router.get("/units", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Property units error:"); }
 });
 
-router.post("/units", async (req, res) => {
+router.post("/units", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -197,7 +207,7 @@ router.post("/units", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }
 });
 
-router.get("/units/:id", async (req, res) => {
+router.get("/units/:id", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -230,7 +240,7 @@ router.get("/units/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get unit error:"); }
 });
 
-router.get("/units/:id/impact-preview", async (req, res) => {
+router.get("/units/:id/impact-preview", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -243,7 +253,7 @@ router.get("/units/:id/impact-preview", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Impact preview error:"); }
 });
 
-router.patch("/units/:id", async (req, res) => {
+router.patch("/units/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -378,7 +388,7 @@ router.patch("/units/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Update unit error:"); }
 });
 
-router.delete("/units/:id", async (req, res) => {
+router.delete("/units/:id", requirePermission("property:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);

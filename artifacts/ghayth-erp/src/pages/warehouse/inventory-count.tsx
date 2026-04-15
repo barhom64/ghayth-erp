@@ -58,8 +58,21 @@ export default function InventoryCountPage() {
   const handleApprove = async (countId: number) => {
     if (!confirm("اعتماد الجرد وتحديث المخزون تلقائياً؟")) return;
     try {
-      const res = await apiFetch(`/warehouse/inventory-counts/${countId}/approve`, { method: "POST", body: JSON.stringify({}) });
-      toast({ title: `تم اعتماد الجرد — ${res.itemsAdjusted} منتج تم تعديله` });
+      const res = await apiFetch<any>(`/warehouse/inventory-counts/${countId}/approve`, { method: "POST", body: JSON.stringify({}) });
+      // P02-MED2 — the server now returns a `warning` field when one
+      // or more GL postings failed (or were skipped due to missing
+      // unit cost). Surface it as a destructive-style toast so the
+      // accountant doesn't walk away thinking the journal entries
+      // are in place when they aren't.
+      if (res?.warning) {
+        toast({
+          variant: "destructive",
+          title: `تم اعتماد الجرد — ${res.itemsAdjusted ?? 0} منتج تم تعديله`,
+          description: res.warning,
+        });
+      } else {
+        toast({ title: `تم اعتماد الجرد — ${res?.itemsAdjusted ?? 0} منتج تم تعديله` });
+      }
       refetch();
     } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };

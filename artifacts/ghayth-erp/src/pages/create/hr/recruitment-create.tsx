@@ -40,7 +40,12 @@ const INITIAL = {
 export default function RecruitmentCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/recruitment/postings", "POST", [["jobs"]]);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/recruitment/postings", "POST", [["jobs"]], {
+    successMessage: "تم إضافة الوظيفة بنجاح",
+  });
   const { data: deptData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const departments = deptData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
@@ -54,7 +59,7 @@ export default function RecruitmentCreate() {
     ? `${Number(form.salaryMin).toLocaleString()} - ${Number(form.salaryMax).toLocaleString()} ${getCurrencySymbol()}`
     : null;
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.title) {
       toast({ variant: "destructive", title: "المسمى الوظيفي مطلوب" });
       return;
@@ -63,20 +68,21 @@ export default function RecruitmentCreate() {
       toast({ variant: "destructive", title: "الحد الأعلى للراتب يجب أن يكون أكبر من الحد الأدنى" });
       return;
     }
-    try {
-      await createMut.mutateAsync({
+    createMut.mutate(
+      {
         ...form,
         salaryMin: form.salaryMin ? Number(form.salaryMin) : undefined,
         salaryMax: form.salaryMax ? Number(form.salaryMax) : undefined,
         closingDate: form.closingDate || undefined,
         vacancies: form.vacancies ? Number(form.vacancies) : 1,
-      });
-      clearDraft();
-      toast({ title: "تم إضافة الوظيفة بنجاح" });
-      setLocation("/hr/recruitment");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الوظيفة" });
-    }
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/recruitment");
+        },
+      },
+    );
   };
 
   return (

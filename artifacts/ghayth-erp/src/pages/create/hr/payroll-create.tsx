@@ -19,7 +19,12 @@ export default function PayrollCreate() {
   const { toast } = useToast();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const createMut = useApiMutation("/hr/payroll", "POST", [["payroll"]]);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/hr/payroll", "POST", [["payroll"]], {
+    successMessage: "تم تشغيل مسير الرواتب بنجاح",
+  });
   const now = new Date();
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("hr_payroll_create", {
     month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
@@ -36,24 +41,25 @@ export default function PayrollCreate() {
   const { data: branchData } = useApiQuery<any>(["branches"], "/settings/branches");
   const branches = branchData?.data || [];
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.month) {
       toast({ variant: "destructive", title: "الشهر مطلوب" });
       return;
     }
-    try {
-      await createMut.mutateAsync({
+    createMut.mutate(
+      {
         month: form.month,
         reference: form.reference || undefined,
         notes: form.notes || undefined,
         scope: form.scope,
-      });
-      clearDraft();
-      toast({ title: "تم تشغيل مسير الرواتب بنجاح" });
-      setLocation("/hr/payroll");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء تشغيل مسير الرواتب" });
-    }
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/payroll");
+        },
+      },
+    );
   };
 
   const monthLabel = form.month

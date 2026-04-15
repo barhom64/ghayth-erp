@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 // Phase A — HR discipline memos on unified primitives.
 import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,19 +14,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { FileText, Plus, Gavel, Clock, CheckCircle, XCircle } from "lucide-react";
+import { FileText, Plus, Gavel } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-const STATUS_STYLES: Record<string, { label: string; color: string; icon: any }> = {
-  pending_employee: { label: "بانتظار الموظف", color: "bg-blue-100 text-blue-700", icon: Clock },
-  pending_manager: { label: "بانتظار المدير", color: "bg-indigo-100 text-indigo-700", icon: Clock },
-  pending_gm: { label: "بانتظار المدير العام", color: "bg-purple-100 text-purple-700", icon: Clock },
-  approved: { label: "معتمد", color: "bg-green-100 text-green-700", icon: CheckCircle },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700", icon: XCircle },
-  cancelled: { label: "ملغي", color: "bg-gray-100 text-gray-700", icon: XCircle },
-  expired: { label: "منتهي", color: "bg-gray-100 text-gray-500", icon: Clock },
-};
+// HR-U3 — حُذفت STATUS_STYLES المحلية. حالات المذكرات التأديبية مُعرَّفة
+// في STATUS_MAP.memo (pending_employee/pending_manager/pending_gm/approved/
+// rejected/cancelled) مع expired في الـ shared.
 
 const INCIDENT_LABELS: Record<string, string> = {
   late: "تأخر",
@@ -188,16 +183,7 @@ export default function DisciplineMemosPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (m) => {
-        const s = STATUS_STYLES[m.status] ?? { label: m.status, color: "", icon: Clock };
-        const Icon = s.icon;
-        return (
-          <Badge className={cn(s.color, "gap-1")}>
-            <Icon className="w-3 h-3" />
-            {s.label}
-          </Badge>
-        );
-      },
+      render: (m) => <PageStatusBadge status={m.status} domain="memo" />,
     },
     {
       key: "source",

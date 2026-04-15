@@ -1088,16 +1088,32 @@ router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), a
       [countId, scope.companyId]
     );
 
-    // Attach batch/lot details for each product to support lot-level counting
-    for (const item of items) {
-      const batches = await rawQuery<any>(
-        `SELECT id, "batchNumber", quantity, "unitCost", "receivedDate"
+    // P02-MED1 — used to fire one batch query per product inside a
+    // for-loop, so a count with 100 items did 101 round-trips. Real
+    // warehouse counts run in the hundreds; the page would visibly
+    // hang while the loop drained the connection pool. Now fetch
+    // every relevant batch in a single IN-clause query and group
+    // client-side, so the route runs in 2 queries regardless of
+    // item count.
+    const productIds = items.map((it: any) => Number(it.productId)).filter((id: number) => Number.isFinite(id));
+    const batchesByProduct = new Map<number, any[]>();
+    if (productIds.length > 0) {
+      const placeholders = productIds.map((_, i) => `$${i + 1}`).join(",");
+      const allBatches = await rawQuery<any>(
+        `SELECT id, "productId", "batchNumber", quantity, "unitCost", "receivedDate"
          FROM warehouse_stock_batches
-         WHERE "productId"=$1 AND quantity > 0
+         WHERE "productId" IN (${placeholders}) AND quantity > 0
          ORDER BY "receivedDate" ASC`,
-        [item.productId]
+        productIds
       );
-      item.batches = batches;
+      for (const batch of allBatches) {
+        const pid = Number(batch.productId);
+        if (!batchesByProduct.has(pid)) batchesByProduct.set(pid, []);
+        batchesByProduct.get(pid)!.push(batch);
+      }
+    }
+    for (const item of items) {
+      item.batches = batchesByProduct.get(Number(item.productId)) ?? [];
     }
 
     res.json({ data: items, total: items.length });
@@ -1165,6 +1181,19 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
       [countId]
     );
 
+    // P02-MED2 — GL posting failures used to be swallowed by a bare
+    // try/catch + console.error inside the loop. The approval still
+    // returned `{ message: "تم اعتماد الجرد" }` even when zero
+    // journal entries actually landed, so the accountant saw a
+    // green checkmark and only discovered the missing entries days
+    // later when month-end reconciliation refused to balance.
+    // Collect each failure and surface it on the response so the
+    // user knows to follow up. Inventory adjustments still apply
+    // regardless — partial GL state is recoverable manually, but
+    // missing inventory adjustments would force a re-count.
+    const glFailures: Array<{ productId: number; productName?: string; reason: string }> = [];
+    const glSkipped: Array<{ productId: number; productName?: string; reason: string }> = [];
+
     // Apply adjustments for items with variance
     for (const item of items) {
       const variance = Number(item.variance);
@@ -1207,16 +1236,26 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
               unitCost: preCost,
               reference: `INV-COUNT-${countId}`,
             });
-          } catch (glErr) {
+          } catch (glErr: any) {
             console.error(
               `[warehouse-gl] inventory count variance GL failed for count ${countId}, product ${item.productId}:`,
               glErr
             );
+            glFailures.push({
+              productId: Number(item.productId),
+              productName: prodBefore?.name ?? undefined,
+              reason: glErr?.message ?? String(glErr),
+            });
           }
         } else if (preCost <= 0) {
           console.warn(
             `[warehouse-gl] inventory count variance for product ${item.productId}: no unit cost — GL posting skipped`
           );
+          glSkipped.push({
+            productId: Number(item.productId),
+            productName: prodBefore?.name ?? undefined,
+            reason: "تكلفة الوحدة غير متوفرة",
+          });
         }
       }
     }
@@ -1226,7 +1265,22 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
       [scope.employeeId || null, countId]
     );
 
-    res.json({ message: "تم اعتماد الجرد وتحديث المخزون", itemsAdjusted: items.filter((i: any) => Number(i.variance) !== 0).length });
+    const itemsAdjusted = items.filter((i: any) => Number(i.variance) !== 0).length;
+    const baseMessage = "تم اعتماد الجرد وتحديث المخزون";
+    if (glFailures.length > 0 || glSkipped.length > 0) {
+      const parts: string[] = [];
+      if (glFailures.length > 0) parts.push(`فشل ترحيل ${glFailures.length} قيد محاسبي`);
+      if (glSkipped.length > 0) parts.push(`تم تخطي ${glSkipped.length} قيد لعدم توفر التكلفة`);
+      res.json({
+        message: baseMessage,
+        itemsAdjusted,
+        warning: `${parts.join(" — ")}. تحقق من السجل وأكمل الترحيل يدوياً.`,
+        glFailures,
+        glSkipped,
+      });
+      return;
+    }
+    res.json({ message: baseMessage, itemsAdjusted });
   } catch (err) { handleRouteError(err, res, "Approve count error:"); }
 });
 

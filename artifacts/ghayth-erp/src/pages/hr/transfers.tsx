@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,16 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowRightLeft, Plus, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp } from "lucide-react";
-import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ApprovalActions } from "@/components/approval-actions";
 import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending: { label: "معلق", color: "bg-yellow-100 text-yellow-700" },
-  approved: { label: "مُعتمد", color: "bg-green-100 text-green-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
-};
+// HR-U3 — حُذفت STATUS_LABELS المحلية. الحالة (pending/approved/rejected)
+// مُعرَّفة في STATUS_MAP.shared ويُرفع العرض إلى PageStatusBadge لضمان
+// توحيد اللون والصياغة مع بقية النظام.
 
 export default function TransfersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
@@ -35,15 +33,22 @@ export default function TransfersPage() {
   const employeeList = asList(employees?.data || employees);
   const branchList = asList(branches?.data || branches);
 
-  const handleSubmit = async () => {
+  // HR-U2 — نستخدم useApiMutation لرفع الأخطاء المُكتَبة تلقائيًا وتوحيد
+  // رسالة النجاح، بدلاً من apiFetch + try/catch الذي كان يعرض e.message أو
+  // "خطأ" عامًا.
+  const createTransferMut = useApiMutation("/hr/transfers", "POST", [["transfers"]], {
+    successMessage: "تم إرسال طلب النقل",
+  });
+
+  const handleSubmit = () => {
     if (!form.employeeId || !form.toBranchId) { toast({ title: "الموظف والفرع مطلوبان", variant: "destructive" }); return; }
-    try {
-      await apiFetch("/hr/transfers", { method: "POST", body: JSON.stringify(form) });
-      toast({ title: "تم إرسال طلب النقل" });
-      setShowForm(false);
-      setForm({ employeeId: "", toBranchId: "", reason: "", effectiveDate: "" });
-      refetch();
-    } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+    createTransferMut.mutate(form, {
+      onSuccess: () => {
+        setShowForm(false);
+        setForm({ employeeId: "", toBranchId: "", reason: "", effectiveDate: "" });
+        refetch();
+      },
+    });
   };
 
   const pendingCount = transfers.filter((t: any) => t.status === "pending").length;
@@ -103,7 +108,7 @@ export default function TransfersPage() {
       <div className="flex gap-2">
         {["all", "pending", "approved", "rejected"].map((s) => (
           <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)}>
-            {s === "all" ? "الكل" : STATUS_LABELS[s]?.label}
+            {s === "all" ? "الكل" : resolveStatus(s)?.label ?? s}
           </Button>
         ))}
       </div>
@@ -119,7 +124,7 @@ export default function TransfersPage() {
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{t.employeeName}</span>
                     <span className="text-xs text-gray-400">#{t.empNumber}</span>
-                    <Badge className={STATUS_LABELS[t.status]?.color || "bg-gray-100 text-gray-600"}>{STATUS_LABELS[t.status]?.label || t.status}</Badge>
+                    <PageStatusBadge status={t.status} />
                   </div>
                   <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
                     <span>{t.fromBranchName || `فرع #${t.fromBranchId}`}</span>

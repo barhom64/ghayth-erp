@@ -43,7 +43,12 @@ const INITIAL = {
 export default function TrainingCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/training/programs", "POST", [["training-programs"]]);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/training/programs", "POST", [["training-programs"]], {
+    successMessage: "تم إضافة البرنامج التدريبي بنجاح",
+  });
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -56,13 +61,13 @@ export default function TrainingCreate() {
     ? `${form.duration} ${form.durationUnit === "hours" ? "ساعة" : form.durationUnit === "days" ? "يوم" : "أسبوع"}`
     : null;
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.title) {
       toast({ variant: "destructive", title: "عنوان البرنامج مطلوب" });
       return;
     }
-    try {
-      await createMut.mutateAsync({
+    createMut.mutate(
+      {
         title: form.title,
         description: form.description || undefined,
         category: form.category || undefined,
@@ -80,13 +85,14 @@ export default function TrainingCreate() {
         objectives: form.objectives || undefined,
         targetAudience: form.targetAudience || undefined,
         ...(attachments.length > 0 ? { attachments } : {}),
-      });
-      clearDraft();
-      toast({ title: "تم إضافة البرنامج التدريبي بنجاح" });
-      setLocation("/hr/training");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة البرنامج" });
-    }
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/training");
+        },
+      },
+    );
   };
 
   return (

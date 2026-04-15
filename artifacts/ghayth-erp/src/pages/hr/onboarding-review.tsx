@@ -1,6 +1,5 @@
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { UserPlus, CheckCircle, Clock, ClipboardCheck, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -35,7 +34,7 @@ export default function OnboardingReviewPage() {
   const pendingOnboarding = employees.filter((e: any) => e.status === "pending" || e.status === "onboarding");
 
   const getOnboardingStatus = (emp: any) => {
-    if (emp.status === "pending" || emp.status === "onboarding") return "pending";
+    if (emp.status === "pending" || emp.status === "onboarding") return "in_review";
     const hireDate = emp.hireDate ? new Date(emp.hireDate) : null;
     if (!hireDate) return "completed";
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
@@ -54,11 +53,8 @@ export default function OnboardingReviewPage() {
     { label: "فترة التجربة", value: inProbation.length, icon: ClipboardCheck, color: "text-purple-600 bg-purple-50" },
   ];
 
-  const statusConfig: Record<string, { label: string; variant: string }> = {
-    pending: { label: "قيد المراجعة", variant: "bg-yellow-100 text-yellow-700" },
-    probation: { label: "فترة التجربة", variant: "bg-purple-100 text-purple-700" },
-    completed: { label: "مكتمل", variant: "bg-green-100 text-green-700" },
-  };
+  // HR-U3 — حُذف statusConfig المحلي. الحالة المحسوبة
+  // (in_review/probation/completed) مُعرَّفة في STATUS_MAP.shared.
 
   return (
     <PageShell
@@ -109,7 +105,6 @@ export default function OnboardingReviewPage() {
           <tbody>
             {displayList.map((e: any) => {
               const status = getOnboardingStatus(e);
-              const cfg = statusConfig[status] || statusConfig.completed;
               return (
                 <tr key={e.id} className="border-b hover:bg-gray-50">
                   <td className="p-3">
@@ -122,7 +117,7 @@ export default function OnboardingReviewPage() {
                   <td className="p-3">{e.jobTitle || "-"}</td>
                   <td className="p-3 text-gray-500">{e.hireDate ? formatDateAr(e.hireDate) : "-"}</td>
                   <td className="p-3 text-gray-500">{e.branchName || "-"}</td>
-                  <td className="p-3"><Badge className={cfg.variant}>{cfg.label}</Badge></td>
+                  <td className="p-3"><PageStatusBadge status={status} /></td>
                 </tr>
               );
             })}

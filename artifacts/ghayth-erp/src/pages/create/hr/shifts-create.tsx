@@ -31,7 +31,12 @@ const DRAFT_KEY = "hr_shifts_create";
 export default function ShiftsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/hr/shifts", "POST", [["shifts"]]);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/hr/shifts", "POST", [["shifts"]], {
+    successMessage: "تم إضافة الوردية بنجاح",
+  });
   const { data: branchData } = useApiQuery<any>(["branches"], "/settings/branches");
   const branches = branchData?.data || [];
 
@@ -64,7 +69,7 @@ export default function ShiftsCreate() {
     return Math.max(0, totalMin / 60);
   })();
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.name) {
       toast({ variant: "destructive", title: "اسم الوردية مطلوب" });
       return;
@@ -73,8 +78,8 @@ export default function ShiftsCreate() {
       toast({ variant: "destructive", title: "وقت البدء والانتهاء مطلوبان" });
       return;
     }
-    try {
-      await createMut.mutateAsync({
+    createMut.mutate(
+      {
         name: form.name,
         startTime: form.startTime,
         endTime: form.endTime,
@@ -83,13 +88,14 @@ export default function ShiftsCreate() {
         days: selectedDays.join(","),
         isDefault: form.isDefault,
         branchId: form.branchId ? Number(form.branchId) : undefined,
-      });
-      clearDraft();
-      toast({ title: "تم إضافة الوردية بنجاح" });
-      setLocation("/hr/shifts");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الوردية" });
-    }
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/shifts");
+        },
+      },
+    );
   };
 
   return (

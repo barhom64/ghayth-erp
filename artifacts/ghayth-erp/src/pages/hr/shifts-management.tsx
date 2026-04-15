@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Users, Plus, Sun, Moon, Clock, Trash2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 
@@ -19,25 +18,28 @@ export default function ShiftsManagementPage() {
   const shifts = shiftsData?.data || [];
   const assignments = assignmentsData?.data || [];
   const employees = empData?.data || [];
-  const { toast } = useToast();
 
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignForm, setAssignForm] = useState({ assignmentId: "", shiftId: "", startDate: "" });
-  const assignMut = useApiMutation("/hr/shift-assignments", "POST", [["shift-assignments"]]);
+  // HR-U4 — successMessage + onSuccess بدل buildErrorToast اليدوي.
+  const assignMut = useApiMutation("/hr/shift-assignments", "POST", [["shift-assignments"]], {
+    successMessage: "تم تعيين الوردية",
+  });
 
-  const handleAssign = async () => {
-    try {
-      await assignMut.mutateAsync({
+  const handleAssign = () => {
+    assignMut.mutate(
+      {
         assignmentId: Number(assignForm.assignmentId),
         shiftId: Number(assignForm.shiftId),
         startDate: assignForm.startDate,
-      });
-      toast({ title: "تم تعيين الوردية" });
-      setShowAssignForm(false);
-      setAssignForm({ assignmentId: "", shiftId: "", startDate: "" });
-    } catch (err: unknown) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
-    }
+      },
+      {
+        onSuccess: () => {
+          setShowAssignForm(false);
+          setAssignForm({ assignmentId: "", shiftId: "", startDate: "" });
+        },
+      },
+    );
   };
 
   return (

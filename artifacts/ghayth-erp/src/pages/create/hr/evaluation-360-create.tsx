@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,8 +16,12 @@ export default function Evaluation360Create() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { scopeQueryString } = useAppContext();
-  const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/hr/evaluation-360", "POST", [["evaluation-360"]], {
+    successMessage: "تم بدء دورة التقييم بنجاح",
+  });
 
   const { data: empResp } = useApiQuery<any>(["employees-list", scopeQueryString], `/employees?${scopeQueryString || ""}&limit=500`);
   const employees = asList(empResp);
@@ -41,30 +44,27 @@ export default function Evaluation360Create() {
 
   const removeParticipant = (id: string) => setParticipants(participants.filter(p => p.evaluatorId !== id));
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!form.employeeId || !form.period) {
       toast({ variant: "destructive", title: "الموظف والفترة مطلوبان" });
       return;
     }
-    setSaving(true);
-    try {
-      await apiFetch("/hr/evaluation-360", {
-        method: "POST",
-        body: JSON.stringify({
-          employeeId: Number(form.employeeId),
-          period: form.period,
-          notes: form.notes || undefined,
-          participants: participants.map(p => ({
-            evaluatorId: Number(p.evaluatorId),
-            evaluatorRole: p.evaluatorRole,
-          })),
-        }),
-      });
-      toast({ title: "تم بدء دورة التقييم بنجاح" });
-      qc.invalidateQueries({ queryKey: ["evaluation-360"] });
-      setLocation("/hr/evaluation-360");
-    } catch { toast({ variant: "destructive", title: "حدث خطأ أثناء الإنشاء" }); }
-    finally { setSaving(false); }
+    createMut.mutate(
+      {
+        employeeId: Number(form.employeeId),
+        period: form.period,
+        notes: form.notes || undefined,
+        participants: participants.map(p => ({
+          evaluatorId: Number(p.evaluatorId),
+          evaluatorRole: p.evaluatorRole,
+        })),
+      },
+      {
+        onSuccess: () => {
+          setLocation("/hr/evaluation-360");
+        },
+      },
+    );
   };
 
   return (
@@ -155,8 +155,8 @@ export default function Evaluation360Create() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/evaluation-360")}>إلغاء</Button>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          <Save className="h-4 w-4" /> {saving ? "جارٍ البدء..." : "بدء دورة التقييم"}
+        <Button onClick={handleSave} disabled={createMut.isPending} className="gap-2">
+          <Save className="h-4 w-4" /> {createMut.isPending ? "جارٍ البدء..." : "بدء دورة التقييم"}
         </Button>
       </div>
     </CreatePageLayout>

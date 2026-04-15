@@ -59,7 +59,12 @@ const DRAFT_KEY = "hr_performance_create";
 export default function PerformanceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/hr/performance", "POST", [["performance"]]);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/hr/performance", "POST", [["performance"]], {
+    successMessage: "تم إضافة التقييم بنجاح",
+  });
   const { data: empData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = empData?.data || [];
 
@@ -87,7 +92,7 @@ export default function PerformanceCreate() {
 
   const selectedEmployee = employees.find((e: any) => String(e.assignmentId || e.id) === form.assignmentId);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.assignmentId) {
       toast({ variant: "destructive", title: "يرجى اختيار الموظف" });
       return;
@@ -97,8 +102,8 @@ export default function PerformanceCreate() {
       return;
     }
     const finalScore = form.overallScore || Math.round(avgScore * 10) / 10;
-    try {
-      await createMut.mutateAsync({
+    createMut.mutate(
+      {
         assignmentId: Number(form.assignmentId),
         period: form.period,
         overallScore: finalScore || undefined,
@@ -111,13 +116,14 @@ export default function PerformanceCreate() {
             ? `الكفاءات: ${competencies.filter((c) => c.score > 0).map((c) => `${c.name} (${c.score}/5)`).join("، ")}`
             : "",
         ].filter(Boolean).join("\n") || undefined,
-      });
-      clearDraft();
-      toast({ title: "تم إضافة التقييم بنجاح" });
-      setLocation("/hr/performance");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التقييم" });
-    }
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/performance");
+        },
+      },
+    );
   };
 
   return (

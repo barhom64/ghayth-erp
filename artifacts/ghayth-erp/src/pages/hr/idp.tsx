@@ -1,23 +1,19 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Target, Plus, BookOpen, TrendingUp, CheckCircle } from "lucide-react";
-import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  planned: { label: "مخططة", color: "bg-blue-100 text-blue-700" },
-  in_progress: { label: "جارية", color: "bg-yellow-100 text-yellow-700" },
-  completed: { label: "مكتملة", color: "bg-green-100 text-green-700" },
-  cancelled: { label: "ملغاة", color: "bg-red-100 text-red-700" },
-};
+// HR-U3 — حُذفت STATUS_LABELS المحلية. القيم (planned/in_progress/completed/cancelled)
+// مُعرَّفة في STATUS_MAP.shared مع صياغة موحّدة (مخطط/قيد التنفيذ/مكتمل/ملغى).
+const IDP_STATUS_KEYS = ["planned", "in_progress", "completed", "cancelled"] as const;
 
 export default function IDPPage() {
   const [showForm, setShowForm] = useState(false);
@@ -33,28 +29,35 @@ export default function IDPPage() {
   const { data: employees } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
   const employeeList = asList(employees?.data || employees);
 
-  const handleSave = async () => {
+  // HR-U2 — useApiMutation للأخطاء المُكتَبة وتوحيد رسائل النجاح.
+  const createIdpMut = useApiMutation("/hr/idp", "POST", [["idp"]], {
+    successMessage: "تم إنشاء خطة التطوير",
+  });
+  const updateIdpStatusMut = useApiMutation<unknown, { id: number; status: string }>(
+    (b) => `/hr/idp/${b.id}`,
+    "PATCH",
+    [["idp"]],
+    { successMessage: "تم تحديث الحالة" },
+  );
+
+  const handleSave = () => {
     if (!form.employeeId) { toast({ title: "الموظف مطلوب", variant: "destructive" }); return; }
     const payload = {
       ...form,
       goals: form.goals ? form.goals.split("\n").filter(Boolean) : [],
       skills: form.skills ? form.skills.split("\n").filter(Boolean) : [],
     };
-    try {
-      await apiFetch("/hr/idp", { method: "POST", body: JSON.stringify(payload) });
-      toast({ title: "تم إنشاء خطة التطوير" });
-      setShowForm(false);
-      setForm({ employeeId: "", title: "", goals: "", skills: "", targetDate: "", notes: "" });
-      refetch();
-    } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+    createIdpMut.mutate(payload, {
+      onSuccess: () => {
+        setShowForm(false);
+        setForm({ employeeId: "", title: "", goals: "", skills: "", targetDate: "", notes: "" });
+        refetch();
+      },
+    });
   };
 
-  const handleStatusUpdate = async (id: number, status: string) => {
-    try {
-      await apiFetch(`/hr/idp/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
-      refetch();
-      toast({ title: "تم تحديث الحالة" });
-    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  const handleStatusUpdate = (id: number, status: string) => {
+    updateIdpStatusMut.mutate({ id, status }, { onSuccess: () => refetch() });
   };
 
   const stats = {
@@ -146,7 +149,7 @@ export default function IDPPage() {
                     <div className="font-semibold">{plan.title || "خطة التطوير الفردي"}</div>
                     <div className="text-sm text-gray-500">{plan.employeeName}</div>
                   </div>
-                  <Badge className={STATUS_LABELS[plan.status]?.color || "bg-gray-100 text-gray-600"}>{STATUS_LABELS[plan.status]?.label || plan.status}</Badge>
+                  <PageStatusBadge status={plan.status} />
                 </div>
                 {goals.length > 0 && (
                   <div>
@@ -167,7 +170,7 @@ export default function IDPPage() {
                   <Select value={plan.status} onValueChange={(v) => handleStatusUpdate(plan.id, v)}>
                     <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                      {IDP_STATUS_KEYS.map((k) => <SelectItem key={k} value={k}>{resolveStatus(k)?.label ?? k}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

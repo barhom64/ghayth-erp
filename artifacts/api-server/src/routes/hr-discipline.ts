@@ -13,6 +13,7 @@ import {
   NotFoundError,
   ValidationError,
   ConflictError,
+  ForbiddenError,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -36,9 +37,8 @@ router.use(authMiddleware);
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function badRequest(res: any, message: string, field = "body"): void {
-  if (res.headersSent) return;
-  res.status(422).json({ error: message, field, fix: message });
+function badRequest(_res: any, message: string, field = "body"): never {
+  throw new ValidationError(message, { field });
 }
 
 async function logMemoEvent(params: {
@@ -135,8 +135,7 @@ router.get("/regulation/:id", requirePermission("hr:read"), async (req, res) => 
       [id, scope.companyId]
     );
     if (!row) {
-      res.status(404).json({ error: "المادة غير موجودة" });
-      return;
+      throw new NotFoundError("المادة غير موجودة");
     }
     res.json(row);
   } catch (err) {
@@ -298,7 +297,7 @@ router.get("/memos/:id", requirePermission("hr:read"), async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const memo = await getMemo(scope.companyId, id);
-    if (!memo) { res.status(404).json({ error: "المحضر غير موجود" }); return; }
+    if (!memo) throw new NotFoundError("المحضر غير موجود");
     const events = await rawQuery<any>(
       `SELECT * FROM hr_inquiry_memo_events
         WHERE "memoId" = $1 ORDER BY "createdAt" ASC`,
@@ -420,14 +419,13 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
     const id = Number(req.params.id);
     const { justification, declined } = req.body as any;
     const memo = await getMemo(scope.companyId, id);
-    if (!memo) { res.status(404).json({ error: "المحضر غير موجود" }); return; }
+    if (!memo) throw new NotFoundError("المحضر غير موجود");
 
     // authorisation: الموظف نفسه أو HR/GM/Owner
     const isOwnerOfMemo = scope.activeAssignmentId === memo.assignmentId;
     const isHR = scope.role === "hr_manager" || scope.role === "owner" || scope.role === "general_manager";
     if (!isOwnerOfMemo && !isHR) {
-      res.status(403).json({ error: "لا تملك صلاحية تقديم التبرير على هذا المحضر" });
-      return;
+      throw new ForbiddenError("لا تملك صلاحية تقديم التبرير على هذا المحضر");
     }
     if (memo.status !== "pending_employee") {
       badRequest(res, `لا يمكن تقديم التبرير في الحالة ${memo.status}`); return;
@@ -489,7 +487,7 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
       badRequest(res, "التوصية غير صحيحة"); return;
     }
     const memo = await getMemo(scope.companyId, id);
-    if (!memo) { res.status(404).json({ error: "المحضر غير موجود" }); return; }
+    if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (memo.status !== "pending_manager") {
       badRequest(res, `لا يمكن تسجيل التوصية في الحالة ${memo.status}`); return;
     }
@@ -538,7 +536,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
     }
 
     const memo = await getMemo(scope.companyId, id);
-    if (!memo) { res.status(404).json({ error: "المحضر غير موجود" }); return; }
+    if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (memo.status !== "pending_gm") {
       badRequest(res, `لا يمكن اعتماد المحضر في الحالة ${memo.status}`); return;
     }
@@ -683,7 +681,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
     const id = Number(req.params.id);
     const { reason } = req.body as any;
     const memo = await getMemo(scope.companyId, id);
-    if (!memo) { res.status(404).json({ error: "المحضر غير موجود" }); return; }
+    if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (["approved", "rejected", "cancelled"].includes(memo.status)) {
       badRequest(res, `لا يمكن إلغاء المحضر في الحالة ${memo.status}`); return;
     }

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { apiFetch } from "@/lib/api";
+import { useApiMutation } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,33 +33,36 @@ export default function AttendanceCreate() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [submitting, setSubmitting] = useState(false);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationStatus, setLocationStatus] = useState<"idle" | "success" | "error">("idle");
 
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    const endpoint = form.activityType === "check_out" ? "/hr/check-out" : "/hr/check-in";
-    try {
-      await apiFetch(endpoint, {
-        method: "POST",
-        body: JSON.stringify({
-          lat: form.lat ? Number(form.lat) : undefined,
-          lon: form.lon ? Number(form.lon) : undefined,
-          notes: form.notes || undefined,
-        }),
-      });
-      clearDraft();
-      queryClient.invalidateQueries({ queryKey: ["attendance"] });
-      toast({ title: form.activityType === "check_in" ? "تم تسجيل الحضور بنجاح" : "تم تسجيل الانصراف بنجاح" });
-      setLocation("/hr/attendance");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء التسجيل" });
-    } finally {
-      setSubmitting(false);
-    }
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const checkInMut = useApiMutation("/hr/check-in", "POST", [["attendance"]], {
+    successMessage: "تم تسجيل الحضور بنجاح",
+  });
+  const checkOutMut = useApiMutation("/hr/check-out", "POST", [["attendance"]], {
+    successMessage: "تم تسجيل الانصراف بنجاح",
+  });
+  const submitting = checkInMut.isPending || checkOutMut.isPending;
+
+  const handleSubmit = () => {
+    const mut = form.activityType === "check_out" ? checkOutMut : checkInMut;
+    mut.mutate(
+      {
+        lat: form.lat ? Number(form.lat) : undefined,
+        lon: form.lon ? Number(form.lon) : undefined,
+        notes: form.notes || undefined,
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/attendance");
+        },
+      },
+    );
   };
 
   const handleGetLocation = () => {

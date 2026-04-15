@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useState, useMemo } from "react";
+import { useApiQuery } from "@/lib/api";
 import { Link, useLocation } from "wouter";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -85,23 +85,26 @@ export default function Employees() {
   const total = employeesResponse?.total || 0;
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("employee");
   const preFiltered = applyFilters(employees || [], filters, {
-    statusField: "",
+    statusField: "status",
     dateField: "",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((e: any) => tagFilteredIds.has(e.id)) : preFiltered;
 
-  const [operationalStatuses, setOperationalStatuses] = useState<Record<number, OperationalStatus>>({});
-
-  useEffect(() => {
-    if (!employees || employees.length === 0) return;
-    apiFetch<{ data: Array<{ employeeId: number } & OperationalStatus> }>("/hr/employees-status")
-      .then((resp) => {
-        const map: Record<number, OperationalStatus> = {};
-        (resp.data || []).forEach((s) => { map[s.employeeId] = s; });
-        setOperationalStatuses(map);
-      })
-      .catch(() => {});
-  }, [employees?.length]);
+  // HR-U4 — قائمة الحالات التشغيلية عبر useApiQuery بدل apiFetch+useEffect.
+  const { data: operationalStatusData } = useApiQuery<{
+    data: Array<{ employeeId: number } & OperationalStatus>;
+  }>(
+    ["hr-employees-status"],
+    "/hr/employees-status",
+    { enabled: (employees?.length ?? 0) > 0 },
+  );
+  const operationalStatuses = useMemo(() => {
+    const map: Record<number, OperationalStatus> = {};
+    (operationalStatusData?.data || []).forEach((s) => {
+      map[s.employeeId] = s;
+    });
+    return map;
+  }, [operationalStatusData]);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/employees",

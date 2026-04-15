@@ -1,35 +1,38 @@
 import { useState } from "react";
 import { getCurrencySymbol } from "@/lib/formatters";
-import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, DollarSign, TrendingUp, Percent, FileText } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 
 export default function SalaryComponentsPage() {
   const { data } = useApiQuery<any>(["salary-components"], "/hr/salary-components");
   const items = data?.data || [];
-  const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", type: "fixed", category: "allowance", value: "", taxable: true });
-  const createMut = useApiMutation("/hr/salary-components", "POST", [["salary-components"]]);
+  // HR-U4 — successMessage + onSuccess بدل buildErrorToast اليدوي.
+  const createMut = useApiMutation("/hr/salary-components", "POST", [["salary-components"]], {
+    successMessage: "تم إضافة المكون بنجاح",
+  });
 
-  const handleSubmit = async () => {
-    try {
-      await createMut.mutateAsync({ ...form, value: Number(form.value) });
-      toast({ title: "تم إضافة المكون بنجاح" });
-      setShowForm(false);
-      setForm({ name: "", type: "fixed", category: "allowance", value: "", taxable: true });
-    } catch (err: unknown) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
-    }
+  const handleSubmit = () => {
+    createMut.mutate(
+      { ...form, value: Number(form.value) },
+      {
+        onSuccess: () => {
+          setShowForm(false);
+          setForm({ name: "", type: "fixed", category: "allowance", value: "", taxable: true });
+        },
+      },
+    );
   };
 
   const typeMap: Record<string, string> = { fixed: "ثابت", percentage: "نسبة", variable: "متغير" };
@@ -64,11 +67,7 @@ export default function SalaryComponentsPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (c) => (
-        <Badge className={c.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
-          {c.status === "active" ? "نشط" : "غير نشط"}
-        </Badge>
-      ),
+      render: (c) => <PageStatusBadge status={c.status || "inactive"} />,
     },
   ];
 

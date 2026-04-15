@@ -27,7 +27,12 @@ export default function LeavesCreate() {
   const copyReason = params.get("copyReason") || "";
   const { user } = useAuth();
   const { toast } = useToast();
-  const createMut = useApiMutation("/hr/leave-requests", "POST", [["leave-requests"], ["leaves"], ["leave-balance"]]);
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+  const createMut = useApiMutation("/hr/leave-requests", "POST", [["leave-requests"], ["leaves"], ["leave-balance"]], {
+    successMessage: "تم إرسال طلب الإجازة بنجاح",
+  });
   const leaveTypesQ = useApiQuery<any>(["leave-types"], "/hr/leave-types");
   const leaveTypes = asList<any>(leaveTypesQ.data);
 
@@ -59,7 +64,7 @@ export default function LeavesCreate() {
     String(b.leaveTypeId) === form.leaveTypeId || b.type === selectedType?.name
   );
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.startDate) {
       toast({ variant: "destructive", title: "تاريخ البداية مطلوب" });
       return;
@@ -76,21 +81,22 @@ export default function LeavesCreate() {
       toast({ variant: "destructive", title: "يرجى اختيار نوع الإجازة" });
       return;
     }
-    try {
-      await createMut.mutateAsync({
+    createMut.mutate(
+      {
         leaveTypeId: Number(form.leaveTypeId),
         startDate: form.startDate,
         endDate: form.endDate,
         reason: form.reason,
         reliefOfficer: form.reliefOfficer || undefined,
         contactDuringLeave: form.contactDuringLeave || undefined,
-      });
-      clearDraft();
-      toast({ title: "تم إرسال طلب الإجازة بنجاح" });
-      setLocation("/hr/leaves");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إرسال الطلب" });
-    }
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/leaves");
+        },
+      },
+    );
   };
 
   return (
