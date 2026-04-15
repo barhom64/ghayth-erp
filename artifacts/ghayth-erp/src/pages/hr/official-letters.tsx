@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatDateAr } from "@/lib/formatters";
-import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { useApiQuery, useApiMutation, buildErrorToast } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 // Phase A — HR official letters on unified primitives.
@@ -37,7 +37,7 @@ export default function OfficialLettersPage() {
   const items = data?.data || [];
   const { toast } = useToast();
   const [form, setForm] = useState({ employeeId: "", type: "general", subject: "", content: "" });
-  const createMut = useApiMutation("/hr/official-letters", "POST", [["official-letters"]]);
+  const createMut = useApiMutation("/hr/official-letters", "POST", [["official-letters"]], { silent: true });
   const { user } = useAuth();
   const branch = useBranchLetterhead(user?.branchId);
   const { roleLevel } = useAppContext();
@@ -98,8 +98,8 @@ export default function OfficialLettersPage() {
       toast({ title: "تم إنشاء الخطاب" });
       setShowForm(false);
       setForm({ employeeId: "", type: "general", subject: "", content: "" });
-    } catch (err: unknown) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    } catch (err) {
+      toast(buildErrorToast(err));
     }
   };
 

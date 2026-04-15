@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { getCurrencySymbol } from "@/lib/formatters";
-import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { useApiQuery, useApiMutation, buildErrorToast } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,7 @@ export default function SalaryComponentsPage() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", type: "fixed", category: "allowance", value: "", taxable: true });
-  const createMut = useApiMutation("/hr/salary-components", "POST", [["salary-components"]]);
+  const createMut = useApiMutation("/hr/salary-components", "POST", [["salary-components"]], { silent: true });
 
   const handleSubmit = async () => {
     try {
@@ -27,8 +27,8 @@ export default function SalaryComponentsPage() {
       toast({ title: "تم إضافة المكون بنجاح" });
       setShowForm(false);
       setForm({ name: "", type: "fixed", category: "allowance", value: "", taxable: true });
-    } catch (err: unknown) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    } catch (err) {
+      toast(buildErrorToast(err));
     }
   };
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -70,8 +70,8 @@ export default function VehicleStatusChangePage() {
       qc.invalidateQueries({ queryKey: ["vehicle-detail", id] });
       qc.invalidateQueries({ queryKey: ["fleet-vehicles"] });
       setLocation(`/fleet/${id}`);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: err.message });
+    } catch (err) {
+      toast(buildErrorToast(err));
     } finally {
       setConfirming(false);
     }

@@ -101,6 +101,22 @@ const RULES = [
       "clicking a pill does nothing. Set `statusField` to the actual " +
       "column (usually `\"status\"`). See Operational Review H1.",
   },
+  {
+    id: "generic-error-toast",
+    scan: [UI_PAGES_DIR],
+    // toast({ variant: "destructive", title: "حدث خطأ" }) drops the
+    // typed-error contract on the floor. Operational Review H2 fixed
+    // 22 call sites by replacing them with `toast(buildErrorToast(err))`,
+    // which surfaces meta.blockers / meta.currentStatus / meta.requiredRoles
+    // / fix / message via the same helpers `useApiMutation` uses
+    // internally. Keep this guard so the regression cannot return.
+    regex: /title:\s*"حدث خطأ"/,
+    message:
+      "Generic `title: \"حدث خطأ\"` toast drops the typed-error contract. " +
+      "Use `toast(buildErrorToast(err))` from `@/lib/api` so the user sees " +
+      "the real code/title/blockers/fix from the server. " +
+      "See Operational Review H2.",
+  },
 ];
 
 /** Recursively yield every `.ts` / `.tsx` file under a directory. */
