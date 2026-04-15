@@ -1692,7 +1692,7 @@ async function probationAlertCheck(): Promise<string> {
 async function retryStuckOfficialLetters(): Promise<string> {
   let retried = 0;
   const stuck = await rawQuery<any>(
-    `SELECT id, "companyId", "branchId", subject, type, "employeeId", status, "approvedAt"
+    `SELECT id, "companyId", subject, type, "employeeId", status, "approvedAt"
        FROM official_letters
       WHERE status = 'approved'
         AND "sentAt" IS NULL
@@ -1705,7 +1705,6 @@ async function retryStuckOfficialLetters(): Promise<string> {
     try {
       await emitEvent({
         companyId: letter.companyId,
-        branchId: letter.branchId ?? undefined,
         userId: null,
         action: "hr.letter.approved",
         entity: "official_letter",
