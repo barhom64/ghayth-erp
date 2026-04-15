@@ -3,8 +3,8 @@ import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -17,15 +17,6 @@ const VEHICLE_STATUS_OPTIONS = [
   { value: "reserved", label: "محجوزة" },
   { value: "accident", label: "حادث" },
 ];
-
-const statusMap: Record<string, { label: string; color: string }> = {
-  available: { label: "متاحة", color: "bg-green-100 text-green-700" },
-  in_use: { label: "قيد الاستخدام", color: "bg-blue-100 text-blue-700" },
-  "in-use": { label: "قيد الاستخدام", color: "bg-blue-100 text-blue-700" },
-  maintenance: { label: "في الصيانة", color: "bg-yellow-100 text-yellow-700" },
-  reserved: { label: "محجوزة", color: "bg-purple-100 text-purple-700" },
-  accident: { label: "حادث", color: "bg-red-100 text-red-700" },
-};
 
 const SEVERITY_COLORS: Record<string, string> = {
   info: "border-blue-200 bg-blue-50",
@@ -100,7 +91,7 @@ export default function VehicleStatusChangePage() {
           <Pencil className="h-5 w-5 text-blue-500" /> تغيير الحالة
         </h3>
         <p className="text-sm text-gray-500">
-            الحالة الحالية: <Badge className={statusMap[vehicle.status]?.color || "bg-gray-100 text-gray-700"}>{statusMap[vehicle.status]?.label || vehicle.status}</Badge>
+            الحالة الحالية: <PageStatusBadge status={vehicle.status} domain="vehicle" />
           </p>
 
           <div>

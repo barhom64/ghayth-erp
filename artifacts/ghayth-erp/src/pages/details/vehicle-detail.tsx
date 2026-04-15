@@ -75,15 +75,6 @@ export default function VehicleDetail() {
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
-  const statusMap: Record<string, { label: string; color: string }> = {
-    available: { label: "متاحة", color: "bg-green-100 text-green-700" },
-    in_use: { label: "قيد الاستخدام", color: "bg-blue-100 text-blue-700" },
-    "in-use": { label: "قيد الاستخدام", color: "bg-blue-100 text-blue-700" },
-    maintenance: { label: "في الصيانة", color: "bg-yellow-100 text-yellow-700" },
-    reserved: { label: "محجوزة", color: "bg-purple-100 text-purple-700" },
-    accident: { label: "حادث", color: "bg-red-100 text-red-700" },
-  };
-
 
   if (isLoading) return (
     <div className="space-y-4">
@@ -179,7 +170,7 @@ export default function VehicleDetail() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }]}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={statusMap[vehicle.status]?.color || "bg-gray-100 text-gray-700"}>{statusMap[vehicle.status]?.label || vehicle.status}</Badge>
+          <PageStatusBadge status={vehicle.status} domain="vehicle" />
           <Link href={`/fleet/${id}/status`}>
             <Button variant="outline" size="sm" className="gap-1">
               <Pencil className="h-4 w-4" />تغيير الحالة

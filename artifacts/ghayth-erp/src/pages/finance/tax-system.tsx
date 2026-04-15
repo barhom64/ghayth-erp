@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,14 +10,6 @@ import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCirc
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  accepted: { label: "مقبولة", color: "text-green-700", bg: "bg-green-100", icon: <CheckCircle className="h-3.5 w-3.5" /> },
-  submitted: { label: "مرسلة", color: "text-blue-700", bg: "bg-blue-100", icon: <Clock className="h-3.5 w-3.5" /> },
-  pending: { label: "معلقة", color: "text-yellow-700", bg: "bg-yellow-100", icon: <Clock className="h-3.5 w-3.5" /> },
-  rejected: { label: "مرفوضة", color: "text-red-700", bg: "bg-red-100", icon: <XCircle className="h-3.5 w-3.5" /> },
-  error: { label: "خطأ", color: "text-red-700", bg: "bg-red-100", icon: <AlertTriangle className="h-3.5 w-3.5" /> },
-};
 
 export default function TaxSystemPage() {
   const currentPeriod = new Date().toISOString().slice(0, 7);
@@ -296,14 +289,9 @@ export default function TaxSystemPage() {
                       {s.entityType === "invoice" ? "فاتورة" : "مصروف"}
                     </Badge>
                   ) },
-                  { key: "status", header: "الحالة", render: (s: any) => {
-                    const cfg = STATUS_CONFIG[s.status] || STATUS_CONFIG.pending!;
-                    return (
-                      <Badge className={`text-xs flex items-center gap-1 w-fit ${cfg.bg} ${cfg.color}`}>
-                        {cfg.icon}{cfg.label}
-                      </Badge>
-                    );
-                  } },
+                  { key: "status", header: "الحالة", render: (s: any) => (
+                    <PageStatusBadge status={s.status || "pending"} domain="zatca" />
+                  ) },
                   { key: "environment", header: "البيئة", render: (s: any) => (
                     <Badge className={`text-xs ${s.environment === "production" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
                       {s.environment === "production" ? "إنتاج" : "اختبار"}

@@ -23,7 +23,10 @@ const RISK_LEVEL_LABELS: Record<string, string> = {
   low: "منخفض", medium: "متوسط", high: "عالٍ", critical: "حرج",
 };
 
-const STATUS_MAP: Record<string, string> = {
+// Dropdown label lookup only — not a status chip. The canonical status
+// source is `STATUS_MAP` in `@/components/page-status-badge`; this file
+// uses PageStatusBadge for rendering where applicable.
+const RISK_STATUS_LABELS: Record<string, string> = {
   open: "مفتوح", mitigated: "مُعالَج", closed: "مغلق",
 };
 
@@ -174,7 +177,7 @@ export default function RisksPage() {
                   <Select value={r.status} onValueChange={(v) => handleStatusUpdate(r.id, v)}>
                     <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(STATUS_MAP).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                      {Object.entries(RISK_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

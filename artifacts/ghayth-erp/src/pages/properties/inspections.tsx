@@ -11,6 +11,7 @@ import { ClipboardList, Plus, CheckCircle, Clock, Star } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 const TYPES: Record<string, string> = {
   move_in: "دخول مستأجر",
@@ -19,11 +20,9 @@ const TYPES: Record<string, string> = {
   maintenance: "صيانة",
 };
 
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  scheduled: { label: "مجدول", color: "bg-blue-100 text-blue-700" },
-  completed: { label: "مكتمل", color: "bg-green-100 text-green-700" },
-  cancelled: { label: "ملغى", color: "bg-gray-100 text-gray-600" },
-};
+// Status filter options — label lookup only. Actual chip rendering
+// goes through PageStatusBadge (shared domain falls back to the trip
+// domain for "scheduled" via `resolveStatus`'s last-resort scan).
 
 export default function InspectionsPage() {
   const [showForm, setShowForm] = useState(false);
@@ -121,7 +120,7 @@ export default function InspectionsPage() {
       <div className="flex gap-2">
         {["all", "scheduled", "completed", "cancelled"].map((s) => (
           <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)}>
-            {s === "all" ? "الكل" : STATUS_MAP[s]?.label}
+            {s === "all" ? "الكل" : resolveStatus(s)?.label ?? s}
           </Button>
         ))}
       </div>
@@ -135,7 +134,7 @@ export default function InspectionsPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{insp.unitNumber} — {insp.buildingName}</span>
-                  <Badge className={STATUS_MAP[insp.status]?.color || "bg-gray-100 text-gray-600"}>{STATUS_MAP[insp.status]?.label || insp.status}</Badge>
+                  <PageStatusBadge status={insp.status} />
                   <Badge className="bg-gray-100 text-gray-600">{TYPES[insp.type] || insp.type}</Badge>
                 </div>
                 <div className="text-sm text-gray-500 mt-1 space-y-0.5">

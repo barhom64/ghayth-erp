@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
@@ -15,7 +14,6 @@ const emptyLine = (): JournalLine => ({ accountCode: "", description: "", debit:
 
 export default function JournalManualCreatePage() {
   const { toast } = useToast();
-  const qc = useQueryClient();
   const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
@@ -33,15 +31,15 @@ export default function JournalManualCreatePage() {
     `/finance/chart-of-accounts${scopeSuffix}`
   );
 
-  const createMutation = useMutation({
-    mutationFn: (payload: any) => apiFetch("/finance/journal-manual", { method: "POST", body: JSON.stringify(payload) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["journal-manual"] });
-      toast({ title: "تم إنشاء القيد اليدوي بحالة مسودة" });
-      navigate("/finance/journal-manual");
+  const createMutation = useApiMutation<unknown, any>(
+    "/finance/journal-manual",
+    "POST",
+    [["journal-manual"]],
+    {
+      successMessage: "تم إنشاء القيد اليدوي بحالة مسودة",
+      onSuccess: () => navigate("/finance/journal-manual"),
     },
-    onError: (e: any) => toast({ variant: "destructive", title: e.message ?? "حدث خطأ" }),
-  });
+  );
 
   const coa = coaData?.data ?? coaData ?? [];
 

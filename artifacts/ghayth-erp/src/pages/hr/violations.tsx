@@ -13,21 +13,26 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
-const statusMap: Record<string, { label: string; color: string }> = {
-  active: { label: "نشط", color: "bg-red-100 text-red-700" },
-  open: { label: "مفتوح", color: "bg-yellow-100 text-yellow-700" },
-  resolved: { label: "تم الحل", color: "bg-green-100 text-green-700" },
-  appealed: { label: "تم الاستئناف", color: "bg-blue-100 text-blue-700" },
-  cancelled: { label: "ملغي", color: "bg-gray-100 text-gray-700" },
-  escalated: { label: "تصعيد", color: "bg-purple-100 text-purple-700" },
-};
+// Status options for filter + edit form. Visual rendering goes through
+// the canonical PageStatusBadge (shared domain).
+const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "active",    label: "نشط"         },
+  { value: "open",      label: "مفتوح"       },
+  { value: "resolved",  label: "تم الحل"     },
+  { value: "appealed",  label: "تم الاستئناف" },
+  { value: "cancelled", label: "ملغي"        },
+  { value: "escalated", label: "تصعيد"       },
+];
 
-const severityMap: Record<string, { label: string; color: string }> = {
-  low: { label: "منخفض", color: "bg-green-100 text-green-700" },
-  medium: { label: "متوسط", color: "bg-yellow-100 text-yellow-700" },
-  high: { label: "مرتفع", color: "bg-orange-100 text-orange-700" },
-  critical: { label: "حرج", color: "bg-red-100 text-red-700" },
-};
+// Severity is a separate domain from status — not in STATUS_MAP. Kept
+// here as a labels-only list; severity chip uses a custom <Badge>
+// below with a tone mapped to severity level.
+const SEVERITY_OPTIONS: ReadonlyArray<{ value: string; label: string; tone: string }> = [
+  { value: "low",      label: "منخفض", tone: "bg-emerald-100 text-emerald-700" },
+  { value: "medium",   label: "متوسط", tone: "bg-amber-100 text-amber-700"     },
+  { value: "high",     label: "مرتفع", tone: "bg-orange-100 text-orange-700"   },
+  { value: "critical", label: "حرج",   tone: "bg-red-100 text-red-700"         },
+];
 
 export default function ViolationsPage() {
   const [filters, setFilters] = useFilters();
@@ -53,9 +58,9 @@ export default function ViolationsPage() {
   const editFields = [
     { key: "type", label: "نوع المخالفة" },
     { key: "description", label: "الوصف" },
-    { key: "severity", label: "الشدة", type: "select" as const, options: Object.entries(severityMap).map(([k, v]) => ({ value: k, label: v.label })) },
+    { key: "severity", label: "الشدة", type: "select" as const, options: SEVERITY_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
     { key: "deduction", label: "الخصم", type: "number" as const },
-    { key: "status", label: "الحالة", type: "select" as const, options: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })) },
+    { key: "status", label: "الحالة", type: "select" as const, options: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -78,7 +83,10 @@ export default function ViolationsPage() {
       key: "severity",
       header: "الشدة",
       sortable: true,
-      render: (v) => <Badge className={severityMap[v.severity]?.color || ""}>{severityMap[v.severity]?.label || v.severity || "-"}</Badge>,
+      render: (v) => {
+        const sev = SEVERITY_OPTIONS.find((o) => o.value === v.severity);
+        return <Badge className={sev?.tone || ""}>{sev?.label || v.severity || "-"}</Badge>;
+      },
     },
     {
       key: "deduction",
@@ -133,7 +141,7 @@ export default function ViolationsPage() {
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالاسم...",
-          statuses: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })),
+          statuses: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
           showDateRange: true,
         }}
         values={filters}

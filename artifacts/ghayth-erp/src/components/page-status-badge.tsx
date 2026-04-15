@@ -94,6 +94,20 @@ export const STATUS_MAP = {
     on_hold:              { label: "معلَّق",           tone: "warning"  },
     deleted:              { label: "محذوف",           tone: "muted"    },
     auto_declined:        { label: "رفض تلقائي",     tone: "danger"   },
+    // Communications (letters/messages) statuses, used by
+    // `src/pages/communications/letters.tsx` after replacing its local
+    // map. Keeping them in the shared domain so any future messaging
+    // surface that stores these raw values gets the same chip.
+    sent:                 { label: "مرسل",            tone: "success"  },
+    delivered:            { label: "تم التسليم",      tone: "success"  },
+    queued:               { label: "في الانتظار",    tone: "warning"  },
+    received:             { label: "مستلم",          tone: "info"     },
+    failed:               { label: "فشل",             tone: "danger"   },
+    // Training programs (hr/training.tsx): planned → upcoming → active
+    // → completed (with cancelled as a terminal branch).
+    planned:              { label: "مخطط",            tone: "info"     },
+    upcoming:             { label: "قادم",            tone: "info"     },
+    enrolled:             { label: "مسجل",            tone: "info"     },
   },
 
   // ── HR ─────────────────────────────────────────────────────────────

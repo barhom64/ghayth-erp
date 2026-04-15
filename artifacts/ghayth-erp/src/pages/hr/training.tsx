@@ -14,13 +14,13 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 
-const statusMap: Record<string, { label: string; color: string }> = {
-  planned: { label: "مخطط", color: "bg-blue-100 text-blue-700" },
-  upcoming: { label: "قادم", color: "bg-blue-100 text-blue-700" },
-  active: { label: "جاري", color: "bg-green-100 text-green-700" },
-  completed: { label: "مكتمل", color: "bg-gray-100 text-gray-700" },
-  cancelled: { label: "ملغي", color: "bg-red-100 text-red-700" },
-};
+const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "planned",   label: "مخطط"   },
+  { value: "upcoming",  label: "قادم"   },
+  { value: "active",    label: "جاري"   },
+  { value: "completed", label: "مكتمل" },
+  { value: "cancelled", label: "ملغي"  },
+];
 
 export default function TrainingPage() {
   const { permissions } = useAppContext();
@@ -54,7 +54,7 @@ export default function TrainingPage() {
     { key: "trainer", label: "المدرب" },
     { key: "location", label: "الموقع" },
     { key: "capacity", label: "السعة", type: "number" as const },
-    { key: "status", label: "الحالة", type: "select" as const, options: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })) },
+    { key: "status", label: "الحالة", type: "select" as const, options: STATUS_OPTIONS as unknown as { value: string; label: string }[] },
   ];
 
   const enrollmentActions = useInlineActions({
@@ -118,7 +118,7 @@ export default function TrainingPage() {
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث في البرامج...",
-          statuses: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })),
+          statuses: STATUS_OPTIONS as unknown as { value: string; label: string }[],
           showDateRange: true,
         }}
         values={filters}

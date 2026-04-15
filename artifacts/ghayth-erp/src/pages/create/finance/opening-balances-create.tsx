@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +29,6 @@ function firstDayOfFiscalYear(): string {
 
 export default function OpeningBalancesCreatePage() {
   const [, setLocation] = useLocation();
-  const qc = useQueryClient();
   const { toast } = useToast();
 
   const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
@@ -44,27 +42,25 @@ export default function OpeningBalancesCreatePage() {
   const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
   const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01;
 
-  const createMut = useMutation({
-    mutationFn: (payload: any) =>
-      apiFetch("/finance/opening-balances", { method: "POST", body: JSON.stringify(payload) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["opening-balances"] });
-      toast({ title: "تم حفظ الأرصدة الافتتاحية" });
-      setLocation("/finance/opening-balances");
+  const createMut = useApiMutation<unknown, any>(
+    "/finance/opening-balances",
+    "POST",
+    [["opening-balances"]],
+    {
+      successMessage: "تم حفظ الأرصدة الافتتاحية",
+      onSuccess: () => setLocation("/finance/opening-balances"),
     },
-    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل الحفظ" }),
-  });
+  );
 
-  const importCsvMut = useMutation({
-    mutationFn: (payload: any) =>
-      apiFetch("/finance/opening-balances/import-csv", { method: "POST", body: JSON.stringify(payload) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["opening-balances"] });
-      toast({ title: "تم استيراد الأرصدة الافتتاحية من ملف CSV" });
-      setLocation("/finance/opening-balances");
+  const importCsvMut = useApiMutation<unknown, any>(
+    "/finance/opening-balances/import-csv",
+    "POST",
+    [["opening-balances"]],
+    {
+      successMessage: "تم استيراد الأرصدة الافتتاحية من ملف CSV",
+      onSuccess: () => setLocation("/finance/opening-balances"),
     },
-    onError: (e: any) => toast({ variant: "destructive", title: e?.message || "فشل استيراد CSV" }),
-  });
+  );
 
   function updateLine(idx: number, field: keyof OBLine, value: string) {
     setLines((prev) => {

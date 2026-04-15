@@ -26,13 +26,6 @@ export default function TicketDetail() {
   const { data: ticket, isLoading, isError, error } = useApiQuery<any>(["ticket-detail", id || ""], `/support/tickets/${id}`, !!id);
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
-  const statusMap: Record<string, { label: string; color: string }> = {
-    open: { label: "مفتوحة", color: "bg-blue-100 text-blue-700" },
-    in_progress: { label: "قيد المعالجة", color: "bg-yellow-100 text-yellow-700" },
-    "in-progress": { label: "قيد المعالجة", color: "bg-yellow-100 text-yellow-700" },
-    resolved: { label: "تم الحل", color: "bg-green-100 text-green-700" },
-    closed: { label: "مغلقة", color: "bg-gray-100 text-gray-700" },
-  };
   const priorityMap: Record<string, { label: string; color: string }> = {
     critical: { label: "حرجة", color: "bg-red-200 text-red-800" },
     high: { label: "عالية", color: "bg-red-100 text-red-700" },

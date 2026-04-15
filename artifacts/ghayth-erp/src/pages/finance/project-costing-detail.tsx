@@ -2,6 +2,7 @@ import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { resolveStatus, type StatusTone } from "@/components/page-status-badge";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
@@ -21,11 +22,14 @@ import {
   Calendar,
 } from "lucide-react";
 
-const STATUS_MAP: Record<string, { label: string; variant: "default" | "success" | "warning" | "destructive" | "info" }> = {
-  active: { label: "نشط", variant: "success" },
-  completed: { label: "مكتمل", variant: "info" },
-  cancelled: { label: "ملغي", variant: "destructive" },
-  on_hold: { label: "موقوف", variant: "warning" },
+const TONE_TO_VARIANT: Record<StatusTone, "default" | "success" | "warning" | "destructive" | "info"> = {
+  success: "success",
+  info: "info",
+  progress: "info",
+  warning: "warning",
+  danger: "destructive",
+  muted: "default",
+  neutral: "default",
 };
 
 export default function ProjectCostingDetailPage() {
@@ -52,7 +56,11 @@ export default function ProjectCostingDetailPage() {
   const budgetRemaining = Number(costSummary.budgetRemaining ?? project?.budgetRemaining ?? (budget - actualCost));
   const usagePct = costSummary.usagePct ?? (budget > 0 ? Math.round((actualCost / budget) * 100) : 0);
 
-  const statusCfg = STATUS_MAP[project?.status] ?? { label: project?.status ?? "—", variant: "default" as const };
+  const resolvedStatus = project?.status ? resolveStatus(project.status, "project") : null;
+  const statusCfg = {
+    label: resolvedStatus?.label ?? project?.status ?? "—",
+    variant: resolvedStatus ? TONE_TO_VARIANT[resolvedStatus.tone] : ("default" as const),
+  };
 
   const overviewContent = () => (
     <Card className="border-0 shadow-sm">

@@ -123,12 +123,13 @@ function CampaignsTab() {
   ];
   const s = stats || {};
 
-  const statusMap: Record<string, { label: string; color: string }> = {
-    draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
-    active: { label: "نشط", color: "bg-green-100 text-green-700" },
-    paused: { label: "متوقف", color: "bg-yellow-100 text-yellow-700" },
-    completed: { label: "مكتمل", color: "bg-blue-100 text-blue-700" },
-  };
+  // Marketing campaign lifecycle. Visual chip lives in PageStatusBadge.
+  const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+    { value: "draft",     label: "مسودة"  },
+    { value: "active",    label: "نشط"    },
+    { value: "paused",    label: "متوقف"  },
+    { value: "completed", label: "مكتمل" },
+  ];
 
   const filtered = applyFilters(items, filters, { searchFields: ["name", "channel"], statusField: "status", dateField: "createdAt" });
 
@@ -144,7 +145,7 @@ function CampaignsTab() {
     { key: "budget", label: "الميزانية", type: "number" as const },
     { key: "spent", label: "المصروف", type: "number" as const },
     { key: "revenue", label: "الإيرادات", type: "number" as const },
-    { key: "status", label: "الحالة", type: "select" as const, options: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })) },
+    { key: "status", label: "الحالة", type: "select" as const, options: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -230,7 +231,7 @@ function CampaignsTab() {
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالحملة أو القناة...",
-          statuses: Object.entries(statusMap).map(([k, v]) => ({ value: k, label: v.label })),
+          statuses: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
           showDateRange: true,
         }}
         values={filters}
