@@ -424,14 +424,25 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
     let entityData: Record<string, any> = {};
 
     if (entityType === "employee" && entityId) {
+      // P02-S6-HIGH — this SELECT used to filter only on `e.id=$1`, with
+      // no `companyId` scope on employees or employee_assignments. Any
+      // user with `documents:read` could pass `entityType=employee` and a
+      // foreign tenant's employee id, and the route would render that
+      // employee's name, ID number, salary, allowances, phone, email,
+      // hire date, branch and department into the template HTML — a
+      // cross-tenant PII / payroll leak. Scope the join through the
+      // assignment so we only ever fetch employees the caller's company
+      // actually employs (matches the invoice branch below which already
+      // filters by `i."companyId"=$2`).
       const [emp] = await rawQuery<any>(`
         SELECT e.*, d.name as "departmentName", b.name as "branchName"
         FROM employees e
-        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
         LEFT JOIN departments d ON d.id = ea."departmentId"
         LEFT JOIN branches b ON b.id = ea."branchId"
         WHERE e.id=$1
-      `, [Number(entityId)]);
+        LIMIT 1
+      `, [Number(entityId), scope.companyId]);
       if (emp) {
         entityData.employee = {
           name: emp.name,
