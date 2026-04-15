@@ -1,5 +1,12 @@
 import { lazy } from "react";
 
+// R.1.5 — Finance Dashboard is the new landing page for /finance. The
+// chart of accounts stays at /finance/accounts (see the separate route
+// entry below). This lets users hit a real overview page instead of
+// being dropped into a list view, and demonstrates the unified page
+// templates (PageShell, PageStatusBadge, useApiMutation) as a reference
+// for the cascade to the rest of the module.
+const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
@@ -57,7 +64,9 @@ const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-jour
 const YearEndClose = lazy(() => import("@/pages/finance/year-end-close"));
 
 export const financeRoutes = [
-  { path: "/finance", component: Accounts },
+  // /finance → the new dashboard (R.1.5). The chart of accounts moves
+  // to its own explicit path so the two pages don't share a URL.
+  { path: "/finance", component: Dashboard },
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },

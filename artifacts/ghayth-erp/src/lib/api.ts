@@ -266,6 +266,69 @@ function toastTitleForCode(code: string): string {
   }
 }
 
+/**
+ * Build the toast description for a typed `ApiError`. R.1.2 upgrades
+ * the description line to surface the richest structured detail the
+ * server returned so the user sees the specific blocker instead of a
+ * generic "cannot do this right now" line.
+ *
+ * Priority order (first non-empty wins):
+ *
+ *   1. CONFLICT with `meta.blockers: string[]` — Phase C.7b delete
+ *      guards (vendors with open POs, accounts with journal lines,
+ *      budgets with used amount, fiscal periods with pending journals,
+ *      etc.) ship an array of human-readable blockers. Render up to
+ *      three of them joined with " — " so the toast stays one line.
+ *
+ *   2. CONFLICT with `meta.pendingCount: number` — fiscal period close
+ *      sends the count of unposted manual journals. Format as
+ *      "يوجد N قيد يدوي غير مُرحَّل".
+ *
+ *   3. CONFLICT with `meta.currentStatus: string` — engine rejected
+ *      the transition because the row was in the wrong state. Format
+ *      as "الحالة الحالية: <currentStatus>" for operators.
+ *
+ *   4. FORBIDDEN with `meta.requiredRoles: string[]` — Phase 5
+ *      `assertRole` failures ship the allowed role list. Format as
+ *      "الأدوار المسموح لها: <joined>".
+ *
+ *   5. `err.fix` — the server's recovery hint (set on every typed
+ *      ValidationError/ConflictError that was upgraded in Phase C.7b).
+ *
+ *   6. `err.message` — the server's arabic message (fallback).
+ */
+function toastDescriptionForError(err: ApiError): string {
+  const meta = err.meta ?? {};
+
+  if (err.code === "CONFLICT" && Array.isArray((meta as any).blockers)) {
+    const blockers = (meta as any).blockers as unknown[];
+    const humanReadable = blockers
+      .filter((b) => typeof b === "string" && b.length > 0)
+      .slice(0, 3) as string[];
+    if (humanReadable.length > 0) {
+      return humanReadable.join(" — ");
+    }
+  }
+
+  if (err.code === "CONFLICT" && typeof (meta as any).pendingCount === "number") {
+    return `يوجد ${(meta as any).pendingCount} قيد يدوي غير مُرحَّل`;
+  }
+
+  if (err.code === "CONFLICT" && typeof (meta as any).currentStatus === "string") {
+    return `الحالة الحالية: ${(meta as any).currentStatus}`;
+  }
+
+  if (err.code === "FORBIDDEN" && Array.isArray((meta as any).requiredRoles)) {
+    const roles = ((meta as any).requiredRoles as unknown[])
+      .filter((r) => typeof r === "string" && r.length > 0) as string[];
+    if (roles.length > 0) {
+      return `الأدوار المسموح لها: ${roles.join("، ")}`;
+    }
+  }
+
+  return err.fix ?? err.message;
+}
+
 export function useApiMutation<TData = any, TBody = any>(
   path: string,
   method: string = "POST",
@@ -316,7 +379,7 @@ export function useApiMutation<TData = any, TBody = any>(
         if (!options?.silent) {
           toast({
             title: toastTitleForCode(error.code),
-            description: error.fix ?? error.message,
+            description: toastDescriptionForError(error),
             variant: "destructive",
           });
         }
