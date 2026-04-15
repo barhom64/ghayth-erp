@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useSearch, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +17,6 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
-import { useToast } from "@/hooks/use-toast";
 
 const FREQ_LABELS: Record<string, string> = {
   monthly: "شهري", quarterly: "ربع سنوي", semi_annual: "نصف سنوي", annual: "سنوي",
@@ -32,10 +30,8 @@ const UTILITY_LABELS: Record<string, string> = {
 
 function PaymentSchedulePanel({ contractId }: { contractId: number }) {
   const { scopeQueryString } = useAppContext();
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
-  const { data: schedResp, isLoading, refetch } = useApiQuery<any>(
+  const { data: schedResp, isLoading } = useApiQuery<any>(
     ["contract-schedule", String(contractId)],
     `/properties/contracts/${contractId}/schedule?x=1${scopeSuffix}`
   );

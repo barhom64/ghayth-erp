@@ -1,13 +1,10 @@
-import { useState } from "react";
 import { formatCurrency } from "@/lib/formatters";
-import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, Scale, DollarSign, Shield, TrendingUp } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -24,26 +21,14 @@ export default function ViolationsManagementPage() {
   const { data } = useApiQuery<any>(["violations"], "/hr/violations");
   const { data: stats } = useApiQuery<any>(["violations-stats"], "/hr/violations-stats");
   const items = data?.data || [];
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [resolvingId, setResolvingId] = useState<number | null>(null);
 
-  const updateViolation = async (id: number, updates: Record<string, string>) => {
-    setResolvingId(id);
-    try {
-      await apiFetch(`/hr/violations/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-      });
-      toast({ title: "تم التحديث" });
-      qc.invalidateQueries({ queryKey: ["violations"] });
-      qc.invalidateQueries({ queryKey: ["violations-stats"] });
-    } catch (err: unknown) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
-    } finally {
-      setResolvingId(null);
-    }
-  };
+  const updateViolationMut = useApiMutation<any, { id: number; status?: string }>(
+    (body) => `/hr/violations/${body.id}`,
+    "PATCH",
+    [["violations"], ["violations-stats"]],
+    { successMessage: "تم التحديث" }
+  );
+  const resolvingId = updateViolationMut.isPending ? updateViolationMut.variables?.id ?? null : null;
 
   const [filters, setFilters] = useFilters();
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
@@ -90,7 +75,7 @@ export default function ViolationsManagementPage() {
             size="sm"
             variant="outline"
             className="text-xs"
-            onClick={(e) => { e.stopPropagation(); updateViolation(v.id, { status: "resolved" }); }}
+            onClick={(e) => { e.stopPropagation(); updateViolationMut.mutate({ id: v.id, status: "resolved" }); }}
             disabled={resolvingId === v.id}
           >
             <Shield className="h-3 w-3 me-1" />{resolvingId === v.id ? "..." : "حل"}

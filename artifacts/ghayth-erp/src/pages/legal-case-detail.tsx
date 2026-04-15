@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,21 +120,24 @@ function CaseTimeline({ sessions }: { sessions: any[] }) {
 function AddSessionForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
   const { toast } = useToast();
   const [form, setForm] = useState({ sessionDate: "", location: "", judge: "", result: "", notes: "", nextSessionDate: "" });
-  const [saving, setSaving] = useState(false);
 
-  const handleSave = async () => {
-    if (!form.sessionDate) { toast({ variant: "destructive", title: "تاريخ الجلسة مطلوب" }); return; }
-    setSaving(true);
-    try {
-      await apiFetch(`/legal/cases/${caseId}/sessions`, { method: "POST", body: JSON.stringify(form) });
-      toast({ title: "تمت إضافة الجلسة بنجاح" });
-      setForm({ sessionDate: "", location: "", judge: "", result: "", notes: "", nextSessionDate: "" });
-      onSuccess();
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "خطأ", description: err.message });
-    } finally {
-      setSaving(false);
+  const saveMut = useApiMutation<any, typeof form>(
+    `/legal/cases/${caseId}/sessions`,
+    "POST",
+    [["legal-case", String(caseId)], ["legal-cases"]],
+    {
+      successMessage: "تمت إضافة الجلسة بنجاح",
+      onSuccess: () => {
+        setForm({ sessionDate: "", location: "", judge: "", result: "", notes: "", nextSessionDate: "" });
+        onSuccess();
+      },
     }
+  );
+  const saving = saveMut.isPending;
+
+  const handleSave = () => {
+    if (!form.sessionDate) { toast({ variant: "destructive", title: "تاريخ الجلسة مطلوب" }); return; }
+    saveMut.mutate(form);
   };
 
   return (
@@ -251,15 +254,20 @@ export default function LegalCaseDetail() {
 
   const allowedTransitions: string[] = caseData.allowedTransitions || [];
 
-  const handleTransition = async (newStatus: string) => {
-    try {
-      await apiFetch(`/legal/cases/${id}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
-      toast({ title: `تم تحديث حالة القضية إلى: ${STATUSES[newStatus] || newStatus}` });
-      refetch();
-      qc.invalidateQueries({ queryKey: ["legal-cases"] });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "خطأ في التحديث", description: err.message });
+  const transitionMut = useApiMutation<any, { status: string }>(
+    `/legal/cases/${id}`,
+    "PATCH",
+    [["legal-case", String(id)], ["legal-cases"]],
+    {
+      successMessage: false,
+      onSuccess: (_d, body) => {
+        toast({ title: `تم تحديث حالة القضية إلى: ${STATUSES[body.status] || body.status}` });
+      },
     }
+  );
+
+  const handleTransition = (newStatus: string) => {
+    transitionMut.mutate({ status: newStatus });
   };
 
   return (

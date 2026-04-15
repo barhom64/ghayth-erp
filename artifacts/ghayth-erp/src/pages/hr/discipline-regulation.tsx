@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +9,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Pencil, RefreshCw, AlertTriangle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 
 const SECTION_LABELS: Record<string, string> = {
@@ -51,57 +49,49 @@ export default function DisciplineRegulationPage() {
     effectiveFrom: string;
     total: number;
   }>(["discipline-regulation"], "/hr/discipline/regulation");
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const [editing, setEditing] = useState<Article | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [reseeding, setReseeding] = useState(false);
 
   const grouped = data?.grouped ?? { work_time: [], work_organization: [], conduct: [] };
   const total = data?.total ?? 0;
 
-  const saveEdit = async () => {
-    if (!editing) return;
-    setSaving(true);
-    try {
-      await apiFetch(`/hr/discipline/regulation/${editing.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          title: editing.title,
-          penalty1: editing.penalty1 ?? null,
-          penalty2: editing.penalty2 ?? null,
-          penalty3: editing.penalty3 ?? null,
-          penalty4: editing.penalty4 ?? null,
-          extraDeduction: editing.extraDeduction ?? null,
-          severity: editing.severity,
-          isTermination: editing.isTermination,
-          legalReference: editing.legalReference ?? null,
-        }),
-      });
-      toast({ title: "تم تحديث المادة" });
-      qc.invalidateQueries({ queryKey: ["discipline-regulation"] });
-      setEditing(null);
-    } catch (err) {
-      toast({ variant: "destructive", title: "فشل التحديث", description: getErrorMessage(err) });
-    } finally {
-      setSaving(false);
+  const saveMut = useApiMutation<any, { id: number } & Partial<Article>>(
+    (body) => `/hr/discipline/regulation/${body.id}`,
+    "PATCH",
+    [["discipline-regulation"]],
+    {
+      successMessage: "تم تحديث المادة",
+      onSuccess: () => setEditing(null),
     }
+  );
+  const saving = saveMut.isPending;
+
+  const reseedMut = useApiMutation<{ ok: boolean; inserted: number }, Record<string, never>>(
+    "/hr/discipline/regulation/reseed",
+    "POST",
+    [["discipline-regulation"]],
+    { successMessage: "تم استنساخ اللائحة الافتراضية" }
+  );
+  const reseeding = reseedMut.isPending;
+
+  const saveEdit = () => {
+    if (!editing) return;
+    saveMut.mutate({
+      id: editing.id,
+      title: editing.title,
+      penalty1: editing.penalty1 ?? null,
+      penalty2: editing.penalty2 ?? null,
+      penalty3: editing.penalty3 ?? null,
+      penalty4: editing.penalty4 ?? null,
+      extraDeduction: editing.extraDeduction ?? null,
+      severity: editing.severity,
+      isTermination: editing.isTermination,
+      legalReference: editing.legalReference ?? null,
+    } as any);
   };
 
-  const reseedDefaults = async () => {
+  const reseedDefaults = () => {
     if (!confirm("سيتم استنساخ اللائحة الافتراضية (49 مادة) للشركة. المتابعة؟")) return;
-    setReseeding(true);
-    try {
-      const res = await apiFetch<{ ok: boolean; inserted: number }>("/hr/discipline/regulation/reseed", {
-        method: "POST",
-      });
-      toast({ title: `تم استنساخ ${res.inserted} مادة` });
-      qc.invalidateQueries({ queryKey: ["discipline-regulation"] });
-    } catch (err) {
-      toast({ variant: "destructive", title: "فشل الاستنساخ", description: getErrorMessage(err) });
-    } finally {
-      setReseeding(false);
-    }
+    reseedMut.mutate({});
   };
 
   const renderArticle = (a: Article) => (

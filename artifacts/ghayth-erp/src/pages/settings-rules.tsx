@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Zap, Plus, Power, PowerOff, Trash2, History, Shield,
   AlertTriangle, CheckCircle, XCircle, Clock, Settings2,
@@ -195,7 +194,6 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
 
 function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
   const { toast } = useToast();
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -212,41 +210,42 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
     notifPriority: "high",
   });
 
-  const handleSubmit = async () => {
+  const createMut = useApiMutation<any, Record<string, any>>(
+    "/rules",
+    "POST",
+    [["business-rules"]],
+    {
+      successMessage: "تم إنشاء القاعدة بنجاح",
+      onSuccess: () => {
+        setForm({ name: "", description: "", triggerEvent: "attendance.checkin", conditionField: "", conditionOperator: ">=", conditionValue: "", actionType: "notification", actionTarget: "manager", module: "hr", priority: 10, notifTitle: "", notifBody: "", notifPriority: "high" });
+        onCreated();
+      },
+    }
+  );
+  const saving = createMut.isPending;
+
+  const handleSubmit = () => {
     if (!form.name || !form.triggerEvent || !form.actionType) {
       toast({ title: "يرجى ملء الحقول المطلوبة", variant: "destructive" });
       return;
     }
-    setSaving(true);
-    try {
-      await apiFetch("/rules", {
-        method: "POST",
-        body: JSON.stringify({
-          name: form.name,
-          description: form.description,
-          triggerEvent: form.triggerEvent,
-          conditionField: form.conditionField || null,
-          conditionOperator: form.conditionOperator,
-          conditionValue: form.conditionValue || null,
-          actionType: form.actionType,
-          actionTarget: form.actionTarget,
-          module: form.module,
-          priority: form.priority,
-          actionConfig: {
-            title: form.notifTitle || form.name,
-            body: form.notifBody,
-            priority: form.notifPriority,
-          },
-        }),
-      });
-      toast({ title: "تم إنشاء القاعدة بنجاح" });
-      setForm({ name: "", description: "", triggerEvent: "attendance.checkin", conditionField: "", conditionOperator: ">=", conditionValue: "", actionType: "notification", actionTarget: "manager", module: "hr", priority: 10, notifTitle: "", notifBody: "", notifPriority: "high" });
-      onCreated();
-    } catch (err: any) {
-      toast({ title: err.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
+    createMut.mutate({
+      name: form.name,
+      description: form.description,
+      triggerEvent: form.triggerEvent,
+      conditionField: form.conditionField || null,
+      conditionOperator: form.conditionOperator,
+      conditionValue: form.conditionValue || null,
+      actionType: form.actionType,
+      actionTarget: form.actionTarget,
+      module: form.module,
+      priority: form.priority,
+      actionConfig: {
+        title: form.notifTitle || form.name,
+        body: form.notifBody,
+        priority: form.notifPriority,
+      },
+    });
   };
 
   return (
@@ -396,32 +395,26 @@ function RuleLogsList() {
 }
 
 export default function SettingsRulesPage() {
-  const qc = useQueryClient();
-  const { toast } = useToast();
   const { data, isLoading } = useApiQuery<{ data: BusinessRule[] }>(["business-rules"], "/rules");
   const rules = data?.data || [];
 
   const activeRules = rules.filter(r => r.isActive);
   const inactiveRules = rules.filter(r => !r.isActive);
 
-  const handleToggle = async (ruleId: number) => {
-    try {
-      await apiFetch(`/rules/${ruleId}/toggle`, { method: "PATCH", body: "{}" });
-      qc.invalidateQueries({ queryKey: ["business-rules"] });
-    } catch (err: any) {
-      toast({ title: err.message, variant: "destructive" });
-    }
-  };
+  const toggleMut = useApiMutation<any, { id: number }>(
+    (body) => `/rules/${body.id}/toggle`,
+    "PATCH",
+    [["business-rules"]]
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/rules/${body.id}`,
+    "DELETE",
+    [["business-rules"]],
+    { successMessage: "تم حذف القاعدة" }
+  );
 
-  const handleDelete = async (ruleId: number) => {
-    try {
-      await apiFetch(`/rules/${ruleId}`, { method: "DELETE" });
-      qc.invalidateQueries({ queryKey: ["business-rules"] });
-      toast({ title: "تم حذف القاعدة" });
-    } catch (err: any) {
-      toast({ title: err.message, variant: "destructive" });
-    }
-  };
+  const handleToggle = (ruleId: number) => toggleMut.mutate({ id: ruleId });
+  const handleDelete = (ruleId: number) => deleteMut.mutate({ id: ruleId });
 
   return (
     <div className="p-4 md:p-6 space-y-6" dir="rtl">
@@ -478,7 +471,7 @@ export default function SettingsRulesPage() {
         </TabsContent>
 
         <TabsContent value="create" className="mt-4">
-          <CreateRuleForm onCreated={() => qc.invalidateQueries({ queryKey: ["business-rules"] })} />
+          <CreateRuleForm onCreated={() => { /* invalidation handled by useApiMutation */ }} />
         </TabsContent>
 
         <TabsContent value="logs" className="mt-4">

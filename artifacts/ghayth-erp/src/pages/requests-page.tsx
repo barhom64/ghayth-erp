@@ -1,5 +1,5 @@
 import { useState, Fragment } from "react";
-import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,25 +65,26 @@ const CONVERT_OPTIONS = [
 function ConvertRequestPanel({ requestId, onSuccess }: { requestId: number; onSuccess: () => void }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [converting, setConverting] = useState(false);
 
-  const handleConvert = async (targetType: string, targetPath: string) => {
-    setConverting(true);
-    try {
-      const result = await apiFetch(`/requests/${requestId}/convert`, {
-        method: "POST",
-        body: JSON.stringify({ targetType }),
-      });
-      toast({ title: "تم التحويل بنجاح", description: result.message });
-      onSuccess();
-      if (result.createdId) {
-        setTimeout(() => setLocation(targetPath), 1200);
-      }
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "خطأ في التحويل", description: err.message });
-    } finally {
-      setConverting(false);
+  const convertMut = useApiMutation<any, { targetType: string; targetPath: string }>(
+    `/requests/${requestId}/convert`,
+    "POST",
+    [["requests"]],
+    {
+      successMessage: false,
+      onSuccess: (result: any, body) => {
+        toast({ title: "تم التحويل بنجاح", description: result?.message });
+        onSuccess();
+        if (result?.createdId) {
+          setTimeout(() => setLocation(body.targetPath), 1200);
+        }
+      },
     }
+  );
+  const converting = convertMut.isPending;
+
+  const handleConvert = (targetType: string, targetPath: string) => {
+    convertMut.mutate({ targetType, targetPath });
   };
 
   return (

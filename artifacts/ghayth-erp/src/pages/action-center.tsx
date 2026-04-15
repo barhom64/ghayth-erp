@@ -2,10 +2,9 @@ import { useState } from "react";
 import { formatDateAr } from "@/lib/formatters";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { apiFetch } from "@/lib/api";
+import { useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { useAuth } from "@/lib/auth";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Calendar, DollarSign, KeyRound, FileSignature, ShoppingCart, Wallet,
   AlertTriangle, Bell, ListTodo, ChevronLeft, Check, X as XIcon, CornerUpLeft,
@@ -66,8 +65,20 @@ export default function ActionCenter() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [activeTab, setActiveTab] = useState<TabKey>("leaves");
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
-  const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const workflowMut = useApiMutation<any, { url: string; notes?: string }>(
+    (body) => body.url,
+    "POST",
+    [["action-center"]],
+    { successMessage: false }
+  );
+  const approvalMut = useApiMutation<any, { url: string; approved: boolean; reason?: string; notes?: string }>(
+    (body) => body.url,
+    "PATCH",
+    [["action-center"]],
+    { successMessage: false }
+  );
 
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["action-center", scopeQueryString],
@@ -91,23 +102,23 @@ export default function ActionCenter() {
     const key = `workflows-${id}`;
     setProcessingIds((prev) => new Set(prev).add(key));
 
-    try {
-      const url = `/workflows/${id}/${decision}${scopeSuffix}`;
-      const body: Record<string, any> = {};
-      if (notes) body.notes = notes;
-      await apiFetch(url, { method: "POST", body: JSON.stringify(body) });
-
-      const labels: Record<WorkflowDecision, string> = { approve: "تم الاعتماد", reject: "تم الرفض", return: "تم الإرجاع" };
-      toast({ title: labels[decision], description: decision === "approve" ? "تم اعتماد المعاملة بنجاح" : decision === "reject" ? "تم رفض المعاملة" : "تم إرجاع المعاملة للتعديل" });
-      queryClient.invalidateQueries({ queryKey: ["action-center"] });
-    } catch (err: any) {
-      toast({ title: "خطأ", description: err?.message || "حدث خطأ أثناء المعالجة", variant: "destructive" });
-    } finally {
-      setProcessingIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
-    }
+    const url = `/workflows/${id}/${decision}${scopeSuffix}`;
+    workflowMut.mutate(
+      { url, notes },
+      {
+        onSuccess: () => {
+          const labels: Record<WorkflowDecision, string> = { approve: "تم الاعتماد", reject: "تم الرفض", return: "تم الإرجاع" };
+          toast({ title: labels[decision], description: decision === "approve" ? "تم اعتماد المعاملة بنجاح" : decision === "reject" ? "تم رفض المعاملة" : "تم إرجاع المعاملة للتعديل" });
+          setProcessingIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
+        },
+        onError: () => {
+          setProcessingIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
+        },
+      }
+    );
   };
 
-  const handleApproval = async (tab: TabKey, id: number, approved: boolean) => {
+  const handleApproval = (tab: TabKey, id: number, approved: boolean) => {
     const endpoint = approvalEndpoints[tab];
     if (!endpoint) return;
 
@@ -124,37 +135,26 @@ export default function ActionCenter() {
     const key = `${tab}-${id}`;
     setProcessingIds((prev) => new Set(prev).add(key));
 
-    try {
-      const body: Record<string, any> = { approved };
-      if (notes) {
-        if (tab === "leaves") {
-          body.reason = notes;
-        } else {
-          body.notes = notes;
-        }
-      }
-      await apiFetch(`${endpoint(id)}${scopeSuffix}`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      toast({
-        title: approved ? "تم الاعتماد" : "تم الرفض",
-        description: approved ? "تم اعتماد المعاملة بنجاح" : "تم رفض المعاملة",
-      });
-      queryClient.invalidateQueries({ queryKey: ["action-center"] });
-    } catch (err: any) {
-      toast({
-        title: "خطأ",
-        description: err?.message || "حدث خطأ أثناء المعالجة",
-        variant: "destructive",
-      });
-    } finally {
-      setProcessingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
+    const body: { url: string; approved: boolean; reason?: string; notes?: string } = {
+      url: `${endpoint(id)}${scopeSuffix}`,
+      approved,
+    };
+    if (notes) {
+      if (tab === "leaves") body.reason = notes;
+      else body.notes = notes;
     }
+    approvalMut.mutate(body, {
+      onSuccess: () => {
+        toast({
+          title: approved ? "تم الاعتماد" : "تم الرفض",
+          description: approved ? "تم اعتماد المعاملة بنجاح" : "تم رفض المعاملة",
+        });
+        setProcessingIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
+      },
+      onError: () => {
+        setProcessingIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
+      },
+    });
   };
 
   if (isLoading) {

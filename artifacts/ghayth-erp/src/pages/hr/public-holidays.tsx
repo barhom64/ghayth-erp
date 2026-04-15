@@ -1,14 +1,12 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Plus, Trash2, Edit2, Save, X } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { Plus, Trash2, Edit2, Save, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 
@@ -32,30 +30,47 @@ export default function PublicHolidaysPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false });
-  const qc = useQueryClient();
 
-  const { data, isLoading, refetch } = useApiQuery<any>(["public-holidays", String(year)], `/hr/public-holidays?year=${year}`);
+  const { data, isLoading } = useApiQuery<any>(["public-holidays", String(year)], `/hr/public-holidays?year=${year}`);
   const holidays = asList(data?.data || data);
 
-  const handleSave = async () => {
-    if (!form.name || !form.startDate) { toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" }); return; }
-    try {
-      if (editingId) {
-        await apiFetch(`/hr/public-holidays/${editingId}`, { method: "PATCH", body: JSON.stringify(form) });
-        toast({ title: "تم تحديث العطلة" });
-      } else {
-        await apiFetch("/hr/public-holidays", { method: "POST", body: JSON.stringify(form) });
-        toast({ title: "تم إضافة العطلة" });
-      }
-      setShowForm(false); setEditingId(null); setForm({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false });
-      refetch();
-    } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false });
   };
 
-  const handleDelete = async (id: number) => {
+  const updateMut = useApiMutation<any, typeof form & { id: number }>(
+    (body) => `/hr/public-holidays/${body.id}`,
+    "PATCH",
+    [["public-holidays"]],
+    { successMessage: "تم تحديث العطلة", onSuccess: resetForm }
+  );
+  const createMut = useApiMutation<any, typeof form>(
+    "/hr/public-holidays",
+    "POST",
+    [["public-holidays"]],
+    { successMessage: "تم إضافة العطلة", onSuccess: resetForm }
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/hr/public-holidays/${body.id}`,
+    "DELETE",
+    [["public-holidays"]],
+    { successMessage: "تم الحذف" }
+  );
+
+  const handleSave = () => {
+    if (!form.name || !form.startDate) { toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" }); return; }
+    if (editingId) {
+      updateMut.mutate({ ...form, id: editingId });
+    } else {
+      createMut.mutate(form);
+    }
+  };
+
+  const handleDelete = (id: number) => {
     if (!confirm("حذف هذه العطلة؟")) return;
-    try { await apiFetch(`/hr/public-holidays/${id}`, { method: "DELETE" }); refetch(); toast({ title: "تم الحذف" }); }
-    catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+    deleteMut.mutate({ id });
   };
 
   const handleEdit = (h: any) => {

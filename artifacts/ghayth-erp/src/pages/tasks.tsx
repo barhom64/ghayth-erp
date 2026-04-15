@@ -1,7 +1,7 @@
 import { useState, Fragment } from "react";
 import { Link, useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
-import { useApiQuery, asList, apiPatch, apiDelete } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -10,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { CheckSquare, Calendar, Building2, Phone, Plus, User, Pencil, Trash2, Check, X, PlayCircle, CheckCircle2, Loader2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
-import { toast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { DeleteConfirmImpact } from "@/components/delete-confirm-impact";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
@@ -60,9 +58,7 @@ export default function Tasks() {
   const [editForm, setEditForm] = useState<any>({});
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
   const { selectedRole, scopeQueryString } = useAppContext();
-  const qc = useQueryClient();
   const isOwner = selectedRole?.roleKey === "owner" || selectedRole?.roleKey === "general_manager";
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("task");
@@ -94,44 +90,46 @@ export default function Tasks() {
 
   const cancelEdit = () => { setEditingId(null); setEditForm({}); };
 
-  const saveEdit = async () => {
+  const updateMut = useApiMutation<any, { id: number } & Record<string, any>>(
+    (body) => `/tasks/${body.id}`,
+    "PATCH",
+    [["tasks"]],
+    {
+      successMessage: "تم تحديث المهمة بنجاح",
+      onSuccess: () => { setEditingId(null); setEditForm({}); },
+    }
+  );
+
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/tasks/${body.id}`,
+    "DELETE",
+    [["tasks"]],
+    {
+      successMessage: "تم حذف المهمة",
+      onSuccess: () => setDeletingId(null),
+    }
+  );
+
+  const quickStatusMut = useApiMutation<any, { id: number; status: string }>(
+    (body) => `/tasks/${body.id}`,
+    "PATCH",
+    [["tasks"]],
+    { successMessage: "تم تحديث الحالة" }
+  );
+
+  const saving = updateMut.isPending || deleteMut.isPending;
+
+  const saveEdit = () => {
     if (!editingId) return;
-    setSaving(true);
-    try {
-      await apiPatch(`/tasks/${editingId}`, editForm);
-      toast({ title: "تم تحديث المهمة بنجاح" });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      setEditingId(null);
-      setEditForm({});
-    } catch {
-      toast({ variant: "destructive", title: "خطأ في تحديث المهمة" });
-    } finally {
-      setSaving(false);
-    }
+    updateMut.mutate({ id: editingId, ...editForm });
   };
 
-  const handleDelete = async (id: number) => {
-    setSaving(true);
-    try {
-      await apiDelete(`/tasks/${id}`);
-      toast({ title: "تم حذف المهمة" });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      setDeletingId(null);
-    } catch {
-      toast({ variant: "destructive", title: "خطأ في حذف المهمة" });
-    } finally {
-      setSaving(false);
-    }
+  const handleDelete = (id: number) => {
+    deleteMut.mutate({ id });
   };
 
-  const quickStatusChange = async (id: number, newStatus: string) => {
-    try {
-      await apiPatch(`/tasks/${id}`, { status: newStatus });
-      toast({ title: newStatus === "completed" ? "تم إكمال المهمة" : "تم تحديث الحالة" });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-    } catch {
-      toast({ variant: "destructive", title: "خطأ في تحديث الحالة" });
-    }
+  const quickStatusChange = (id: number, newStatus: string) => {
+    quickStatusMut.mutate({ id, status: newStatus });
   };
 
   return (

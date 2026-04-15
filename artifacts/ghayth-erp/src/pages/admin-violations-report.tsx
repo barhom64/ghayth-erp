@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -55,7 +54,6 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string
 };
 
 export default function ViolationsReportPage() {
-  const qc = useQueryClient();
   const [filters, setFilters] = useState({ type: "", priority: "", status: "open", department: "" });
   const queryParams = new URLSearchParams();
   if (filters.type) queryParams.set("type", filters.type);
@@ -74,17 +72,16 @@ export default function ViolationsReportPage() {
   const byDepartment = data?.byDepartment || [];
   const trend = data?.trend || [];
 
-  const [resolving, setResolving] = useState<number | null>(null);
+  const resolveMut = useApiMutation<any, { id: number }>(
+    (body) => `/admin/violations/${body.id}/resolve`,
+    "PATCH",
+    [["violations-report"]],
+    { successMessage: "تم الحل" }
+  );
+  const resolving = resolveMut.isPending ? resolveMut.variables?.id ?? null : null;
 
-  const handleResolve = async (id: number) => {
-    setResolving(id);
-    try {
-      await apiFetch(`/admin/violations/${id}/resolve`, { method: "PATCH" });
-      qc.invalidateQueries({ queryKey: ["violations-report"] });
-    } catch (e) {
-      console.error(e);
-    }
-    setResolving(null);
+  const handleResolve = (id: number) => {
+    resolveMut.mutate({ id });
   };
 
   const summaryCards = [

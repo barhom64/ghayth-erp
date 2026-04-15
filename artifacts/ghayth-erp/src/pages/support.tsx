@@ -10,7 +10,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { textColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -20,8 +20,6 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { formatDateAr } from "@/lib/formatters";
 
 function Support() {
@@ -214,8 +212,6 @@ function Support() {
 function KBManagement() {
   const { data: kbResp, isLoading, isError, error, refetch } = useApiQuery<any>(["support-kb"], "/support/kb");
   const items = asList(kbResp);
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const { roleLevel } = useAppContext();
   const canWrite = roleLevel >= 50;
   const [filters, setFilters] = useFilters();
@@ -259,15 +255,21 @@ function KBManagement() {
     },
   ];
 
-  const handleCreate = async () => {
+  const createMut = useApiMutation<any, typeof newForm>(
+    "/support/kb",
+    "POST",
+    [["support-kb"]],
+    {
+      successMessage: "تم إنشاء المقالة",
+      onSuccess: () => {
+        setShowNew(false);
+        setNewForm({ title: "", content: "", category: "", status: "published" });
+      },
+    }
+  );
+  const handleCreate = () => {
     if (!newForm.title) return;
-    try {
-      await apiFetch("/support/kb", { method: "POST", body: JSON.stringify(newForm) });
-      toast({ title: "تم إنشاء المقالة" });
-      setShowNew(false);
-      setNewForm({ title: "", content: "", category: "", status: "published" });
-      qc.invalidateQueries({ queryKey: ["support-kb"] });
-    } catch { toast({ variant: "destructive", title: "خطأ في الحفظ" }); }
+    createMut.mutate(newForm);
   };
 
   return (

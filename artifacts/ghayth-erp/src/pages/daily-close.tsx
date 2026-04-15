@@ -1,9 +1,6 @@
-import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
   Shield, CheckCircle2, XCircle, AlertTriangle, Lock,
@@ -17,9 +14,6 @@ import { cn } from "@/lib/utils";
 export default function DailyClose() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [isClosing, setIsClosing] = useState(false);
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["daily-close-checklist", scopeQueryString],
@@ -34,35 +28,20 @@ export default function DailyClose() {
   const passedCount = items.filter((i: any) => i.passed).length;
   const failedCount = items.filter((i: any) => !i.passed).length;
 
-  const handleClose = async (force = false) => {
+  const closeMut = useApiMutation<any, { notes: string; force: boolean }>(
+    () => `/operations-center/daily-close/execute${scopeSuffix}`,
+    "POST",
+    [["daily-close-checklist"]],
+    { successMessage: "تم إقفال اليوم بنجاح" }
+  );
+  const isClosing = closeMut.isPending;
+
+  const handleClose = (force = false) => {
     const msg = force
       ? "ستقوم بالتجاوز القسري وإقفال اليوم رغم وجود بنود غير مكتملة. هل أنت متأكد؟"
       : "هل أنت متأكد من إقفال اليوم؟ لا يمكن التراجع عن هذا الإجراء.";
     if (!confirm(msg)) return;
-    setIsClosing(true);
-    try {
-      await apiFetch(`/operations-center/daily-close/execute${scopeSuffix}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes: "", force }),
-      });
-      toast({ title: "تم الإقفال", description: "تم إقفال اليوم بنجاح" });
-      queryClient.invalidateQueries({ queryKey: ["daily-close-checklist"] });
-      refetch();
-    } catch (err: any) {
-      const msg = err?.message || "تعذّر إقفال اليوم";
-      if (!force && msg.includes("بنود لم تكتمل")) {
-        toast({
-          title: "لا يمكن الإقفال",
-          description: msg,
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "خطأ", description: msg, variant: "destructive" });
-      }
-    } finally {
-      setIsClosing(false);
-    }
+    closeMut.mutate({ notes: "", force });
   };
 
   if (isLoading) {

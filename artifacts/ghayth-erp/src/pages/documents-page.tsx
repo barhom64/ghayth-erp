@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -89,17 +89,14 @@ function DocumentsList() {
     !search || d.title?.includes(search) || d.fileName?.includes(search)
   );
 
-  const handleStatusChange = async (docId: number, newStatus: string) => {
-    try {
-      await apiFetch(`/documents/${docId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: newStatus }),
-      });
-      refetch();
-      qc.invalidateQueries({ queryKey: ["doc-stats"] });
-    } catch (err: any) {
-      alert(err.message);
-    }
+  const statusMut = useApiMutation<any, { id: number; status: string }>(
+    (body) => `/documents/${body.id}/status`,
+    "PATCH",
+    [["documents"], ["doc-stats"]],
+    { successMessage: "تم تحديث الحالة" }
+  );
+  const handleStatusChange = (docId: number, newStatus: string) => {
+    statusMut.mutate({ id: docId, status: newStatus });
   };
 
   const handleDownload = async (docId: number, fileName: string) => {
@@ -247,19 +244,24 @@ function DocumentsList() {
 }
 
 function FoldersTab() {
-  const { data: foldersResp, isLoading, isError, refetch } = useApiQuery<any>(["doc-folders"], "/documents/folders");
+  const { data: foldersResp, isLoading, isError } = useApiQuery<any>(["doc-folders"], "/documents/folders");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", color: "" });
   const items = asList(foldersResp);
 
-  const handleCreate = async () => {
-    try {
-      await apiFetch("/documents/folders", { method: "POST", body: JSON.stringify(form) });
-      setForm({ name: "", color: "" });
-      setShowForm(false);
-      refetch();
-    } catch {}
-  };
+  const createMut = useApiMutation<any, { name: string; color: string }>(
+    "/documents/folders",
+    "POST",
+    [["doc-folders"]],
+    {
+      successMessage: "تم إنشاء المجلد",
+      onSuccess: () => {
+        setForm({ name: "", color: "" });
+        setShowForm(false);
+      },
+    }
+  );
+  const handleCreate = () => createMut.mutate(form);
 
   return (
     <div className="space-y-4">
@@ -306,21 +308,26 @@ function FoldersTab() {
 }
 
 function TemplatesTab() {
-  const { data: templatesResp, isLoading, refetch } = useApiQuery<any>(["doc-templates"], "/documents/templates");
+  const { data: templatesResp, isLoading } = useApiQuery<any>(["doc-templates"], "/documents/templates");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", category: "" });
   const items = asList(templatesResp);
   const [tplSearch, setTplSearch] = useState("");
   const filteredTemplates = items.filter((t: any) => !tplSearch || t.name?.includes(tplSearch) || t.category?.includes(tplSearch));
 
-  const handleCreate = async () => {
-    try {
-      await apiFetch("/documents/templates", { method: "POST", body: JSON.stringify(form) });
-      setForm({ name: "", description: "", category: "" });
-      setShowForm(false);
-      refetch();
-    } catch {}
-  };
+  const createMut = useApiMutation<any, { name: string; description: string; category: string }>(
+    "/documents/templates",
+    "POST",
+    [["doc-templates"]],
+    {
+      successMessage: "تم إنشاء القالب",
+      onSuccess: () => {
+        setForm({ name: "", description: "", category: "" });
+        setShowForm(false);
+      },
+    }
+  );
+  const handleCreate = () => createMut.mutate(form);
 
   return (
     <div className="space-y-4">

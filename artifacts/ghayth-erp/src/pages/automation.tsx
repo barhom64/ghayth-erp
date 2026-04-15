@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,8 +53,6 @@ export default function Automation() {
   const autoLogs = asList(autoLogsResp);
   const autoLogsTotal = autoLogsResp?.total || autoLogs.length;
   const { data: autoStats } = useApiQuery<any>(["automation-stats"], "/automation/automation-stats");
-  const { toast } = useToast();
-  const qc = useQueryClient();
 
   const filteredJobs = cronJobs.filter((j: any) => !jobSearch || j.name?.includes(jobSearch) || j.description?.includes(jobSearch));
   const filteredLogs = cronLogs.filter((l: any) => !logSearch || l.jobName?.includes(logSearch) || l.result?.includes(logSearch));
@@ -67,28 +63,26 @@ export default function Automation() {
     l.actionTaken?.includes(autoLogSearch)
   );
 
-  const handleToggle = async (id: number) => {
-    try {
-      await apiFetch(`/automation/cron-jobs/${id}/toggle`, { method: "POST", body: "{}" });
-      qc.invalidateQueries({ queryKey: ["cron-jobs"] });
-    } catch { toast({ variant: "destructive", title: "حدث خطأ" }); }
-  };
+  const toggleJobMut = useApiMutation<any, { id: number }>(
+    (body) => `/automation/cron-jobs/${body.id}/toggle`,
+    "POST",
+    [["cron-jobs"]]
+  );
+  const triggerJobMut = useApiMutation<any, { id: number }>(
+    (body) => `/automation/cron-jobs/${body.id}/trigger`,
+    "POST",
+    [["cron-jobs"], ["cron-logs"]],
+    { successMessage: "تم تشغيل المهمة يدوياً" }
+  );
+  const toggleProactiveMut = useApiMutation<any, { id: number }>(
+    (body) => `/automation/proactive-rules/${body.id}/toggle`,
+    "POST",
+    [["proactive-rules"]]
+  );
 
-  const handleTrigger = async (id: number) => {
-    try {
-      await apiFetch(`/automation/cron-jobs/${id}/trigger`, { method: "POST", body: "{}" });
-      toast({ title: "تم تشغيل المهمة يدوياً" });
-      qc.invalidateQueries({ queryKey: ["cron-jobs"] });
-      qc.invalidateQueries({ queryKey: ["cron-logs"] });
-    } catch { toast({ variant: "destructive", title: "حدث خطأ" }); }
-  };
-
-  const handleToggleProactive = async (id: number) => {
-    try {
-      await apiFetch(`/automation/proactive-rules/${id}/toggle`, { method: "POST", body: "{}" });
-      qc.invalidateQueries({ queryKey: ["proactive-rules"] });
-    } catch { toast({ variant: "destructive", title: "حدث خطأ" }); }
-  };
+  const handleToggle = (id: number) => toggleJobMut.mutate({ id });
+  const handleTrigger = (id: number) => triggerJobMut.mutate({ id });
+  const handleToggleProactive = (id: number) => toggleProactiveMut.mutate({ id });
 
   const activeProactiveCount = proactiveRules.filter((r: any) => r.isActive).length;
 

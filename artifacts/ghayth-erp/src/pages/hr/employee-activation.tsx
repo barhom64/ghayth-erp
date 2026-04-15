@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { formatCurrency } from "@/lib/formatters";
-import { useApiQuery, apiFetch } from "@/lib/api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,7 +59,6 @@ export default function EmployeeActivationPage() {
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const { toast } = useToast();
-  const qc = useQueryClient();
   const [filters, setFilters] = useFilters();
   const { data, refetch } = useApiQuery<any>(["employees"], "/employees?limit=200");
   const employees = data?.data || [];
@@ -84,39 +82,38 @@ export default function EmployeeActivationPage() {
     { label: "معلقين", value: suspended, icon: ToggleLeft, color: "text-yellow-600 bg-yellow-50" },
   ];
 
-  const lifecycleMutation = useMutation({
-    mutationFn: async ({ action, employee, reason }: { action: LifecycleAction; employee: any; reason: string }) => {
-      if (action === "terminate") {
-        return apiFetch(`/employees/${employee.id}`, {
-          method: "DELETE",
-          body: JSON.stringify({ reason }),
-        });
-      }
-      const nextStatus = action === "activate" ? "active" : "suspended";
-      return apiFetch(`/employees/${employee.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: nextStatus, statusReason: reason || undefined }),
-      });
+  const onLifecycleSuccess = (action: LifecycleAction) => {
+    const msg =
+      action === "activate" ? "تم تفعيل الموظف" :
+      action === "suspend" ? "تم تعليق الموظف" :
+      "تم إنهاء خدمة الموظف";
+    toast({ title: msg });
+    refetch();
+    setPending(null);
+    setReason("");
+  };
+
+  const patchMutation = useApiMutation<any, { id: number; status: string; statusReason?: string; action: LifecycleAction }>(
+    (body) => `/employees/${body.id}`,
+    "PATCH",
+    [["employees"]],
+    {
+      successMessage: false,
+      onSuccess: (_d, body) => onLifecycleSuccess(body.action),
     },
-    onSuccess: (_, vars) => {
-      const msg =
-        vars.action === "activate" ? "تم تفعيل الموظف" :
-        vars.action === "suspend" ? "تم تعليق الموظف" :
-        "تم إنهاء خدمة الموظف";
-      toast({ title: msg });
-      qc.invalidateQueries({ queryKey: ["employees"] });
-      refetch();
-      setPending(null);
-      setReason("");
+  );
+
+  const terminateMutation = useApiMutation<any, { id: number; reason: string; action: LifecycleAction }>(
+    (body) => `/employees/${body.id}`,
+    "DELETE",
+    [["employees"]],
+    {
+      successMessage: false,
+      onSuccess: (_d, body) => onLifecycleSuccess(body.action),
     },
-    onError: (err: any) => {
-      toast({
-        variant: "destructive",
-        title: "فشل التنفيذ",
-        description: err?.message || "حدث خطأ أثناء تحديث حالة الموظف",
-      });
-    },
-  });
+  );
+
+  const lifecyclePending = patchMutation.isPending || terminateMutation.isPending;
 
   const openConfirm = (action: LifecycleAction, employee: any) => {
     setReason("");
@@ -130,7 +127,18 @@ export default function EmployeeActivationPage() {
       toast({ variant: "destructive", title: "السبب مطلوب" });
       return;
     }
-    lifecycleMutation.mutate({ ...pending, reason: reason.trim() });
+    const trimmed = reason.trim();
+    if (pending.action === "terminate") {
+      terminateMutation.mutate({ id: pending.employee.id, reason: trimmed, action: "terminate" });
+    } else {
+      const nextStatus = pending.action === "activate" ? "active" : "suspended";
+      patchMutation.mutate({
+        id: pending.employee.id,
+        status: nextStatus,
+        statusReason: trimmed || undefined,
+        action: pending.action,
+      });
+    }
   };
 
   const columns: DataTableColumn<any>[] = [
@@ -308,13 +316,13 @@ export default function EmployeeActivationPage() {
             </div>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={lifecycleMutation.isPending}>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel disabled={lifecyclePending}>إلغاء</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => { e.preventDefault(); confirmAction(); }}
-              disabled={lifecycleMutation.isPending}
+              disabled={lifecyclePending}
               className={cfg?.destructive ? "bg-red-600 hover:bg-red-700" : undefined}
             >
-              {lifecycleMutation.isPending ? "جارٍ التنفيذ..." : cfg?.confirmLabel}
+              {lifecyclePending ? "جارٍ التنفيذ..." : cfg?.confirmLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
