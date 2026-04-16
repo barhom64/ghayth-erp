@@ -10,6 +10,7 @@ import {
   User, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { useQueryClient } from "@tanstack/react-query";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
@@ -21,13 +22,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   rejected:     { label: "مرفوض",            color: "bg-red-100 text-red-700"      },
 };
 
-const EXIT_TYPE_MAP: Record<string, string> = {
-  resignation:  "استقالة",
-  termination:  "فصل",
-  retirement:   "تقاعد",
-  contract_end: "انتهاء عقد",
-  mutual:       "اتفاق متبادل",
-};
+import { EXIT_TYPES } from "@/lib/hr-type-maps";
 
 const CLEARANCE_STATUS: Record<string, { label: string; color: string }> = {
   pending:  { label: "معلق",  color: "text-amber-600 bg-amber-50" },
@@ -79,7 +74,7 @@ export default function ExitDetail() {
   return (
     <PageShell
       title={`طلب نهاية خدمة — ${item?.employeeName || ""}`}
-      subtitle={item ? `${EXIT_TYPE_MAP[item.exitType] || item.exitType} — ${item.jobTitle || ""}` : undefined}
+      subtitle={item ? `${EXIT_TYPES[item.exitType] || item.exitType} — ${item.jobTitle || ""}` : undefined}
       loading={isLoading}
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
@@ -104,29 +99,12 @@ export default function ExitDetail() {
       }
     >
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50" },
-          { label: "نوع الإنهاء", value: EXIT_TYPE_MAP[item.exitType] || item.exitType, icon: LogOut, color: "text-red-600 bg-red-50" },
-          { label: "سنوات الخدمة", value: yearsOfService, icon: Calendar, color: "text-purple-600 bg-purple-50" },
-          { label: "المكافأة المقدّرة", value: formatCurrency(Number(item.estimatedGratuity || 0)), icon: DollarSign, color: "text-green-600 bg-green-50" },
-        ].map((c) => {
-          const Icon = c.icon;
-          return (
-            <Card key={c.label} className="border-0 shadow-sm">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                  <Icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
-                </div>
-                <div>
-                  <p className="text-lg font-bold">{c.value}</p>
-                  <p className="text-xs text-gray-500">{c.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <KpiGrid items={[
+        { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50", size: "sm" },
+        { label: "نوع الإنهاء", value: EXIT_TYPES[item.exitType] || item.exitType, icon: LogOut, color: "text-red-600 bg-red-50", size: "sm" },
+        { label: "سنوات الخدمة", value: yearsOfService, icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
+        { label: "المكافأة المقدّرة", value: formatCurrency(Number(item.estimatedGratuity || 0)), icon: DollarSign, color: "text-green-600 bg-green-50", size: "sm" },
+      ]} />
 
       {/* تنبيه الفصل */}
       {item.exitType === "termination" && (

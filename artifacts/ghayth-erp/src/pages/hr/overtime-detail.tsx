@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Timer, Calendar, DollarSign, Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending:  { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700" },
@@ -62,24 +63,7 @@ export default function OvertimeDetail() {
       }
     >
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {kpis.map((c) => {
-          const Icon = c.icon;
-          return (
-            <Card key={c.label} className="border-0 shadow-sm">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                  <Icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
-                </div>
-                <div>
-                  <p className="text-lg font-bold">{c.value}</p>
-                  <p className="text-xs text-gray-500">{c.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <KpiGrid items={kpis.map(k => ({ ...k, size: "sm" as const }))} />
 
       {/* تفاصيل الطلب */}
       <Card className="border-0 shadow-sm">

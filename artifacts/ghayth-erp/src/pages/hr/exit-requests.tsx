@@ -1,7 +1,6 @@
 import { formatCurrency } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
@@ -14,6 +13,9 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
+import { EXIT_TYPES } from "@/lib/hr-type-maps";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "pending",   label: "بانتظار الموافقة" },
@@ -28,14 +30,6 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   completed: { label: "مكتمل",            color: "bg-green-100 text-green-700 border-green-300" },
   rejected:  { label: "مرفوض",            color: "bg-red-100 text-red-700 border-red-300"       },
   cancelled: { label: "ملغي",             color: "bg-gray-100 text-gray-600 border-gray-300"    },
-};
-
-const EXIT_TYPE_MAP: Record<string, string> = {
-  resignation:  "استقالة",
-  termination:  "فصل",
-  retirement:   "تقاعد",
-  contract_end: "انتهاء عقد",
-  mutual:       "اتفاق متبادل",
 };
 
 export default function ExitRequestsPage() {
@@ -110,9 +104,7 @@ export default function ExitRequestsPage() {
       sortable: true,
       render: (v) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold shrink-0">
-            {(v.employeeName || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={v.employeeName} color="red" />
           <div>
             <span className="font-medium text-sm block">{v.employeeName}</span>
             {v.jobTitle && (
@@ -136,7 +128,7 @@ export default function ExitRequestsPage() {
             "border-gray-200",
           )}
         >
-          {EXIT_TYPE_MAP[v.exitType] || v.exitType}
+          {EXIT_TYPES[v.exitType] || v.exitType}
         </Badge>
       ),
     },
@@ -232,22 +224,7 @@ export default function ExitRequestsPage() {
         </Link>
       }
     >
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       {Number(stats.pending) > 0 && (
         <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">

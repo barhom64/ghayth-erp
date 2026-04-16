@@ -2,10 +2,12 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, CheckCircle, XCircle, Clock, AlertTriangle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { APPROVAL_ROLES } from "@/lib/hr-type-maps";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "pending",   label: "معلق"  },
@@ -21,15 +23,6 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   escalated: { label: "تصعيد", color: "bg-purple-100 text-purple-700 border-purple-300" },
 };
 
-const roleMap: Record<string, string> = {
-  manager: "المدير المباشر",
-  branch_manager: "مدير الفرع",
-  hr: "الموارد البشرية",
-  hr_manager: "مدير الموارد البشرية",
-  general_manager: "المدير العام",
-  finance_manager: "المدير المالي",
-  owner: "المالك",
-};
 
 export default function ApprovalChainsPage() {
   const [filters, setFilters] = useFilters();
@@ -91,7 +84,7 @@ export default function ApprovalChainsPage() {
       header: "الدور المطلوب",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">{roleMap[v.requiredRole] || v.requiredRole}</span>
+        <span className="text-sm text-gray-600">{APPROVAL_ROLES[v.requiredRole] || v.requiredRole}</span>
       ),
     },
     {

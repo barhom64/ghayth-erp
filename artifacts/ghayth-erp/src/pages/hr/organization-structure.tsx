@@ -1,8 +1,8 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Network, ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { KpiGrid } from "@/components/shared/kpi-card";
 
 export default function OrganizationStructurePage() {
   const { data: depts } = useApiQuery<any>(["departments"], "/settings/departments");
@@ -10,28 +10,19 @@ export default function OrganizationStructurePage() {
   const departments = depts?.data || [];
   const employees = empData?.data || [];
 
+  const kpis = [
+    { label: "الأقسام", value: departments.length, icon: Building2, color: "text-blue-600 bg-blue-50" },
+    { label: "الموظفين", value: employees.length, icon: Users, color: "text-green-600 bg-green-50" },
+    { label: "المناصب", value: [...new Set(employees.map((e: any) => e.jobTitle))].length, icon: Network, color: "text-purple-600 bg-purple-50" },
+  ];
+
   return (
     <PageShell
       title="الهيكل التنظيمي المفصل"
       subtitle="عرض شجري للأقسام والمسؤولين والعلاقات التنظيمية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "الهيكل التنظيمي المفصل" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "الأقسام", value: departments.length, icon: Building2, color: "text-blue-600 bg-blue-50" },
-          { label: "الموظفين", value: employees.length, icon: Users, color: "text-green-600 bg-green-50" },
-          { label: "المناصب", value: [...new Set(employees.map((e: any) => e.jobTitle))].length, icon: Network, color: "text-purple-600 bg-purple-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-2xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <div className="flex justify-center">
         <div className="text-center">

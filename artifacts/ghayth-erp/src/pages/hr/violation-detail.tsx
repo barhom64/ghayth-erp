@@ -10,6 +10,7 @@ import {
   AlertTriangle, Shield, DollarSign, Calendar, User, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const SEVERITY_MAP: Record<string, { label: string; color: string }> = {
@@ -69,29 +70,12 @@ export default function ViolationDetail() {
       }
     >
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50" },
-          { label: "النوع", value: VIOLATION_TYPES[item.type] || item.type, icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
-          { label: "الخصم", value: formatCurrency(Number(item.deduction || 0)), icon: DollarSign, color: "text-red-600 bg-red-50" },
-          { label: "الفترة", value: item.period || "—", icon: Calendar, color: "text-purple-600 bg-purple-50" },
-        ].map((c) => {
-          const Icon = c.icon;
-          return (
-            <Card key={c.label} className="border-0 shadow-sm">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                  <Icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
-                </div>
-                <div>
-                  <p className="text-lg font-bold">{c.value}</p>
-                  <p className="text-xs text-gray-500">{c.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <KpiGrid items={[
+        { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50", size: "sm" },
+        { label: "النوع", value: VIOLATION_TYPES[item.type] || item.type, icon: AlertTriangle, color: "text-amber-600 bg-amber-50", size: "sm" },
+        { label: "الخصم", value: formatCurrency(Number(item.deduction || 0)), icon: DollarSign, color: "text-red-600 bg-red-50", size: "sm" },
+        { label: "الفترة", value: item.period || "—", icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
+      ]} />
 
       {/* تفاصيل المخالفة */}
       <Card className="border-0 shadow-sm">

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Wallet, Calendar, DollarSign, CheckCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { KpiGrid } from "@/components/shared/kpi-card";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700" },
@@ -76,29 +77,12 @@ export default function LoanDetail() {
       }
     >
       {/* ملخص السلفة */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "المبلغ الكلي", value: formatCurrency(Number(loan.amount)), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
-          { label: "المسدد", value: formatCurrency(Number(loan.paidAmount ?? 0)), icon: CheckCircle, color: "text-green-600 bg-green-50" },
-          { label: "المتبقي", value: formatCurrency(Number(loan.remainingAmount ?? loan.amount)), icon: Wallet, color: "text-red-600 bg-red-50" },
-          { label: "القسط الشهري", value: formatCurrency(Number(loan.installmentAmount ?? 0)), icon: Calendar, color: "text-purple-600 bg-purple-50" },
-        ].map((c) => {
-          const Icon = c.icon;
-          return (
-            <Card key={c.label} className="border-0 shadow-sm">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                  <Icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
-                </div>
-                <div>
-                  <p className="text-lg font-bold">{c.value}</p>
-                  <p className="text-xs text-gray-500">{c.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <KpiGrid items={[
+        { label: "المبلغ الكلي", value: formatCurrency(Number(loan.amount)), icon: DollarSign, color: "text-blue-600 bg-blue-50", size: "sm" },
+        { label: "المسدد", value: formatCurrency(Number(loan.paidAmount ?? 0)), icon: CheckCircle, color: "text-green-600 bg-green-50", size: "sm" },
+        { label: "المتبقي", value: formatCurrency(Number(loan.remainingAmount ?? loan.amount)), icon: Wallet, color: "text-red-600 bg-red-50", size: "sm" },
+        { label: "القسط الشهري", value: formatCurrency(Number(loan.installmentAmount ?? 0)), icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
+      ]} />
 
       {/* شريط التقدم */}
       {loan.status === "active" && (

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
@@ -19,16 +19,7 @@ import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@/components/approval-actions";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-
-
-const typeMap: Record<string, string> = {
-  general: "عام",
-  employment_certificate: "شهادة عمل",
-  salary_certificate: "شهادة راتب",
-  experience_letter: "شهادة خبرة",
-  warning_letter: "خطاب إنذار",
-  termination_letter: "خطاب إنهاء خدمة",
-};
+import { LETTER_TYPES } from "@/lib/hr-type-maps";
 
 export default function OfficialLettersPage() {
   const [showForm, setShowForm] = useState(false);
@@ -54,7 +45,7 @@ export default function OfficialLettersPage() {
 
   const columns: DataTableColumn<any>[] = [
     { key: "subject", header: "الموضوع", sortable: true, className: "font-medium", render: (l) => l.subject },
-    { key: "type", header: "النوع", sortable: true, render: (l) => typeMap[l.type] || l.type },
+    { key: "type", header: "النوع", sortable: true, render: (l) => LETTER_TYPES[l.type] || l.type },
     { key: "employeeName", header: "الموظف", sortable: true, className: "text-gray-500", render: (l) => l.employeeName || "-" },
     { key: "createdAt", header: "التاريخ", sortable: true, className: "text-gray-500", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "-" },
     { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status} /> },
@@ -117,26 +108,12 @@ export default function OfficialLettersPage() {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "إجمالي الخطابات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-          { label: "مسودة", value: items.filter((l: any) => l.status === "draft").length, icon: FileSignature, color: "text-gray-600 bg-gray-50" },
-          { label: "صادر", value: items.filter((l: any) => l.status === "issued").length, icon: Send, color: "text-green-600 bg-green-50" },
-          { label: "مرسل", value: items.filter((l: any) => l.status === "sent").length, icon: Send, color: "text-blue-600 bg-blue-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي الخطابات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+        { label: "مسودة", value: items.filter((l: any) => l.status === "draft").length, icon: FileSignature, color: "text-gray-600 bg-gray-50" },
+        { label: "صادر", value: items.filter((l: any) => l.status === "issued").length, icon: Send, color: "text-green-600 bg-green-50" },
+        { label: "مرسل", value: items.filter((l: any) => l.status === "sent").length, icon: Send, color: "text-blue-600 bg-blue-50" },
+      ]} />
 
       <AdvancedFilters
         config={{
@@ -163,7 +140,7 @@ export default function OfficialLettersPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(typeMap).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    {Object.entries(LETTER_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -192,7 +169,7 @@ export default function OfficialLettersPage() {
           open={!!previewLetter}
           onClose={() => setPreviewLetter(null)}
           branch={branch}
-          documentTitle={typeMap[previewLetter.type] || "خطاب رسمي"}
+          documentTitle={LETTER_TYPES[previewLetter.type] || "خطاب رسمي"}
           documentRef={previewLetter.ref || `LTR-${previewLetter.id}`}
           documentDate={previewLetter.createdAt ? formatDateAr(previewLetter.createdAt) : ""}
         >

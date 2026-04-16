@@ -4,26 +4,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, FileText, Clock, Shield } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { DOCUMENT_TYPES, DOCUMENT_COLORS } from "@/lib/hr-type-maps";
 
-const DOC_LABELS: Record<string, string> = {
-  work_permit: "تصريح عمل",
-  iqama: "إقامة",
-  passport: "جواز سفر",
-  contract: "عقد عمل",
-};
-
-const DOC_COLORS: Record<string, string> = {
-  work_permit: "border-blue-300 text-blue-700 bg-blue-50",
-  iqama: "border-purple-300 text-purple-700 bg-purple-50",
-  passport: "border-green-300 text-green-700 bg-green-50",
-  contract: "border-orange-300 text-orange-700 bg-orange-50",
-};
-
-const DOC_STATUS_OPTIONS = Object.entries(DOC_LABELS).map(([value, label]) => ({ value, label }));
+const DOC_STATUS_OPTIONS = Object.entries(DOCUMENT_TYPES).map(([value, label]) => ({ value, label }));
 
 function getSeverityBadge(daysLeft: number) {
   if (daysLeft <= 0) return { label: "منتهي", color: "bg-red-100 text-red-700 border-red-300" };
@@ -66,9 +54,7 @@ export default function ExpiringDocumentsPage() {
       sortable: true,
       render: (v) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
-            {(v.employeeName || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={v.employeeName} color="blue" />
           <span className="font-medium text-sm">{v.employeeName}</span>
         </div>
       ),
@@ -78,8 +64,8 @@ export default function ExpiringDocumentsPage() {
       header: "نوع الوثيقة",
       sortable: true,
       render: (v) => (
-        <Badge variant="outline" className={cn("text-xs", DOC_COLORS[v.docType] || "")}>
-          {DOC_LABELS[v.docType] || v.docLabel || v.docType}
+        <Badge variant="outline" className={cn("text-xs", DOCUMENT_COLORS[v.docType] || "")}>
+          {DOCUMENT_TYPES[v.docType] || v.docLabel || v.docType}
         </Badge>
       ),
     },
@@ -130,21 +116,7 @@ export default function ExpiringDocumentsPage() {
       }
     >
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       {/* Expired alert */}
       {expiredCount > 0 && (

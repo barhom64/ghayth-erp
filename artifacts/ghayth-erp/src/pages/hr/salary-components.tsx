@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { SALARY_COMPONENT_TYPES, SALARY_CATEGORIES } from "@/lib/hr-type-maps";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, DollarSign, TrendingUp, Percent, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
@@ -36,8 +37,6 @@ export default function SalaryComponentsPage() {
     );
   };
 
-  const typeMap: Record<string, string> = { fixed: "ثابت", percentage: "نسبة", variable: "متغير" };
-  const categoryMap: Record<string, string> = { allowance: "بدل", deduction: "خصم", benefit: "مزايا" };
 
   const [filters, setFilters] = useFilters();
   const filtered = applyFilters(items, filters, { searchFields: ["name", "type", "category"], statusField: "status" });
@@ -46,14 +45,14 @@ export default function SalaryComponentsPage() {
 
   const columns: DataTableColumn<any>[] = [
     { key: "name", header: "المكون", sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
-    { key: "type", header: "النوع", sortable: true, render: (c) => typeMap[c.type] || c.type },
+    { key: "type", header: "النوع", sortable: true, render: (c) => SALARY_COMPONENT_TYPES[c.type] || c.type },
     {
       key: "category",
       header: "التصنيف",
       sortable: true,
       render: (c) => (
         <Badge className={c.category === "deduction" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
-          {categoryMap[c.category] || c.category || "بدل"}
+          {SALARY_CATEGORIES[c.category] || c.category || "بدل"}
         </Badge>
       ),
     },
@@ -83,26 +82,12 @@ export default function SalaryComponentsPage() {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "إجمالي المكونات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-          { label: "البدلات", value: allowances.length, icon: TrendingUp, color: "text-green-600 bg-green-50" },
-          { label: "الخصومات", value: deductions.length, icon: DollarSign, color: "text-red-600 bg-red-50" },
-          { label: "نسبية", value: items.filter((c: any) => c.type === "percentage").length, icon: Percent, color: "text-purple-600 bg-purple-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي المكونات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+        { label: "البدلات", value: allowances.length, icon: TrendingUp, color: "text-green-600 bg-green-50" },
+        { label: "الخصومات", value: deductions.length, icon: DollarSign, color: "text-red-600 bg-red-50" },
+        { label: "نسبية", value: items.filter((c: any) => c.type === "percentage").length, icon: Percent, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <AdvancedFilters
         config={{

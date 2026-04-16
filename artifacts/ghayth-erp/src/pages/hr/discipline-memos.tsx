@@ -1,15 +1,17 @@
 import { Link, useLocation } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, FileText, Gavel, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { INCIDENT_LABELS } from "@/lib/hr-type-maps";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "pending_employee", label: "بانتظار الموظف" },
@@ -19,16 +21,6 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "rejected",        label: "مرفوض" },
   { value: "cancelled",       label: "ملغي" },
 ];
-
-const INCIDENT_LABELS: Record<string, string> = {
-  late: "تأخر",
-  absence: "غياب",
-  early_leave: "خروج مبكر",
-  behavior: "سلوك",
-  organization: "تنظيم",
-  gps_out_of_range: "خارج النطاق",
-  custom: "أخرى",
-};
 
 export default function DisciplineMemosPage() {
   const [, navigate] = useLocation();
@@ -54,26 +46,31 @@ export default function DisciplineMemosPage() {
     {
       label: "بانتظار الموظف",
       value: stats?.pendingEmployee ?? 0,
+      icon: Gavel,
       color: "text-blue-600 bg-blue-50",
     },
     {
       label: "بانتظار المدير",
       value: stats?.pendingManager ?? 0,
+      icon: Gavel,
       color: "text-indigo-600 bg-indigo-50",
     },
     {
       label: "بانتظار المدير العام",
       value: stats?.pendingGm ?? 0,
+      icon: Gavel,
       color: "text-purple-600 bg-purple-50",
     },
     {
       label: "معتمدة",
       value: stats?.approved ?? 0,
+      icon: Gavel,
       color: "text-green-600 bg-green-50",
     },
     {
       label: "إجمالي الخصومات",
       value: formatCurrency(Number(stats?.totalDeductions ?? 0)),
+      icon: Gavel,
       color: "text-red-600 bg-red-50",
     },
   ];
@@ -97,9 +94,7 @@ export default function DisciplineMemosPage() {
       sortable: true,
       render: (m) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold shrink-0">
-            {(m.employeeName || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={m.employeeName} color="red" />
           <div>
             <span className="font-medium text-sm block">{m.employeeName}</span>
             {m.empNumber && (
@@ -226,21 +221,7 @@ export default function DisciplineMemosPage() {
       }
     >
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <Gavel className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} className="grid-cols-2 lg:grid-cols-5" />
 
       {/* Pending alert */}
       {pendingTotal > 0 && (

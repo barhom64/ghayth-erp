@@ -3,10 +3,8 @@ import { formatDateAr } from "@/lib/formatters";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Calendar, Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Timer, Copy } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { ProcessStages, EntityTimeline } from "@/components/shared/entity-timeline";
@@ -19,15 +17,9 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { textColumn, dateColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
-
-const typeMap: Record<string, string> = {
-  annual: "سنوية", sick: "مرضية", personal: "شخصية", unpaid: "بدون راتب",
-  maternity: "أمومة", paternity: "أبوة", emergency: "طارئة",
-};
-
-const roleLabels: Record<string, string> = {
-  manager: "المدير", hr: "الموارد البشرية", owner: "المالك", director: "المدير العام", finance: "المالية",
-};
+import { LEAVE_TYPES, APPROVAL_ROLES } from "@/lib/hr-type-maps";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 
 function LeaveApprovalStages({ leaveId, leaveStatus }: { leaveId: number; leaveStatus: string }) {
   const { data } = useApiQuery<any>(
@@ -42,7 +34,7 @@ function LeaveApprovalStages({ leaveId, leaveStatus }: { leaveId: number; leaveS
   const steps = chainSteps.map((cs: any) => {
     const stageRecord = stages.find((s: any) => s.stage === cs.stepOrder);
     let status: "completed" | "current" | "pending" | "rejected" | "skipped" = "pending";
-    let detail = roleLabels[cs.requiredRole] || cs.requiredRole;
+    let detail = APPROVAL_ROLES[cs.requiredRole] || cs.requiredRole;
     let time: string | undefined;
 
     if (stageRecord) {
@@ -124,9 +116,7 @@ export default function LeavesPage() {
       sortable: true,
       render: (l) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-xs font-bold">
-            {(l.employeeName || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={l.employeeName} color="purple" />
           <span className="font-medium">{l.employeeName}</span>
         </div>
       ),
@@ -135,7 +125,7 @@ export default function LeavesPage() {
       key: "leaveType",
       header: "النوع",
       sortable: true,
-      render: (l) => l.leaveTypeName || typeMap[l.leaveType] || l.leaveType || "-",
+      render: (l) => l.leaveTypeName || LEAVE_TYPES[l.leaveType] || l.leaveType || "-",
     },
     dateColumn("startDate", "من"),
     dateColumn("endDate", "إلى"),
@@ -231,21 +221,7 @@ export default function LeavesPage() {
         />
       }
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <DataTable
         columns={columns}

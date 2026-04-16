@@ -1,7 +1,8 @@
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 // Phase A — HR performance on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -36,9 +37,7 @@ export default function PerformancePage() {
       sortable: true,
       render: (p) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 text-xs font-bold">
-            {(p.employeeName || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={p.employeeName} color="orange" />
           <div>
             <span className="font-medium block">{p.employeeName}</span>
             {p.empNumber && <span className="text-xs text-gray-400">{p.empNumber}</span>}
@@ -99,21 +98,7 @@ export default function PerformancePage() {
         </Link>
       }
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <AdvancedFilters
         config={{

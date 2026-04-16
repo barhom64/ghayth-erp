@@ -1,31 +1,23 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 // Phase A — HR recruitment on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Briefcase, Users, UserCheck, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
 const jobStatusMap: Record<string, { label: string; color: string }> = {
   open: { label: "مفتوح", color: "bg-green-100 text-green-700" },
   closed: { label: "مغلق", color: "bg-red-100 text-red-700" },
   draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
-};
-
-const stageMap: Record<string, { label: string; color: string }> = {
-  new: { label: "جديد", color: "bg-blue-100 text-blue-700" },
-  screening: { label: "فرز", color: "bg-yellow-100 text-yellow-700" },
-  interview: { label: "مقابلة", color: "bg-purple-100 text-purple-700" },
-  offer: { label: "عرض", color: "bg-green-100 text-green-700" },
-  hired: { label: "تم التوظيف", color: "bg-emerald-100 text-emerald-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
 };
 
 export default function RecruitmentPage() {
@@ -69,7 +61,7 @@ export default function RecruitmentPage() {
   });
 
   const appEditFields = [
-    { key: "status", label: "المرحلة", type: "select" as const, options: Object.entries(stageMap).map(([k, v]) => ({ value: k, label: v.label })) },
+    { key: "status", label: "المرحلة", type: "select" as const, options: Object.entries(RECRUITMENT_STAGES).map(([k, v]) => ({ value: k, label: v.label })) },
     { key: "rating", label: "التقييم", type: "number" as const },
   ];
 
@@ -117,9 +109,7 @@ export default function RecruitmentPage() {
       sortable: true,
       render: (a) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
-            {(a.applicantName || a.name || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={a.applicantName || a.name} color="indigo" />
           <span className="font-medium">{a.applicantName || a.name}</span>
         </div>
       ),
@@ -132,7 +122,7 @@ export default function RecruitmentPage() {
       key: "status",
       header: "المرحلة",
       sortable: true,
-      render: (a) => <Badge className={stageMap[a.status || a.stage]?.color || ""}>{stageMap[a.status || a.stage]?.label || a.status || a.stage}</Badge>,
+      render: (a) => <Badge className={RECRUITMENT_STAGES[a.status || a.stage]?.color || ""}>{RECRUITMENT_STAGES[a.status || a.stage]?.label || a.status || a.stage}</Badge>,
     },
     {
       key: "actions",
@@ -155,21 +145,7 @@ export default function RecruitmentPage() {
       subtitle="إدارة الوظائف المفتوحة وطلبات التوظيف"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
@@ -187,7 +163,7 @@ export default function RecruitmentPage() {
           searchPlaceholder: "بحث...",
           statuses: [
             ...Object.entries(jobStatusMap).map(([k, v]) => ({ value: k, label: v.label })),
-            ...Object.entries(stageMap).map(([k, v]) => ({ value: k, label: v.label })),
+            ...Object.entries(RECRUITMENT_STAGES).map(([k, v]) => ({ value: k, label: v.label })),
           ],
           showDateRange: true,
         }}

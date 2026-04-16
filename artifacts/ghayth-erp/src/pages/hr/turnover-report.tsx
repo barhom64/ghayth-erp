@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TrendingDown, Users, DollarSign, BarChart3, PieChart } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart as RechartsPie, Pie } from "recharts";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -166,9 +167,7 @@ export default function TurnoverReportPage() {
                   sortable: true,
                   render: (v: any) => (
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold shrink-0">
-                        {(v.employeeName || "؟").charAt(0)}
-                      </div>
+                      <AvatarInitial name={v.employeeName} color="red" />
                       <span className="font-medium text-sm">{v.employeeName}</span>
                     </div>
                   ),
