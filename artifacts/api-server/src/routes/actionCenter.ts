@@ -198,6 +198,60 @@ router.get("/", async (req, res) => {
       console.error("Action-center criticalAlerts error:", e);
     }
 
+    let pendingLoans: any[] = [];
+    if (PAYROLL_ROLES.includes(scope.role)) {
+      try {
+        pendingLoans = await rawQuery<any>(
+          `SELECT l.id, l."loanNumber", l."loanType", l.amount, l.status, l."createdAt",
+                  e.name AS "employeeName"
+           FROM hr_employee_loans l
+           JOIN employee_assignments ea ON ea.id = l."assignmentId"
+           JOIN employees e ON e.id = ea."employeeId"
+           WHERE l."companyId" = ANY($1::int[]) AND l.status = 'pending'
+           ORDER BY l."createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        console.error("Action-center pendingLoans error:", e);
+      }
+    }
+
+    let pendingOvertime: any[] = [];
+    if (PAYROLL_ROLES.includes(scope.role)) {
+      try {
+        pendingOvertime = await rawQuery<any>(
+          `SELECT o.id, o."requestNumber", o.hours, o."totalAmount", o.status, o."createdAt",
+                  e.name AS "employeeName"
+           FROM hr_overtime_requests o
+           JOIN employee_assignments ea ON ea.id = o."assignmentId"
+           JOIN employees e ON e.id = ea."employeeId"
+           WHERE o."companyId" = ANY($1::int[]) AND o.status = 'pending'
+           ORDER BY o."createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        console.error("Action-center pendingOvertime error:", e);
+      }
+    }
+
+    let pendingExitRequests: any[] = [];
+    if (PAYROLL_ROLES.includes(scope.role)) {
+      try {
+        pendingExitRequests = await rawQuery<any>(
+          `SELECT er.id, er."exitType", er.status, er."createdAt",
+                  e.name AS "employeeName"
+           FROM hr_exit_requests er
+           JOIN employee_assignments ea ON ea.id = er."assignmentId"
+           JOIN employees e ON e.id = ea."employeeId"
+           WHERE er."companyId" = ANY($1::int[]) AND er.status = 'pending'
+           ORDER BY er."createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        console.error("Action-center pendingExitRequests error:", e);
+      }
+    }
+
     let pendingWorkflows: any[] = [];
     try {
       pendingWorkflows = await rawQuery<any>(
@@ -225,7 +279,10 @@ router.get("/", async (req, res) => {
       pendingLetters.length +
       pendingPurchases.length +
       pendingExpenses.length +
-      pendingWorkflows.length;
+      pendingWorkflows.length +
+      pendingLoans.length +
+      pendingOvertime.length +
+      pendingExitRequests.length;
 
     res.json({
       summary: {
@@ -242,6 +299,9 @@ router.get("/", async (req, res) => {
       pendingPurchases,
       pendingExpenses,
       pendingWorkflows,
+      pendingLoans,
+      pendingOvertime,
+      pendingExitRequests,
       slaBreached,
       escalations,
       todayTasks,

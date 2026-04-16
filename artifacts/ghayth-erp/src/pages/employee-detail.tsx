@@ -376,6 +376,8 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const trainings: any[] = employee.trainings || [];
   const payroll: any[] = employee.payroll || [];
   const violations: any[] = employee.violations || [];
+  const loans: any[] = employee.loans || [];
+  const overtime: any[] = employee.overtime || [];
 
   const hireDate = employee.hireDate ? new Date(employee.hireDate) : null;
   const serviceDays = hireDate ? Math.floor((Date.now() - hireDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
@@ -870,17 +872,109 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
       )}
 
       {activeTab === "finance" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-600" />
-              الملف المالي للموظف
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FinancialTab entityType="employee" entityId={id} />
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          {/* سلف الموظف */}
+          {loans.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-emerald-600" />
+                  سلف الموظف ({loans.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">رقم السلفة</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">النوع</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">المبلغ</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">المتبقي</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loans.map((ln: any) => {
+                      const loanTypes: Record<string, string> = { salary_advance: "سلفة راتب", personal: "شخصية", emergency: "طارئة" };
+                      const statusColors: Record<string, string> = { pending: "bg-amber-100 text-amber-700", active: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700", rejected: "bg-red-100 text-red-700" };
+                      const statusLabels: Record<string, string> = { pending: "معلقة", active: "نشطة", completed: "مسددة", rejected: "مرفوضة" };
+                      return (
+                        <tr key={ln.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                          <td className="px-4 py-2 font-mono text-xs text-blue-700">{ln.loanNumber}</td>
+                          <td className="px-4 py-2">{loanTypes[ln.loanType] || ln.loanType}</td>
+                          <td className="px-4 py-2 font-semibold">{formatCurrency(Number(ln.amount))}</td>
+                          <td className="px-4 py-2 text-red-600">{formatCurrency(Number(ln.remainingAmount || 0))}</td>
+                          <td className="px-4 py-2">
+                            <Badge variant="outline" className={cn("text-xs", statusColors[ln.status] || "")}>
+                              {statusLabels[ln.status] || ln.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* وقت إضافي */}
+          {overtime.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-cyan-600" />
+                  الوقت الإضافي ({overtime.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">رقم الطلب</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">التاريخ</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">الساعات</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">المبلغ</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overtime.map((ot: any) => {
+                      const otStatusColors: Record<string, string> = { pending: "bg-amber-100 text-amber-700", approved: "bg-green-100 text-green-700", paid: "bg-blue-100 text-blue-700", rejected: "bg-red-100 text-red-700" };
+                      const otStatusLabels: Record<string, string> = { pending: "معلق", approved: "معتمد", paid: "مدفوع", rejected: "مرفوض" };
+                      return (
+                        <tr key={ot.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                          <td className="px-4 py-2 font-mono text-xs text-purple-700">{ot.requestNumber}</td>
+                          <td className="px-4 py-2 text-gray-600">{ot.overtimeDate ? new Date(ot.overtimeDate).toLocaleDateString("ar-SA") : "—"}</td>
+                          <td className="px-4 py-2">{Number(ot.hours).toFixed(1)} ساعة</td>
+                          <td className="px-4 py-2 font-semibold text-green-700">{formatCurrency(Number(ot.totalAmount || 0))}</td>
+                          <td className="px-4 py-2">
+                            <Badge variant="outline" className={cn("text-xs", otStatusColors[ot.status] || "")}>
+                              {otStatusLabels[ot.status] || ot.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* الملف المالي العام */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-blue-600" />
+                الملف المالي للموظف
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FinancialTab entityType="employee" entityId={id} />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "documents" && (
