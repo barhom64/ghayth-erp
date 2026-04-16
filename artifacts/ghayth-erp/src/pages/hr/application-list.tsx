@@ -9,17 +9,9 @@ import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
-const stageMap: Record<string, { label: string; color: string }> = {
-  new: { label: "جديد", color: "bg-blue-100 text-blue-700 border-blue-300" },
-  screening: { label: "فرز", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
-  interview: { label: "مقابلة", color: "bg-purple-100 text-purple-700 border-purple-300" },
-  offer: { label: "عرض", color: "bg-green-100 text-green-700 border-green-300" },
-  hired: { label: "تم التوظيف", color: "bg-emerald-100 text-emerald-700 border-emerald-300" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700 border-red-300" },
-};
-
-const STATUS_OPTIONS = Object.entries(stageMap).map(([value, { label }]) => ({ value, label }));
+const STATUS_OPTIONS = Object.entries(RECRUITMENT_STAGES).map(([value, { label }]) => ({ value, label }));
 
 export default function ApplicationListPage() {
   const [, navigate] = useLocation();
@@ -102,7 +94,7 @@ export default function ApplicationListPage() {
       sortable: true,
       render: (v) => {
         const stage = v.status || v.stage;
-        const st = stageMap[stage];
+        const st = RECRUITMENT_STAGES[stage];
         return (
           <Badge variant="outline" className={cn("text-xs", st?.color || "")}>
             {st?.label || stage || "-"}

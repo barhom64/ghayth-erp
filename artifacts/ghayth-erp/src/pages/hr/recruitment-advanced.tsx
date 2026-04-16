@@ -6,22 +6,14 @@ import { Briefcase, Users, UserCheck, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-
-const stageMap: Record<string, { label: string; color: string }> = {
-  new: { label: "جديد", color: "bg-blue-100 text-blue-700" },
-  screening: { label: "فرز", color: "bg-yellow-100 text-yellow-700" },
-  interview: { label: "مقابلة", color: "bg-purple-100 text-purple-700" },
-  offer: { label: "عرض", color: "bg-green-100 text-green-700" },
-  hired: { label: "تم التوظيف", color: "bg-emerald-100 text-emerald-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
-};
+import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
 export default function RecruitmentAdvancedPage() {
   const { data: stats } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
   const { data: appsData } = useApiQuery<any>(["applicants"], "/recruitment/applications");
   const apps = appsData?.data || [];
 
-  const pipeline = Object.entries(stageMap).map(([key, val]) => ({
+  const pipeline = Object.entries(RECRUITMENT_STAGES).map(([key, val]) => ({
     stage: key,
     label: val.label,
     color: val.color,
@@ -68,7 +60,7 @@ export default function RecruitmentAdvancedPage() {
               { key: "postingTitle", header: "المنصب", sortable: true, render: (v) => <span className="text-gray-500">{v.postingTitle || v.position || "-"}</span> },
               { key: "email", header: "البريد", sortable: true, render: (v) => <span className="text-gray-500">{v.email || "-"}</span> },
               { key: "rating", header: "التقييم", sortable: true, render: (v) => <span>{v.rating ? `${v.rating}/5` : "-"}</span> },
-              { key: "status", header: "المرحلة", sortable: true, render: (v) => <Badge className={stageMap[v.status]?.color || ""}>{stageMap[v.status]?.label || v.status}</Badge> },
+              { key: "status", header: "المرحلة", sortable: true, render: (v) => <Badge className={RECRUITMENT_STAGES[v.status]?.color || ""}>{RECRUITMENT_STAGES[v.status]?.label || v.status}</Badge> },
             ] as DataTableColumn<any>[]}
             data={apps}
             noToolbar

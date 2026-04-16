@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Network, ChevronDown } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 
 export default function OrganizationStructurePage() {
   const { data: depts } = useApiQuery<any>(["departments"], "/settings/departments");
@@ -51,7 +52,7 @@ export default function OrganizationStructurePage() {
                       <div className="space-y-1 mt-2 border-t pt-2">
                         {deptEmps.slice(0, 5).map((e: any) => (
                           <div key={e.id} className="flex items-center gap-2 text-sm">
-                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs">{(e.name || "").charAt(0)}</div>
+                            <AvatarInitial name={e.name} size="sm" />
                             <span>{e.name}</span>
                             <span className="text-gray-400 text-xs ms-auto">{e.jobTitle}</span>
                           </div>

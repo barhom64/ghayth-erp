@@ -25,6 +25,8 @@ import {
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
+import { generateSequentialNumber, nextPeriod as nextPeriodHelper, currentPeriod, advancePeriod as advancePeriodHelper } from "../lib/hrHelpers.js";
+import { HR_TABLES, NUMBER_PREFIXES, LOAN_STATUS } from "../lib/hrEnums.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -75,16 +77,9 @@ async function ensureLoanTables(): Promise<void> {
   `).catch(() => {});
 }
 
-// ─── رقم السلفة المتسلسل ──────────────────────────────────────────────────
+// ─── رقم السلفة المتسلسل (يستخدم الأداة الموحّدة من hrHelpers) ──────────
 async function generateLoanNumber(companyId: number): Promise<string> {
-  const year = new Date().getFullYear();
-  const [row] = await rawQuery<{ cnt: string }>(
-    `SELECT COUNT(*)::int AS cnt FROM hr_employee_loans
-     WHERE "companyId" = $1 AND EXTRACT(YEAR FROM "createdAt") = $2`,
-    [companyId, year]
-  );
-  const seq = Number(row?.cnt ?? 0) + 1;
-  return `LOAN-${year}-${String(seq).padStart(4, "0")}`;
+  return generateSequentialNumber(HR_TABLES.LOANS, companyId, NUMBER_PREFIXES.LOAN);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -452,20 +447,14 @@ router.get("/loans/my", async (req, res) => {
   }
 });
 
-// ─── أدوات مساعدة ────────────────────────────────────────────────────────────
+// ─── أدوات الفترات (تستخدم hrHelpers الموحّد) ────────────────────────────
 
 function nextPeriod(): string {
-  const now = new Date();
-  const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
-  const m = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
-  return `${y}-${String(m).padStart(2, "0")}`;
+  return nextPeriodHelper(currentPeriod());
 }
 
 function advancePeriod(period: string): string {
-  const [y, m] = period.split("-").map(Number);
-  const nm = m === 12 ? 1 : m + 1;
-  const ny = m === 12 ? y + 1 : y;
-  return `${ny}-${String(nm).padStart(2, "0")}`;
+  return advancePeriodHelper(period, 1);
 }
 
 export default router;

@@ -24,6 +24,8 @@ import {
   processApprovalStep,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
+import { generateSequentialNumber, calcHourlyRate as calcHourlyRateHelper } from "../lib/hrHelpers.js";
+import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -59,23 +61,13 @@ async function ensureOvertimeTable(): Promise<void> {
   `).catch(() => {});
 }
 
-// ─── رقم متسلسل ─────────────────────────────────────────────────────────────
+// ─── رقم متسلسل (يستخدم الأداة الموحّدة من hrHelpers) ───────────────────
 async function generateOvertimeNumber(companyId: number): Promise<string> {
-  const year = new Date().getFullYear();
-  const [row] = await rawQuery<{ cnt: string }>(
-    `SELECT COUNT(*)::int AS cnt FROM hr_overtime_requests
-     WHERE "companyId" = $1 AND EXTRACT(YEAR FROM "createdAt") = $2`,
-    [companyId, year]
-  );
-  const seq = Number(row?.cnt ?? 0) + 1;
-  return `OT-${year}-${String(seq).padStart(4, "0")}`;
+  return generateSequentialNumber(HR_TABLES.OVERTIME, companyId, NUMBER_PREFIXES.OVERTIME);
 }
 
-// ─── حساب المعدل بالساعة ────────────────────────────────────────────────────
-function calcHourlyRate(monthlySalary: number): number {
-  // المادة 98 من نظام العمل السعودي: الراتب / 30 / 8
-  return Math.round((monthlySalary / 30 / 8) * 100) / 100;
-}
+// ─── حساب المعدل بالساعة (يستخدم hrHelpers — المادة 98 السعودية) ────────
+const calcHourlyRate = calcHourlyRateHelper;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime — قائمة الطلبات

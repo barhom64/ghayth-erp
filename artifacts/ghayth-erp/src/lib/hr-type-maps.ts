@@ -84,6 +84,15 @@ export const EXIT_TYPES: Record<string, string> = {
   unknown: "غير محدد",
 };
 
+// ── أنواع إنهاء الخدمة (لحساب المكافأة وفق نظام العمل السعودي) ──────
+export const TERMINATION_TYPES: Record<string, string> = {
+  end_of_service: "إنهاء خدمة من قبل صاحب العمل",
+  resignation: "استقالة",
+  contract_end: "انتهاء العقد",
+  retirement: "تقاعد",
+  termination: "فصل تأديبي",
+};
+
 // ── أنواع السلف ─────────────────────────────────────────────────────
 export const LOAN_TYPES: Record<string, string> = {
   salary_advance: "سلفة راتب",

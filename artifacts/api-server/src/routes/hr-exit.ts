@@ -24,6 +24,8 @@ import {
   getManagerAssignmentId,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
+import { generateSequentialNumber } from "../lib/hrHelpers.js";
+import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -78,16 +80,9 @@ async function ensureExitTables(): Promise<void> {
   `).catch(() => {});
 }
 
-// ─── رقم متسلسل ─────────────────────────────────────────────────────────────
+// ─── رقم متسلسل (يستخدم الأداة الموحّدة من hrHelpers) ───────────────────
 async function generateExitNumber(companyId: number): Promise<string> {
-  const year = new Date().getFullYear();
-  const [row] = await rawQuery<{ cnt: string }>(
-    `SELECT COUNT(*)::int AS cnt FROM hr_exit_requests
-     WHERE "companyId" = $1 AND EXTRACT(YEAR FROM "createdAt") = $2`,
-    [companyId, year]
-  );
-  const seq = Number(row?.cnt ?? 0) + 1;
-  return `EXIT-${year}-${String(seq).padStart(4, "0")}`;
+  return generateSequentialNumber(HR_TABLES.EXIT, companyId, NUMBER_PREFIXES.EXIT);
 }
 
 // ─── أقسام إخلاء الطرف الافتراضية ──────────────────────────────────────────
