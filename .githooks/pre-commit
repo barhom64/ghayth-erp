@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#
+# .githooks/pre-commit — git pre-commit hook wrapper.
+#
+# Runs scripts/guard.sh so every local commit goes through the same
+# checks CI runs (typecheck, lint:patterns, audit:routes, audit:schema).
+#
+# Enable once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# (The scripts/postinstall.sh helper also does this automatically after
+#  `pnpm install`.)
+#
+# Bypass in genuine emergencies (not for lazy commits) with:
+#
+#   git commit --no-verify
+#
+# Every --no-verify commit must be followed by a ship-blocking fix.
+#
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+if [ -f scripts/guard.sh ]; then
+  bash scripts/guard.sh
+else
+  echo "pre-commit: scripts/guard.sh missing — skipping guard"
+fi

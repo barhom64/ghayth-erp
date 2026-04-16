@@ -1,0 +1,43 @@
+name: guard
+
+# Runs the same scripts/guard.sh stack that fires on every local commit
+# via the .githooks/pre-commit hook. This is the last line of defence:
+# even if a developer bypasses the local hook with --no-verify, this
+# workflow will refuse to merge the PR if any guard is red.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          # The root postinstall would try to set git hooks; harmless
+          # inside Actions but we skip it explicitly to keep the log clean.
+          HUSKY: '0'
+
+      - name: Run guard suite (typecheck + lint:patterns + audit:routes + audit:schema)
+        run: bash scripts/guard.sh

@@ -8,6 +8,10 @@
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "lint:patterns": "node scripts/src/lint-patterns.mjs",
+    "audit:routes": "node scripts/src/audit-routes.mjs",
+    "audit:schema": "node scripts/src/audit-schema-drift.mjs",
+    "guard": "bash scripts/guard.sh",
+    "postinstall": "bash scripts/install-hooks.sh",
     "db:bootstrap": "bash db/bootstrap.sh",
     "db:dump-schema": "bash db/dump-schema.sh",
     "db:dump-seed": "bash db/dump-seed.sh"
