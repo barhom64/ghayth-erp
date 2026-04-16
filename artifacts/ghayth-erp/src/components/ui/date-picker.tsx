@@ -85,9 +85,11 @@ function getHijriFirstDayOfWeek(hYear: number, hMonth: number): number {
 interface HijriCalendarProps {
   selected?: Date;
   onSelect: (date: Date | undefined) => void;
+  maxDate?: Date;
+  minDate?: Date;
 }
 
-function HijriCalendar({ selected, onSelect }: HijriCalendarProps) {
+function HijriCalendar({ selected, onSelect, maxDate, minDate }: HijriCalendarProps) {
   const today = new Date();
   const todayH = toHijri(today);
   const initH = selected ? toHijri(selected) : todayH;
@@ -144,19 +146,21 @@ function HijriCalendar({ selected, onSelect }: HijriCalendarProps) {
       <div className="grid grid-cols-7 gap-0">
         {cells.map((day, i) => {
           if (!day) return <div key={i} />;
+          const greg = hijriToGregorian(viewYear, viewMonth, day);
+          const isDisabled = (maxDate && greg > maxDate) || (minDate && greg < minDate);
           const isSelected = selectedH && selectedH.year === viewYear && selectedH.month === viewMonth && selectedH.day === day;
           const isToday = todayH.year === viewYear && todayH.month === viewMonth && todayH.day === day;
           return (
             <button
               key={i}
               type="button"
-              onClick={() => {
-                const greg = hijriToGregorian(viewYear, viewMonth, day);
-                onSelect(greg);
-              }}
+              disabled={!!isDisabled}
+              onClick={() => onSelect(greg)}
               className={cn(
                 "h-8 w-full text-sm rounded-md transition-colors",
-                isSelected
+                isDisabled
+                  ? "text-muted-foreground opacity-40 cursor-not-allowed"
+                  : isSelected
                   ? "bg-primary text-primary-foreground"
                   : isToday
                   ? "bg-accent text-accent-foreground"
@@ -180,9 +184,13 @@ export interface DatePickerProps {
   disabled?: boolean;
   id?: string;
   calendarMode?: "hijri" | "gregorian" | "both";
+  /** Prevent selecting dates after this date */
+  maxDate?: Date;
+  /** Prevent selecting dates before this date */
+  minDate?: Date;
 }
 
-export function DatePicker({ value, onChange, placeholder = "اختر تاريخاً", className, disabled, id, calendarMode: propMode }: DatePickerProps) {
+export function DatePicker({ value, onChange, placeholder = "اختر تاريخاً", className, disabled, id, calendarMode: propMode, maxDate, minDate }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
   const resolveGlobalMode = (): "hijri" | "gregorian" | "both" => {
@@ -271,12 +279,17 @@ export function DatePicker({ value, onChange, placeholder = "اختر تاريخ
         </div>
 
         {mode === "hijri" ? (
-          <HijriCalendar selected={selected} onSelect={handleSelect} />
+          <HijriCalendar selected={selected} onSelect={handleSelect} maxDate={maxDate} minDate={minDate} />
         ) : (
           <DayPicker
             mode="single"
             selected={selected}
             onSelect={handleSelect}
+            disabled={(date) => {
+              if (maxDate && date > maxDate) return true;
+              if (minDate && date < minDate) return true;
+              return false;
+            }}
             dir="rtl"
             className="p-3"
             classNames={{
