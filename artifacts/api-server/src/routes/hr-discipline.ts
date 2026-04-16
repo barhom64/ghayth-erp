@@ -813,7 +813,7 @@ router.put("/auto-detection/settings", requirePermission("hr:update"), async (re
       companyId: scope.companyId, userId: scope.userId,
       action: "auto_detection.settings_updated",
       entity: "system_settings", entityId: 0,
-      details: JSON.stringify(body),
+      reason: "تحديث إعدادات الرصد التلقائي",
     });
 
     const updated = await getAutoDetectionSettings(scope.companyId);
@@ -839,7 +839,7 @@ router.post("/auto-detection/run", requirePermission("hr:update"), async (req, r
       companyId: scope.companyId, userId: scope.userId,
       action: "auto_detection.manual_run",
       entity: "auto_detection_log", entityId: 0,
-      details: JSON.stringify({ date: targetDate, detected: result.detected, memosCreated: result.memosCreated }),
+      reason: `تشغيل يدوي: ${targetDate} — رصد ${result.detected} مخالفة`,
     });
 
     res.json(result);

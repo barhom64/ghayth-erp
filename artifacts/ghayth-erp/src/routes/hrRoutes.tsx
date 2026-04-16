@@ -19,6 +19,12 @@ const Recruitment = lazy(() => import("@/pages/hr/recruitment"));
 const RecruitmentCreate = lazy(() => import("@/pages/create/hr/recruitment-create"));
 const JobDetail = lazy(() => import("@/pages/hr/job-detail"));
 const ApplicantsCreate = lazy(() => import("@/pages/create/hr/applicants-create"));
+const Loans = lazy(() => import("@/pages/hr/loans"));
+const LoansCreate = lazy(() => import("@/pages/create/hr/loans-create"));
+const Overtime = lazy(() => import("@/pages/hr/overtime"));
+const OvertimeCreate = lazy(() => import("@/pages/create/hr/overtime-create"));
+const ExitRequests = lazy(() => import("@/pages/hr/exit-requests"));
+const ExitCreate = lazy(() => import("@/pages/create/hr/exit-create"));
 const Violations = lazy(() => import("@/pages/hr/violations"));
 const ViolationsCreate = lazy(() => import("@/pages/create/hr/violations-create"));
 const Shifts = lazy(() => import("@/pages/hr/shifts"));
@@ -91,6 +97,12 @@ export const hrRoutes = [
   { path: "/hr/recruitment/applications", component: ApplicationList, subKey: "recruitment" },
   { path: "/hr/recruitment/advanced", component: RecruitmentAdvanced, subKey: "recruitment" },
   { path: "/hr/recruitment/jobs/:id", component: JobDetail, subKey: "recruitment" },
+  { path: "/hr/loans", component: Loans, subKey: "payroll" },
+  { path: "/hr/loans/create", component: LoansCreate, subKey: "payroll" },
+  { path: "/hr/overtime", component: Overtime, subKey: "attendance" },
+  { path: "/hr/overtime/create", component: OvertimeCreate, subKey: "attendance" },
+  { path: "/hr/exit", component: ExitRequests, subKey: "employees" },
+  { path: "/hr/exit/create", component: ExitCreate, subKey: "employees" },
   { path: "/hr/violations", component: Violations, subKey: "violations" },
   { path: "/hr/violations/create", component: ViolationsCreate, subKey: "violations" },
   { path: "/hr/violations/management", component: ViolationsManagement, subKey: "violations" },

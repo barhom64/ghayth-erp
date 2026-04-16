@@ -407,7 +407,7 @@ export async function runAutoDetection(
 
           // ── إشعار المدير ──
           if (settings.notifyManager) {
-            getManagerAssignmentId(companyId, incident.branchId)
+            getManagerAssignmentId(companyId, incident.branchId ?? 0)
               .then((managerId) => {
                 if (managerId) {
                   createNotification({

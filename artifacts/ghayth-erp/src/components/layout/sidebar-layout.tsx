@@ -15,7 +15,7 @@ import {
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
-  Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar,
+  Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,6 +97,9 @@ const allNavSections: NavSection[] = [
         { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
         { label: "الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
         { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
+        { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
+        { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
+        { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
         { label: "التقييم 360°", path: "/hr/evaluation-360", icon: Target, subKey: "performance" },
         { label: "التدريب", path: "/hr/training", icon: GraduationCap, subKey: "training" },
@@ -658,6 +661,18 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "/hr/recruitment/applications": [
       { label: "وظيفة جديدة", icon: Plus, link: "/hr/recruitment/create" },
       { label: "الوظائف", icon: Briefcase, link: "/hr/recruitment" },
+    ],
+    "/hr/loans": [
+      { label: "طلب سلفة جديدة", icon: Plus, link: "/hr/loans/create" },
+      { label: "الرواتب", icon: DollarSign, link: "/hr/payroll" },
+    ],
+    "/hr/overtime": [
+      { label: "طلب وقت إضافي", icon: Plus, link: "/hr/overtime/create" },
+      { label: "الحضور", icon: Clock, link: "/hr/attendance" },
+    ],
+    "/hr/exit": [
+      { label: "طلب نهاية خدمة", icon: Plus, link: "/hr/exit/create" },
+      { label: "مكافأة نهاية الخدمة", icon: DollarSign, link: "/hr/gratuity" },
     ],
     "/hr/violations": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
