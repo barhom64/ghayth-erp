@@ -27,21 +27,27 @@ import {
 } from "@/components/ui/autocomplete";
 import {
   AlertTriangle,
+  Ban,
   Check,
   ChevronDown,
   ChevronUp,
   Clock,
+  DoorOpen,
   FileText,
+  Gavel,
   Loader2,
   MapPin,
   Pencil,
+  PenLine,
   Plus,
+  ScrollText,
   Shield,
   Trash2,
   User,
   Users,
   X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/formatters";
 
@@ -110,41 +116,56 @@ interface RelatedPartyEntry {
 const INCIDENT_TYPES: {
   value: IncidentType;
   label: string;
-  icon: string;
+  Icon: LucideIcon;
   desc: string;
+  color: string;          // tailwind color prefix, e.g. "amber"
+  bgSelected: string;     // bg when selected
+  borderSelected: string; // border when selected
+  iconBg: string;         // icon circle bg
+  iconColor: string;      // icon stroke color
 }[] = [
-  { value: "late", label: "تأخر", icon: "⏰", desc: "تأخر عن موعد الحضور" },
   {
-    value: "early_leave",
-    label: "مغادرة مبكرة",
-    icon: "🚪",
+    value: "late", label: "تأخر", Icon: Clock,
+    desc: "تأخر عن موعد الحضور",
+    color: "amber", bgSelected: "bg-amber-50", borderSelected: "border-amber-400",
+    iconBg: "bg-amber-100", iconColor: "text-amber-600",
+  },
+  {
+    value: "early_leave", label: "مغادرة مبكرة", Icon: DoorOpen,
     desc: "مغادرة قبل نهاية الدوام",
+    color: "orange", bgSelected: "bg-orange-50", borderSelected: "border-orange-400",
+    iconBg: "bg-orange-100", iconColor: "text-orange-600",
   },
   {
-    value: "absence",
-    label: "غياب",
-    icon: "❌",
+    value: "absence", label: "غياب", Icon: Ban,
     desc: "غياب بدون إذن مسبق",
+    color: "red", bgSelected: "bg-red-50", borderSelected: "border-red-400",
+    iconBg: "bg-red-100", iconColor: "text-red-600",
   },
   {
-    value: "behavior",
-    label: "سلوك",
-    icon: "⚠️",
+    value: "behavior", label: "سلوك", Icon: Gavel,
     desc: "تصرف مخالف لأخلاقيات العمل",
+    color: "purple", bgSelected: "bg-purple-50", borderSelected: "border-purple-400",
+    iconBg: "bg-purple-100", iconColor: "text-purple-600",
   },
   {
-    value: "organization",
-    label: "تنظيم",
-    icon: "📜",
+    value: "organization", label: "تنظيم", Icon: ScrollText,
     desc: "مخالفة السياسات والإجراءات",
+    color: "blue", bgSelected: "bg-blue-50", borderSelected: "border-blue-400",
+    iconBg: "bg-blue-100", iconColor: "text-blue-600",
   },
   {
-    value: "gps_out_of_range",
-    label: "GPS",
-    icon: "📍",
-    desc: "خروج عن النطاق المحدد",
+    value: "gps_out_of_range", label: "خروج عن النطاق", Icon: MapPin,
+    desc: "خروج عن النطاق الجغرافي المحدد",
+    color: "emerald", bgSelected: "bg-emerald-50", borderSelected: "border-emerald-400",
+    iconBg: "bg-emerald-100", iconColor: "text-emerald-600",
   },
-  { value: "custom", label: "مخصّص", icon: "📝", desc: "مخالفة غير مصنفة" },
+  {
+    value: "custom", label: "مخصّص", Icon: PenLine,
+    desc: "مخالفة غير مصنفة",
+    color: "slate", bgSelected: "bg-slate-50", borderSelected: "border-slate-400",
+    iconBg: "bg-slate-100", iconColor: "text-slate-600",
+  },
 ];
 
 const TIME_BASED_TYPES: IncidentType[] = ["late", "early_leave", "absence"];
@@ -432,27 +453,51 @@ function IncidentTypeSelector() {
         اختر نوع الواقعة — المادة تُحدَّد تلقائياً للأنواع الزمنية
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {INCIDENT_TYPES.map((it) => (
-          <button
-            key={it.value}
-            type="button"
-            onClick={() =>
-              setValue("incidentType", it.value, { shouldValidate: true })
-            }
-            className={cn(
-              "p-3 rounded-xl border-2 text-right transition-all duration-200",
-              current === it.value
-                ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200 ring-offset-1 scale-[1.02]"
-                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50",
-            )}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg">{it.icon}</span>
-              <span className="text-sm font-medium">{it.label}</span>
-            </div>
-            <p className="text-xs text-gray-500">{it.desc}</p>
-          </button>
-        ))}
+        {INCIDENT_TYPES.map((it) => {
+          const selected = current === it.value;
+          return (
+            <button
+              key={it.value}
+              type="button"
+              onClick={() =>
+                setValue("incidentType", it.value, { shouldValidate: true })
+              }
+              className={cn(
+                "relative p-4 rounded-xl border-2 text-right transition-all duration-200 group",
+                selected
+                  ? `${it.borderSelected} ${it.bgSelected} shadow-sm`
+                  : "border-gray-200 hover:border-gray-300 hover:shadow-sm bg-white",
+              )}
+            >
+              {selected && (
+                <span className="absolute top-2 left-2 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                  <Check className="h-3 w-3 text-white" />
+                </span>
+              )}
+              <div className={cn(
+                "w-10 h-10 rounded-lg flex items-center justify-center mb-3",
+                selected ? it.iconBg : "bg-gray-100 group-hover:bg-gray-200",
+              )}>
+                <it.Icon className={cn(
+                  "h-5 w-5",
+                  selected ? it.iconColor : "text-gray-500 group-hover:text-gray-700",
+                )} />
+              </div>
+              <span className={cn(
+                "text-sm font-semibold block mb-0.5",
+                selected ? "text-gray-900" : "text-gray-700",
+              )}>
+                {it.label}
+              </span>
+              <p className={cn(
+                "text-xs leading-relaxed",
+                selected ? "text-gray-600" : "text-gray-400",
+              )}>
+                {it.desc}
+              </p>
+            </button>
+          );
+        })}
       </div>
       {error && (
         <p className="text-xs text-red-600 mt-2 animate-in fade-in duration-200">
