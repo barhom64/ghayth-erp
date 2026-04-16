@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
+import { UnifiedDateRange } from "@/components/ui/unified-date-range";
 import { Badge } from "@/components/ui/badge";
 import { Filter, X, Search, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -212,16 +212,15 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
           )}
 
           {config.showDateRange !== false && (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 whitespace-nowrap">من:</span>
-                <DatePicker value={values.dateFrom} onChange={v => update("dateFrom", v)} className="w-[150px]" />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 whitespace-nowrap">إلى:</span>
-                <DatePicker value={values.dateTo} onChange={v => update("dateTo", v)} className="w-[150px]" />
-              </div>
-            </>
+            <div className="w-full md:w-auto md:min-w-[420px]">
+              <UnifiedDateRange
+                value={{ from: values.dateFrom, to: values.dateTo }}
+                onChange={(v) => onChange({ ...values, dateFrom: v.from, dateTo: v.to })}
+                showPresets
+                showDualCalendar={false}
+                variant="compact"
+              />
+            </div>
           )}
 
           {config.extraFilters?.map(ef => (
@@ -316,17 +315,19 @@ function SimpleFilters({
             </div>
           )}
 
-          {onDateFromChange && (
-            <div className="min-w-[130px]">
-              <label className="text-xs font-medium text-gray-500 mb-1 block">من تاريخ</label>
-              <DatePicker value={dateFrom} onChange={onDateFromChange} />
-            </div>
-          )}
-
-          {onDateToChange && (
-            <div className="min-w-[130px]">
-              <label className="text-xs font-medium text-gray-500 mb-1 block">إلى تاريخ</label>
-              <DatePicker value={dateTo} onChange={onDateToChange} />
+          {(onDateFromChange || onDateToChange) && (
+            <div className="min-w-[280px] flex-1">
+              <label className="text-xs font-medium text-gray-500 mb-1 block">الفترة</label>
+              <UnifiedDateRange
+                value={{ from: dateFrom || "", to: dateTo || "" }}
+                onChange={(v) => {
+                  if (v.from !== (dateFrom || "")) onDateFromChange?.(v.from);
+                  if (v.to !== (dateTo || "")) onDateToChange?.(v.to);
+                }}
+                showPresets={false}
+                showDualCalendar={false}
+                variant="compact"
+              />
             </div>
           )}
 
