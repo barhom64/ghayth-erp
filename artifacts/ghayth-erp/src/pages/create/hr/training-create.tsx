@@ -14,23 +14,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { BookOpen, Clock, MapPin, Users, DollarSign, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const trainingTypes = [
-  { value: "workshop", label: "ورشة عمل", icon: "🔧", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { value: "course", label: "دورة تدريبية", icon: "📚", color: "bg-green-50 text-green-700 border-green-200" },
-  { value: "seminar", label: "ندوة", icon: "🎤", color: "bg-purple-50 text-purple-700 border-purple-200" },
-  { value: "online", label: "تدريب عن بعد", icon: "💻", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-  { value: "on_the_job", label: "تدريب على رأس العمل", icon: "🏢", color: "bg-orange-50 text-orange-700 border-orange-200" },
-];
-
-const categories = [
-  { value: "technical", label: "تقني" },
-  { value: "management", label: "إداري" },
-  { value: "safety", label: "سلامة وصحة مهنية" },
-  { value: "soft-skills", label: "مهارات شخصية" },
-  { value: "compliance", label: "امتثال وتنظيم" },
-  { value: "leadership", label: "قيادة وإدارة" },
-];
+import { TRAINING_TYPES, TRAINING_CATEGORIES } from "@/lib/hr-type-maps";
 
 const DRAFT_KEY = "hr_training_create";
 const INITIAL = {
@@ -113,7 +97,7 @@ export default function TrainingCreate() {
             <BookOpen className="h-4 w-4" /> نوع التدريب
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {trainingTypes.map((tt) => (
+            {TRAINING_TYPES.map((tt) => (
               <button
                 key={tt.value}
                 type="button"
@@ -139,7 +123,7 @@ export default function TrainingCreate() {
             <Label>التصنيف</Label>
             <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.category} onChange={(e) => set("category", e.target.value)}>
               <option value="">اختر التصنيف</option>
-              {categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              {TRAINING_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
           <div>
@@ -214,8 +198,8 @@ export default function TrainingCreate() {
             <h4 className="text-sm font-semibold text-blue-700 mb-2">ملخص البرنامج</h4>
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{form.title}</Badge>
-              {form.type && <Badge variant="outline">{trainingTypes.find(t => t.value === form.type)?.label}</Badge>}
-              {form.category && <Badge variant="outline">{categories.find(c => c.value === form.category)?.label}</Badge>}
+              {form.type && <Badge variant="outline">{TRAINING_TYPES.find(t => t.value === form.type)?.label}</Badge>}
+              {form.category && <Badge variant="outline">{TRAINING_CATEGORIES.find(c => c.value === form.category)?.label}</Badge>}
               {durationDisplay && <Badge variant="outline"><Clock className="h-3 w-3 me-1" />{durationDisplay}</Badge>}
               {form.maxParticipants && <Badge variant="outline"><Users className="h-3 w-3 me-1" />{form.maxParticipants} مشارك</Badge>}
               {form.cost && <Badge variant="outline"><DollarSign className="h-3 w-3 me-1" />{Number(form.cost).toLocaleString()} {getCurrencySymbol()}</Badge>}

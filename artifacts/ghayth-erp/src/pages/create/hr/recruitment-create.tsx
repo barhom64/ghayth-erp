@@ -14,20 +14,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { Briefcase, MapPin, Calendar, DollarSign, Users, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/formatters";
-
-const jobTypes = [
-  { value: "full-time", label: "دوام كامل", color: "bg-green-50 text-green-700 border-green-200" },
-  { value: "part-time", label: "دوام جزئي", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { value: "contract", label: "عقد مؤقت", color: "bg-orange-50 text-orange-700 border-orange-200" },
-  { value: "internship", label: "تدريب تعاوني", color: "bg-purple-50 text-purple-700 border-purple-200" },
-];
-
-const experienceLevels = [
-  { value: "entry", label: "مبتدئ (0-2 سنوات)" },
-  { value: "mid", label: "متوسط (3-5 سنوات)" },
-  { value: "senior", label: "خبير (6-10 سنوات)" },
-  { value: "lead", label: "قيادي (+10 سنوات)" },
-];
+import { JOB_TYPES, EXPERIENCE_LEVELS, EDUCATION_LEVELS } from "@/lib/hr-type-maps";
 
 const DRAFT_KEY = "hr_recruitment_create";
 const INITIAL = {
@@ -103,7 +90,7 @@ export default function RecruitmentCreate() {
             <Briefcase className="h-4 w-4" /> نوع التوظيف
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {jobTypes.map((jt) => (
+            {JOB_TYPES.map((jt) => (
               <button
                 key={jt.value}
                 type="button"
@@ -150,18 +137,14 @@ export default function RecruitmentCreate() {
             <Label>مستوى الخبرة</Label>
             <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.experienceLevel} onChange={(e) => set("experienceLevel", e.target.value)}>
               <option value="">اختر المستوى</option>
-              {experienceLevels.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+              {EXPERIENCE_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </div>
           <div>
             <Label>المؤهل العلمي</Label>
             <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.education} onChange={(e) => set("education", e.target.value)}>
               <option value="">اختر المؤهل</option>
-              <option value="high_school">ثانوية</option>
-              <option value="diploma">دبلوم</option>
-              <option value="bachelor">بكالوريوس</option>
-              <option value="master">ماجستير</option>
-              <option value="phd">دكتوراه</option>
+              {EDUCATION_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </div>
         </div>
@@ -216,7 +199,7 @@ export default function RecruitmentCreate() {
             <div className="flex flex-wrap gap-2">
               {form.title && <Badge variant="outline">{form.title}</Badge>}
               {form.department && <Badge variant="outline">{form.department}</Badge>}
-              {form.type && <Badge variant="outline">{jobTypes.find(t => t.value === form.type)?.label}</Badge>}
+              {form.type && <Badge variant="outline">{JOB_TYPES.find(t => t.value === form.type)?.label}</Badge>}
               {form.location && <Badge variant="outline"><MapPin className="h-3 w-3 me-1" />{form.location}</Badge>}
               {form.vacancies && Number(form.vacancies) > 1 && <Badge variant="outline"><Users className="h-3 w-3 me-1" />{form.vacancies} شواغر</Badge>}
               {form.closingDate && <Badge variant="outline"><Clock className="h-3 w-3 me-1" />يُغلق: {form.closingDate}</Badge>}

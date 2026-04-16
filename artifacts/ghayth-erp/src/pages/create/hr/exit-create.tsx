@@ -11,18 +11,12 @@ import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { formatCurrency } from "@/lib/formatters";
+import { EXIT_TYPES } from "@/lib/hr-type-maps";
+import { DatePicker } from "@/components/ui/date-picker";
 import { LogOut, User, Calendar, Info, DollarSign, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DRAFT_KEY = "hr_exit_create";
-
-const EXIT_TYPES = [
-  { value: "resignation",  label: "استقالة"        },
-  { value: "termination",  label: "فصل"            },
-  { value: "retirement",   label: "تقاعد"          },
-  { value: "contract_end", label: "انتهاء عقد"     },
-  { value: "mutual",       label: "اتفاق متبادل"   },
-];
 
 export default function ExitCreate() {
   const [, setLocation] = useLocation();
@@ -161,8 +155,8 @@ export default function ExitCreate() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {EXIT_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                {Object.entries(EXIT_TYPES).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -175,10 +169,9 @@ export default function ExitCreate() {
               <Calendar className="h-4 w-4 text-gray-500" />
               آخر يوم عمل
             </Label>
-            <Input
-              type="date"
+            <DatePicker
               value={form.lastWorkingDay}
-              onChange={(e) => setForm({ ...form, lastWorkingDay: e.target.value })}
+              onChange={(v) => setForm({ ...form, lastWorkingDay: v })}
             />
           </div>
 
@@ -212,7 +205,7 @@ export default function ExitCreate() {
                   <p className="text-xs text-gray-500">سنوات الخدمة</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-amber-700">{EXIT_TYPES.find(t => t.value === form.exitType)?.label}</p>
+                  <p className="text-lg font-bold text-amber-700">{EXIT_TYPES[form.exitType] || form.exitType}</p>
                   <p className="text-xs text-gray-500">نوع الإنهاء</p>
                 </div>
                 <div>
