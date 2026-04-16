@@ -10,6 +10,7 @@ import { Plus, Trash2, Edit2, Save, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export default function PublicHolidaysPage() {
   const currentYear = new Date().getFullYear();
@@ -120,11 +121,11 @@ export default function PublicHolidaysPage() {
               </div>
               <div>
                 <Label>تاريخ البداية *</Label>
-                <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+                <DatePicker value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} />
               </div>
               <div>
                 <Label>تاريخ النهاية</Label>
-                <Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+                <DatePicker value={form.endDate} onChange={(v) => setForm({ ...form, endDate: v })} />
               </div>
               <div className="col-span-2">
                 <Label>الوصف</Label>

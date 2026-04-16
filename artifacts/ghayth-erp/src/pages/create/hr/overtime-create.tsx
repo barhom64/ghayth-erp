@@ -11,15 +11,11 @@ import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { formatCurrency } from "@/lib/formatters";
+import { OVERTIME_MULTIPLIERS } from "@/lib/hr-type-maps";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Clock, User, Calculator, Info } from "lucide-react";
 
 const DRAFT_KEY = "hr_overtime_create";
-
-const MULTIPLIERS = [
-  { value: "1.25", label: "×1.25 — أيام عادية (بعض القطاعات)" },
-  { value: "1.50", label: "×1.50 — المعدل الافتراضي (نظام العمل)" },
-  { value: "2.00", label: "×2.00 — أيام العطل والإجازات" },
-];
 
 export default function OvertimeCreate() {
   const [, setLocation] = useLocation();
@@ -164,10 +160,10 @@ export default function OvertimeCreate() {
 
           <div className="space-y-2">
             <Label>تاريخ الوقت الإضافي <span className="text-red-500">*</span></Label>
-            <Input
-              type="date"
+            <DatePicker
               value={form.overtimeDate}
-              onChange={(e) => setForm({ ...form, overtimeDate: e.target.value })}
+              onChange={(v) => setForm({ ...form, overtimeDate: v })}
+              maxDate={new Date()}
             />
           </div>
         </div>
@@ -217,7 +213,7 @@ export default function OvertimeCreate() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {MULTIPLIERS.map((m) => (
+                {OVERTIME_MULTIPLIERS.map((m) => (
                   <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                 ))}
               </SelectContent>

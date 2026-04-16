@@ -14,17 +14,9 @@ import {
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { VIOLATION_STATUS } from "@/lib/hr-type-maps";
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "draft",                label: "مسودة"            },
-  { value: "pending_employee",     label: "بانتظار الموظف"   },
-  { value: "pending_manager",      label: "بانتظار المدير"   },
-  { value: "pending_hr_decision",  label: "بانتظار HR"       },
-  { value: "approved",             label: "مُنفَّذ"          },
-  { value: "rejected",             label: "مرفوض"            },
-  { value: "appealed",             label: "استئناف"           },
-  { value: "cancelled",            label: "ملغي"             },
-];
+const STATUS_OPTIONS = Object.entries(VIOLATION_STATUS).map(([value, { label }]) => ({ value, label }));
 
 const INCIDENT_LABELS: Record<string, { label: string; Icon: typeof Clock; color: string }> = {
   late:             { label: "تأخر",         Icon: Clock,      color: "text-amber-600 bg-amber-50"   },

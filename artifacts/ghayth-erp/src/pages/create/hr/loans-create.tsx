@@ -13,16 +13,11 @@ import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { formatCurrency } from "@/lib/formatters";
+import { LOAN_TYPES } from "@/lib/hr-type-maps";
 import { Banknote, Info, User, Calculator, Calendar, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DRAFT_KEY = "hr_loans_create";
-
-const LOAN_TYPES = [
-  { value: "salary_advance", label: "سلفة راتب" },
-  { value: "personal",       label: "سلفة شخصية" },
-  { value: "emergency",      label: "سلفة طارئة" },
-];
 
 export default function LoansCreate() {
   const [, setLocation] = useLocation();
@@ -162,8 +157,8 @@ export default function LoansCreate() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {LOAN_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                {Object.entries(LOAN_TYPES).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

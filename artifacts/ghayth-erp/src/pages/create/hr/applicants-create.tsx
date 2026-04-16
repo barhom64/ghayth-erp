@@ -12,15 +12,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { User, Mail, Phone, Briefcase, GraduationCap, Link as LinkIcon, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const sourceOptions = [
-  { value: "website", label: "الموقع الإلكتروني" },
-  { value: "linkedin", label: "لينكد إن" },
-  { value: "referral", label: "ترشيح داخلي" },
-  { value: "agency", label: "وكالة توظيف" },
-  { value: "job_fair", label: "معرض توظيف" },
-  { value: "other", label: "أخرى" },
-];
+import { APPLICANT_SOURCES, EDUCATION_LEVELS } from "@/lib/hr-type-maps";
 
 const DRAFT_KEY = "hr_applicants_create";
 const INITIAL = {
@@ -142,11 +134,7 @@ export default function ApplicantsCreate() {
               <Label>المؤهل العلمي</Label>
               <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.education} onChange={(e) => set("education", e.target.value)}>
                 <option value="">اختر المؤهل</option>
-                <option value="high_school">ثانوية</option>
-                <option value="diploma">دبلوم</option>
-                <option value="bachelor">بكالوريوس</option>
-                <option value="master">ماجستير</option>
-                <option value="phd">دكتوراه</option>
+                {EDUCATION_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
             <div>
@@ -165,7 +153,7 @@ export default function ApplicantsCreate() {
               <Label>مصدر التقديم</Label>
               <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.source} onChange={(e) => set("source", e.target.value)}>
                 <option value="">اختر المصدر</option>
-                {sourceOptions.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                {APPLICANT_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
             <div>
@@ -191,9 +179,9 @@ export default function ApplicantsCreate() {
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{form.applicantName}</Badge>
               {selectedJob && <Badge variant="outline"><Briefcase className="h-3 w-3 me-1" />{selectedJob.title}</Badge>}
-              {form.education && <Badge variant="outline">{form.education === "bachelor" ? "بكالوريوس" : form.education === "master" ? "ماجستير" : form.education}</Badge>}
+              {form.education && <Badge variant="outline">{EDUCATION_LEVELS.find(l => l.value === form.education)?.label || form.education}</Badge>}
               {form.experience && <Badge variant="outline">{form.experience} خبرة</Badge>}
-              {form.source && <Badge variant="outline">{sourceOptions.find(s => s.value === form.source)?.label}</Badge>}
+              {form.source && <Badge variant="outline">{APPLICANT_SOURCES.find(s => s.value === form.source)?.label}</Badge>}
             </div>
           </div>
         )}

@@ -15,20 +15,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
+import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "pending",  label: "بانتظار الموافقة" },
-  { value: "approved", label: "معتمد"            },
-  { value: "paid",     label: "مدفوع"            },
-  { value: "rejected", label: "مرفوض"            },
-];
-
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending:  { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700 border-amber-300" },
-  approved: { label: "معتمد",            color: "bg-green-100 text-green-700 border-green-300" },
-  paid:     { label: "مدفوع",            color: "bg-blue-100 text-blue-700 border-blue-300"    },
-  rejected: { label: "مرفوض",            color: "bg-red-100 text-red-700 border-red-300"       },
-};
+const STATUS_OPTIONS = Object.entries(OVERTIME_STATUS).map(([value, { label }]) => ({ value, label }));
+const STATUS_MAP = OVERTIME_STATUS;
 
 export default function OvertimePage() {
   const [, navigate] = useLocation();

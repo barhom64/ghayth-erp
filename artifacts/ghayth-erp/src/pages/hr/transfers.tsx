@@ -18,18 +18,11 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { ApprovalActions } from "@/components/approval-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
+import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
+import { DatePicker } from "@/components/ui/date-picker";
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "pending",  label: "بانتظار الموافقة" },
-  { value: "approved", label: "معتمد"            },
-  { value: "rejected", label: "مرفوض"            },
-];
-
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending:  { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700 border-amber-300" },
-  approved: { label: "معتمد",            color: "bg-green-100 text-green-700 border-green-300" },
-  rejected: { label: "مرفوض",            color: "bg-red-100 text-red-700 border-red-300"       },
-};
+const STATUS_OPTIONS = Object.entries(TRANSFER_STATUS).map(([value, { label }]) => ({ value, label }));
+const STATUS_MAP = TRANSFER_STATUS;
 
 export default function TransfersPage() {
   const [filters, setFilters] = useFilters();
@@ -247,7 +240,7 @@ export default function TransfersPage() {
             </div>
             <div>
               <Label>تاريخ التفعيل</Label>
-              <Input type="date" value={form.effectiveDate} onChange={(e) => setForm({ ...form, effectiveDate: e.target.value })} />
+              <DatePicker value={form.effectiveDate} onChange={(v) => setForm({ ...form, effectiveDate: v })} />
             </div>
             <div>
               <Label>سبب النقل</Label>

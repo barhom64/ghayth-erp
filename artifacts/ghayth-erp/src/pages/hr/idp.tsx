@@ -16,15 +16,10 @@ import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { IDP_STATUS } from "@/lib/hr-type-maps";
+import { DatePicker } from "@/components/ui/date-picker";
 
-const IDP_STATUS_KEYS = ["planned", "in_progress", "completed", "cancelled"] as const;
-
-const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "planned",     label: "مخطط"        },
-  { value: "in_progress", label: "قيد التنفيذ" },
-  { value: "completed",   label: "مكتمل"       },
-  { value: "cancelled",   label: "ملغي"        },
-];
+const STATUS_OPTIONS = Object.entries(IDP_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function IDPPage() {
   const [showForm, setShowForm] = useState(false);
@@ -170,9 +165,9 @@ export default function IDPPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {IDP_STATUS_KEYS.map((k) => (
+            {Object.entries(IDP_STATUS).map(([k, v]) => (
               <SelectItem key={k} value={k}>
-                {resolveStatus(k)?.label ?? k}
+                {v.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -252,7 +247,7 @@ export default function IDPPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>التاريخ المستهدف</Label>
-                <Input type="date" value={form.targetDate} onChange={(e) => setForm({ ...form, targetDate: e.target.value })} />
+                <DatePicker value={form.targetDate} onChange={(v) => setForm({ ...form, targetDate: v })} />
               </div>
               <div>
                 <Label>ملاحظات</Label>

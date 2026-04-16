@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calculator, DollarSign, Calendar, User } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { TERMINATION_TYPES } from "@/lib/hr-type-maps";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export default function GratuityPage() {
   const [form, setForm] = useState({ employeeId: "", terminationType: "end_of_service", terminationDate: new Date().toISOString().split("T")[0] });
@@ -60,7 +61,7 @@ export default function GratuityPage() {
           </div>
           <div>
             <Label>تاريخ إنهاء الخدمة</Label>
-            <Input type="date" value={form.terminationDate} onChange={(e) => setForm({ ...form, terminationDate: e.target.value })} />
+            <DatePicker value={form.terminationDate} onChange={(v) => setForm({ ...form, terminationDate: v })} />
           </div>
           <div className="flex items-end">
             <Button onClick={handleCalc} className="w-full" disabled={!form.employeeId || isLoading}>
