@@ -215,6 +215,15 @@ const DEFAULTS: ViolationForm = {
 
 const DRAFT_KEY = "hr_violations_create";
 const STORAGE_KEY = `erp_draft_${DRAFT_KEY}`;
+const EXTRA_STORAGE_KEY = `erp_draft_${DRAFT_KEY}_extra`;
+
+interface DraftExtra {
+  witnesses?: WitnessEntry[];
+  reasons?: string[];
+  relatedParties?: RelatedPartyEntry[];
+  openStep?: number;
+  savedAt?: string;
+}
 
 function loadDraftDefaults(): ViolationForm {
   try {
@@ -226,12 +235,48 @@ function loadDraftDefaults(): ViolationForm {
   return DEFAULTS;
 }
 
-function DraftManager({ defaults }: { defaults: ViolationForm }) {
-  const form = useFormContext<ViolationForm>();
-  const [visible, setVisible] = useState(
-    () => !!localStorage.getItem(STORAGE_KEY),
-  );
+function loadDraftExtra(): DraftExtra {
+  try {
+    const stored = localStorage.getItem(EXTRA_STORAGE_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch { /* corrupt */ }
+  return {};
+}
 
+function saveDraftExtra(extra: DraftExtra) {
+  try {
+    localStorage.setItem(EXTRA_STORAGE_KEY, JSON.stringify({
+      ...extra,
+      savedAt: new Date().toISOString(),
+    }));
+  } catch { /* quota */ }
+}
+
+function clearAllDrafts() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(EXTRA_STORAGE_KEY);
+  } catch {}
+}
+
+function DraftManager({
+  defaults,
+  witnesses,
+  reasons,
+  relatedParties,
+  openStep,
+}: {
+  defaults: ViolationForm;
+  witnesses: WitnessEntry[];
+  reasons: string[];
+  relatedParties: RelatedPartyEntry[];
+  openStep: number;
+}) {
+  const form = useFormContext<ViolationForm>();
+  const hasDraft = !!localStorage.getItem(STORAGE_KEY);
+  const [visible, setVisible] = useState(() => hasDraft);
+
+  // Save form fields (debounced 1s)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const sub = form.watch((values) => {
@@ -239,9 +284,7 @@ function DraftManager({ defaults }: { defaults: ViolationForm }) {
       timer = setTimeout(() => {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
-        } catch {
-          /* quota exceeded */
-        }
+        } catch { /* quota exceeded */ }
       }, 1000);
     });
     return () => {
@@ -250,22 +293,41 @@ function DraftManager({ defaults }: { defaults: ViolationForm }) {
     };
   }, [form]);
 
+  // Save extra state (witnesses, reasons, relatedParties, openStep) — debounced 1.5s
+  const extraTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    clearTimeout(extraTimer.current);
+    extraTimer.current = setTimeout(() => {
+      saveDraftExtra({ witnesses, reasons, relatedParties, openStep });
+    }, 1500);
+    return () => clearTimeout(extraTimer.current);
+  }, [witnesses, reasons, relatedParties, openStep]);
+
   if (!visible) return null;
 
+  const extra = loadDraftExtra();
+  const savedAt = extra.savedAt
+    ? new Date(extra.savedAt).toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" })
+    : null;
+
   return (
-    <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
-      <span>تم استعادة مسودة محفوظة سابقاً</span>
+    <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-sm text-amber-700">
+      <div className="flex items-center gap-2">
+        <FileText className="h-4 w-4 text-amber-500" />
+        <span>تم استعادة مسودة محفوظة{savedAt ? ` (${savedAt})` : ""}</span>
+      </div>
       <Button
         type="button"
         variant="ghost"
         size="sm"
         className="text-amber-600 h-7 px-2"
         onClick={() => {
-          localStorage.removeItem(STORAGE_KEY);
+          clearAllDrafts();
           form.reset(defaults);
           setVisible(false);
         }}
       >
+        <X className="h-3 w-3 ml-1" />
         مسح المسودة
       </Button>
     </div>
@@ -1379,11 +1441,14 @@ function StepDocumentation({
 
 export default function ViolationsCreate() {
   const [, setLocation] = useLocation();
+
+  // Load saved extra draft state (witnesses, reasons, relatedParties, openStep)
+  const [draftExtra] = useState(() => loadDraftExtra());
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [witnesses, setWitnesses] = useState<WitnessEntry[]>([]);
-  const [reasons, setReasons] = useState<string[]>([]);
-  const [relatedParties, setRelatedParties] = useState<RelatedPartyEntry[]>([]);
-  const [openStep, setOpenStep] = useState(0);
+  const [witnesses, setWitnesses] = useState<WitnessEntry[]>(draftExtra.witnesses || []);
+  const [reasons, setReasons] = useState<string[]>(draftExtra.reasons || []);
+  const [relatedParties, setRelatedParties] = useState<RelatedPartyEntry[]>(draftExtra.relatedParties || []);
+  const [openStep, setOpenStep] = useState(draftExtra.openStep || 0);
 
   // Employee data
   const { data: empData } = useApiQuery<{ data: any[] }>(
@@ -1394,11 +1459,6 @@ export default function ViolationsCreate() {
 
   // Draft defaults
   const draftDefaults = loadDraftDefaults();
-  const clearDraft = useCallback(() => {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
-  }, []);
 
   // Memo creation mutation — successMessage: false so we show the memo number ourselves
   const createMemo = useApiMutation<
@@ -1454,11 +1514,17 @@ export default function ViolationsCreate() {
             title: "تم تسجيل المخالفة بنجاح",
             description: `رقم المحضر: ${result.memoNumber}`,
           });
-          clearDraft();
+          clearAllDrafts();
           setLocation("/hr/violations");
         }}
       >
-        <DraftManager defaults={DEFAULTS} />
+        <DraftManager
+          defaults={DEFAULTS}
+          witnesses={witnesses}
+          reasons={reasons}
+          relatedParties={relatedParties}
+          openStep={openStep}
+        />
         <WizardFormContent
           employees={employees}
           openStep={openStep}
