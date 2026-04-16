@@ -13,6 +13,7 @@ const PayrollCreate = lazy(() => import("@/pages/create/hr/payroll-create"));
 const Performance = lazy(() => import("@/pages/hr/performance"));
 const PerformanceCreate = lazy(() => import("@/pages/create/hr/performance-create"));
 const Training = lazy(() => import("@/pages/hr/training"));
+const TrainingDetail = lazy(() => import("@/pages/hr/training-detail"));
 const TrainingCreate = lazy(() => import("@/pages/create/hr/training-create"));
 const Organization = lazy(() => import("@/pages/hr/organization"));
 const Recruitment = lazy(() => import("@/pages/hr/recruitment"));
@@ -92,6 +93,7 @@ export const hrRoutes = [
   { path: "/hr/performance/advanced", component: PerformanceAdvanced, subKey: "performance" },
   { path: "/hr/training", component: Training, subKey: "training" },
   { path: "/hr/training/create", component: TrainingCreate, subKey: "training" },
+  { path: "/hr/training/:id", component: TrainingDetail, subKey: "training" },
   { path: "/hr/training/advanced", component: TrainingAdvanced, subKey: "training" },
   { path: "/hr/organization", component: Organization, subKey: "organization" },
   { path: "/hr/organization/structure", component: OrganizationStructure, subKey: "organization" },

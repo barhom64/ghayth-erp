@@ -137,10 +137,10 @@ export default function TrainingPage() {
               <Card key={t.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
+                    <Link href={`/hr/training/${t.id}`} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
                       <GraduationCap className="w-5 h-5 text-blue-500" />
                       <span className="font-semibold">{t.title}</span>
-                    </div>
+                    </Link>
                     <div className="flex items-center gap-1">
                       <PageStatusBadge status={t.status} />
                       <RowActions

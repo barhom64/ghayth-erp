@@ -1,108 +1,172 @@
-import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Plus, Search, Users, UserCheck, Clock } from "lucide-react";
+import { Plus, Users, UserCheck, Clock, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 const stageMap: Record<string, { label: string; color: string }> = {
-  new: { label: "جديد", color: "bg-blue-100 text-blue-700" },
-  screening: { label: "فرز", color: "bg-yellow-100 text-yellow-700" },
-  interview: { label: "مقابلة", color: "bg-purple-100 text-purple-700" },
-  offer: { label: "عرض", color: "bg-green-100 text-green-700" },
-  hired: { label: "تم التوظيف", color: "bg-emerald-100 text-emerald-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
+  new: { label: "جديد", color: "bg-blue-100 text-blue-700 border-blue-300" },
+  screening: { label: "فرز", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
+  interview: { label: "مقابلة", color: "bg-purple-100 text-purple-700 border-purple-300" },
+  offer: { label: "عرض", color: "bg-green-100 text-green-700 border-green-300" },
+  hired: { label: "تم التوظيف", color: "bg-emerald-100 text-emerald-700 border-emerald-300" },
+  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700 border-red-300" },
 };
 
+const STATUS_OPTIONS = Object.entries(stageMap).map(([value, { label }]) => ({ value, label }));
+
 export default function ApplicationListPage() {
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState("all");
+  const [, navigate] = useLocation();
+  const [filters, setFilters] = useFilters();
   const { data } = useApiQuery<any>(["applicants"], "/recruitment/applications");
   const apps = data?.data || [];
 
-  const filtered = apps.filter((a: any) => {
-    if (stageFilter !== "all" && (a.status || a.stage) !== stageFilter) return false;
-    if (search && !(a.applicantName || a.name || "").includes(search)) return false;
-    return true;
+  const filtered = applyFilters(apps, filters, {
+    searchFields: ["applicantName", "name", "email", "postingTitle"],
+    statusField: "status",
+    dateField: "createdAt",
   });
 
   const kpis = [
     { label: "إجمالي المتقدمين", value: apps.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "جدد", value: apps.filter((a: any) => a.status === "new").length, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-    { label: "تم توظيفهم", value: apps.filter((a: any) => a.status === "hired").length, icon: UserCheck, color: "text-green-600 bg-green-50" },
+    { label: "جدد", value: apps.filter((a: any) => (a.status || a.stage) === "new").length, icon: Clock, color: "text-amber-600 bg-amber-50" },
+    { label: "تم توظيفهم", value: apps.filter((a: any) => (a.status || a.stage) === "hired").length, icon: UserCheck, color: "text-green-600 bg-green-50" },
+    { label: "مرفوض", value: apps.filter((a: any) => (a.status || a.stage) === "rejected").length, icon: XCircle, color: "text-red-600 bg-red-50" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "applicantName",
+      header: "الاسم",
+      sortable: true,
+      render: (v) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold shrink-0">
+            {(v.applicantName || v.name || "؟").charAt(0)}
+          </div>
+          <span className="font-medium text-sm">{v.applicantName || v.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: "postingTitle",
+      header: "المنصب",
+      sortable: true,
+      render: (v) => (
+        <span className="text-sm text-gray-600">{v.postingTitle || v.position || "-"}</span>
+      ),
+    },
+    {
+      key: "email",
+      header: "البريد",
+      render: (v) => (
+        <span className="text-sm text-gray-500">{v.email || "-"}</span>
+      ),
+    },
+    {
+      key: "phone",
+      header: "الهاتف",
+      render: (v) => (
+        <span className="text-sm text-gray-500 font-mono">{v.phone || "-"}</span>
+      ),
+    },
+    {
+      key: "rating",
+      header: "التقييم",
+      sortable: true,
+      render: (v) => {
+        if (!v.rating) return <span className="text-gray-400">-</span>;
+        const r = Number(v.rating);
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-xs",
+              r >= 4 ? "border-green-300 text-green-700 bg-green-50" :
+              r >= 3 ? "border-amber-300 text-amber-700 bg-amber-50" :
+              "border-red-300 text-red-700 bg-red-50",
+            )}
+          >
+            {r}/5
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "المرحلة",
+      sortable: true,
+      render: (v) => {
+        const stage = v.status || v.stage;
+        const st = stageMap[stage];
+        return (
+          <Badge variant="outline" className={cn("text-xs", st?.color || "")}>
+            {st?.label || stage || "-"}
+          </Badge>
+        );
+      },
+    },
   ];
 
   return (
     <PageShell
       title="قائمة المتقدمين"
       subtitle="متابعة طلبات التوظيف ومراحل الفرز"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "قائمة المتقدمين" }]}
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { href: "/hr/recruitment", label: "التوظيف" },
+      ]}
+      actions={
+        <Link href="/hr/recruitment/applicants/create">
+          <Button size="sm" className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            إضافة متقدم
+          </Button>
+        </Link>
+      }
     >
-      <div className="grid grid-cols-3 gap-4">
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
+          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-4 flex items-center gap-3">
               <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
                 <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
               </div>
-              <div><p className="text-2xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
+              <div>
+                <p className="text-xl font-bold">{c.value}</p>
+                <p className="text-xs text-gray-500">{c.label}</p>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute start-3 top-2.5 h-4 w-4 text-gray-400" />
-            <Input placeholder="بحث..." className="ps-9 w-64" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="border rounded-md p-2 text-sm" value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}>
-            <option value="all">جميع المراحل</option>
-            {Object.entries(stageMap).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
-        </div>
-        <Link href="/hr/recruitment/applicants/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة متقدم</Button>
-        </Link>
-      </div>
+      {/* Filters */}
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالاسم أو البريد أو المنصب...",
+          statuses: STATUS_OPTIONS,
+          showDateRange: true,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50">
-            <th className="p-3 text-start font-medium">الاسم</th>
-            <th className="p-3 text-start font-medium">المنصب</th>
-            <th className="p-3 text-start font-medium">البريد</th>
-            <th className="p-3 text-start font-medium">الهاتف</th>
-            <th className="p-3 text-start font-medium">التقييم</th>
-            <th className="p-3 text-start font-medium">المرحلة</th>
-          </tr></thead>
-          <tbody>
-            {filtered.map((a: any) => (
-              <tr key={a.id} className="border-b hover:bg-gray-50 transition-colors">
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
-                      {(a.applicantName || a.name || "؟").charAt(0)}
-                    </div>
-                    <span className="font-medium">{a.applicantName || a.name}</span>
-                  </div>
-                </td>
-                <td className="p-3 text-gray-500">{a.postingTitle || a.position || "-"}</td>
-                <td className="p-3 text-gray-500">{a.email || "-"}</td>
-                <td className="p-3 text-gray-500">{a.phone || "-"}</td>
-                <td className="p-3">{a.rating ? `${a.rating}/5` : "-"}</td>
-                <td className="p-3"><Badge className={stageMap[a.status || a.stage]?.color || ""}>{stageMap[a.status || a.stage]?.label || a.status || a.stage}</Badge></td>
-              </tr>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا يوجد متقدمين</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      {/* Table */}
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا يوجد متقدمين — أضف متقدم جديد للبدء"
+        pageSize={20}
+      />
     </PageShell>
   );
 }
