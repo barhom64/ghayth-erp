@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Briefcase, Users, UserCheck, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const stageMap: Record<string, { label: string; color: string }> = {
   new: { label: "جديد", color: "bg-blue-100 text-blue-700" },
@@ -68,28 +69,20 @@ export default function RecruitmentAdvancedPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-base">آخر المتقدمين</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">الاسم</th>
-              <th className="p-3 text-start">المنصب</th>
-              <th className="p-3 text-start">البريد</th>
-              <th className="p-3 text-start">التقييم</th>
-              <th className="p-3 text-start">المرحلة</th>
-            </tr></thead>
-            <tbody>
-              {apps.slice(0, 15).map((a: any) => (
-                <tr key={a.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium">{a.applicantName || a.name}</td>
-                  <td className="p-3 text-gray-500">{a.postingTitle || a.position || "-"}</td>
-                  <td className="p-3 text-gray-500">{a.email || "-"}</td>
-                  <td className="p-3">{a.rating ? `${a.rating}/5` : "-"}</td>
-                  <td className="p-3"><Badge className={stageMap[a.status]?.color || ""}>{stageMap[a.status]?.label || a.status}</Badge></td>
-                </tr>
-              ))}
-              {apps.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا يوجد متقدمين</td></tr>}
-            </tbody>
-          </table>
+        <CardContent>
+          <DataTable
+            columns={[
+              { key: "applicantName", header: "الاسم", sortable: true, render: (v) => <span className="font-medium">{v.applicantName || v.name}</span> },
+              { key: "postingTitle", header: "المنصب", sortable: true, render: (v) => <span className="text-gray-500">{v.postingTitle || v.position || "-"}</span> },
+              { key: "email", header: "البريد", sortable: true, render: (v) => <span className="text-gray-500">{v.email || "-"}</span> },
+              { key: "rating", header: "التقييم", sortable: true, render: (v) => <span>{v.rating ? `${v.rating}/5` : "-"}</span> },
+              { key: "status", header: "المرحلة", sortable: true, render: (v) => <Badge className={stageMap[v.status]?.color || ""}>{stageMap[v.status]?.label || v.status}</Badge> },
+            ] as DataTableColumn<any>[]}
+            data={apps}
+            noToolbar
+            emptyMessage="لا يوجد متقدمين"
+            pageSize={15}
+          />
         </CardContent>
       </Card>
     </PageShell>

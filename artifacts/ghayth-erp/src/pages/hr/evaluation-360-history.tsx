@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 function ScoreDot({ score }: { score: number | null | undefined }) {
   if (score == null) return <span className="text-gray-400">-</span>;
@@ -85,41 +86,25 @@ export default function Evaluation360HistoryPage() {
       )}
 
       {/* History Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="p-3 text-start font-medium">الفترة</th>
-              <th className="p-3 text-start font-medium">تاريخ البدء</th>
-              <th className="p-3 text-start font-medium">النظام</th>
-              <th className="p-3 text-start font-medium">المدير</th>
-              <th className="p-3 text-start font-medium">الزملاء</th>
-              <th className="p-3 text-start font-medium">360° النهائي</th>
-              <th className="p-3 text-start font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {history.map((h: any) => (
-              <tr key={h.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-medium">{h.period}</td>
-                <td className="p-3 text-gray-500">{h.startDate ? new Date(h.startDate).toLocaleDateString('ar-SA') : '-'}</td>
-                <td className="p-3"><ScoreDot score={h.systemScore} /></td>
-                <td className="p-3"><ScoreDot score={h.managerScore} /></td>
-                <td className="p-3"><ScoreDot score={h.peerScore} /></td>
-                <td className="p-3"><ScoreDot score={h.finalScore} /></td>
-                <td className="p-3">
-                  <Link href={`/hr/evaluation-360/${h.id}`}>
-                    <Button variant="ghost" size="sm" className="text-xs">عرض</Button>
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {history.length === 0 && (
-              <tr><td colSpan={7} className="p-8 text-center text-gray-400">لا توجد سجلات</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={[
+          { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="font-medium">{v.period}</span> },
+          { key: "startDate", header: "تاريخ البدء", sortable: true, render: (v) => <span className="text-gray-500">{v.startDate ? new Date(v.startDate).toLocaleDateString('ar-SA') : '-'}</span> },
+          { key: "systemScore", header: "النظام", sortable: true, render: (v) => <ScoreDot score={v.systemScore} /> },
+          { key: "managerScore", header: "المدير", sortable: true, render: (v) => <ScoreDot score={v.managerScore} /> },
+          { key: "peerScore", header: "الزملاء", sortable: true, render: (v) => <ScoreDot score={v.peerScore} /> },
+          { key: "finalScore", header: "360° النهائي", sortable: true, render: (v) => <ScoreDot score={v.finalScore} /> },
+          { key: "id", header: "", render: (v) => (
+            <Link href={`/hr/evaluation-360/${v.id}`}>
+              <Button variant="ghost" size="sm" className="text-xs">عرض</Button>
+            </Link>
+          ) },
+        ] as DataTableColumn<any>[]}
+        data={history}
+        noToolbar
+        emptyMessage="لا توجد سجلات"
+        pageSize={20}
+      />
     </PageShell>
   );
 }

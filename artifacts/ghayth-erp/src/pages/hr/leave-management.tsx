@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => void }) {
   const [showImpact, setShowImpact] = useState(false);
@@ -139,29 +140,19 @@ export default function LeaveManagementPage() {
         </TabsContent>
 
         <TabsContent value="balances">
-          <Card><CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">نوع الإجازة</th>
-                <th className="p-3 text-start">المستحق</th>
-                <th className="p-3 text-start">المستخدم</th>
-                <th className="p-3 text-start">المحجوز</th>
-                <th className="p-3 text-start">المتبقي</th>
-              </tr></thead>
-              <tbody>
-                {balances.map((b: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{b.name || b.leaveTypeName}</td>
-                    <td className="p-3">{b.annualDays || b.entitled || b.maxDays}</td>
-                    <td className="p-3 text-red-600">{b.used || 0}</td>
-                    <td className="p-3 text-yellow-600">{b.reserved || 0}</td>
-                    <td className="p-3 font-bold text-green-600">{b.remaining ?? (Number(b.maxDays || b.annualDays || 0) - Number(b.used || 0))}</td>
-                  </tr>
-                ))}
-                {balances.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد أرصدة</td></tr>}
-              </tbody>
-            </table>
-          </CardContent></Card>
+          <DataTable
+            columns={[
+              { key: "name", header: "نوع الإجازة", sortable: true, render: (v) => <span className="font-medium">{v.name || v.leaveTypeName}</span> },
+              { key: "annualDays", header: "المستحق", sortable: true, render: (v) => <span>{v.annualDays || v.entitled || v.maxDays}</span> },
+              { key: "used", header: "المستخدم", sortable: true, render: (v) => <span className="text-red-600">{v.used || 0}</span> },
+              { key: "reserved", header: "المحجوز", sortable: true, render: (v) => <span className="text-yellow-600">{v.reserved || 0}</span> },
+              { key: "remaining", header: "المتبقي", sortable: true, render: (v) => <span className="font-bold text-green-600">{v.remaining ?? (Number(v.maxDays || v.annualDays || 0) - Number(v.used || 0))}</span> },
+            ] as DataTableColumn<any>[]}
+            data={balances}
+            noToolbar
+            emptyMessage="لا توجد أرصدة"
+            pageSize={20}
+          />
         </TabsContent>
 
         <TabsContent value="types">

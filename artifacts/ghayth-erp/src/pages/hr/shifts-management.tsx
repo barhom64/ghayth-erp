@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Users, Plus, Sun, Moon, Clock, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function ShiftsManagementPage() {
   const { data: shiftsData } = useApiQuery<any>(["shifts"], "/hr/shifts");
@@ -120,29 +121,19 @@ export default function ShiftsManagementPage() {
               </CardContent>
             </Card>
           )}
-          <Card><CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">الموظف</th>
-                <th className="p-3 text-start">الوردية</th>
-                <th className="p-3 text-start">الوقت</th>
-                <th className="p-3 text-start">من</th>
-                <th className="p-3 text-start">إلى</th>
-              </tr></thead>
-              <tbody>
-                {assignments.map((a: any) => (
-                  <tr key={a.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{a.employeeName || "-"}</td>
-                    <td className="p-3">{a.shiftName || "-"}</td>
-                    <td className="p-3 font-mono">{a.startTime} - {a.endTime}</td>
-                    <td className="p-3 text-gray-500">{a.startDate || "-"}</td>
-                    <td className="p-3 text-gray-500">{a.endDate || "مستمر"}</td>
-                  </tr>
-                ))}
-                {assignments.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد تعيينات</td></tr>}
-              </tbody>
-            </table>
-          </CardContent></Card>
+          <DataTable
+            columns={[
+              { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName || "-"}</span> },
+              { key: "shiftName", header: "الوردية", sortable: true, render: (v) => <span>{v.shiftName || "-"}</span> },
+              { key: "startTime", header: "الوقت", sortable: true, render: (v) => <span className="font-mono">{v.startTime} - {v.endTime}</span> },
+              { key: "startDate", header: "من", sortable: true, render: (v) => <span className="text-gray-500">{v.startDate || "-"}</span> },
+              { key: "endDate", header: "إلى", sortable: true, render: (v) => <span className="text-gray-500">{v.endDate || "مستمر"}</span> },
+            ] as DataTableColumn<any>[]}
+            data={assignments}
+            noToolbar
+            emptyMessage="لا توجد تعيينات"
+            pageSize={20}
+          />
         </TabsContent>
       </Tabs>
     </PageShell>

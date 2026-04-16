@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function TrainingAdvancedPage() {
   const { data: statsData } = useApiQuery<any>(["training-stats"], "/training/stats");
@@ -61,26 +62,19 @@ export default function TrainingAdvancedPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-base">أحدث التسجيلات</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">الموظف</th>
-              <th className="p-3 text-start">البرنامج</th>
-              <th className="p-3 text-start">الحالة</th>
-              <th className="p-3 text-start">الدرجة</th>
-            </tr></thead>
-            <tbody>
-              {enrollments.slice(0, 15).map((e: any) => (
-                <tr key={e.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium">{e.employeeName || "-"}</td>
-                  <td className="p-3">{e.programTitle || "-"}</td>
-                  <td className="p-3"><Badge className={e.status === "completed" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>{e.status === "completed" ? "مكتمل" : e.status === "enrolled" ? "مسجل" : e.status}</Badge></td>
-                  <td className="p-3">{e.score ?? "-"}</td>
-                </tr>
-              ))}
-              {enrollments.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد تسجيلات</td></tr>}
-            </tbody>
-          </table>
+        <CardContent>
+          <DataTable
+            columns={[
+              { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName || "-"}</span> },
+              { key: "programTitle", header: "البرنامج", sortable: true, render: (v) => <span>{v.programTitle || "-"}</span> },
+              { key: "status", header: "الحالة", sortable: true, render: (v) => <Badge className={v.status === "completed" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>{v.status === "completed" ? "مكتمل" : v.status === "enrolled" ? "مسجل" : v.status}</Badge> },
+              { key: "score", header: "الدرجة", sortable: true, render: (v) => <span>{v.score ?? "-"}</span> },
+            ] as DataTableColumn<any>[]}
+            data={enrollments}
+            noToolbar
+            emptyMessage="لا توجد تسجيلات"
+            pageSize={15}
+          />
         </CardContent>
       </Card>
     </PageShell>

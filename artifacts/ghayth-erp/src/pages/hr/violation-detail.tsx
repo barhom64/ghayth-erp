@@ -10,6 +10,7 @@ import {
   Loader2, AlertTriangle, Shield, DollarSign, Calendar, User, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const SEVERITY_MAP: Record<string, { label: string; color: string }> = {
   low:    { label: "بسيطة",   color: "bg-blue-100 text-blue-700"   },
@@ -160,43 +161,24 @@ export default function ViolationDetail() {
               محاضر التحقيق المرتبطة
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">رقم المحضر</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">الجزاء</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">المبلغ</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">الحالة</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">التاريخ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {memos.map((m: any) => (
-                  <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                    <td className="px-4 py-3">
-                      <Link href={`/hr/discipline/memos/${m.id}`}>
-                        <span className="font-mono text-xs text-blue-700 hover:underline cursor-pointer">
-                          {m.memoNumber}
-                        </span>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">{m.penaltyLabel || "—"}</td>
-                    <td className="px-4 py-3 font-medium text-red-600">
-                      {formatCurrency(Number(m.totalDeductionAmount || 0))}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className="text-xs">
-                        {m.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">
-                      {m.createdAt ? formatDateAr(m.createdAt) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <CardContent>
+            <DataTable
+              columns={[
+                { key: "memoNumber", header: "رقم المحضر", sortable: true, render: (v) => (
+                  <Link href={`/hr/discipline/memos/${v.id}`}>
+                    <span className="font-mono text-xs text-blue-700 hover:underline cursor-pointer">{v.memoNumber}</span>
+                  </Link>
+                ) },
+                { key: "penaltyLabel", header: "الجزاء", sortable: true, render: (v) => <span className="text-gray-700">{v.penaltyLabel || "—"}</span> },
+                { key: "totalDeductionAmount", header: "المبلغ", sortable: true, render: (v) => <span className="font-medium text-red-600">{formatCurrency(Number(v.totalDeductionAmount || 0))}</span> },
+                { key: "status", header: "الحالة", sortable: true, render: (v) => <Badge variant="outline" className="text-xs">{v.status}</Badge> },
+                { key: "createdAt", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.createdAt ? formatDateAr(v.createdAt) : "—"}</span> },
+              ] as DataTableColumn<any>[]}
+              data={memos}
+              noToolbar
+              emptyMessage="لا توجد محاضر"
+              pageSize={10}
+            />
           </CardContent>
         </Card>
       )}

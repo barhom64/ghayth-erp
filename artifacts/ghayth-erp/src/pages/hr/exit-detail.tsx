@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending:      { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700"  },
@@ -250,34 +251,22 @@ export default function ExitDetail() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">إخلاء الطرف</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">القسم</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">المسؤول</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">الحالة</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">ملاحظات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clearance.map((cl: any) => {
-                  const cSt = CLEARANCE_STATUS[cl.status] ?? { label: cl.status, color: "text-gray-600 bg-gray-50" };
-                  return (
-                    <tr key={cl.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="px-4 py-3 font-medium">{cl.department || cl.section || "—"}</td>
-                      <td className="px-4 py-3 text-gray-600">{cl.responsibleName || "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cSt.color)}>
-                          {cSt.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{cl.notes || "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <CardContent>
+            <DataTable
+              columns={[
+                { key: "department", header: "القسم", sortable: true, render: (v) => <span className="font-medium">{v.department || v.section || "—"}</span> },
+                { key: "responsibleName", header: "المسؤول", sortable: true, render: (v) => <span className="text-gray-600">{v.responsibleName || "—"}</span> },
+                { key: "status", header: "الحالة", sortable: true, render: (v) => {
+                  const cSt = CLEARANCE_STATUS[v.status] ?? { label: v.status, color: "text-gray-600 bg-gray-50" };
+                  return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cSt.color)}>{cSt.label}</span>;
+                } },
+                { key: "notes", header: "ملاحظات", render: (v) => <span className="text-gray-500 text-xs">{v.notes || "—"}</span> },
+              ] as DataTableColumn<any>[]}
+              data={clearance}
+              noToolbar
+              emptyMessage="لا توجد بيانات إخلاء طرف"
+              pageSize={20}
+            />
           </CardContent>
         </Card>
       )}

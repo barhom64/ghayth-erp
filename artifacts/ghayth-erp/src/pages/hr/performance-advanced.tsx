@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Target, TrendingUp, Award, BarChart3, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function PerformanceAdvancedPage() {
   const { data } = useApiQuery<any>(["performance"], "/hr/performance");
@@ -64,35 +65,28 @@ export default function PerformanceAdvancedPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-base">أفضل الموظفين أداءً</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">#</th>
-              <th className="p-3 text-start">الموظف</th>
-              <th className="p-3 text-start">التقييم</th>
-              <th className="p-3 text-start">الفترة</th>
-            </tr></thead>
-            <tbody>
-              {items.sort((a: any, b: any) => Number(b.overallScore || 0) - Number(a.overallScore || 0)).slice(0, 10).map((p: any, i: number) => (
-                <tr key={p.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3">
-                    <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold", i < 3 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-700")}>{i + 1}</div>
-                  </td>
-                  <td className="p-3 font-medium">{p.employeeName}</td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: 5 }).map((_, j) => (
-                        <Star key={j} className={cn("w-4 h-4", j < Number(p.overallScore) ? "text-yellow-400 fill-yellow-400" : "text-gray-200")} />
-                      ))}
-                      <span className="ms-2 font-bold">{Number(p.overallScore).toFixed(1)}</span>
-                    </div>
-                  </td>
-                  <td className="p-3 text-gray-500">{p.period || "-"}</td>
-                </tr>
-              ))}
-              {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد تقييمات</td></tr>}
-            </tbody>
-          </table>
+        <CardContent>
+          <DataTable
+            columns={[
+              { key: "rank", header: "#", render: (_v, i) => {
+                return <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold", i < 3 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-700")}>{i + 1}</div>;
+              } },
+              { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
+              { key: "overallScore", header: "التقييم", sortable: true, render: (v) => (
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }).map((_, j) => (
+                    <Star key={j} className={cn("w-4 h-4", j < Number(v.overallScore) ? "text-yellow-400 fill-yellow-400" : "text-gray-200")} />
+                  ))}
+                  <span className="ms-2 font-bold">{Number(v.overallScore).toFixed(1)}</span>
+                </div>
+              ) },
+              { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-gray-500">{v.period || "-"}</span> },
+            ] as DataTableColumn<any>[]}
+            data={[...items].sort((a: any, b: any) => Number(b.overallScore || 0) - Number(a.overallScore || 0)).slice(0, 10)}
+            noToolbar
+            emptyMessage="لا توجد تقييمات"
+            pageSize={10}
+          />
         </CardContent>
       </Card>
     </PageShell>

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Wallet, Calendar, DollarSign, CheckCircle, Clock, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700" },
@@ -177,34 +178,22 @@ export default function LoanDetail() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">جدول الأقساط</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">#</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">الفترة</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">المبلغ</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {installments.map((inst: any) => {
-                  const iSt = INSTALLMENT_STATUS[inst.status] ?? { label: inst.status, color: "text-gray-600 bg-gray-50" };
-                  return (
-                    <tr key={inst.id || inst.installmentNumber} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="px-4 py-3 text-gray-500">{inst.installmentNumber}</td>
-                      <td className="px-4 py-3 text-gray-700 font-mono">{inst.period}</td>
-                      <td className="px-4 py-3 font-medium">{formatCurrency(Number(inst.amount))}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", iSt.color)}>
-                          {iSt.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <CardContent>
+            <DataTable
+              columns={[
+                { key: "installmentNumber", header: "#", sortable: true, render: (v) => <span className="text-gray-500">{v.installmentNumber}</span> },
+                { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-gray-700 font-mono">{v.period}</span> },
+                { key: "amount", header: "المبلغ", sortable: true, render: (v) => <span className="font-medium">{formatCurrency(Number(v.amount))}</span> },
+                { key: "status", header: "الحالة", sortable: true, render: (v) => {
+                  const iSt = INSTALLMENT_STATUS[v.status] ?? { label: v.status, color: "text-gray-600 bg-gray-50" };
+                  return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", iSt.color)}>{iSt.label}</span>;
+                } },
+              ] as DataTableColumn<any>[]}
+              data={installments}
+              noToolbar
+              emptyMessage="لا توجد أقساط"
+              pageSize={20}
+            />
           </CardContent>
         </Card>
       )}
