@@ -14,28 +14,10 @@ import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 
+import { INCIDENT_LABELS, MEMO_ACTION_LABELS } from "@/lib/hr-type-maps";
+
 // HR-U3 — حُذفت STATUS_STYLES المحلية. حالات المذكرات التأديبية موحّدة في
 // STATUS_MAP.memo + STATUS_MAP.shared (draft/expired).
-
-const INCIDENT_LABELS: Record<string, string> = {
-  late: "تأخر",
-  absence: "غياب",
-  early_leave: "خروج مبكر",
-  behavior: "سلوك",
-  organization: "تنظيم",
-  gps_out_of_range: "خارج النطاق",
-  custom: "أخرى",
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  created: "إنشاء المحضر",
-  justified: "تقديم التبرير",
-  manager_recommended: "توصية المدير",
-  gm_decided: "قرار المدير العام",
-  penalty_applied: "تطبيق الجزاء",
-  cancelled: "إلغاء المحضر",
-  escalated: "تصعيد",
-};
 
 interface MemoData {
   memo: any;
@@ -381,7 +363,7 @@ export default function DisciplineMemoDetailPage() {
                 <div key={ev.id} className="flex gap-3 border-r-2 border-primary/30 pe-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline">{ACTION_LABELS[ev.action] ?? ev.action}</Badge>
+                      <Badge variant="outline">{MEMO_ACTION_LABELS[ev.action] ?? ev.action}</Badge>
                       <span className="text-xs text-muted-foreground">{ev.actorRole}</span>
                     </div>
                     {ev.note && <p className="text-sm mt-1">{ev.note}</p>}

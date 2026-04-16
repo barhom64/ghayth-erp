@@ -2,11 +2,12 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Navigation, Clock, AlertTriangle } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { KpiGrid } from "@/components/shared/kpi-card";
 
 const defaultCenter: [number, number] = [24.7136, 46.6753];
 
@@ -88,21 +89,7 @@ export default function FieldTrackingPage() {
       subtitle="متابعة مواقع الموظفين الميدانيين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "التتبع الميداني" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <Card>
         <CardContent className="p-4">
@@ -114,27 +101,18 @@ export default function FieldTrackingPage() {
         </CardContent>
       </Card>
 
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50">
-            <th className="p-3 text-start">الموظف</th>
-            <th className="p-3 text-start">التاريخ</th>
-            <th className="p-3 text-start">وقت التسجيل</th>
-            <th className="p-3 text-start">الحالة</th>
-          </tr></thead>
-          <tbody>
-            {items.slice(0, 20).map((a: any) => (
-              <tr key={a.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-medium">{a.employeeName}</td>
-                <td className="p-3 text-gray-500">{a.date}</td>
-                <td className="p-3 font-mono">{a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
-                <td className="p-3"><Badge className={a.status === "present" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>{a.status === "present" ? "حاضر" : a.status}</Badge></td>
-              </tr>
-            ))}
-            {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد سجلات</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        columns={[
+          { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
+          { key: "date", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.date}</span> },
+          { key: "checkIn", header: "وقت التسجيل", sortable: true, render: (v) => <span className="font-mono">{v.checkIn ? new Date(v.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</span> },
+          { key: "status", header: "الحالة", sortable: true, render: (v) => <Badge className={v.status === "present" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>{v.status === "present" ? "حاضر" : v.status}</Badge> },
+        ] as DataTableColumn<any>[]}
+        data={items}
+        noToolbar
+        emptyMessage="لا توجد سجلات"
+        pageSize={20}
+      />
     </PageShell>
   );
 }

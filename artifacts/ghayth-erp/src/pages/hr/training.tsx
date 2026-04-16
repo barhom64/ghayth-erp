@@ -8,8 +8,8 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, GraduationCap, Users, BookOpen, Award } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
@@ -99,21 +99,7 @@ export default function TrainingPage() {
         </Link>
       }
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <AdvancedFilters
         config={{
@@ -137,10 +123,10 @@ export default function TrainingPage() {
               <Card key={t.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
+                    <Link href={`/hr/training/${t.id}`} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
                       <GraduationCap className="w-5 h-5 text-blue-500" />
                       <span className="font-semibold">{t.title}</span>
-                    </div>
+                    </Link>
                     <div className="flex items-center gap-1">
                       <PageStatusBadge status={t.status} />
                       <RowActions

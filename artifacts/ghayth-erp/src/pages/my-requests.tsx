@@ -6,7 +6,7 @@ import { formatDateAr } from "@/lib/formatters";
 import {
   Clock, Calendar, DollarSign, FileSignature,
   CheckCircle2, XCircle, AlertCircle, ChevronLeft,
-  Loader2, RefreshCw, ClipboardList,
+  Loader2, RefreshCw, ClipboardList, Wallet, Timer, LogOut,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,9 @@ const typeLabels: Record<string, { label: string; icon: any }> = {
   leave: { label: "إجازة", icon: Calendar },
   salary_advance: { label: "سلفة راتب", icon: DollarSign },
   official_letter: { label: "خطاب رسمي", icon: FileSignature },
+  loan: { label: "سلفة موظف", icon: Wallet },
+  overtime: { label: "وقت إضافي", icon: Timer },
+  exit: { label: "نهاية خدمة", icon: LogOut },
 };
 
 function StatusBadge({ status }: { status: string }) {

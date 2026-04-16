@@ -102,10 +102,10 @@ export default function MyPayslip() {
                 </div>
                 {[
                   { label: "التأمينات", value: payslip.gosi },
-                  { label: "سلف الراتب", value: payslip.advanceDeduction },
+                  { label: "أقساط سلف", value: payslip.advanceDeduction },
                   { label: "غياب", value: payslip.absenceDeduction },
                   { label: "تأخير", value: payslip.lateDeduction },
-                  { label: "استقطاعات أخرى", value: payslip.otherDeductions },
+                  { label: "مخالفات وجزاءات", value: payslip.otherDeductions },
                 ].filter((item) => Number(item.value) > 0).map((item) => (
                   <div key={item.label} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0">
                     <span className="text-gray-500">{item.label}</span>

@@ -21,6 +21,7 @@ import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "../routes/finance-recurring.js";
 import { scanObligations } from "./obligationsEngine.js";
+import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -2763,6 +2764,11 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
   return `Budget variance alerts sent: ${alerted}`;
 }
 
+async function dailyAutoViolationDetection(): Promise<string> {
+  const result = await runAutoDetectionAllCompanies();
+  return `الرصد التلقائي: ${result.totalDetected} واقعة مكتشفة، ${result.totalMemos} محضر جديد عبر ${result.companies} شركة`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
@@ -2775,6 +2781,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "hourly_sla_escalation", description: "تصعيد SLA كل ساعة", schedule: "0 * * * *", handler: hourlySlaEscalation },
   { name: "hourly_approval_escalation", description: "تصعيد الموافقات كل ساعة", schedule: "0 * * * *", handler: hourlyApprovalEscalation },
   { name: "daily_deduction_check", description: "خصومات الغياب اليومية", schedule: "0 23 * * *", handler: dailyDeductionCheck },
+  { name: "daily_auto_violation_detection", description: "الرصد التلقائي للمخالفات — تأخر وغياب ومغادرة مبكرة وخروج GPS", schedule: "30 23 * * *", handler: dailyAutoViolationDetection },
   { name: "daily_invoice_overdue", description: "تصعيد الفواتير المتأخرة 6 مراحل", schedule: "0 8 * * *", handler: dailyInvoiceOverdueEscalation },
   { name: "daily_fuel_monitor", description: "مراقبة استهلاك الوقود", schedule: "0 9 * * *", handler: dailyFuelMonitor },
   { name: "daily_inventory_check", description: "فحص المخزون + طلب شراء تلقائي", schedule: "0 10 * * *", handler: dailyInventoryCheck },

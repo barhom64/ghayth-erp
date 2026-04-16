@@ -40,6 +40,8 @@ const MyAttendance = lazy(() => import("@/pages/my-attendance"));
 const MyPayslip = lazy(() => import("@/pages/my-payslip"));
 const MyPerformance = lazy(() => import("@/pages/my-performance"));
 const MyDocuments = lazy(() => import("@/pages/my-documents"));
+const MyLoans = lazy(() => import("@/pages/my-loans"));
+const MyOvertime = lazy(() => import("@/pages/my-overtime"));
 const ActionCenter = lazy(() => import("@/pages/action-center"));
 const ManagerBoard = lazy(() => import("@/pages/manager-board"));
 const ModuleDashboards = lazy(() => import("@/pages/module-dashboards"));
@@ -58,6 +60,8 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-payslip", component: MyPayslip },
   { path: "/my-performance", component: MyPerformance },
   { path: "/my-documents", component: MyDocuments },
+  { path: "/my-loans", component: MyLoans },
+  { path: "/my-overtime", component: MyOvertime },
   { path: "/action-center", component: ActionCenter },
   { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
   { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },

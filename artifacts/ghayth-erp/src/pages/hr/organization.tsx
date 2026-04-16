@@ -1,8 +1,8 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Network, Briefcase, MapPin, User } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { KpiGrid } from "@/components/shared/kpi-card";
 
 export default function OrganizationPage() {
   const { data: depts } = useApiQuery<any>(["departments"], "/settings/departments");
@@ -23,21 +23,7 @@ export default function OrganizationPage() {
       subtitle="عرض الأقسام والإدارات والمناصب"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "الهيكل التنظيمي" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">الأقسام والإدارات</CardTitle></CardHeader>

@@ -1,30 +1,31 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Briefcase, Users, UserCheck, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
-
-const stageMap: Record<string, { label: string; color: string }> = {
-  new: { label: "جديد", color: "bg-blue-100 text-blue-700" },
-  screening: { label: "فرز", color: "bg-yellow-100 text-yellow-700" },
-  interview: { label: "مقابلة", color: "bg-purple-100 text-purple-700" },
-  offer: { label: "عرض", color: "bg-green-100 text-green-700" },
-  hired: { label: "تم التوظيف", color: "bg-emerald-100 text-emerald-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
-};
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
 export default function RecruitmentAdvancedPage() {
   const { data: stats } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
   const { data: appsData } = useApiQuery<any>(["applicants"], "/recruitment/applications");
   const apps = appsData?.data || [];
 
-  const pipeline = Object.entries(stageMap).map(([key, val]) => ({
+  const pipeline = Object.entries(RECRUITMENT_STAGES).map(([key, val]) => ({
     stage: key,
     label: val.label,
     color: val.color,
     count: apps.filter((a: any) => (a.status || a.stage) === key).length,
   }));
+
+  const kpis = [
+    { label: "وظائف مفتوحة", value: stats?.openPostings ?? 0, icon: Briefcase, color: "text-blue-600 bg-blue-50" },
+    { label: "إجمالي المتقدمين", value: stats?.totalApplications ?? apps.length, icon: Users, color: "text-green-600 bg-green-50" },
+    { label: "تم التوظيف", value: apps.filter((a: any) => a.status === "hired").length, icon: UserCheck, color: "text-purple-600 bg-purple-50" },
+    { label: "معدل التحويل", value: apps.length > 0 ? Math.round((apps.filter((a: any) => a.status === "hired").length / apps.length) * 100) + "%" : "0%", icon: BarChart3, color: "text-orange-600 bg-orange-50" },
+  ];
 
   return (
     <PageShell
@@ -32,23 +33,7 @@ export default function RecruitmentAdvancedPage() {
       subtitle="إحصائيات ومؤشرات عمليات التوظيف"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التوظيف المتقدمة" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "وظائف مفتوحة", value: stats?.openPostings ?? 0, icon: Briefcase, color: "text-blue-600 bg-blue-50" },
-          { label: "إجمالي المتقدمين", value: stats?.totalApplications ?? apps.length, icon: Users, color: "text-green-600 bg-green-50" },
-          { label: "تم التوظيف", value: apps.filter((a: any) => a.status === "hired").length, icon: UserCheck, color: "text-purple-600 bg-purple-50" },
-          { label: "معدل التحويل", value: apps.length > 0 ? Math.round((apps.filter((a: any) => a.status === "hired").length / apps.length) * 100) + "%" : "0%", icon: BarChart3, color: "text-orange-600 bg-orange-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-2xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">مسار التوظيف</CardTitle></CardHeader>
@@ -68,28 +53,20 @@ export default function RecruitmentAdvancedPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-base">آخر المتقدمين</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">الاسم</th>
-              <th className="p-3 text-start">المنصب</th>
-              <th className="p-3 text-start">البريد</th>
-              <th className="p-3 text-start">التقييم</th>
-              <th className="p-3 text-start">المرحلة</th>
-            </tr></thead>
-            <tbody>
-              {apps.slice(0, 15).map((a: any) => (
-                <tr key={a.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium">{a.applicantName || a.name}</td>
-                  <td className="p-3 text-gray-500">{a.postingTitle || a.position || "-"}</td>
-                  <td className="p-3 text-gray-500">{a.email || "-"}</td>
-                  <td className="p-3">{a.rating ? `${a.rating}/5` : "-"}</td>
-                  <td className="p-3"><Badge className={stageMap[a.status]?.color || ""}>{stageMap[a.status]?.label || a.status}</Badge></td>
-                </tr>
-              ))}
-              {apps.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا يوجد متقدمين</td></tr>}
-            </tbody>
-          </table>
+        <CardContent>
+          <DataTable
+            columns={[
+              { key: "applicantName", header: "الاسم", sortable: true, render: (v) => <span className="font-medium">{v.applicantName || v.name}</span> },
+              { key: "postingTitle", header: "المنصب", sortable: true, render: (v) => <span className="text-gray-500">{v.postingTitle || v.position || "-"}</span> },
+              { key: "email", header: "البريد", sortable: true, render: (v) => <span className="text-gray-500">{v.email || "-"}</span> },
+              { key: "rating", header: "التقييم", sortable: true, render: (v) => <span>{v.rating ? `${v.rating}/5` : "-"}</span> },
+              { key: "status", header: "المرحلة", sortable: true, render: (v) => <Badge className={RECRUITMENT_STAGES[v.status]?.color || ""}>{RECRUITMENT_STAGES[v.status]?.label || v.status}</Badge> },
+            ] as DataTableColumn<any>[]}
+            data={apps}
+            noToolbar
+            emptyMessage="لا يوجد متقدمين"
+            pageSize={15}
+          />
         </CardContent>
       </Card>
     </PageShell>

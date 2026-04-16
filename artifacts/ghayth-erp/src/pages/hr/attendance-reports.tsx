@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Users, AlertTriangle, DollarSign } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
@@ -67,21 +67,7 @@ export default function AttendanceReportsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تقارير الحضور والانصراف" }]}
       actions={<Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <AdvancedFilters
         config={{

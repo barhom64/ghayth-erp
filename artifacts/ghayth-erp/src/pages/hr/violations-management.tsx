@@ -5,17 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, Scale, DollarSign, Shield, TrendingUp } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
-
-const severityMap: Record<string, { label: string; color: string }> = {
-  low: { label: "منخفض", color: "bg-green-100 text-green-700" },
-  medium: { label: "متوسط", color: "bg-yellow-100 text-yellow-700" },
-  high: { label: "مرتفع", color: "bg-orange-100 text-orange-700" },
-  critical: { label: "حرج", color: "bg-red-100 text-red-700" },
-};
+import { SEVERITY_LEVELS } from "@/lib/hr-type-maps";
 
 export default function ViolationsManagementPage() {
   const { data } = useApiQuery<any>(["violations"], "/hr/violations");
@@ -47,7 +41,7 @@ export default function ViolationsManagementPage() {
       key: "severity",
       header: "الشدة",
       sortable: true,
-      render: (v) => <Badge className={severityMap[v.severity]?.color || ""}>{severityMap[v.severity]?.label || v.severity}</Badge>,
+      render: (v) => <Badge className={SEVERITY_LEVELS[v.severity]?.color || ""}>{SEVERITY_LEVELS[v.severity]?.label || v.severity}</Badge>,
     },
     {
       key: "deduction",
@@ -91,23 +85,12 @@ export default function ViolationsManagementPage() {
       subtitle="تحليل وإدارة المخالفات مع التصعيد التلقائي"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة المخالفات المتقدمة" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-          { label: "نشطة", value: stats?.active ?? 0, icon: Scale, color: "text-yellow-600 bg-yellow-50" },
-          { label: "إجمالي الخصومات", value: formatCurrency(stats?.totalDeductions ?? 0), icon: DollarSign, color: "text-orange-600 bg-orange-50" },
-          { label: "أنواع المخالفات", value: Object.keys(byType).length, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+        { label: "نشطة", value: stats?.active ?? 0, icon: Scale, color: "text-yellow-600 bg-yellow-50" },
+        { label: "إجمالي الخصومات", value: formatCurrency(stats?.totalDeductions ?? 0), icon: DollarSign, color: "text-orange-600 bg-orange-50" },
+        { label: "أنواع المخالفات", value: Object.keys(byType).length, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <Tabs defaultValue="list" dir="rtl">
         <TabsList>
@@ -119,7 +102,7 @@ export default function ViolationsManagementPage() {
             <AdvancedFilters
               config={{
                 searchPlaceholder: "بحث بالاسم...",
-                statuses: Object.entries(severityMap).map(([k, v]) => ({ value: k, label: v.label })),
+                statuses: Object.entries(SEVERITY_LEVELS).map(([k, v]) => ({ value: k, label: v.label })),
                 showDateRange: true,
               }}
               values={filters}

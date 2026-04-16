@@ -1,14 +1,15 @@
 import { formatCurrency } from "@/lib/formatters";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   Plus, AlertTriangle, Scale, DollarSign, Shield,
-  Clock, Ban, Gavel, ScrollText, MapPin, PenLine, DoorOpen, FileText,
+  Clock, Ban, Gavel, ScrollText, MapPin, PenLine, DoorOpen, FileText, Radar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -36,6 +37,7 @@ const INCIDENT_LABELS: Record<string, { label: string; Icon: typeof Clock; color
 };
 
 export default function ViolationsPage() {
+  const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const { data } = useApiQuery<{ data: any[]; total: number }>(
     ["discipline-memos"],
@@ -84,9 +86,7 @@ export default function ViolationsPage() {
       sortable: true,
       render: (v) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold shrink-0">
-            {(v.employeeName || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={v.employeeName} color="red" />
           <div>
             <span className="font-medium text-sm block">{v.employeeName}</span>
             {v.empNumber && (
@@ -207,30 +207,24 @@ export default function ViolationsPage() {
       subtitle="محاضر الاستفسار والإجراءات التأديبية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/violations/create">
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            تسجيل مخالفة
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/hr/violations/auto-detection">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Radar className="h-4 w-4" />
+              الرصد التلقائي
+            </Button>
+          </Link>
+          <Link href="/hr/violations/create">
+            <Button size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              تسجيل مخالفة
+            </Button>
+          </Link>
+        </div>
       }
     >
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       {/* Termination alert */}
       {terminationCount > 0 && (
@@ -261,6 +255,7 @@ export default function ViolationsPage() {
         noToolbar
         emptyMessage="لا توجد محاضر مخالفات — سجّل مخالفة جديدة للبدء"
         pageSize={20}
+        onRowClick={(item) => navigate(`/hr/discipline/memos/${item.id}`)}
       />
     </PageShell>
   );

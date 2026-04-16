@@ -9,20 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Edit2, Save, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
-
-const TYPES: Record<string, string> = {
-  national: "وطنية",
-  religious: "دينية",
-  custom: "خاصة بالشركة",
-};
-
-const TYPE_COLORS: Record<string, string> = {
-  national: "bg-green-100 text-green-700",
-  religious: "bg-purple-100 text-purple-700",
-  custom: "bg-blue-100 text-blue-700",
-};
-
-const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
 
 export default function PublicHolidaysPage() {
   const currentYear = new Date().getFullYear();
@@ -127,7 +114,7 @@ export default function PublicHolidaysPage() {
                 <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    {Object.entries(HOLIDAY_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -181,7 +168,7 @@ export default function PublicHolidaysPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge className={TYPE_COLORS[h.type] || "bg-gray-100 text-gray-700"}>{TYPES[h.type] || h.type}</Badge>
+                      <Badge className={HOLIDAY_COLORS[h.type] || "bg-gray-100 text-gray-700"}>{HOLIDAY_TYPES[h.type] || h.type}</Badge>
                       {h.isRecurring && <Badge className="bg-orange-100 text-orange-700">سنوي</Badge>}
                       <button onClick={() => handleEdit(h)} className="p-1 text-gray-400 hover:text-primary"><Edit2 className="w-3.5 h-3.5" /></button>
                       <button onClick={() => handleDelete(h.id)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>

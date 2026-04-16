@@ -13,8 +13,11 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Clock, Plus, CheckCircle, XCircle, AlertCircle, Users, ChevronDown, ChevronUp, AlertTriangle, DollarSign } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { PENALTY_LEVELS } from "@/lib/hr-type-maps";
 
 
 // P02-M1 — `new Date(...).toISOString().slice(0, 10)` converts the
@@ -35,13 +38,6 @@ function monthEndDate(month: string): string {
   return `${yearStr}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
 }
 
-const PENALTY_LEVELS: Record<number, { label: string; color: string; bg: string }> = {
-  1: { label: "تنبيه شفهي", color: "text-yellow-700", bg: "bg-yellow-50" },
-  2: { label: "إنذار كتابي أول", color: "text-orange-700", bg: "bg-orange-50" },
-  3: { label: "إنذار كتابي ثاني", color: "text-red-600", bg: "bg-red-50" },
-  4: { label: "خصم من الراتب", color: "text-red-700", bg: "bg-red-100" },
-  5: { label: "إيقاف مؤقت", color: "text-red-800", bg: "bg-red-200" },
-};
 
 function PenaltyChain({ record }: { record: any }) {
   const lateMin = record.lateMinutes || 0;
@@ -141,9 +137,7 @@ export default function AttendancePage() {
       sortable: true,
       render: (a) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">
-            {(a.employeeName || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={a.employeeName} color="blue" />
           <span className="font-medium">{a.employeeName}</span>
         </div>
       ),
@@ -229,22 +223,7 @@ export default function AttendancePage() {
         />
       }
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-                {c.trend && <p className="text-xs text-green-500">{c.trend}</p>}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />

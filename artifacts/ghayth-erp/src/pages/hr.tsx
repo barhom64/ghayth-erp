@@ -9,6 +9,8 @@ import {
   Users, Clock, Calendar, DollarSign, GraduationCap, Target,
   Briefcase, Scale, CalendarClock, Network, UserPlus, ChevronLeft,
   TrendingUp, AlertCircle, CheckCircle2, ClipboardCheck,
+  Wallet, Timer, LogOut, ArrowRightLeft, Star, Award,
+  FileText, BookOpen, CalendarOff, BarChart3,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -86,11 +88,19 @@ export default function HR() {
   const { data: pendingLeavesResp } = useApiQuery<any>(["leaves-pending", scopeQueryString], `/hr/leave-requests?status=pending&page=1&limit=1${scopeSuffix}`);
   const { data: payrollResp } = useApiQuery<any>(["payroll-latest", scopeQueryString], `/hr/payroll?page=1&limit=1${scopeSuffix}`);
   const { data: attendanceResp } = useApiQuery<any>(["attendance-today", scopeQueryString], `/hr/attendance?page=1&limit=1${scopeSuffix}`);
+  const { data: loansResp } = useApiQuery<any>(["loans-active", scopeQueryString], `/hr/loans?status=active&page=1&limit=1${scopeSuffix}`);
+  const { data: overtimeResp } = useApiQuery<any>(["overtime-pending", scopeQueryString], `/hr/overtime?status=pending&page=1&limit=1${scopeSuffix}`);
+  const { data: exitResp } = useApiQuery<any>(["exit-pending", scopeQueryString], `/hr/exit?status=pending&page=1&limit=1${scopeSuffix}`);
+  const { data: violationsResp } = useApiQuery<any>(["violations-stats", scopeQueryString], `/hr/violations-stats?${scopeQueryString || ""}`);
 
   const totalEmployees = employeesResp?.total ?? "—";
   const pendingLeaves = pendingLeavesResp?.total ?? "—";
   const latestPayroll = asList(payrollResp)[0];
   const totalAttendanceToday = attendanceResp?.total ?? "—";
+  const activeLoans = loansResp?.total ?? 0;
+  const pendingOvertime = overtimeResp?.total ?? 0;
+  const pendingExit = exitResp?.total ?? 0;
+  const violationsThisMonth = violationsResp?.thisMonth ?? 0;
 
   return (
     <PageShell
@@ -135,6 +145,38 @@ export default function HR() {
           iconColor="text-emerald-600 bg-emerald-50"
           onClick={() => navigate("/hr/payroll")}
         />
+        <KPICard
+          title="سلف نشطة"
+          value={activeLoans}
+          subtitle="قروض جارية"
+          icon={Wallet}
+          iconColor="text-orange-600 bg-orange-50"
+          onClick={() => navigate("/hr/loans")}
+        />
+        <KPICard
+          title="وقت إضافي معلق"
+          value={pendingOvertime}
+          subtitle="بانتظار الاعتماد"
+          icon={Timer}
+          iconColor="text-cyan-600 bg-cyan-50"
+          onClick={() => navigate("/hr/overtime")}
+        />
+        <KPICard
+          title="طلبات نهاية خدمة"
+          value={pendingExit}
+          subtitle="قيد المعالجة"
+          icon={LogOut}
+          iconColor="text-rose-600 bg-rose-50"
+          onClick={() => navigate("/hr/exit")}
+        />
+        <KPICard
+          title="مخالفات الشهر"
+          value={violationsThisMonth}
+          subtitle="مخالفات مسجلة"
+          icon={Scale}
+          iconColor="text-red-600 bg-red-50"
+          onClick={() => navigate("/hr/violations")}
+        />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -148,6 +190,8 @@ export default function HR() {
             <QuickLink label="تفعيل الموظفين" icon={UserPlus} iconColor="text-indigo-600 bg-indigo-50" path="/hr/employee-activation" description="تفعيل حسابات الموظفين الجدد" />
             <QuickLink label="مراجعة التعيين" icon={ClipboardCheck} iconColor="text-violet-600 bg-violet-50" path="/hr/onboarding-review" description="متابعة إجراءات التعيين" />
             <QuickLink label="الهيكل التنظيمي" icon={Network} iconColor="text-sky-600 bg-sky-50" path="/hr/organization" description="عرض وإدارة الهيكل التنظيمي" />
+            <QuickLink label="الوثائق المنتهية" icon={FileText} iconColor="text-red-600 bg-red-50" path="/hr/expiring-documents" description="متابعة الإقامات والتصاريح" />
+            <QuickLink label="الخطابات الرسمية" icon={FileText} iconColor="text-gray-600 bg-gray-50" path="/hr/official-letters" description="خطابات التعريف والشهادات" />
           </div>
         </div>
 
@@ -161,6 +205,7 @@ export default function HR() {
             <QuickLink label="تقارير الحضور" icon={CheckCircle2} iconColor="text-purple-500 bg-purple-50" path="/hr/attendance/reports" description="تقارير وإحصاءات الحضور" />
             <QuickLink label="الإجازات وإدارتها" icon={Calendar} iconColor="text-emerald-600 bg-emerald-50" path="/hr/leaves" description="طلبات الإجازة وإدارتها" />
             <QuickLink label="الورديات" icon={CalendarClock} iconColor="text-teal-600 bg-teal-50" path="/hr/shifts" description="جداول وإدارة الورديات" />
+            <QuickLink label="العطل الرسمية" icon={CalendarOff} iconColor="text-green-600 bg-green-50" path="/hr/public-holidays" description="إدارة العطل والمناسبات" />
           </div>
         </div>
 
@@ -171,8 +216,14 @@ export default function HR() {
           </h2>
           <div className="space-y-2">
             <QuickLink label="الرواتب" icon={DollarSign} iconColor="text-emerald-600 bg-emerald-50" path="/hr/payroll" description="مسيرات الرواتب والمكافآت" />
+            <QuickLink label="سلف الموظفين" icon={Wallet} iconColor="text-orange-600 bg-orange-50" path="/hr/loans" description="إدارة سلف وقروض الموظفين" />
+            <QuickLink label="الوقت الإضافي" icon={Timer} iconColor="text-cyan-600 bg-cyan-50" path="/hr/overtime" description="طلبات ساعات العمل الإضافية" />
             <QuickLink label="تقييم الأداء" icon={Target} iconColor="text-orange-600 bg-orange-50" path="/hr/performance" description="تقييمات الأداء الدورية" />
+            <QuickLink label="تقييم 360°" icon={Star} iconColor="text-amber-600 bg-amber-50" path="/hr/evaluation-360" description="تقييم شامل متعدد الأطراف" />
             <QuickLink label="التدريب" icon={GraduationCap} iconColor="text-cyan-600 bg-cyan-50" path="/hr/training" description="البرامج التدريبية للموظفين" />
+            <QuickLink label="مكافأة نهاية الخدمة" icon={Award} iconColor="text-green-600 bg-green-50" path="/hr/gratuity" description="حساب وتقدير المكافآت" />
+            <QuickLink label="خطط التطوير" icon={BookOpen} iconColor="text-indigo-600 bg-indigo-50" path="/hr/idp" description="خطط التطوير الفردي للموظفين" />
+            <QuickLink label="تقرير الدوران" icon={BarChart3} iconColor="text-rose-600 bg-rose-50" path="/hr/turnover-report" description="تحليل معدل الدوران والتكاليف" />
           </div>
         </div>
 
@@ -185,6 +236,8 @@ export default function HR() {
             <QuickLink label="التوظيف" icon={Briefcase} iconColor="text-rose-600 bg-rose-50" path="/hr/recruitment" description="الوظائف الشاغرة والمتقدمين" />
             <QuickLink label="المتقدمين" icon={Users} iconColor="text-pink-600 bg-pink-50" path="/hr/recruitment/applications" description="طلبات التقديم المستلمة" />
             <QuickLink label="المخالفات والجزاءات" icon={Scale} iconColor="text-red-600 bg-red-50" path="/hr/violations" description="سجل المخالفات والجزاءات" />
+            <QuickLink label="نهاية الخدمة" icon={LogOut} iconColor="text-gray-600 bg-gray-50" path="/hr/exit" description="طلبات إنهاء الخدمة والتسوية" />
+            <QuickLink label="نقل الموظفين" icon={ArrowRightLeft} iconColor="text-blue-600 bg-blue-50" path="/hr/transfers" description="طلبات النقل بين الفروع" />
           </div>
         </div>
 
@@ -229,6 +282,24 @@ export default function HR() {
                 <UserPlus className="h-4 w-4" />
               </div>
               <span className="text-sm font-medium text-gray-800">إضافة موظف</span>
+            </button>
+            <button
+              onClick={() => navigate("/hr/loans/create")}
+              className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-orange-200 hover:bg-orange-50/30 transition-all text-right"
+            >
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-orange-600 bg-orange-50">
+                <Wallet className="h-4 w-4" />
+              </div>
+              <span className="text-sm font-medium text-gray-800">طلب سلفة</span>
+            </button>
+            <button
+              onClick={() => navigate("/hr/overtime/create")}
+              className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-cyan-200 hover:bg-cyan-50/30 transition-all text-right"
+            >
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-cyan-600 bg-cyan-50">
+                <Timer className="h-4 w-4" />
+              </div>
+              <span className="text-sm font-medium text-gray-800">تسجيل وقت إضافي</span>
             </button>
           </div>
         </div>

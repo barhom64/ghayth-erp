@@ -31,6 +31,9 @@ export const requestTypeLabels: Record<string, string> = {
   salary_advance: "سلفة راتب",
   letter: "خطاب رسمي",
   custody: "عُهدة",
+  loan: "سلفة موظف",
+  overtime: "وقت إضافي",
+  exit: "نهاية خدمة",
 };
 
 export const severityColors: Record<string, string> = {

@@ -7,14 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calculator, DollarSign, Calendar, User } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
-
-const TERMINATION_TYPES: Record<string, string> = {
-  end_of_service: "إنهاء خدمة من قبل صاحب العمل",
-  resignation: "استقالة",
-  contract_end: "انتهاء العقد",
-  retirement: "تقاعد",
-  termination: "فصل تأديبي",
-};
+import { TERMINATION_TYPES } from "@/lib/hr-type-maps";
 
 export default function GratuityPage() {
   const [form, setForm] = useState({ employeeId: "", terminationType: "end_of_service", terminationDate: new Date().toISOString().split("T")[0] });

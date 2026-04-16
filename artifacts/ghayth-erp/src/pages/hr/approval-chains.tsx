@@ -1,87 +1,141 @@
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, CheckCircle, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { APPROVAL_ROLES } from "@/lib/hr-type-maps";
 
-const stageStatus: Record<string, { label: string; color: string; icon: any }> = {
-  pending: { label: "معلق", color: "bg-yellow-100 text-yellow-700", icon: Clock },
-  approved: { label: "موافق", color: "bg-green-100 text-green-700", icon: CheckCircle },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700", icon: XCircle },
-  escalated: { label: "تصعيد", color: "bg-purple-100 text-purple-700", icon: AlertTriangle },
+const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "pending",   label: "معلق"  },
+  { value: "approved",  label: "موافق" },
+  { value: "rejected",  label: "مرفوض" },
+  { value: "escalated", label: "تصعيد" },
+];
+
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  pending:   { label: "معلق",  color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
+  approved:  { label: "موافق", color: "bg-green-100 text-green-700 border-green-300"   },
+  rejected:  { label: "مرفوض", color: "bg-red-100 text-red-700 border-red-300"         },
+  escalated: { label: "تصعيد", color: "bg-purple-100 text-purple-700 border-purple-300" },
 };
 
-const roleMap: Record<string, string> = {
-  manager: "المدير المباشر",
-  hr: "الموارد البشرية",
-  owner: "المالك",
-};
 
 export default function ApprovalChainsPage() {
+  const [filters, setFilters] = useFilters();
   const { data } = useApiQuery<any>(["approval-chains"], "/hr/approval-chains");
   const items = data?.data || [];
 
+  const filtered = applyFilters(items, filters, {
+    searchFields: ["employeeName", "leaveTypeName"],
+    statusField: "status",
+    dateField: "createdAt",
+  });
+
   const kpis = [
     { label: "إجمالي المراحل", value: items.length, icon: GitBranch, color: "text-blue-600 bg-blue-50" },
-    { label: "معلقة", value: items.filter((i: any) => i.status === "pending").length, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
+    { label: "معلقة", value: items.filter((i: any) => i.status === "pending").length, icon: Clock, color: "text-amber-600 bg-amber-50" },
     { label: "مكتملة", value: items.filter((i: any) => i.status === "approved").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
     { label: "تصعيد", value: items.filter((i: any) => i.status === "escalated").length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "requestId",
+      header: "الطلب",
+      sortable: true,
+      render: (v) => (
+        <div>
+          <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+            #{v.requestId}
+          </span>
+          <span className="block text-xs text-gray-400 mt-1">
+            {v.leaveTypeName} — {v.days} أيام
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "employeeName",
+      header: "الموظف",
+      sortable: true,
+      render: (v) => (
+        <div className="flex items-center gap-2">
+          <AvatarInitial name={v.employeeName} color="blue" />
+          <span className="font-medium text-sm">{v.employeeName}</span>
+        </div>
+      ),
+    },
+    {
+      key: "stage",
+      header: "المرحلة",
+      sortable: true,
+      render: (v) => (
+        <Badge variant="outline" className="text-xs">المرحلة {v.stage}</Badge>
+      ),
+    },
+    {
+      key: "requiredRole",
+      header: "الدور المطلوب",
+      sortable: true,
+      render: (v) => (
+        <span className="text-sm text-gray-600">{APPROVAL_ROLES[v.requiredRole] || v.requiredRole}</span>
+      ),
+    },
+    {
+      key: "decision",
+      header: "القرار",
+      render: (v) => (
+        <span className="text-sm text-gray-600">{v.decision || "-"}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (v) => {
+        const st = STATUS_MAP[v.status] || STATUS_MAP.pending;
+        return (
+          <Badge variant="outline" className={cn("text-xs", st.color)}>
+            {st.label}
+          </Badge>
+        );
+      },
+    },
   ];
 
   return (
     <PageShell
       title="سلاسل الموافقات"
       subtitle="إعداد مسارات الاعتماد ومراحل الموافقة"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "سلاسل الموافقات" }]}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* KPI cards */}
+      <KpiGrid items={kpis} />
 
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50">
-            <th className="p-3 text-start font-medium">الطلب</th>
-            <th className="p-3 text-start font-medium">الموظف</th>
-            <th className="p-3 text-start font-medium">المرحلة</th>
-            <th className="p-3 text-start font-medium">الدور المطلوب</th>
-            <th className="p-3 text-start font-medium">القرار</th>
-            <th className="p-3 text-start font-medium">الحالة</th>
-          </tr></thead>
-          <tbody>
-            {items.map((item: any) => {
-              const st = stageStatus[item.status] || stageStatus.pending;
-              return (
-                <tr key={item.id} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-3">
-                    <span className="text-gray-500">#{item.requestId}</span>
-                    <span className="block text-xs text-gray-400">{item.leaveTypeName} — {item.days} أيام</span>
-                  </td>
-                  <td className="p-3 font-medium">{item.employeeName}</td>
-                  <td className="p-3">المرحلة {item.stage}</td>
-                  <td className="p-3">{roleMap[item.requiredRole] || item.requiredRole}</td>
-                  <td className="p-3">{item.decision || "-"}</td>
-                  <td className="p-3"><Badge className={st.color}>{st.label}</Badge></td>
-                </tr>
-              );
-            })}
-            {items.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد سلاسل موافقات</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      {/* Filters */}
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالاسم أو نوع الإجازة...",
+          statuses: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
+
+      {/* Table */}
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا توجد سلاسل موافقات"
+        pageSize={20}
+      />
     </PageShell>
   );
 }

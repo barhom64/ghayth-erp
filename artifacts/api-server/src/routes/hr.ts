@@ -1928,7 +1928,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const absenceMap = new Map<number, number>();
     for (const row of absenceRows) absenceMap.set(Number(row.assignmentId), Number(row.absentDays ?? 0));
 
-    // Loan installments per assignment
+    // Loan installments per assignment (legacy loan_accounts)
     const loanRows = await rawQuery<any>(
       `SELECT la."assignmentId", COALESCE(SUM(la."monthlyInstallment"), 0) AS "installment"
        FROM loan_accounts la
@@ -1939,7 +1939,20 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const loanMap = new Map<number, number>();
     for (const row of loanRows) loanMap.set(Number(row.assignmentId), Number(row.installment ?? 0));
 
-    // Overtime per assignment
+    // HR loan installments per assignment (hr_employee_loans module)
+    const hrLoanRows = await rawQuery<any>(
+      `SELECT li."assignmentId", COALESCE(SUM(li.amount), 0) AS "installment"
+       FROM hr_loan_installments li
+       WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
+       GROUP BY li."assignmentId"`,
+      [scope.companyId, targetPeriod]
+    ).catch(() => [] as any[]);
+    for (const row of hrLoanRows) {
+      const aId = Number(row.assignmentId);
+      loanMap.set(aId, (loanMap.get(aId) ?? 0) + Number(row.installment ?? 0));
+    }
+
+    // Overtime per assignment (from attendance records)
     const overtimeRows = await rawQuery<any>(
       `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
        FROM attendance a
@@ -1949,6 +1962,17 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     );
     const overtimeMap = new Map<number, number>();
     for (const row of overtimeRows) overtimeMap.set(Number(row.assignmentId), Number(row.totalOvertimeMinutes ?? 0));
+
+    // Approved overtime requests (HR module — with correct multipliers)
+    const hrOtRows = await rawQuery<any>(
+      `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
+       FROM hr_overtime_requests
+       WHERE "companyId" = $1 AND TO_CHAR(date, 'YYYY-MM') = $2 AND status = 'approved'
+       GROUP BY "assignmentId"`,
+      [scope.companyId, targetPeriod]
+    ).catch(() => [] as any[]);
+    const hrOtMap = new Map<number, number>();
+    for (const row of hrOtRows) hrOtMap.set(Number(row.assignmentId), Number(row.otAmount ?? 0));
 
     // ── Build per-assignment payroll lines (12 items each) ──
     let totalNet = 0;
@@ -2004,7 +2028,10 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       const overtimeMinutes = overtimeMap.get(aId) ?? 0;
       const overtimeHours = Math.round((overtimeMinutes / 60) * 100) / 100;
       const hourlyRate = basic / (30 * 8);
-      const overtime = Math.round(overtimeHours * hourlyRate * 1.5 * 100) / 100;
+      const attendanceOt = Math.round(overtimeHours * hourlyRate * 1.5 * 100) / 100;
+      const hrOtAmount = hrOtMap.get(aId) ?? 0;
+      // استخدام الأعلى بين وقت الحضور ومبلغ طلبات OT المعتمدة (لتجنب الاحتساب المزدوج)
+      const overtime = Math.max(attendanceOt, hrOtAmount);
 
       const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee;
       const net = Math.max(0, Math.round((gross + overtime - totalDeductions) * 100) / 100);
@@ -2068,6 +2095,35 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
                status = CASE WHEN "remainingAmount" - "monthlyInstallment" <= 0 THEN 'settled' ELSE status END
            WHERE "companyId" = $1 AND status = 'active' AND "assignmentId" = ANY($2::int[])`,
           [scope.companyId, assignmentIdsWithLoans]
+        );
+      }
+
+      // تحديث أقساط سلف HR كـ "مدفوعة" وتحديث رصيد السلفة
+      if (hrLoanRows.length > 0) {
+        await client.query(
+          `UPDATE hr_loan_installments SET status = 'paid', "paidAt" = NOW()
+           WHERE "companyId" = $1 AND period = $2 AND status = 'pending'`,
+          [scope.companyId, targetPeriod]
+        );
+        await client.query(
+          `UPDATE hr_employee_loans l SET
+             "paidAmount" = COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0),
+             "remainingAmount" = l.amount - COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0),
+             status = CASE
+               WHEN l.amount - COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0) <= 0
+               THEN 'completed' ELSE l.status END,
+             "updatedAt" = NOW()
+           WHERE l."companyId" = $1 AND l.status = 'active'`,
+          [scope.companyId]
+        );
+      }
+
+      // تحديث حالة طلبات الوقت الإضافي المعتمدة كـ "مدفوعة"
+      if (hrOtRows.length > 0) {
+        await client.query(
+          `UPDATE hr_overtime_requests SET status = 'paid', "updatedAt" = NOW()
+           WHERE "companyId" = $1 AND TO_CHAR(date, 'YYYY-MM') = $2 AND status = 'approved'`,
+          [scope.companyId, targetPeriod]
         );
       }
 
@@ -2159,6 +2215,35 @@ router.get("/violations", requirePermission("hr:read"), async (req, res) => {
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { console.error("Get violations error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+});
+
+router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [item] = await rawQuery<any>(
+      `SELECT ev.*, e.name AS "employeeName", e."empNumber",
+              ea."jobTitle", ea.salary, b.name AS "branchName"
+       FROM employee_violations ev
+       JOIN employee_assignments ea ON ea.id = ev."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN branches b ON b.id = ea."branchId"
+       WHERE ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`,
+      [req.params.id, scope.companyId]
+    );
+    if (!item) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+
+    // جلب محضر التحقيق المرتبط إن وجد
+    const memos = await rawQuery<any>(
+      `SELECT dm.id, dm."memoNumber", dm.status, dm."penaltyLabel",
+              dm."baseDeductionAmount", dm."totalDeductionAmount", dm."createdAt"
+       FROM discipline_memos dm
+       WHERE dm."violationId" = $1 AND dm."companyId" = $2
+       ORDER BY dm."createdAt" DESC`,
+      [item.id, scope.companyId]
+    ).catch(() => [] as any[]);
+
+    res.json({ ...item, memos });
+  } catch (err) { console.error("Get violation detail error:", err); res.status(500).json({ error: "خطأ في الخادم" }); }
 });
 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
@@ -2368,7 +2453,7 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
     if (!name || !chainType) {
       throw new ValidationError("الاسم ونوع السلسلة مطلوبان", { field: name ? "chainType" : "name" });
     }
-    const validTypes = ["leaves", "purchases", "expenses", "advances", "letters"];
+    const validTypes = ["leaves", "purchases", "expenses", "advances", "letters", "loans", "overtime", "exit"];
     if (!validTypes.includes(chainType)) {
       throw new ValidationError(
         `نوع السلسلة يجب أن يكون أحد: ${validTypes.join(", ")}`,
@@ -2667,21 +2752,22 @@ router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) =>
 router.get("/violations-stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const currentMonth = new Date().toISOString().slice(0, 7);
     const [total] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
-    const [active] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
+    const [thisMonthRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL AND period = $2`, [scope.companyId, currentMonth]
     );
     const [totalDeductions] = await rawQuery<any>(
       `SELECT COALESCE(SUM(deduction),0) AS total FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
     res.json({
       total: Number(total?.count ?? 0),
-      active: Number(active?.count ?? 0),
+      thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     });
-  } catch (_e) { res.json({ total: 0, active: 0, totalDeductions: 0 }); }
+  } catch (_e) { res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
 });
 
 router.patch("/violations/:id", requirePermission("hr:update"), async (req, res) => {

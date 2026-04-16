@@ -13,13 +13,24 @@ const PayrollCreate = lazy(() => import("@/pages/create/hr/payroll-create"));
 const Performance = lazy(() => import("@/pages/hr/performance"));
 const PerformanceCreate = lazy(() => import("@/pages/create/hr/performance-create"));
 const Training = lazy(() => import("@/pages/hr/training"));
+const TrainingDetail = lazy(() => import("@/pages/hr/training-detail"));
 const TrainingCreate = lazy(() => import("@/pages/create/hr/training-create"));
 const Organization = lazy(() => import("@/pages/hr/organization"));
 const Recruitment = lazy(() => import("@/pages/hr/recruitment"));
 const RecruitmentCreate = lazy(() => import("@/pages/create/hr/recruitment-create"));
 const JobDetail = lazy(() => import("@/pages/hr/job-detail"));
 const ApplicantsCreate = lazy(() => import("@/pages/create/hr/applicants-create"));
+const Loans = lazy(() => import("@/pages/hr/loans"));
+const LoanDetail = lazy(() => import("@/pages/hr/loan-detail"));
+const LoansCreate = lazy(() => import("@/pages/create/hr/loans-create"));
+const Overtime = lazy(() => import("@/pages/hr/overtime"));
+const OvertimeDetail = lazy(() => import("@/pages/hr/overtime-detail"));
+const OvertimeCreate = lazy(() => import("@/pages/create/hr/overtime-create"));
+const ExitRequests = lazy(() => import("@/pages/hr/exit-requests"));
+const ExitDetail = lazy(() => import("@/pages/hr/exit-detail"));
+const ExitCreate = lazy(() => import("@/pages/create/hr/exit-create"));
 const Violations = lazy(() => import("@/pages/hr/violations"));
+const ViolationDetail = lazy(() => import("@/pages/hr/violation-detail"));
 const ViolationsCreate = lazy(() => import("@/pages/create/hr/violations-create"));
 const Shifts = lazy(() => import("@/pages/hr/shifts"));
 const ShiftsCreate = lazy(() => import("@/pages/create/hr/shifts-create"));
@@ -54,6 +65,7 @@ const IDP = lazy(() => import("@/pages/hr/idp"));
 const Gratuity = lazy(() => import("@/pages/hr/gratuity"));
 const TurnoverReport = lazy(() => import("@/pages/hr/turnover-report"));
 const ExpiringDocuments = lazy(() => import("@/pages/hr/expiring-documents"));
+const AutoDetection = lazy(() => import("@/pages/hr/auto-detection"));
 const DisciplineRegulation = lazy(() => import("@/pages/hr/discipline-regulation"));
 const DisciplineMemos = lazy(() => import("@/pages/hr/discipline-memos"));
 const DisciplineMemoDetail = lazy(() => import("@/pages/hr/discipline-memo-detail"));
@@ -81,6 +93,7 @@ export const hrRoutes = [
   { path: "/hr/performance/advanced", component: PerformanceAdvanced, subKey: "performance" },
   { path: "/hr/training", component: Training, subKey: "training" },
   { path: "/hr/training/create", component: TrainingCreate, subKey: "training" },
+  { path: "/hr/training/:id", component: TrainingDetail, subKey: "training" },
   { path: "/hr/training/advanced", component: TrainingAdvanced, subKey: "training" },
   { path: "/hr/organization", component: Organization, subKey: "organization" },
   { path: "/hr/organization/structure", component: OrganizationStructure, subKey: "organization" },
@@ -90,10 +103,21 @@ export const hrRoutes = [
   { path: "/hr/recruitment/applications", component: ApplicationList, subKey: "recruitment" },
   { path: "/hr/recruitment/advanced", component: RecruitmentAdvanced, subKey: "recruitment" },
   { path: "/hr/recruitment/jobs/:id", component: JobDetail, subKey: "recruitment" },
+  { path: "/hr/loans", component: Loans, subKey: "payroll" },
+  { path: "/hr/loans/create", component: LoansCreate, subKey: "payroll" },
+  { path: "/hr/loans/:id", component: LoanDetail, subKey: "payroll" },
+  { path: "/hr/overtime", component: Overtime, subKey: "attendance" },
+  { path: "/hr/overtime/create", component: OvertimeCreate, subKey: "attendance" },
+  { path: "/hr/overtime/:id", component: OvertimeDetail, subKey: "attendance" },
+  { path: "/hr/exit", component: ExitRequests, subKey: "employees" },
+  { path: "/hr/exit/create", component: ExitCreate, subKey: "employees" },
+  { path: "/hr/exit/:id", component: ExitDetail, subKey: "employees" },
   { path: "/hr/violations", component: Violations, subKey: "violations" },
   { path: "/hr/violations/create", component: ViolationsCreate, subKey: "violations" },
+  { path: "/hr/violations/:id", component: ViolationDetail, subKey: "violations" },
   { path: "/hr/violations/management", component: ViolationsManagement, subKey: "violations" },
   { path: "/hr/violations/penalty-escalation", component: PenaltyEscalation, subKey: "violations" },
+  { path: "/hr/violations/auto-detection", component: AutoDetection, subKey: "violations" },
   { path: "/hr/discipline/regulation", component: DisciplineRegulation, subKey: "violations" },
   { path: "/hr/discipline/memos", component: DisciplineMemos, subKey: "violations" },
   { path: "/hr/discipline/memos/:id", component: DisciplineMemoDetail, subKey: "violations" },

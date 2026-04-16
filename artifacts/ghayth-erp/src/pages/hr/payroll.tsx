@@ -3,6 +3,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 // Phase A — HR payroll list on unified primitives.
 import { PageShell } from "@/components/page-shell";
@@ -10,7 +11,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, DollarSign, Users, TrendingUp, FileText, Eye } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
-import { cn } from "@/lib/utils";
+
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
@@ -19,32 +20,21 @@ import { useAppContext } from "@/contexts/app-context";
 function PayrollLines({ runId }: { runId: number }) {
   const { data } = useApiQuery<any>(["payroll-lines", String(runId)], `/hr/payroll/${runId}/lines`, !!runId);
   const lines = data?.data || [];
-  if (lines.length === 0) return <p className="text-center text-gray-400 py-4">لا توجد تفاصيل</p>;
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="border-b bg-gray-50">
-          <th className="p-2 text-start">الموظف</th>
-          <th className="p-2 text-start">الأساسي</th>
-          <th className="p-2 text-start">الإجمالي</th>
-          <th className="p-2 text-start">التأمينات</th>
-          <th className="p-2 text-start">الخصومات</th>
-          <th className="p-2 text-start">الصافي</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lines.map((l: any) => (
-          <tr key={l.id} className="border-b hover:bg-gray-50">
-            <td className="p-2 font-medium">{l.employeeName}</td>
-            <td className="p-2">{Number(l.basic).toLocaleString("ar-SA")}</td>
-            <td className="p-2">{Number(l.grossSalary).toLocaleString("ar-SA")}</td>
-            <td className="p-2 text-orange-600">{Number(l.gosi).toLocaleString("ar-SA")}</td>
-            <td className="p-2 text-red-600">{Number(l.lateDeduction).toLocaleString("ar-SA")}</td>
-            <td className="p-2 font-bold text-green-700">{Number(l.netSalary).toLocaleString("ar-SA")}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <DataTable
+      columns={[
+        { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
+        { key: "basic", header: "الأساسي", sortable: true, render: (v) => <span>{Number(v.basic).toLocaleString("ar-SA")}</span> },
+        { key: "grossSalary", header: "الإجمالي", sortable: true, render: (v) => <span>{Number(v.grossSalary).toLocaleString("ar-SA")}</span> },
+        { key: "gosi", header: "التأمينات", sortable: true, render: (v) => <span className="text-orange-600">{Number(v.gosi).toLocaleString("ar-SA")}</span> },
+        { key: "lateDeduction", header: "الخصومات", sortable: true, render: (v) => <span className="text-red-600">{Number(v.lateDeduction).toLocaleString("ar-SA")}</span> },
+        { key: "netSalary", header: "الصافي", sortable: true, render: (v) => <span className="font-bold text-green-700">{Number(v.netSalary).toLocaleString("ar-SA")}</span> },
+      ] as DataTableColumn<any>[]}
+      data={lines}
+      noToolbar
+      emptyMessage="لا توجد تفاصيل"
+      pageSize={50}
+    />
   );
 }
 
@@ -125,21 +115,7 @@ export default function PayrollPage() {
         </div>
       }
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <AdvancedFilters
         config={{
@@ -175,7 +151,7 @@ export default function PayrollPage() {
           {selectedRun ? (
             <Card>
               <CardHeader><CardTitle className="text-base">تفاصيل المسير #{selectedRun}</CardTitle></CardHeader>
-              <CardContent className="p-0"><PayrollLines runId={selectedRun} /></CardContent>
+              <CardContent><PayrollLines runId={selectedRun} /></CardContent>
             </Card>
           ) : (
             <Card><CardContent className="p-8 text-center text-gray-400">اختر مسير رواتب لعرض التفاصيل</CardContent></Card>

@@ -674,7 +674,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
       throw new NotFoundError("الموظف غير موجود");
     }
 
-    const [tasks, attendance, leaves, trainings, payroll, violations] = await Promise.all([
+    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime] = await Promise.all([
       rawQuery<any>(
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
@@ -724,9 +724,24 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          ORDER BY ev."createdAt" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
       ).catch(() => []),
+      rawQuery<any>(
+        `SELECT l.id, l."loanNumber", l."loanType", l.amount, l."paidAmount", l."remainingAmount",
+                l."installmentCount", l."installmentAmount", l.status, l."createdAt"
+         FROM hr_employee_loans l
+         WHERE l."assignmentId" = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL
+         ORDER BY l."createdAt" DESC LIMIT 20`,
+        [employee.assignmentId, scope.companyId]
+      ).catch(() => []),
+      rawQuery<any>(
+        `SELECT o.id, o."requestNumber", o."overtimeDate", o.hours, o."totalAmount", o.status, o."createdAt"
+         FROM hr_overtime_requests o
+         WHERE o."assignmentId" = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL
+         ORDER BY o."overtimeDate" DESC LIMIT 20`,
+        [employee.assignmentId, scope.companyId]
+      ).catch(() => []),
     ]);
 
-    res.json({ ...employee, tasks, attendance, leaves, trainings, payroll, violations });
+    res.json({ ...employee, tasks, attendance, leaves, trainings, payroll, violations, loans, overtime });
   } catch (err) {
     handleRouteError(err, res, "Get employee error:");
   }

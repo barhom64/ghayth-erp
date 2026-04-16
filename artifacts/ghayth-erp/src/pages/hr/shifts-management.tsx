@@ -3,13 +3,14 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarClock, Users, Plus, Sun, Moon, Clock, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { CalendarClock, Users, Plus, Sun, Moon, Clock } from "lucide-react";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function ShiftsManagementPage() {
   const { data: shiftsData } = useApiQuery<any>(["shifts"], "/hr/shifts");
@@ -48,23 +49,12 @@ export default function ShiftsManagementPage() {
       subtitle="تعيين الموظفين للورديات وإدارة الجداول"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الورديات المتقدمة" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "الورديات", value: shifts.length, icon: CalendarClock, color: "text-blue-600 bg-blue-50" },
-          { label: "نشطة", value: shifts.filter((s: any) => s.status === "active").length, icon: Clock, color: "text-green-600 bg-green-50" },
-          { label: "التعيينات", value: assignments.length, icon: Users, color: "text-purple-600 bg-purple-50" },
-          { label: "الموظفين", value: employees.length, icon: Users, color: "text-orange-600 bg-orange-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-2xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={[
+        { label: "الورديات", value: shifts.length, icon: CalendarClock, color: "text-blue-600 bg-blue-50" },
+        { label: "نشطة", value: shifts.filter((s: any) => s.status === "active").length, icon: Clock, color: "text-green-600 bg-green-50" },
+        { label: "التعيينات", value: assignments.length, icon: Users, color: "text-purple-600 bg-purple-50" },
+        { label: "الموظفين", value: employees.length, icon: Users, color: "text-orange-600 bg-orange-50" },
+      ]} />
 
       <Tabs defaultValue="shifts" dir="rtl">
         <TabsList className="grid w-full grid-cols-2">
@@ -109,10 +99,12 @@ export default function ShiftsManagementPage() {
               <CardContent className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div><Label>الوردية</Label>
-                    <select className="w-full border rounded-md p-2 mt-1" value={assignForm.shiftId} onChange={(e) => setAssignForm({ ...assignForm, shiftId: e.target.value })}>
-                      <option value="">اختر</option>
-                      {shifts.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.startTime}-{s.endTime})</option>)}
-                    </select>
+                    <Select value={assignForm.shiftId} onValueChange={(v) => setAssignForm({ ...assignForm, shiftId: v })}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="اختر" /></SelectTrigger>
+                      <SelectContent>
+                        {shifts.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.startTime}-{s.endTime})</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div><Label>من تاريخ</Label><div className="mt-1"><DatePicker value={assignForm.startDate} onChange={(v) => setAssignForm({ ...assignForm, startDate: v })} /></div></div>
                   <div className="flex items-end"><Button onClick={handleAssign} disabled={!assignForm.shiftId || assignMut.isPending}>تعيين</Button></div>
@@ -120,29 +112,19 @@ export default function ShiftsManagementPage() {
               </CardContent>
             </Card>
           )}
-          <Card><CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">الموظف</th>
-                <th className="p-3 text-start">الوردية</th>
-                <th className="p-3 text-start">الوقت</th>
-                <th className="p-3 text-start">من</th>
-                <th className="p-3 text-start">إلى</th>
-              </tr></thead>
-              <tbody>
-                {assignments.map((a: any) => (
-                  <tr key={a.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{a.employeeName || "-"}</td>
-                    <td className="p-3">{a.shiftName || "-"}</td>
-                    <td className="p-3 font-mono">{a.startTime} - {a.endTime}</td>
-                    <td className="p-3 text-gray-500">{a.startDate || "-"}</td>
-                    <td className="p-3 text-gray-500">{a.endDate || "مستمر"}</td>
-                  </tr>
-                ))}
-                {assignments.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد تعيينات</td></tr>}
-              </tbody>
-            </table>
-          </CardContent></Card>
+          <DataTable
+            columns={[
+              { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName || "-"}</span> },
+              { key: "shiftName", header: "الوردية", sortable: true, render: (v) => <span>{v.shiftName || "-"}</span> },
+              { key: "startTime", header: "الوقت", sortable: true, render: (v) => <span className="font-mono">{v.startTime} - {v.endTime}</span> },
+              { key: "startDate", header: "من", sortable: true, render: (v) => <span className="text-gray-500">{v.startDate || "-"}</span> },
+              { key: "endDate", header: "إلى", sortable: true, render: (v) => <span className="text-gray-500">{v.endDate || "مستمر"}</span> },
+            ] as DataTableColumn<any>[]}
+            data={assignments}
+            noToolbar
+            emptyMessage="لا توجد تعيينات"
+            pageSize={20}
+          />
         </TabsContent>
       </Tabs>
     </PageShell>

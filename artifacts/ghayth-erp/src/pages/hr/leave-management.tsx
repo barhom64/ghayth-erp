@@ -5,10 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, CheckCircle, XCircle, Clock, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => void }) {
   const [showImpact, setShowImpact] = useState(false);
@@ -19,9 +21,7 @@ function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => vo
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 text-xs font-bold">
-                {(request.employeeName || "؟").charAt(0)}
-              </div>
+              <AvatarInitial name={request.employeeName} color="yellow" />
               <span className="font-semibold">{request.employeeName}</span>
               <Badge className="bg-yellow-100 text-yellow-700">معلق</Badge>
             </div>
@@ -106,21 +106,7 @@ export default function LeaveManagementPage() {
       subtitle="اعتماد طلبات الإجازات ومتابعة الأرصدة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الإجازات" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <Tabs defaultValue="pending" dir="rtl">
         <TabsList className="grid w-full grid-cols-3">
@@ -139,29 +125,19 @@ export default function LeaveManagementPage() {
         </TabsContent>
 
         <TabsContent value="balances">
-          <Card><CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">نوع الإجازة</th>
-                <th className="p-3 text-start">المستحق</th>
-                <th className="p-3 text-start">المستخدم</th>
-                <th className="p-3 text-start">المحجوز</th>
-                <th className="p-3 text-start">المتبقي</th>
-              </tr></thead>
-              <tbody>
-                {balances.map((b: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{b.name || b.leaveTypeName}</td>
-                    <td className="p-3">{b.annualDays || b.entitled || b.maxDays}</td>
-                    <td className="p-3 text-red-600">{b.used || 0}</td>
-                    <td className="p-3 text-yellow-600">{b.reserved || 0}</td>
-                    <td className="p-3 font-bold text-green-600">{b.remaining ?? (Number(b.maxDays || b.annualDays || 0) - Number(b.used || 0))}</td>
-                  </tr>
-                ))}
-                {balances.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد أرصدة</td></tr>}
-              </tbody>
-            </table>
-          </CardContent></Card>
+          <DataTable
+            columns={[
+              { key: "name", header: "نوع الإجازة", sortable: true, render: (v) => <span className="font-medium">{v.name || v.leaveTypeName}</span> },
+              { key: "annualDays", header: "المستحق", sortable: true, render: (v) => <span>{v.annualDays || v.entitled || v.maxDays}</span> },
+              { key: "used", header: "المستخدم", sortable: true, render: (v) => <span className="text-red-600">{v.used || 0}</span> },
+              { key: "reserved", header: "المحجوز", sortable: true, render: (v) => <span className="text-yellow-600">{v.reserved || 0}</span> },
+              { key: "remaining", header: "المتبقي", sortable: true, render: (v) => <span className="font-bold text-green-600">{v.remaining ?? (Number(v.maxDays || v.annualDays || 0) - Number(v.used || 0))}</span> },
+            ] as DataTableColumn<any>[]}
+            data={balances}
+            noToolbar
+            emptyMessage="لا توجد أرصدة"
+            pageSize={20}
+          />
         </TabsContent>
 
         <TabsContent value="types">

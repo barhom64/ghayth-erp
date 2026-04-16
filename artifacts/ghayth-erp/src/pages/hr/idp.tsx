@@ -1,35 +1,42 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Target, Plus, BookOpen, TrendingUp, CheckCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
-// HR-U3 — حُذفت STATUS_LABELS المحلية. القيم (planned/in_progress/completed/cancelled)
-// مُعرَّفة في STATUS_MAP.shared مع صياغة موحّدة (مخطط/قيد التنفيذ/مكتمل/ملغى).
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+
 const IDP_STATUS_KEYS = ["planned", "in_progress", "completed", "cancelled"] as const;
+
+const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "planned",     label: "مخطط"        },
+  { value: "in_progress", label: "قيد التنفيذ" },
+  { value: "completed",   label: "مكتمل"       },
+  { value: "cancelled",   label: "ملغي"        },
+];
 
 export default function IDPPage() {
   const [showForm, setShowForm] = useState(false);
-  const [empFilter, setEmpFilter] = useState("");
   const [form, setForm] = useState({ employeeId: "", title: "", goals: "", skills: "", targetDate: "", notes: "" });
+  const [filters, setFilters] = useFilters();
 
-  const { data, refetch } = useApiQuery<any>(
-    ["idp", empFilter],
-    `/hr/idp${empFilter ? `?employeeId=${empFilter}` : ""}`
-  );
+  const { data, refetch } = useApiQuery<any>(["idp"], "/hr/idp");
   const plans = asList(data?.data || data);
 
   const { data: employees } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
   const employeeList = asList(employees?.data || employees);
 
-  // HR-U2 — useApiMutation للأخطاء المُكتَبة وتوحيد رسائل النجاح.
   const createIdpMut = useApiMutation("/hr/idp", "POST", [["idp"]], {
     successMessage: "تم إنشاء خطة التطوير",
   });
@@ -60,125 +67,209 @@ export default function IDPPage() {
     updateIdpStatusMut.mutate({ id, status }, { onSuccess: () => refetch() });
   };
 
+  const filtered = applyFilters(plans, filters, {
+    searchFields: ["employeeName", "title"],
+    statusField: "status",
+    dateField: "createdAt",
+  });
+
   const stats = {
     total: plans.length,
+    planned: plans.filter((p: any) => p.status === "planned").length,
     inProgress: plans.filter((p: any) => p.status === "in_progress").length,
     completed: plans.filter((p: any) => p.status === "completed").length,
   };
+
+  const kpis = [
+    { label: "إجمالي الخطط", value: stats.total, icon: Target, color: "text-blue-600 bg-blue-50" },
+    { label: "مخطط", value: stats.planned, icon: BookOpen, color: "text-indigo-600 bg-indigo-50" },
+    { label: "جارية", value: stats.inProgress, icon: TrendingUp, color: "text-amber-600 bg-amber-50" },
+    { label: "مكتملة", value: stats.completed, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  ];
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "employeeName",
+      header: "الموظف",
+      sortable: true,
+      render: (v) => (
+        <div className="flex items-center gap-2">
+          <AvatarInitial name={v.employeeName} color="indigo" />
+          <span className="font-medium text-sm">{v.employeeName}</span>
+        </div>
+      ),
+    },
+    {
+      key: "title",
+      header: "عنوان الخطة",
+      sortable: true,
+      render: (v) => (
+        <span className="text-sm">{v.title || "خطة التطوير الفردي"}</span>
+      ),
+    },
+    {
+      key: "goals",
+      header: "الأهداف",
+      render: (v) => {
+        const goals = Array.isArray(v.goals)
+          ? v.goals
+          : typeof v.goals === "string"
+            ? (() => { try { return JSON.parse(v.goals || "[]"); } catch { return []; } })()
+            : [];
+        if (!goals.length) return <span className="text-gray-400">-</span>;
+        return (
+          <div className="flex items-center gap-1">
+            <Badge variant="outline" className="text-xs">
+              {goals.length} {goals.length === 1 ? "هدف" : "أهداف"}
+            </Badge>
+          </div>
+        );
+      },
+    },
+    {
+      key: "skills",
+      header: "المهارات",
+      render: (v) => {
+        const skills = Array.isArray(v.skills)
+          ? v.skills
+          : typeof v.skills === "string"
+            ? (() => { try { return JSON.parse(v.skills || "[]"); } catch { return []; } })()
+            : [];
+        if (!skills.length) return <span className="text-gray-400">-</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {skills.slice(0, 2).map((s: string, i: number) => (
+              <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{s}</span>
+            ))}
+            {skills.length > 2 && (
+              <span className="text-xs text-gray-400">+{skills.length - 2}</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: "targetDate",
+      header: "التاريخ المستهدف",
+      sortable: true,
+      render: (v) => (
+        <span className="text-sm text-gray-600">
+          {v.targetDate
+            ? new Date(v.targetDate).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
+            : "-"}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (v) => (
+        <Select value={v.status} onValueChange={(val) => handleStatusUpdate(v.id, val)}>
+          <SelectTrigger className="w-32 h-7 text-xs" onClick={(e) => e.stopPropagation()}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {IDP_STATUS_KEYS.map((k) => (
+              <SelectItem key={k} value={k}>
+                {resolveStatus(k)?.label ?? k}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ),
+    },
+  ];
 
   return (
     <PageShell
       title="خطط التطوير الفردي"
       subtitle="تخطيط مسارات التطوير والنمو الوظيفي للموظفين"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "خطط التطوير الفردي" }]}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm">
-          <Plus className="w-4 h-4 me-1" /> خطة جديدة
+        <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+          <Plus className="h-4 w-4" />
+          خطة جديدة
         </Button>
       }
     >
-      <div className="grid grid-cols-3 gap-4">
-        <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold">{stats.total}</div><div className="text-xs text-gray-500">إجمالي الخطط</div></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold text-yellow-600">{stats.inProgress}</div><div className="text-xs text-gray-500">جارية</div></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold text-green-600">{stats.completed}</div><div className="text-xs text-gray-500">مكتملة</div></CardContent></Card>
-      </div>
+      {/* KPI cards */}
+      <KpiGrid items={kpis} />
 
-      {showForm && (
-        <Card className="border-2 border-primary/20">
-          <CardHeader className="pb-2"><CardTitle className="text-base">خطة تطوير جديدة</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>الموظف *</Label>
-              <Select value={form.employeeId} onValueChange={(v) => setForm({ ...form, employeeId: v })}>
-                <SelectTrigger><SelectValue placeholder="اختر موظفاً" /></SelectTrigger>
-                <SelectContent>
-                  {employeeList.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+      {/* Filters */}
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالاسم أو عنوان الخطة...",
+          statuses: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+          showDateRange: true,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
+
+      {/* Table */}
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا توجد خطط تطوير — أنشئ خطة جديدة للبدء"
+        pageSize={20}
+      />
+
+      {/* Create dialog */}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>خطة تطوير جديدة</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>الموظف *</Label>
+                <Select value={form.employeeId} onValueChange={(v) => setForm({ ...form, employeeId: v })}>
+                  <SelectTrigger><SelectValue placeholder="اختر موظفاً" /></SelectTrigger>
+                  <SelectContent>
+                    {employeeList.map((e: any) => (
+                      <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>عنوان الخطة</Label>
+                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="خطة التطوير الفردي لـ..." />
+              </div>
             </div>
             <div>
-              <Label>عنوان الخطة</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="خطة التطوير الفردي لـ..." />
-            </div>
-            <div className="col-span-2">
               <Label>الأهداف (سطر لكل هدف)</Label>
-              <Textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })} placeholder="هدف 1&#10;هدف 2&#10;هدف 3" rows={4} />
+              <Textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })} placeholder={"هدف 1\nهدف 2\nهدف 3"} rows={3} />
             </div>
-            <div className="col-span-2">
+            <div>
               <Label>المهارات المستهدفة (سطر لكل مهارة)</Label>
-              <Textarea value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="مهارة 1&#10;مهارة 2" rows={3} />
+              <Textarea value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder={"مهارة 1\nمهارة 2"} rows={2} />
             </div>
-            <div>
-              <Label>التاريخ المستهدف</Label>
-              <Input type="date" value={form.targetDate} onChange={(e) => setForm({ ...form, targetDate: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>التاريخ المستهدف</Label>
+                <Input type="date" value={form.targetDate} onChange={(e) => setForm({ ...form, targetDate: e.target.value })} />
+              </div>
+              <div>
+                <Label>ملاحظات</Label>
+                <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </div>
             </div>
-            <div>
-              <Label>ملاحظات</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <Button onClick={handleSave}>حفظ الخطة</Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="flex gap-2 items-center">
-        <Label className="text-sm">تصفية بالموظف:</Label>
-        <Select value={empFilter} onValueChange={setEmpFilter}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="الكل" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">الكل</SelectItem>
-            {employeeList.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {plans.length === 0 ? (
-          <div className="col-span-2 text-center py-8 text-gray-400">لا توجد خطط تطوير</div>
-        ) : plans.map((plan: any) => {
-          const goals = Array.isArray(plan.goals) ? plan.goals : (typeof plan.goals === "string" ? JSON.parse(plan.goals || "[]") : []);
-          const skills = Array.isArray(plan.skills) ? plan.skills : (typeof plan.skills === "string" ? JSON.parse(plan.skills || "[]") : []);
-          return (
-            <Card key={plan.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-semibold">{plan.title || "خطة التطوير الفردي"}</div>
-                    <div className="text-sm text-gray-500">{plan.employeeName}</div>
-                  </div>
-                  <PageStatusBadge status={plan.status} />
-                </div>
-                {goals.length > 0 && (
-                  <div>
-                    <div className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Target className="w-3 h-3" /> الأهداف</div>
-                    <ul className="text-xs text-gray-600 space-y-0.5">
-                      {goals.slice(0, 3).map((g: string, i: number) => <li key={i} className="flex gap-1"><span className="text-primary">•</span>{g}</li>)}
-                      {goals.length > 3 && <li className="text-gray-400">+{goals.length - 3} أهداف أخرى</li>}
-                    </ul>
-                  </div>
-                )}
-                {skills.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {skills.map((s: string, i: number) => <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{s}</span>)}
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  {plan.targetDate && <span className="text-xs text-gray-400">الهدف: {plan.targetDate?.split("T")[0]}</span>}
-                  <Select value={plan.status} onValueChange={(v) => handleStatusUpdate(plan.id, v)}>
-                    <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {IDP_STATUS_KEYS.map((k) => <SelectItem key={k} value={k}>{resolveStatus(k)?.label ?? k}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={createIdpMut.isPending}>
+              إلغاء
+            </Button>
+            <Button onClick={handleSave} disabled={createIdpMut.isPending}>
+              {createIdpMut.isPending ? "جاري الحفظ..." : "حفظ الخطة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

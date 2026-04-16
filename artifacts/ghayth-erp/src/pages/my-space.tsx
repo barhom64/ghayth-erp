@@ -14,6 +14,7 @@ import { LeavesAndRequestsSection } from "./my-space/leaves-and-requests-section
 import { TasksAndNotificationsSection } from "./my-space/tasks-and-notifications-section";
 import { CustodiesAndDocumentsSection } from "./my-space/custodies-and-documents-section";
 import { RecentActionsAndPerformanceSection } from "./my-space/recent-actions-and-performance-section";
+import { ActiveLoansCard } from "./my-space/active-loans-card";
 import { ViolationsCard } from "./my-space/violations-card";
 import { PendingApprovalsCard } from "./my-space/pending-approvals-card";
 import { MonthlySummaryCard } from "./my-space/monthly-summary-card";
@@ -66,6 +67,7 @@ export default function MySpace() {
   const notifications = data?.notifications || [];
   const custodies = data?.custodies || [];
   const violations = data?.violations || [];
+  const activeLoans = data?.activeLoans || [];
   const currentShift = data?.currentShift;
   const monthlyStats = data?.monthlyStats;
   const recentActions = data?.recentActions || [];
@@ -117,6 +119,8 @@ export default function MySpace() {
         recentActions={recentActions}
         performanceReviews={performanceReviews}
       />
+
+      <ActiveLoansCard activeLoans={activeLoans} />
 
       <ViolationsCard violations={violations} />
 

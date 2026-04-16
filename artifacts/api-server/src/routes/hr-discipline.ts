@@ -29,6 +29,13 @@ import {
   ensureInquiryMemoForViolation,
   type IncidentType,
 } from "../lib/disciplineEngine.js";
+import {
+  runAutoDetection,
+  getDetectionLog,
+  getAutoDetectionSettings,
+  saveAutoDetectionSettings,
+  type AutoDetectionSettings,
+} from "../lib/autoViolationEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -774,6 +781,140 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
     res.json(totals ?? {});
   } catch (err) {
     handleRouteError(err, res, "Memo stats error:");
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// الرصد التلقائي للمخالفات
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** GET /hr/discipline/auto-detection/settings — إعدادات الرصد التلقائي */
+router.get("/auto-detection/settings", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const settings = await getAutoDetectionSettings(scope.companyId);
+    res.json(settings);
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في قراءة إعدادات الرصد التلقائي");
+  }
+});
+
+/** PUT /hr/discipline/auto-detection/settings — تحديث إعدادات الرصد التلقائي */
+router.put("/auto-detection/settings", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+      throw new ForbiddenError("غير مصرح بتعديل إعدادات الرصد التلقائي");
+    }
+    const body = req.body as Partial<AutoDetectionSettings>;
+    await saveAutoDetectionSettings(scope.companyId, body);
+
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "auto_detection.settings_updated",
+      entity: "system_settings", entityId: 0,
+      reason: "تحديث إعدادات الرصد التلقائي",
+    });
+
+    const updated = await getAutoDetectionSettings(scope.companyId);
+    res.json({ success: true, settings: updated });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في تحديث إعدادات الرصد التلقائي");
+  }
+});
+
+/** POST /hr/discipline/auto-detection/run — تشغيل الرصد يدوياً */
+router.post("/auto-detection/run", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+      throw new ForbiddenError("غير مصرح بتشغيل الرصد التلقائي");
+    }
+    const { date } = req.body as { date?: string };
+    const targetDate = date ?? new Date().toISOString().split("T")[0]!;
+
+    const result = await runAutoDetection(scope.companyId, targetDate);
+
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "auto_detection.manual_run",
+      entity: "auto_detection_log", entityId: 0,
+      reason: `تشغيل يدوي: ${targetDate} — رصد ${result.detected} مخالفة`,
+    });
+
+    res.json(result);
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في تشغيل الرصد التلقائي");
+  }
+});
+
+/** GET /hr/discipline/auto-detection/log — سجل عمليات الرصد */
+router.get("/auto-detection/log", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { limit, offset, fromDate, toDate } = req.query as any;
+    const result = await getDetectionLog(scope.companyId, {
+      limit: limit ? Number(limit) : 50,
+      offset: offset ? Number(offset) : 0,
+      fromDate,
+      toDate,
+    });
+    res.json(result);
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في قراءة سجل الرصد التلقائي");
+  }
+});
+
+/** GET /hr/discipline/auto-detection/summary — ملخص إحصائي */
+router.get("/auto-detection/summary", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    // إحصائيات آخر 30 يوم
+    const stats = await rawQuery<any>(
+      `SELECT
+         COUNT(*) AS "totalRuns",
+         COALESCE(SUM(detected), 0) AS "totalDetected",
+         COALESCE(SUM("violationsCreated"), 0) AS "totalViolations",
+         COALESCE(SUM("memosCreated"), 0) AS "totalMemos",
+         COALESCE(SUM(errors), 0) AS "totalErrors",
+         MAX("createdAt") AS "lastRunAt"
+       FROM auto_detection_log
+       WHERE "companyId" = $1
+         AND "createdAt" >= NOW() - INTERVAL '30 days'`,
+      [scope.companyId]
+    ).catch(() => [{}]);
+
+    // تفصيل حسب النوع من آخر 30 يوم
+    const byType = await rawQuery<any>(
+      `SELECT
+         d.value->>'type' AS type,
+         COUNT(*) AS count
+       FROM auto_detection_log adl,
+            jsonb_array_elements(adl.details) AS d(value)
+       WHERE adl."companyId" = $1
+         AND adl."createdAt" >= NOW() - INTERVAL '30 days'
+       GROUP BY d.value->>'type'
+       ORDER BY count DESC`,
+      [scope.companyId]
+    ).catch(() => []);
+
+    const typeLabels: Record<string, string> = {
+      late: "تأخر",
+      early_leave: "مغادرة مبكرة",
+      absence: "غياب",
+      gps_out_of_range: "خروج GPS",
+    };
+
+    res.json({
+      ...(stats[0] ?? {}),
+      byType: byType.map((r: any) => ({
+        type: r.type,
+        label: typeLabels[r.type] ?? r.type,
+        count: Number(r.count),
+      })),
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في ملخص الرصد التلقائي");
   }
 });
 

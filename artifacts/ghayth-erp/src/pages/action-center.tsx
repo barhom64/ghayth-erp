@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth";
 import {
   Calendar, DollarSign, KeyRound, FileSignature, ShoppingCart, Wallet,
   AlertTriangle, Bell, ListTodo, ChevronLeft, Check, X as XIcon, CornerUpLeft,
-  ArrowUpRight, Briefcase, CheckCircle2, Timer,
+  ArrowUpRight, Briefcase, CheckCircle2, Timer, LogOut, Banknote,
   User, Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +30,7 @@ function formatTimeAgo(timestamp: string): string {
   return `منذ ${days} يوم`;
 }
 
-type TabKey = "workflows" | "leaves" | "advances" | "custodies" | "letters" | "purchases" | "expenses";
+type TabKey = "workflows" | "leaves" | "advances" | "custodies" | "letters" | "purchases" | "expenses" | "loans" | "overtime" | "exit";
 
 const tabs: { key: TabKey; label: string; icon: any }[] = [
   { key: "workflows", label: "سير العمل", icon: Briefcase },
@@ -40,6 +40,9 @@ const tabs: { key: TabKey; label: string; icon: any }[] = [
   { key: "letters", label: "خطابات", icon: FileSignature },
   { key: "purchases", label: "مشتريات", icon: ShoppingCart },
   { key: "expenses", label: "مصروفات", icon: Wallet },
+  { key: "loans", label: "سلف موظفين", icon: Banknote },
+  { key: "overtime", label: "وقت إضافي", icon: Timer },
+  { key: "exit", label: "نهاية خدمة", icon: LogOut },
 ];
 
 const approvalEndpoints: Record<TabKey, (id: number) => string> = {
@@ -50,6 +53,9 @@ const approvalEndpoints: Record<TabKey, (id: number) => string> = {
   letters: (id) => `/hr/official-letters/${id}/approve`,
   purchases: (id) => `/finance/purchase-requests/${id}/approve`,
   expenses: (id) => `/finance/expenses/${id}/approve`,
+  loans: (id) => `/hr/loans/${id}/approve`,
+  overtime: (id) => `/hr/overtime/${id}/approve`,
+  exit: (id) => `/hr/exit/${id}/approve`,
 };
 
 const priorityLabels: Record<string, string> = {
@@ -188,6 +194,9 @@ export default function ActionCenter() {
   const pendingPurchases = data?.pendingPurchases || [];
   const pendingExpenses = data?.pendingExpenses || [];
   const pendingWorkflows = data?.pendingWorkflows || [];
+  const pendingLoans = data?.pendingLoans || [];
+  const pendingOvertime = data?.pendingOvertime || [];
+  const pendingExitRequests = data?.pendingExitRequests || [];
   const slaBreached = data?.slaBreached || [];
   const escalations = data?.escalations || [];
   const todayTasks = data?.todayTasks || [];
@@ -201,6 +210,9 @@ export default function ActionCenter() {
     letters: pendingLetters,
     purchases: pendingPurchases,
     expenses: pendingExpenses,
+    loans: pendingLoans,
+    overtime: pendingOvertime,
+    exit: pendingExitRequests,
   };
 
   const tabLinks: Record<TabKey, string> = {
@@ -211,6 +223,9 @@ export default function ActionCenter() {
     letters: "/letters",
     purchases: "/finance/purchase-orders",
     expenses: "/finance/expenses",
+    loans: "/hr/loans",
+    overtime: "/hr/overtime",
+    exit: "/hr/exit",
   };
 
   const currentData = tabData[activeTab];
@@ -304,6 +319,46 @@ export default function ActionCenter() {
             </div>
           </div>
         );
+      case "loans": {
+        const loanTypeLabels: Record<string, string> = { salary_advance: "سلفة راتب", personal: "سلفة شخصية", emergency: "سلفة طارئة" };
+        return (
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+              <Banknote className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
+              <p className="text-xs text-gray-500">{loanTypeLabels[item.loanType] || item.loanType} — {Number(item.amount).toLocaleString("ar-SA")} ر.س</p>
+            </div>
+          </div>
+        );
+      }
+      case "overtime":
+        return (
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-cyan-50 flex items-center justify-center shrink-0">
+              <Timer className="w-4 h-4 text-cyan-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
+              <p className="text-xs text-gray-500">{Number(item.hours).toFixed(1)} ساعة — {Number(item.totalAmount).toLocaleString("ar-SA")} ر.س</p>
+            </div>
+          </div>
+        );
+      case "exit": {
+        const exitTypeLabels: Record<string, string> = { resignation: "استقالة", termination: "فصل", retirement: "تقاعد", contract_end: "انتهاء عقد", mutual: "اتفاق متبادل" };
+        return (
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+              <LogOut className="w-4 h-4 text-red-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
+              <p className="text-xs text-gray-500">{exitTypeLabels[item.exitType] || item.exitType}</p>
+            </div>
+          </div>
+        );
+      }
       default:
         return null;
     }
