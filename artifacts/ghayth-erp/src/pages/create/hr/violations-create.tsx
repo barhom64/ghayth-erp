@@ -26,6 +26,7 @@ import {
   Autocomplete,
   type AutocompleteOption,
 } from "@/components/ui/autocomplete";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   AlertTriangle,
   Ban,
@@ -574,31 +575,26 @@ function IncidentTypeSelector() {
 // ─── Step 1: Incident Details ────────────────────────────────────────────────
 
 function StepIncident() {
-  const { watch, register, formState: { errors } } = useFormContext<ViolationForm>();
+  const { watch, setValue, formState: { errors } } = useFormContext<ViolationForm>();
+  const incidentDate = watch("incidentDate");
   const incidentType = watch("incidentType") as IncidentType;
   const showDuration = incidentType === "late" || incidentType === "early_leave";
   const showAbsence = incidentType === "absence";
   const showDisrupts = incidentType === "late";
 
-  const today = new Date().toISOString().split("T")[0];
-
   return (
     <div className="space-y-5">
       <FormGrid cols={2}>
         <div className="space-y-1.5">
-          <label htmlFor="incidentDate" className="text-sm font-medium">
+          <label className="text-sm font-medium">
             تاريخ الواقعة <span className="text-red-500">*</span>
           </label>
-          <input
-            id="incidentDate"
-            type="date"
-            max={today}
-            className={cn(
-              "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              errors.incidentDate && "border-red-500",
-            )}
-            {...register("incidentDate")}
+          <DatePicker
+            value={incidentDate}
+            onChange={(val) => setValue("incidentDate", val, { shouldValidate: true })}
+            maxDate={new Date()}
+            placeholder="اختر تاريخ الواقعة"
+            calendarMode="both"
           />
           {errors.incidentDate?.message && (
             <p className="text-xs text-red-600">{errors.incidentDate.message as string}</p>
@@ -1571,10 +1567,10 @@ function WizardFormContent({
 }) {
   const { watch, formState: { errors, submitCount } } = useFormContext<ViolationForm>();
   const [
-    incidentDate, incidentType, assignmentId,
+    incidentDate, incidentType, assignmentId, description,
     durationMinutes, absenceDays, disruptsOthers, regulationId,
   ] = watch([
-    "incidentDate", "incidentType", "assignmentId",
+    "incidentDate", "incidentType", "assignmentId", "description",
     "durationMinutes", "absenceDays", "disruptsOthers", "regulationId",
   ]);
 
@@ -1601,8 +1597,8 @@ function WizardFormContent({
     prevSubmitCount.current = submitCount;
   }, [submitCount, errors, setOpenStep]);
 
-  // Step completion logic
-  const step1Complete = !!incidentDate && !!incidentType;
+  // Step completion logic — step 1 requires date + type + description
+  const step1Complete = !!incidentDate && !!incidentType && !!description;
   const step2Complete = step1Complete && !!assignmentId;
   const isTimeBased = TIME_BASED_TYPES.includes(incidentType as IncidentType);
 
@@ -1683,23 +1679,7 @@ function WizardFormContent({
     "active", // docs always accessible
   ];
 
-  // Auto-advance to next step
-  const prevStep1 = useRef(step1Complete);
-  const prevStep2 = useRef(step2Complete);
-
-  useEffect(() => {
-    if (step1Complete && !prevStep1.current) {
-      setOpenStep(1);
-    }
-    prevStep1.current = step1Complete;
-  }, [step1Complete, setOpenStep]);
-
-  useEffect(() => {
-    if (step2Complete && !prevStep2.current) {
-      setOpenStep(2);
-    }
-    prevStep2.current = step2Complete;
-  }, [step2Complete, setOpenStep]);
+  // No auto-advance — user navigates manually via "التالي" buttons
 
   // Build step 1 summary
   const incidentLabel =
@@ -1719,7 +1699,11 @@ function WizardFormContent({
       <StepIndicator
         steps={STEP_LABELS}
         statuses={statuses}
-        onStepClick={(i) => setOpenStep(i)}
+        onStepClick={(i) => {
+          // Don't allow clicking locked steps
+          if (statuses[i] === "locked") return;
+          setOpenStep(i);
+        }}
       />
 
       {/* Step 1: Incident */}
@@ -1731,6 +1715,22 @@ function WizardFormContent({
         onToggle={() => setOpenStep(openStep === 0 ? -1 : 0)}
       >
         <StepIncident />
+        <div className="flex justify-start pt-4 mt-4 border-t">
+          <Button
+            type="button"
+            disabled={!step1Complete}
+            onClick={() => setOpenStep(1)}
+            className="gap-1.5"
+          >
+            التالي: اختيار الموظف
+            <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
+          </Button>
+          {!step1Complete && (
+            <p className="text-xs text-gray-400 self-center mr-3">
+              أكمل جميع الحقول المطلوبة أولاً
+            </p>
+          )}
+        </div>
       </WizardSection>
 
       {/* Step 2: Employee */}
@@ -1739,13 +1739,33 @@ function WizardFormContent({
         summary={step2Summary}
         status={statuses[1]}
         isOpen={openStep === 1}
-        onToggle={() => setOpenStep(openStep === 1 ? -1 : 1)}
+        onToggle={() => statuses[1] !== "locked" && setOpenStep(openStep === 1 ? -1 : 1)}
       >
         <StepEmployee
           employees={employees}
           priorMemos={priorMemos}
           priorMemosLoading={memosLoading}
         />
+        <div className="flex justify-between pt-4 mt-4 border-t">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpenStep(0)}
+            className="gap-1.5"
+          >
+            <ChevronDown className="h-4 w-4 rotate-90" />
+            السابق
+          </Button>
+          <Button
+            type="button"
+            disabled={!step2Complete}
+            onClick={() => setOpenStep(2)}
+            className="gap-1.5"
+          >
+            التالي: اللائحة والجزاء
+            <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
+          </Button>
+        </div>
       </WizardSection>
 
       {/* Step 3: Regulation & Penalty */}
@@ -1758,7 +1778,7 @@ function WizardFormContent({
         }
         status={statuses[2]}
         isOpen={openStep === 2}
-        onToggle={() => setOpenStep(openStep === 2 ? -1 : 2)}
+        onToggle={() => statuses[2] !== "locked" && setOpenStep(openStep === 2 ? -1 : 2)}
       >
         <StepPenalty
           preview={preview}
@@ -1766,6 +1786,25 @@ function WizardFormContent({
           priorMemos={priorMemos}
           employees={employees}
         />
+        <div className="flex justify-between pt-4 mt-4 border-t">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpenStep(1)}
+            className="gap-1.5"
+          >
+            <ChevronDown className="h-4 w-4 rotate-90" />
+            السابق
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setOpenStep(3)}
+            className="gap-1.5"
+          >
+            التالي: التوثيق
+            <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
+          </Button>
+        </div>
       </WizardSection>
 
       {/* Step 4: Documentation */}
