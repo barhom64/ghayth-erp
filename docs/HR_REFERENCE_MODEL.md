@@ -60,7 +60,8 @@ artifacts/api-server/src/routes/hr-discipline.ts → 0
 artifacts/api-server/src/routes/employees.ts     → 0
 ```
 
-Total backend sites converted this round: **75** (`hr.ts` Sprint 2) + **1**
+Total backend sites converted: **75** (`hr.ts` Sprint 2) + **91**
+(`hr.ts` Sprint 5 — every remaining `res.status(...)` site) + **1**
 helper signature fix (`hr-discipline.ts:41`) + **3** inner-try/catch
 integration errors (`hr.ts` payroll journal, HR accruals, JWT secret).
 
@@ -152,6 +153,31 @@ Backend:
   `throw new IntegrationError(...)`.
 * `hr.ts` imports updated to include `IntegrationError`.
 
+### HR-U5 — backend mop-up (Sprint 5)
+
+HR-U4 landed the _frontend_ unification and claimed "0 legacy patterns in
+HR routes", but an honest `grep` against `hr.ts` still found **91**
+residual `res.status(4xx).json({error})` call sites from earlier
+refactors. HR-U5 finishes the job:
+
+* Every residual site in `artifacts/api-server/src/routes/hr.ts`
+  (leave-requests approve/return/escalate, payroll create + PATCH +
+  DELETE, approval chains + decisions, attendance-policy,
+  violations PATCH/DELETE, shifts PATCH/DELETE + assignments,
+  official-letters POST/PATCH/DELETE/approve, onboarding-steps,
+  impact-preview, evaluation-cycles detail + system-report + peer +
+  upward-review + summary + history, public-holidays CRUD, delegations,
+  transfers, IDP, accruals monthly + preview) now throws the matching
+  typed error class.
+* `throw new ValidationError(msg, { field })` is used wherever the
+  original payload named a field; otherwise the message stands alone.
+* Extra payload fields (`journalId`, `currentBranchId`, integration
+  details) moved onto `meta` on the typed error.
+* `pnpm --filter api-server typecheck` clean after the sweep.
+* After HR-U5 the _actual_ legacy `res.status(4xx).json({error})` count
+  in `hr.ts` is **0** (single remaining hit is a code comment on
+  line 754 explaining the old pattern).
+
 ---
 
 ## 5. Intentionally deferred (P2)
@@ -214,4 +240,6 @@ hold on the branch of record:
 * [x] Every HR mutation either uses `useApiMutation` with `successMessage`
       or a documented `buildErrorToast` helper
 
-All seven boxes are ticked as of HR-U4. HR is closed as a reference model.
+All seven boxes are ticked as of HR-U5 (the residual 91 `res.status`
+sites HR-U4 missed were converted in HR-U5). HR is closed as a
+reference model.

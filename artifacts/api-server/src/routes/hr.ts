@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   ForbiddenError,
+  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -1287,7 +1288,9 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
     }
 
     if (approved === "returned") {
-      if (!reason) { res.status(400).json({ error: "يجب ذكر سبب الإرجاع" }); return; }
+      if (!reason) {
+        throw new ValidationError("يجب ذكر سبب الإرجاع", { field: "reason" });
+      }
 
       await rawExecute(
         `UPDATE hr_leave_requests SET status = 'returned', "rejectedReason" = $1 WHERE id = $2 AND "companyId" = $3`,
@@ -1624,15 +1627,16 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
     const { id } = req.params;
 
     if (!["branch_manager", "hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك" });
-      return;
+      throw new ForbiddenError("غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك");
     }
 
     const [request] = await rawQuery<any>(
       `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
       [Number(id), scope.companyId]
     );
-    if (!request) { res.status(404).json({ error: "الطلب غير موجود أو ليس معلقاً" }); return; }
+    if (!request) {
+      throw new NotFoundError("الطلب غير موجود أو ليس معلقاً");
+    }
 
     // Escalation is only valid when the current pending stage has exceeded its 48h window
     const [currentPendingStage] = await rawQuery<any>(
@@ -1644,20 +1648,22 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
     );
 
     if (!currentPendingStage) {
-      res.status(400).json({ error: "لا توجد مراحل موافقة معلقة لهذا الطلب" });
-      return;
+      throw new ConflictError("لا توجد مراحل موافقة معلقة لهذا الطلب");
     }
 
     const expiresAt = new Date(currentPendingStage.expiresAt);
     if (expiresAt > new Date()) {
       const msRemaining = expiresAt.getTime() - Date.now();
       const hoursRemaining = Math.ceil(msRemaining / 3600000);
-      res.status(400).json({
-        error: `لا يمكن التصعيد قبل انتهاء مهلة الموافقة (48 ساعة). الوقت المتبقي: ${hoursRemaining} ساعة`,
-        expiresAt: expiresAt.toISOString(),
-        hoursRemaining,
-      });
-      return;
+      throw new ConflictError(
+        `لا يمكن التصعيد قبل انتهاء مهلة الموافقة (48 ساعة). الوقت المتبقي: ${hoursRemaining} ساعة`,
+        {
+          meta: {
+            expiresAt: expiresAt.toISOString(),
+            hoursRemaining,
+          },
+        },
+      );
     }
 
     // Stage has expired – mark it and escalate
@@ -1764,12 +1770,12 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const scope = req.scope!;
     // Payroll execution requires HR, Finance, Director or Owner role
     if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({
-        error: "ليس لديك الصلاحية لتشغيل مسير الرواتب",
-        requiredRoles: ["hr_manager", "finance_manager", "general_manager", "owner"],
-        yourRole: scope.role,
+      throw new ForbiddenError("ليس لديك الصلاحية لتشغيل مسير الرواتب", {
+        meta: {
+          requiredRoles: ["hr_manager", "finance_manager", "general_manager", "owner"],
+          yourRole: scope.role,
+        },
       });
-      return;
     }
     const { month } = req.body as { month?: string };
     const targetPeriod = month ?? new Date().toISOString().slice(0, 7);
@@ -1786,10 +1792,9 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const accrualDate = `${targetPeriod}-01`;
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, accrualDate);
     if (!periodCheck.open) {
-      res.status(422).json({
-        error: `لا يمكن تشغيل الرواتب في فترة مُقفلة: ${periodCheck.periodName ?? targetPeriod}`,
-      });
-      return;
+      throw new ValidationError(
+        `لا يمكن تشغيل الرواتب في فترة مُقفلة: ${periodCheck.periodName ?? targetPeriod}`,
+      );
     }
 
     // Prevent duplicate runs
@@ -1798,7 +1803,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       [scope.companyId, targetPeriod]
     );
     if (existing) {
-      res.status(409).json({ error: `الرواتب لشهر ${targetPeriod} تمت معالجتها مسبقاً` }); return;
+      throw new ConflictError(`الرواتب لشهر ${targetPeriod} تمت معالجتها مسبقاً`);
     }
 
     // ── Payroll pre-check: attendance completeness ──
@@ -2092,9 +2097,13 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
         ].filter(l => l.debit > 0 || l.credit > 0),
       });
     } catch (journalErr) {
-      console.error("Payroll journal entry failed:", journalErr);
-      res.status(500).json({ error: "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي" });
-      return;
+      throw new IntegrationError(
+        "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي",
+        {
+          meta: { integration: "journal", period: targetPeriod },
+          cause: journalErr,
+        },
+      );
     }
 
     emitEvent({
@@ -2229,7 +2238,7 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
       [scope.companyId, finalEmployeeId, period, overallScore ?? 0, finalScores, finalComments, status ?? "pending"]
     );
     res.status(201).json({ id: insertId, ...req.body });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Create performance error:"); }
 });
 
 router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) => {
@@ -2306,7 +2315,7 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
       [scope.companyId, name, type ?? "fixed", category ?? "allowance", value ?? 0, taxable ?? true]
     );
     res.status(201).json({ id: insertId, ...req.body });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
 
 router.get("/approval-chains", requirePermission("hr:read"), async (req, res) => {
@@ -2353,15 +2362,18 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
   try {
     const scope = req.scope!;
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح بإنشاء سلاسل موافقات" }); return;
+      throw new ForbiddenError("غير مصرح بإنشاء سلاسل موافقات");
     }
     const { name, chainType, minAmount, maxAmount, steps } = req.body as any;
     if (!name || !chainType) {
-      res.status(400).json({ error: "الاسم ونوع السلسلة مطلوبان" }); return;
+      throw new ValidationError("الاسم ونوع السلسلة مطلوبان", { field: name ? "chainType" : "name" });
     }
     const validTypes = ["leaves", "purchases", "expenses", "advances", "letters"];
     if (!validTypes.includes(chainType)) {
-      res.status(400).json({ error: `نوع السلسلة يجب أن يكون أحد: ${validTypes.join(", ")}` }); return;
+      throw new ValidationError(
+        `نوع السلسلة يجب أن يكون أحد: ${validTypes.join(", ")}`,
+        { field: "chainType" },
+      );
     }
 
     const { insertId: chainId } = await rawExecute(
@@ -2395,7 +2407,7 @@ router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"),
   try {
     const scope = req.scope!;
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام" }); return;
+      throw new ForbiddenError("غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام");
     }
     const id = Number(req.params.id);
     await rawExecute(`DELETE FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
@@ -2428,28 +2440,28 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
     const { approved, reason } = req.body as any;
 
     if (!["branch_manager", "hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح بالموافقة أو الرفض" }); return;
+      throw new ForbiddenError("غير مصرح بالموافقة أو الرفض");
     }
 
     const [request] = await rawQuery<any>(
       `SELECT * FROM approval_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!request) { res.status(404).json({ error: "طلب الموافقة غير موجود أو تمت معالجته" }); return; }
+    if (!request) {
+      throw new NotFoundError("طلب الموافقة غير موجود أو تمت معالجته");
+    }
 
     const isOwnerOverride = scope.role === "owner";
     const isAssignedApprover = request.assignedTo === scope.activeAssignmentId;
     const roleMatches = !request.requiredRole || request.requiredRole === scope.role;
 
     if (!isOwnerOverride && !isAssignedApprover && !roleMatches) {
-      res.status(403).json({
-        error: `هذا الطلب يتطلب موافقة ${request.requiredRole ?? "المعين"}. دورك الحالي: ${scope.role}`,
-      }); return;
+      throw new ForbiddenError(
+        `هذا الطلب يتطلب موافقة ${request.requiredRole ?? "المعين"}. دورك الحالي: ${scope.role}`,
+      );
     }
     if (!isOwnerOverride && request.assignedTo && !isAssignedApprover) {
-      res.status(403).json({
-        error: "هذا الطلب مخصص لموافق آخر. لا يمكنك اتخاذ القرار.",
-      }); return;
+      throw new ForbiddenError("هذا الطلب مخصص لموافق آخر. لا يمكنك اتخاذ القرار.");
     }
 
     const refCreatorMap: Record<string, { table: string; col: string }> = {
@@ -2474,8 +2486,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       }
     }
     if (requesterId !== undefined && requesterId === scope.activeAssignmentId) {
-      res.status(403).json({ error: "لا يمكنك الموافقة على طلبك الخاص" });
-      return;
+      throw new ForbiddenError("لا يمكنك الموافقة على طلبك الخاص");
     }
 
     const result = await processApprovalStep({
@@ -2573,7 +2584,7 @@ router.put("/attendance-policy", requirePermission("hr:update"), async (req, res
   try {
     const scope = req.scope!;
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح" }); return;
+      throw new ForbiddenError("غير مصرح");
     }
     const b = req.body as any;
     await rawExecute(
@@ -2677,7 +2688,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
   try {
     const scope = req.scope!;
     if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = Number(req.params.id);
     const b = req.body as any;
@@ -2692,12 +2703,14 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
     } else if (b.notes) {
       params.push(b.notes); sets.push(`description=CONCAT(description, E'\\n', $${params.length})`);
     }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات");
+    }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(updated || { message: "تم التحديث" });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Patch violation error:"); }
 });
 
 router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => {
@@ -2722,12 +2735,14 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
       if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1`, [scope.companyId]);
       params.push(b.isDefault); sets.push(`"isDefault"=$${params.length}`);
     }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات");
+    }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Patch shift error:"); }
 });
 
 router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) => {
@@ -2735,7 +2750,7 @@ router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) =>
     const scope = req.scope!;
     await rawExecute(`DELETE FROM shifts WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
     res.json({ message: "تم حذف الوردية" });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Delete shift error:"); }
 });
 
 router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) => {
@@ -2767,14 +2782,14 @@ router.post("/shift-assignments", requirePermission("hr:create"), async (req, re
       `SELECT id FROM shifts WHERE id=$1 AND "companyId"=$2`, [shiftId, scope.companyId]
     );
     if (!validAssignment || !validShift) {
-      res.status(403).json({ error: "غير مصرح" }); return;
+      throw new ForbiddenError("غير مصرح");
     }
     const { insertId } = await rawExecute(
       `INSERT INTO employee_shift_assignments ("assignmentId","shiftId","startDate","endDate") VALUES ($1,$2,$3,$4)`,
       [assignmentId, shiftId, startDate, endDate ?? null]
     );
     res.status(201).json({ id: insertId });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
 
 router.get("/official-letters", requirePermission("hr:read"), async (req, res) => {
@@ -2854,7 +2869,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
     }).catch(console.error);
 
     res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
-  } catch (e: any) { res.status(500).json({ error: e?.message || "حدث خطأ" }); }
+  } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
 });
 
 router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res) => {
@@ -2879,24 +2894,28 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك");
     }
     const { status, reason } = req.body as any;
     if (status && ["approved", "rejected"].includes(status)) {
-      res.status(400).json({ error: "استخدم نقطة نهاية الموافقة/الرفض المخصصة" }); return;
+      throw new ValidationError("استخدم نقطة نهاية الموافقة/الرفض المخصصة", { field: "status" });
     }
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
     if (status) { sets.push(`status = $${idx++}`); params.push(status); }
     if (reason !== undefined) { sets.push(`reason = $${idx++}`); params.push(reason); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات للتحديث");
+    }
     params.push(Number(req.params.id), scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE hr_leave_requests SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "طلب الإجازة غير موجود" }); return; }
+    if (!row) {
+      throw new NotFoundError("طلب الإجازة غير موجود");
+    }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3071,7 +3090,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
   try {
     const scope = req.scope!;
     if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك");
     }
     const { status } = req.body as any;
 
@@ -3114,10 +3133,10 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       const totalJeDebit = jlLines.reduce((s, l) => s + l.debit, 0);
       const totalJeCredit = jlLines.reduce((s, l) => s + l.credit, 0);
       if (Math.abs(totalJeDebit - totalJeCredit) > 0.01) {
-        res.status(422).json({
-          error: `لا يمكن ترحيل الرواتب: القيد المحاسبي غير متوازن (مدين=${totalJeDebit.toFixed(2)} ≠ دائن=${totalJeCredit.toFixed(2)})`,
-        });
-        return;
+        throw new ValidationError(
+          `لا يمكن ترحيل الرواتب: القيد المحاسبي غير متوازن (مدين=${totalJeDebit.toFixed(2)} ≠ دائن=${totalJeCredit.toFixed(2)})`,
+          { meta: { totalJeDebit, totalJeCredit } },
+        );
       }
 
       await withTransaction(async (client) => {
@@ -3220,7 +3239,7 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: حذف الرواتب مقصور على HR أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: حذف الرواتب مقصور على HR أو المالك");
     }
     const id = Number(req.params.id);
     const [exists] = await rawQuery<any>(
@@ -3228,7 +3247,7 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
     );
     if (!exists) throw new NotFoundError("دورة الرواتب غير موجودة");
     if (exists.status === "posted") {
-      res.status(400).json({ error: "لا يمكن حذف دورة رواتب تم ترحيلها" }); return;
+      throw new ConflictError("لا يمكن حذف دورة رواتب تم ترحيلها");
     }
     await withTransaction(async (client) => {
       await client.query(`UPDATE payroll_lines SET "deletedAt" = NOW() WHERE "runId" = $1 AND "deletedAt" IS NULL`, [id]);
@@ -3256,7 +3275,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
   try {
     const scope = req.scope!;
     if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك");
     }
     const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = req.body as any;
     const sets: string[] = [];
@@ -3270,7 +3289,9 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
     if (strengths !== undefined) { sets.push(`strengths = $${idx++}`); params.push(strengths); }
     if (improvements !== undefined) { sets.push(`improvements = $${idx++}`); params.push(improvements); }
     if (goals !== undefined) { sets.push(`goals = $${idx++}`); params.push(goals); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات");
+    }
     sets.push(`"updatedAt" = NOW()`);
     params.push(Number(req.params.id), scope.companyId);
     const [row] = await rawQuery<any>(
@@ -3286,7 +3307,7 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: حذف التقييمات مقصور على HR أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: حذف التقييمات مقصور على HR أو المالك");
     }
     const [row] = await rawQuery<any>(
       `DELETE FROM performance_reviews WHERE id = $1 AND "companyId" = $2 RETURNING id`,
@@ -3302,7 +3323,7 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: حذف المخالفات مقصور على HR أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: حذف المخالفات مقصور على HR أو المالك");
     }
     const [row] = await rawQuery<any>(
       `UPDATE employee_violations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
@@ -3318,7 +3339,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
   try {
     const scope = req.scope!;
     if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: تعديل الخطابات مقصور على HR أو المدير أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: تعديل الخطابات مقصور على HR أو المدير أو المالك");
     }
     const { subject, content, status, type } = req.body as any;
     const sets: string[] = [];
@@ -3328,7 +3349,9 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
     if (content !== undefined) { sets.push(`content = $${idx++}`); params.push(content); }
     if (status !== undefined) { sets.push(`status = $${idx++}`); params.push(status); }
     if (type !== undefined) { sets.push(`type = $${idx++}`); params.push(type); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    if (sets.length === 0) {
+      throw new ValidationError("لا توجد بيانات");
+    }
     params.push(Number(req.params.id), scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
@@ -3343,7 +3366,7 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: حذف الخطابات مقصور على HR أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: حذف الخطابات مقصور على HR أو المالك");
     }
     const [row] = await rawQuery<any>(
       `DELETE FROM official_letters WHERE id = $1 AND "companyId" = $2 RETURNING id`,
@@ -3359,7 +3382,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
     const scope = req.scope!;
     const HR_APPROVAL_ROLES = ["hr_manager", "branch_manager", "general_manager", "owner"];
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: لا تملك صلاحية اعتماد الخطابات" }); return;
+      throw new ForbiddenError("غير مصرح: لا تملك صلاحية اعتماد الخطابات");
     }
     const { id } = req.params;
     const { approved, notes } = req.body as any;
@@ -3372,7 +3395,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
 
     const newStatus = approved === false ? "rejected" : approved === true ? "approved" : "returned";
     if (newStatus === "rejected" && !notes) {
-      res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return;
+      throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
     }
 
     if (newStatus === "approved") {
@@ -3541,10 +3564,12 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
   try {
     const scope = req.scope!;
     if (!['owner', 'general_manager', 'hr_manager'].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح بتعديل إعدادات التهيئة" }); return;
+      throw new ForbiddenError("غير مصرح بتعديل إعدادات التهيئة");
     }
     const { steps } = req.body as { steps: string[] };
-    if (!Array.isArray(steps)) { res.status(400).json({ error: "الخطوات مطلوبة" }); return; }
+    if (!Array.isArray(steps)) {
+      throw new ValidationError("الخطوات مطلوبة", { field: "steps" });
+    }
     const val = JSON.stringify(steps);
     await rawExecute(
       `INSERT INTO settings (key, value, scope, "scopeId")
@@ -3565,7 +3590,7 @@ router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, r
     const scope = req.scope!;
     const { employeeId, leaveTypeId, startDate, endDate, days } = req.body as any;
     if (!employeeId || !leaveTypeId || !startDate || !endDate) {
-      res.status(400).json({ error: "بيانات غير مكتملة" }); return;
+      throw new ValidationError("بيانات غير مكتملة");
     }
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
@@ -3582,7 +3607,9 @@ router.post("/impact-preview/termination", requirePermission("hr:read"), async (
   try {
     const scope = req.scope!;
     const { employeeId } = req.body as any;
-    if (!employeeId) { res.status(400).json({ error: "معرف الموظف مطلوب" }); return; }
+    if (!employeeId) {
+      throw new ValidationError("معرف الموظف مطلوب", { field: "employeeId" });
+    }
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
       [Number(employeeId), scope.companyId]
@@ -3597,7 +3624,9 @@ router.post("/impact-preview/violation", requirePermission("hr:read"), async (re
   try {
     const scope = req.scope!;
     const { employeeId, deduction = 0, severity = "medium" } = req.body as any;
-    if (!employeeId) { res.status(400).json({ error: "معرف الموظف مطلوب" }); return; }
+    if (!employeeId) {
+      throw new ValidationError("معرف الموظف مطلوب", { field: "employeeId" });
+    }
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
       [Number(employeeId), scope.companyId]
@@ -3867,17 +3896,25 @@ router.get("/evaluation-cycles", requirePermission("hr:read"), async (req, res) 
 router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    if (!isHR(scope)) return res.status(403).json({ error: "مسموح فقط لـ HR بإنشاء دورات التقييم" });
+    if (!isHR(scope)) {
+      throw new ForbiddenError("مسموح فقط لـ HR بإنشاء دورات التقييم");
+    }
 
     const { employeeId, period, notes, participants = [] } = req.body as any;
-    if (!employeeId || !period) return res.status(422).json({ error: "employeeId و period مطلوبان" });
+    if (!employeeId || !period) {
+      throw new ValidationError("employeeId و period مطلوبان", {
+        field: employeeId ? "period" : "employeeId",
+      });
+    }
 
     // Validate subject employee belongs to this company (multi-tenant integrity)
     const [subjectAssign] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 LIMIT 1`,
       [employeeId, scope.companyId]
     );
-    if (!subjectAssign) return res.status(422).json({ error: "الموظف لا ينتمي إلى هذه الشركة" });
+    if (!subjectAssign) {
+      throw new ValidationError("الموظف لا ينتمي إلى هذه الشركة", { field: "employeeId" });
+    }
 
     // Create the cycle
     const { insertId: cycleId } = await rawExecute(
@@ -3937,7 +3974,7 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
        WHERE ec.id = $1 AND ec."companyId" = $2`,
       [cycleId, scope.companyId]
     );
-    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+    if (!cycle) throw new NotFoundError("دورة التقييم غير موجودة");
 
     // Access check:
     // - HR: see all cycles in the company
@@ -3961,7 +3998,7 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
         [cycleId, scope.employeeId]
       );
       if (!sharedBranch && !isOwnCycle && !isParticipant) {
-        return res.status(403).json({ error: "لا تملك صلاحية لعرض دورات الموظفين خارج فرعك" });
+        throw new ForbiddenError("لا تملك صلاحية لعرض دورات الموظفين خارج فرعك");
       }
     } else {
       // Regular employee: own cycle or assigned participant
@@ -3970,7 +4007,7 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
         `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
         [cycleId, scope.employeeId]
       );
-      if (!isOwn && !isParticipant) return res.status(403).json({ error: "لا تملك صلاحية لعرض هذه الدورة" });
+      if (!isOwn && !isParticipant) throw new ForbiddenError("لا تملك صلاحية لعرض هذه الدورة");
     }
 
     const [sysEval] = await rawQuery<any>(
@@ -4034,7 +4071,7 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
        WHERE ec.id = $1 AND ec."companyId" = $2`,
       [cycleId, scope.companyId]
     );
-    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+    if (!cycle) throw new NotFoundError("دورة التقييم غير موجودة");
 
     // Enforce the same cycle-level authorization as the detail endpoint
     if (isHR(scope)) {
@@ -4053,7 +4090,7 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
         [cycleId, scope.employeeId]
       );
       if (!sharedBranch && cycle.employeeId !== scope.employeeId && !isParticipantRow) {
-        return res.status(403).json({ error: "لا تملك صلاحية لعرض التقرير الآلي لهذه الدورة" });
+        throw new ForbiddenError("لا تملك صلاحية لعرض التقرير الآلي لهذه الدورة");
       }
     } else {
       const isOwn = cycle.employeeId === scope.employeeId;
@@ -4062,7 +4099,7 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
         [cycleId, scope.employeeId]
       );
       if (!isOwn && !isParticipantRow) {
-        return res.status(403).json({ error: "لا تملك صلاحية لعرض التقرير الآلي لهذه الدورة" });
+        throw new ForbiddenError("لا تملك صلاحية لعرض التقرير الآلي لهذه الدورة");
       }
     }
 
@@ -4100,14 +4137,14 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
 
     // Evaluator is always the authenticated user — prevents impersonation
     const evaluatorId = scope.employeeId;
-    if (!evaluatorId) return res.status(403).json({ error: "لا يمكن تحديد هوية المقيِّم" });
-    if (!overallScore) return res.status(422).json({ error: "overallScore مطلوب" });
+    if (!evaluatorId) throw new ForbiddenError("لا يمكن تحديد هوية المقيِّم");
+    if (!overallScore) throw new ValidationError("overallScore مطلوب", { field: "overallScore" });
 
     const [cycle] = await rawQuery<any>(
       `SELECT "employeeId","companyId" FROM evaluation_cycles WHERE id = $1 AND "companyId" = $2`,
       [cycleId, scope.companyId]
     );
-    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+    if (!cycle) throw new NotFoundError("دورة التقييم غير موجودة");
 
     // Authorization: determine if evaluator is allowed to submit for this cycle
     // Priority: (1) assigned participant (always allowed + uses their assigned role)
@@ -4135,11 +4172,11 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
         [scope.employeeId, scope.companyId, cycle.employeeId]
       );
       if (!sharedBranch) {
-        return res.status(403).json({ error: "لا تملك صلاحية تقييم موظفين خارج فرعك" });
+        throw new ForbiddenError("لا تملك صلاحية تقييم موظفين خارج فرعك");
       }
       evaluatorRole = "manager";
     } else {
-      return res.status(403).json({ error: "أنت لست ضمن المقيِّمين المعينين لهذه الدورة" });
+      throw new ForbiddenError("أنت لست ضمن المقيِّمين المعينين لهذه الدورة");
     }
 
     const { insertId } = await rawExecute(
@@ -4171,13 +4208,17 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
     const cycleId = Number(req.params.id);
     const { managerId, overallScore, scores, comments } = req.body as any;
 
-    if (!managerId || !overallScore) return res.status(422).json({ error: "managerId و overallScore مطلوبان" });
+    if (!managerId || !overallScore) {
+      throw new ValidationError("managerId و overallScore مطلوبان", {
+        field: !managerId ? "managerId" : "overallScore",
+      });
+    }
 
     const [cycle] = await rawQuery<any>(
       `SELECT id,"companyId","employeeId" FROM evaluation_cycles WHERE id = $1 AND "companyId" = $2`,
       [cycleId, scope.companyId]
     );
-    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+    if (!cycle) throw new NotFoundError("دورة التقييم غير موجودة");
 
     // Validate that the managerId is a legitimate participant in this cycle with role=manager
     // This prevents rating arbitrary employees as "manager" within a cycle
@@ -4186,12 +4227,14 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
       [cycleId, managerId]
     );
     if (!managerIsParticipant) {
-      return res.status(422).json({ error: "المدير المختار ليس مشاركاً معيَّناً بدور مدير في هذه الدورة" });
+      throw new ValidationError("المدير المختار ليس مشاركاً معيَّناً بدور مدير في هذه الدورة", {
+        field: "managerId",
+      });
     }
 
     // Self-rating guard: reviewer cannot rate themselves as manager
     if (managerId === scope.employeeId) {
-      return res.status(403).json({ error: "لا يمكنك تقييم نفسك في التقييم العكسي" });
+      throw new ForbiddenError("لا يمكنك تقييم نفسك في التقييم العكسي");
     }
 
     // Eligibility check — upward reviews must come from non-manager employees:
@@ -4206,7 +4249,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
     );
 
     if (!isSubject && !isEligibleParticipant) {
-      return res.status(403).json({ error: "أنت غير مؤهل لتقديم تقييم عكسي في هذه الدورة" });
+      throw new ForbiddenError("أنت غير مؤهل لتقديم تقييم عكسي في هذه الدورة");
     }
 
     // Prevent duplicate submissions from the same person per cycle per manager
@@ -4214,7 +4257,11 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
     // pair without revealing the reviewer's identity
     const crypto = await import("crypto");
     const secret = process.env.JWT_SECRET;
-    if (!secret) return res.status(500).json({ error: "خطأ في إعداد النظام: JWT_SECRET غير مضبوط" });
+    if (!secret) {
+      throw new IntegrationError("خطأ في إعداد النظام: JWT_SECRET غير مضبوط", {
+        meta: { integration: "auth", secret: "JWT_SECRET" },
+      });
+    }
     const submissionToken = crypto
       .createHmac("sha256", secret)
       .update(`${scope.userId}:${cycleId}:${managerId}`)
@@ -4226,7 +4273,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
       `SELECT id FROM anonymous_upward_reviews WHERE "cycleId"=$1 AND "managerId"=$2 AND "submissionToken"=$3`,
       [cycleId, managerId, submissionToken]
     );
-    if (existing) return res.status(409).json({ error: "لقد أرسلت تقييمك لهذا المدير مسبقاً في هذه الدورة" });
+    if (existing) throw new ConflictError("لقد أرسلت تقييمك لهذا المدير مسبقاً في هذه الدورة");
 
     // Insert with hashed token only — reviewer identity NOT stored
     const { insertId } = await rawExecute(
@@ -4255,7 +4302,7 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
        WHERE ec.id = $1 AND ec."companyId" = $2`,
       [cycleId, scope.companyId]
     );
-    if (!cycle) return res.status(404).json({ error: "دورة التقييم غير موجودة" });
+    if (!cycle) throw new NotFoundError("دورة التقييم غير موجودة");
 
     // Access check (same branch-scoped rules as detail endpoint)
     if (isHR(scope)) {
@@ -4274,10 +4321,10 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
         [cycleId, scope.employeeId]
       );
       if (!sharedBranch && cycle.employeeId !== scope.employeeId && !isParticipantRow) {
-        return res.status(403).json({ error: "لا تملك صلاحية لعرض هذا الملخص" });
+        throw new ForbiddenError("لا تملك صلاحية لعرض هذا الملخص");
       }
     } else if (cycle.employeeId !== scope.employeeId) {
-      return res.status(403).json({ error: "لا تملك صلاحية لعرض هذا الملخص" });
+      throw new ForbiddenError("لا تملك صلاحية لعرض هذا الملخص");
     }
 
     const [sysEval] = await rawQuery<any>(
@@ -4332,7 +4379,7 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
        WHERE ea."employeeId"=$1 AND ea."companyId"=$2 AND ea."isPrimary"=true`,
       [employeeId, scope.companyId]
     );
-    if (!empAssign) return res.status(404).json({ error: "الموظف غير موجود في هذه الشركة" });
+    if (!empAssign) throw new NotFoundError("الموظف غير موجود في هذه الشركة");
 
     // Access check:
     // - HR: unrestricted within company
@@ -4351,10 +4398,10 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
       );
       const isOwn = scope.employeeId === employeeId;
       if (!sharedBranch && !isOwn) {
-        return res.status(403).json({ error: "لا تملك صلاحية لعرض تاريخ تقييمات موظفين خارج فرعك" });
+        throw new ForbiddenError("لا تملك صلاحية لعرض تاريخ تقييمات موظفين خارج فرعك");
       }
     } else if (scope.employeeId !== employeeId) {
-      return res.status(403).json({ error: "لا تملك صلاحية لعرض تاريخ تقييمات هذا الموظف" });
+      throw new ForbiddenError("لا تملك صلاحية لعرض تاريخ تقييمات هذا الموظف");
     }
 
     const cycles = await rawQuery<any>(
@@ -4382,7 +4429,7 @@ router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), a
 
     // Only HR or the manager themselves can view this — no cross-manager access
     if (!isHR(scope) && scope.employeeId !== managerId) {
-      return res.status(403).json({ error: "لا تملك صلاحية لعرض التقييمات العكسية لمدير آخر" });
+      throw new ForbiddenError("لا تملك صلاحية لعرض التقييمات العكسية لمدير آخر");
     }
 
     const [row] = await rawQuery<any>(
@@ -4448,7 +4495,7 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
       `SELECT id FROM employees WHERE "userId" = $1 LIMIT 1`,
       [scope.userId]
     );
-    if (!emp) { res.status(400).json({ error: "لم يتم العثور على الموظف المرتبط بحسابك" }); return; }
+    if (!emp) throw new ValidationError("لم يتم العثور على الموظف المرتبط بحسابك");
     const r = await rawExecute(
       `INSERT INTO delegations ("delegatorId","delegateId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
       [emp.id, delegateId, scope.companyId, delegationScope || "عام", reason, startDate || new Date(), endDate || null]
@@ -4480,11 +4527,13 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح: إدارة الإجازات الرسمية مقصورة على HR أو المالك" }); return;
+      throw new ForbiddenError("غير مصرح: إدارة الإجازات الرسمية مقصورة على HR أو المالك");
     }
     const b = req.body;
     if (!b.name || !b.startDate) {
-      res.status(400).json({ error: "اسم العطلة وتاريخ البداية مطلوبان" }); return;
+      throw new ValidationError("اسم العطلة وتاريخ البداية مطلوبان", {
+        field: !b.name ? "name" : "startDate",
+      });
     }
     const startDate = new Date(b.startDate);
     const year = b.year || startDate.getFullYear();
@@ -4503,7 +4552,7 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح" }); return;
+      throw new ForbiddenError("غير مصرح");
     }
     const id = Number(req.params.id);
     const b = req.body;
@@ -4521,7 +4570,7 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
       `UPDATE public_holidays SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!rows[0]) { res.status(404).json({ error: "العطلة غير موجودة" }); return; }
+    if (!rows[0]) throw new NotFoundError("العطلة غير موجودة");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update holiday error:"); }
 });
@@ -4530,7 +4579,7 @@ router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req
   try {
     const scope = req.scope!;
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح" }); return;
+      throw new ForbiddenError("غير مصرح");
     }
     await rawExecute(`DELETE FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
     res.json({ message: "تم حذف العطلة" });
@@ -4542,7 +4591,7 @@ router.get("/public-holidays/check", requirePermission("hr:read"), async (req, r
   try {
     const scope = req.scope!;
     const { date } = req.query as any;
-    if (!date) { res.status(400).json({ error: "التاريخ مطلوب" }); return; }
+    if (!date) throw new ValidationError("التاريخ مطلوب", { field: "date" });
     const [holiday] = await rawQuery<any>(
       `SELECT * FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
       [scope.companyId, date]
@@ -4959,7 +5008,7 @@ router.post("/idp", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
-    if (!b.employeeId) { res.status(400).json({ error: "الموظف مطلوب" }); return; }
+    if (!b.employeeId) throw new ValidationError("الموظف مطلوب", { field: "employeeId" });
     const goals = Array.isArray(b.goals) ? JSON.stringify(b.goals) : (b.goals || '[]');
     const skills = Array.isArray(b.skills) ? JSON.stringify(b.skills) : (b.skills || '[]');
     const trainingIds = Array.isArray(b.trainingIds) ? JSON.stringify(b.trainingIds) : (b.trainingIds || '[]');
@@ -4995,7 +5044,7 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
       `UPDATE employee_development_plans SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
-    if (!rows[0]) { res.status(404).json({ error: "خطة التطوير غير موجودة" }); return; }
+    if (!rows[0]) throw new NotFoundError("خطة التطوير غير موجودة");
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update IDP error:"); }
 });
@@ -5092,15 +5141,16 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
     const targetPeriod = period || new Date().toISOString().slice(0, 7);
 
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
-      res.status(400).json({ error: "صيغة الفترة غير صحيحة (YYYY-MM)" });
-      return;
+      throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)", { field: "period" });
     }
 
     const accrualDate = `${targetPeriod}-01`;
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, accrualDate);
     if (!periodCheck.open) {
-      res.status(422).json({ error: `لا يمكن تسجيل استحقاقات في فترة مُقفلة: ${periodCheck.periodName ?? ""}` });
-      return;
+      throw new ValidationError(
+        `لا يمكن تسجيل استحقاقات في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "period", meta: { periodName: periodCheck.periodName } },
+      );
     }
 
     const ref = `HR-ACCRUAL-${targetPeriod}`;
@@ -5109,8 +5159,9 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       [scope.companyId, ref]
     );
     if (existing) {
-      res.status(409).json({ error: "تم تسجيل استحقاقات هذه الفترة مسبقاً", journalId: existing.id });
-      return;
+      throw new ConflictError("تم تسجيل استحقاقات هذه الفترة مسبقاً", {
+        meta: { journalId: existing.id, period: targetPeriod },
+      });
     }
 
     const employees = await rawQuery<any>(
@@ -5124,8 +5175,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
     );
 
     if (employees.length === 0) {
-      res.status(400).json({ error: "لا يوجد موظفون نشطون لاحتساب الاستحقاقات" });
-      return;
+      throw new ValidationError("لا يوجد موظفون نشطون لاحتساب الاستحقاقات");
     }
 
     const periodEnd = new Date(`${targetPeriod}-28`);
@@ -5168,8 +5218,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
     totalEosAccrual = Math.round(totalEosAccrual * 100) / 100;
 
     if (totalLeaveAccrual <= 0 && totalEosAccrual <= 0) {
-      res.status(400).json({ error: "لا توجد مبالغ استحقاق لاحتسابها" });
-      return;
+      throw new ValidationError("لا توجد مبالغ استحقاق لاحتسابها");
     }
 
     const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
@@ -5197,9 +5246,10 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
         lines,
       });
     } catch (journalErr) {
-      console.error("HR accrual journal entry failed:", journalErr);
-      res.status(500).json({ error: "فشل تسجيل قيد الاستحقاقات" });
-      return;
+      throw new IntegrationError("فشل تسجيل قيد الاستحقاقات", {
+        meta: { integration: "journal", period: targetPeriod },
+        cause: journalErr,
+      });
     }
 
     emitEvent({
@@ -5232,8 +5282,7 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
     const period = (req.query.period as string) || new Date().toISOString().slice(0, 7);
 
     if (!/^\d{4}-\d{2}$/.test(period)) {
-      res.status(400).json({ error: "صيغة الفترة غير صحيحة (YYYY-MM)" });
-      return;
+      throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)", { field: "period" });
     }
 
     const ref = `HR-ACCRUAL-${period}`;
