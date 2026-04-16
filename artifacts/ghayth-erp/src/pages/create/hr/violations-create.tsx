@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useFormContext } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -1399,12 +1400,15 @@ export default function ViolationsCreate() {
     } catch {}
   }, []);
 
-  // Memo creation mutation
-  const createMemo = useApiMutation(
+  // Memo creation mutation — successMessage: false so we show the memo number ourselves
+  const createMemo = useApiMutation<
+    { id: number; memoNumber: string; regulationId?: number; penaltyPreview?: any },
+    any
+  >(
     "/hr/discipline/memos",
     "POST",
     [["discipline-memos"], ["violations"]],
-    { successMessage: "تم تسجيل المخالفة بنجاح" },
+    { successMessage: false },
   );
 
   return (
@@ -1424,7 +1428,7 @@ export default function ViolationsCreate() {
           </Button>
         }
         onSubmit={async (values) => {
-          await createMemo.mutateAsync({
+          const result = await createMemo.mutateAsync({
             assignmentId: Number(values.assignmentId),
             incidentType: values.incidentType,
             incidentDate: values.incidentDate,
@@ -1445,6 +1449,10 @@ export default function ViolationsCreate() {
                   manualOverrideReason: values.manualOverrideReason,
                 }
               : {}),
+          });
+          toast({
+            title: "تم تسجيل المخالفة بنجاح",
+            description: `رقم المحضر: ${result.memoNumber}`,
           });
           clearDraft();
           setLocation("/hr/violations");
