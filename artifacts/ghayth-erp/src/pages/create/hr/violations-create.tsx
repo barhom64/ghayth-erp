@@ -1,100 +1,322 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useFormContext } from "react-hook-form";
+import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { CreatePageLayout } from "@/components/create-page-layout";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { getCurrencySymbol } from "@/lib/formatters";
-import { cn } from "@/lib/utils";
 import {
-  Check, ChevronDown, AlertTriangle, Pencil, Plus, Trash2, User, UserCheck,
+  CreatePageLayout,
+  CreationDateField,
+} from "@/components/create-page-layout";
+import {
+  FormShell,
+  FormTextField,
+  FormTextareaField,
+  FormNumberField,
+  FormDateField,
+  FormGrid,
+} from "@/components/form-shell";
+import {
+  FileDropZone,
+  type Attachment,
+} from "@/components/shared/file-drop-zone";
+import {
+  Autocomplete,
+  type AutocompleteOption,
+} from "@/components/ui/autocomplete";
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  FileText,
+  Loader2,
+  MapPin,
+  Pencil,
+  Plus,
+  Shield,
+  Trash2,
+  User,
+  Users,
+  X,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { getCurrencySymbol } from "@/lib/formatters";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
-type IncidentType = "late" | "early_leave" | "absence" | "behavior" | "organization" | "gps" | "custom";
+type IncidentType =
+  | "late"
+  | "early_leave"
+  | "absence"
+  | "behavior"
+  | "organization"
+  | "gps_out_of_range"
+  | "custom";
 
-interface Employee {
+interface RegulationRow {
   id: number;
-  name: string;
-  employeeNumber: string;
-  jobTitle: string;
-  branch: string;
-  assignmentId: number;
+  section: string;
+  articleNumber: number;
+  title: string;
+  penalty1: string;
+  penalty2: string;
+  penalty3: string;
+  penalty4: string;
+  extraDeduction: string | null;
+  severity: string;
+  isTermination: boolean;
+  legalReference: string | null;
 }
 
-interface PenaltyPreview {
-  dailyWage: number;
+interface PenaltyResolution {
+  regulation: RegulationRow;
+  occurrenceCount: number;
   penaltyLabel: string;
   baseDeductionAmount: number;
   extraDeductionAmount: number;
   totalDeductionAmount: number;
-  warningOnly: boolean;
   isTermination: boolean;
-  terminationType?: string;
-  occurrenceCount: number;
-  regulationId: number;
-  regulationTitle: string;
-  regulationSection: string;
+  terminationType?: "with_benefits" | "without_benefits";
+  warningOnly: boolean;
+  reason: string;
 }
 
-interface Regulation {
-  id: number;
-  title: string;
-  section: string;
+interface PenaltyPreviewResponse {
+  dailyWage: number;
+  resolution: PenaltyResolution | null;
 }
 
-interface Witness {
+interface WitnessEntry {
   type: "employee" | "external";
-  search: string;
-  selectedEmployee: Employee | null;
-  externalName: string;
-  externalTitle: string;
+  employeeId?: string;
+  employeeName?: string;
+  name?: string;
+  role?: string;
 }
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+interface RelatedPartyEntry {
+  type: "employee" | "external";
+  employeeId?: string;
+  employeeName?: string;
+  name?: string;
+  role?: string;
+}
 
-const today = new Date().toISOString().split("T")[0];
+// ─── Constants ──────────────────────────────────────────────────────────────
 
-const INCIDENT_TYPES: { value: IncidentType; label: string; icon: string }[] = [
-  { value: "late", label: "تأخر", icon: "⏰" },
-  { value: "early_leave", label: "مغادرة مبكرة", icon: "🚪" },
-  { value: "absence", label: "غياب", icon: "❌" },
-  { value: "behavior", label: "سلوك", icon: "⚠️" },
-  { value: "organization", label: "تنظيم", icon: "📋" },
-  { value: "gps", label: "GPS", icon: "📍" },
-  { value: "custom", label: "مخصّص", icon: "📝" },
+const INCIDENT_TYPES: {
+  value: IncidentType;
+  label: string;
+  icon: string;
+  desc: string;
+}[] = [
+  { value: "late", label: "تأخر", icon: "⏰", desc: "تأخر عن موعد الحضور" },
+  {
+    value: "early_leave",
+    label: "مغادرة مبكرة",
+    icon: "🚪",
+    desc: "مغادرة قبل نهاية الدوام",
+  },
+  {
+    value: "absence",
+    label: "غياب",
+    icon: "❌",
+    desc: "غياب بدون إذن مسبق",
+  },
+  {
+    value: "behavior",
+    label: "سلوك",
+    icon: "⚠️",
+    desc: "تصرف مخالف لأخلاقيات العمل",
+  },
+  {
+    value: "organization",
+    label: "تنظيم",
+    icon: "📜",
+    desc: "مخالفة السياسات والإجراءات",
+  },
+  {
+    value: "gps_out_of_range",
+    label: "GPS",
+    icon: "📍",
+    desc: "خروج عن النطاق المحدد",
+  },
+  { value: "custom", label: "مخصّص", icon: "📝", desc: "مخالفة غير مصنفة" },
 ];
 
-const MANUAL_TYPES: IncidentType[] = ["behavior", "organization", "custom"];
+const TIME_BASED_TYPES: IncidentType[] = ["late", "early_leave", "absence"];
 
-// ─── Step Indicator ───────────────────────────────────────────────────────────
+const STEP_LABELS = [
+  { key: "incident", label: "الواقعة", icon: AlertTriangle },
+  { key: "employee", label: "الموظف", icon: User },
+  { key: "penalty", label: "اللائحة والجزاء", icon: Shield },
+  { key: "docs", label: "التوثيق", icon: FileText },
+] as const;
 
-function StepIndicator({ current, completed }: { current: number; completed: boolean[] }) {
-  const labels = ["الواقعة", "الموظف", "اللائحة", "التوثيق"];
+// ─── Zod Schema ─────────────────────────────────────────────────────────────
+
+const violationSchema = z.object({
+  incidentDate: z.string().min(1, "تاريخ الواقعة مطلوب").refine(
+    (val) => !val || val <= new Date().toISOString().split("T")[0],
+    "لا يمكن اختيار تاريخ مستقبلي",
+  ),
+  incidentType: z.string().min(1, "نوع الواقعة مطلوب"),
+  durationMinutes: z.coerce.number().optional(),
+  absenceDays: z.coerce.number().optional(),
+  disruptsOthers: z.boolean().optional(),
+  description: z.string().min(1, "وصف المخالفة مطلوب"),
+  assignmentId: z.string().min(1, "يرجى اختيار الموظف"),
+  regulationId: z.coerce.number().optional(),
+  manualOverrideAmount: z.coerce.number().optional(),
+  manualOverrideReason: z.string().optional(),
+});
+
+type ViolationForm = z.infer<typeof violationSchema>;
+
+const DEFAULTS: ViolationForm = {
+  incidentDate: "",
+  incidentType: "",
+  durationMinutes: undefined,
+  absenceDays: undefined,
+  disruptsOthers: false,
+  description: "",
+  assignmentId: "",
+  regulationId: undefined,
+  manualOverrideAmount: undefined,
+  manualOverrideReason: "",
+};
+
+// ─── Draft persistence ──────────────────────────────────────────────────────
+
+const DRAFT_KEY = "hr_violations_create";
+const STORAGE_KEY = `erp_draft_${DRAFT_KEY}`;
+
+function loadDraftDefaults(): ViolationForm {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) return { ...DEFAULTS, ...JSON.parse(stored) };
+  } catch {
+    /* corrupt draft */
+  }
+  return DEFAULTS;
+}
+
+function DraftManager({ defaults }: { defaults: ViolationForm }) {
+  const form = useFormContext<ViolationForm>();
+  const [visible, setVisible] = useState(
+    () => !!localStorage.getItem(STORAGE_KEY),
+  );
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const sub = form.watch((values) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
+        } catch {
+          /* quota exceeded */
+        }
+      }, 1000);
+    });
+    return () => {
+      sub.unsubscribe();
+      clearTimeout(timer);
+    };
+  }, [form]);
+
+  if (!visible) return null;
+
   return (
-    <div className="flex items-center justify-center gap-2 mb-6" dir="rtl">
-      {labels.map((label, i) => {
-        const done = completed[i];
-        const active = current === i;
+    <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+      <span>تم استعادة مسودة محفوظة سابقاً</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="text-amber-600 h-7 px-2"
+        onClick={() => {
+          localStorage.removeItem(STORAGE_KEY);
+          form.reset(defaults);
+          setVisible(false);
+        }}
+      >
+        مسح المسودة
+      </Button>
+    </div>
+  );
+}
+
+// ─── Step Indicator ─────────────────────────────────────────────────────────
+
+type StepStatus = "active" | "completed" | "locked";
+
+function StepIndicator({
+  steps,
+  statuses,
+  onStepClick,
+}: {
+  steps: typeof STEP_LABELS;
+  statuses: StepStatus[];
+  onStepClick: (idx: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-6 px-2">
+      {steps.map((step, i) => {
+        const status = statuses[i];
+        const Icon = step.icon;
+        const isClickable = status === "completed";
         return (
-          <div key={i} className="flex items-center gap-2">
-            <div className="flex flex-col items-center gap-1">
+          <div key={step.key} className="flex items-center flex-1 last:flex-0">
+            <button
+              type="button"
+              disabled={!isClickable}
+              onClick={() => isClickable && onStepClick(i)}
+              className={cn(
+                "flex items-center gap-2 transition-all duration-200",
+                isClickable && "cursor-pointer hover:opacity-80",
+                !isClickable && status !== "active" && "cursor-default",
+              )}
+            >
               <div
                 className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all",
-                  done ? "bg-green-500 text-white" : active ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-500",
+                  "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300",
+                  status === "active" &&
+                    "bg-blue-600 text-white ring-2 ring-blue-200 ring-offset-2",
+                  status === "completed" && "bg-green-500 text-white",
+                  status === "locked" && "bg-gray-200 text-gray-400",
                 )}
               >
-                {done ? <Check className="h-4 w-4" /> : i + 1}
+                {status === "completed" ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <span>{i + 1}</span>
+                )}
               </div>
-              <span className="text-xs text-gray-500">{label}</span>
-            </div>
-            {i < 3 && <div className={cn("w-8 h-0.5 mb-4", done ? "bg-green-400" : "bg-gray-200")} />}
+              <span
+                className={cn(
+                  "text-sm hidden sm:inline transition-all duration-200",
+                  status === "active" && "font-bold text-blue-700",
+                  status === "completed" && "text-green-700",
+                  status === "locked" && "text-gray-400",
+                )}
+              >
+                {step.label}
+              </span>
+            </button>
+            {i < steps.length - 1 && (
+              <div
+                className={cn(
+                  "flex-1 h-0.5 mx-3 transition-all duration-300",
+                  statuses[i + 1] !== "locked"
+                    ? "bg-blue-300"
+                    : "bg-gray-200 border-dashed border-t border-gray-300 h-0",
+                )}
+              />
+            )}
           </div>
         );
       })}
@@ -102,606 +324,1332 @@ function StepIndicator({ current, completed }: { current: number; completed: boo
   );
 }
 
-// ─── Accordion Panel ──────────────────────────────────────────────────────────
+// ─── Wizard Section (collapsible accordion) ─────────────────────────────────
 
-function AccordionPanel({
-  open, locked, title, summary, onEdit, children,
+function WizardSection({
+  title,
+  summary,
+  status,
+  isOpen,
+  onToggle,
+  children,
 }: {
-  open: boolean; locked: boolean; title: string; summary?: string; onEdit?: () => void; children: React.ReactNode;
+  title: string;
+  summary?: string;
+  status: StepStatus;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
 }) {
-  return (
-    <div className={cn(
-      "border rounded-xl overflow-hidden transition-all duration-300",
-      locked ? "border-gray-200 opacity-60" : open ? "border-blue-300 shadow-sm" : "border-gray-300",
-    )}>
-      <div className={cn(
-        "flex items-center justify-between px-4 py-3",
-        open ? "bg-blue-50" : locked ? "bg-gray-50" : "bg-white",
-      )}>
-        <div className="flex items-center gap-2">
-          {!open && !locked && summary && (
-            <Check className="h-4 w-4 text-green-500" />
-          )}
-          <span className="font-semibold text-sm">{title}</span>
-          {!open && summary && (
-            <span className="text-xs text-gray-500 truncate max-w-xs">{summary}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {!open && !locked && onEdit && (
-            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs" onClick={onEdit}>
-              <Pencil className="h-3 w-3" /> تعديل
-            </Button>
-          )}
-          {locked && <span className="text-xs text-gray-400">مقفل</span>}
-          {!locked && <ChevronDown className={cn("h-4 w-4 text-gray-400 transition-transform", open && "rotate-180")} />}
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen && ref.current) {
+      setTimeout(() => {
+        ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
+    }
+  }, [isOpen]);
+
+  if (status === "locked") {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 opacity-50">
+        <div className="flex items-center gap-3 text-gray-400">
+          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+            <Clock className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-sm font-medium">{title}</span>
+          <span className="text-xs mr-auto">ينتظر اكتمال المرحلة السابقة</span>
         </div>
       </div>
-      {open && !locked && (
-        <div className="p-4 space-y-4 border-t border-blue-100">{children}</div>
-      )}
-    </div>
-  );
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse bg-muted rounded h-4", className)} />;
-}
-
-// ─── Employee Search ──────────────────────────────────────────────────────────
-
-function EmployeeSearch({
-  value, onSelect, placeholder = "ابحث باسم الموظف أو الرقم",
-}: {
-  value: string; onSelect: (emp: Employee) => void; placeholder?: string;
-}) {
-  const [query, setQuery] = useState(value);
-  const [open, setOpen] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const [debouncedQ, setDebouncedQ] = useState("");
-
-  const { data, isFetching } = useApiQuery<{ data: Employee[] }>(
-    ["emp-search", debouncedQ],
-    `/hr/employees?search=${encodeURIComponent(debouncedQ)}`,
-    { enabled: debouncedQ.length >= 1 },
-  );
-  const results = data?.data || [];
-
-  const handleChange = useCallback((q: string) => {
-    setQuery(q);
-    setOpen(true);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setDebouncedQ(q), 300);
-  }, []);
+    );
+  }
 
   return (
-    <div className="relative">
-      <Input
-        value={query}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder={placeholder}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className="text-right"
-      />
-      {open && (isFetching || results.length > 0) && (
-        <div className="absolute z-50 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-48 overflow-auto">
-          {isFetching && <div className="p-3 text-sm text-gray-500">جاري البحث…</div>}
-          {results.map((emp) => (
-            <button
-              key={emp.id}
-              type="button"
-              className="w-full text-right px-3 py-2 hover:bg-blue-50 text-sm"
-              onMouseDown={() => { onSelect(emp); setQuery(emp.name); setOpen(false); }}
-            >
-              <span className="font-medium">{emp.name}</span>
-              <span className="text-gray-400 mr-2 text-xs">#{emp.employeeNumber}</span>
-            </button>
-          ))}
+    <div
+      ref={ref}
+      className={cn(
+        "rounded-xl border transition-all duration-300",
+        isOpen
+          ? "border-blue-200 bg-white shadow-sm"
+          : "border-gray-200 bg-gray-50/30",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4 text-right"
+      >
+        <div className="flex items-center gap-3">
+          {status === "completed" && !isOpen ? (
+            <div className="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+              <Check className="h-3.5 w-3.5" />
+            </div>
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+              <Pencil className="h-3 w-3" />
+            </div>
+          )}
+          <div>
+            <span className="text-sm font-semibold">{title}</span>
+            {!isOpen && summary && (
+              <span className="text-xs text-gray-500 mr-2">{summary}</span>
+            )}
+          </div>
+        </div>
+        {isOpen ? (
+          <ChevronUp className="h-4 w-4 text-gray-400" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-gray-400" />
+        )}
+      </button>
+      {isOpen && (
+        <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+          {children}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Incident Type Selector ─────────────────────────────────────────────────
 
-export default function ViolationsCreate() {
-  const [, setLocation] = useLocation();
-
-  // Step open state (0=incident,1=employee,2=regulation,3=docs)
-  const [openStep, setOpenStep] = useState(0);
-
-  // Step 1 — Incident
-  const [incidentDate, setIncidentDate] = useState("");
-  const [incidentType, setIncidentType] = useState<IncidentType | "">("");
-  const [description, setDescription] = useState("");
-  const [minutesDuration, setMinutesDuration] = useState("");
-  const [disruptedOthers, setDisruptedOthers] = useState(false);
-  const [daysAbsent, setDaysAbsent] = useState("");
-
-  // Step 2 — Employee
-  const [employee, setEmployee] = useState<Employee | null>(null);
-
-  // Step 3 — Regulation
-  const [preview, setPreview] = useState<PenaltyPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [manualRegId, setManualRegId] = useState<number | null>(null);
-  const [overrideAmount, setOverrideAmount] = useState("");
-  const [overrideReason, setOverrideReason] = useState("");
-
-  // Step 4 — Docs (always open logic handled separately)
-  const [witnesses, setWitnesses] = useState<Witness[]>([]);
-  const [additionalReasons, setAdditionalReasons] = useState<string[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-
-  // Step completion flags
-  const step1Done = !!incidentDate && !!incidentType && description.trim().length > 0;
-  const step2Done = !!employee;
-  const step3Done = !!preview;
-
-  const completed = [step1Done, step2Done, step3Done, false];
-
-  // Fetch regulations for manual types
-  const isManual = MANUAL_TYPES.includes(incidentType as IncidentType);
-  const { data: regData } = useApiQuery<{ data: Regulation[] }>(
-    ["regulations-conduct"],
-    "/hr/discipline/regulation?section=conduct",
-    { enabled: isManual && openStep === 2 },
-  );
-  const regulations = regData?.data || [];
-
-  // Auto-fire penalty-preview when step 3 opens
-  const penaltyMut = useApiMutation("/hr/discipline/penalty-preview", "POST", []);
-  useEffect(() => {
-    if (openStep !== 2 || !step1Done || !step2Done || !employee) return;
-    setPreviewLoading(true);
-    setPreview(null);
-    const body: Record<string, unknown> = {
-      assignmentId: employee.assignmentId,
-      incidentType,
-      ...(minutesDuration ? { minutesDuration: Number(minutesDuration) } : {}),
-      ...(daysAbsent ? { daysAbsent: Number(daysAbsent) } : {}),
-      ...(incidentType === "late" ? { disruptedOthers } : {}),
-      ...(manualRegId ? { regulationId: manualRegId } : {}),
-    };
-    penaltyMut.mutateAsync(body)
-      .then((res: unknown) => { setPreview(res as PenaltyPreview); })
-      .catch(() => {})
-      .finally(() => setPreviewLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openStep]);
-
-  // Submit
-  const createMut = useApiMutation("/hr/violations", "POST", [["violations"]], {
-    successMessage: "تم تسجيل المخالفة بنجاح",
-  });
-
-  const canSubmit = step1Done && step2Done && step3Done;
-
-  async function handleSubmit(draft = false) {
-    if (!employee || !incidentType) return;
-    await createMut.mutateAsync({
-      assignmentId: employee.assignmentId,
-      incidentDate,
-      incidentType,
-      description,
-      ...(minutesDuration ? { minutesDuration: Number(minutesDuration) } : {}),
-      ...(daysAbsent ? { daysAbsent: Number(daysAbsent) } : {}),
-      ...(incidentType === "late" ? { disruptedOthers } : {}),
-      ...(manualRegId ? { regulationId: manualRegId } : {}),
-      ...(overrideAmount ? { overrideAmount: Number(overrideAmount), overrideReason } : {}),
-      witnesses: witnesses.map((w) =>
-        w.type === "employee"
-          ? { type: "employee", employeeId: w.selectedEmployee?.id }
-          : { type: "external", name: w.externalName, title: w.externalTitle },
-      ),
-      additionalReasons: additionalReasons.filter(Boolean),
-      attachments,
-      draft,
-    });
-    setLocation("/hr/discipline-memos");
-  }
-
-  // Witness helpers
-  function addWitness() {
-    setWitnesses((prev) => [...prev, { type: "employee", search: "", selectedEmployee: null, externalName: "", externalTitle: "" }]);
-  }
-  function removeWitness(i: number) {
-    setWitnesses((prev) => prev.filter((_, idx) => idx !== i));
-  }
-  function updateWitness(i: number, patch: Partial<Witness>) {
-    setWitnesses((prev) => prev.map((w, idx) => (idx === i ? { ...w, ...patch } : w)));
-  }
+function IncidentTypeSelector() {
+  const {
+    watch,
+    setValue,
+    formState: { errors },
+  } = useFormContext<ViolationForm>();
+  const current = watch("incidentType") as IncidentType;
+  const error = errors.incidentType?.message;
 
   return (
-    <CreatePageLayout title="تسجيل مخالفة" backPath="/hr/violations">
-      <div className="max-w-2xl mx-auto space-y-4 pb-24" dir="rtl">
-        <StepIndicator current={openStep} completed={completed} />
-
-        {/* ── Step 1: Incident ── */}
-        <AccordionPanel
-          open={openStep === 0}
-          locked={false}
-          title="الواقعة"
-          summary={step1Done ? `${incidentDate} · ${INCIDENT_TYPES.find((t) => t.value === incidentType)?.label}` : undefined}
-          onEdit={() => setOpenStep(0)}
-        >
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label>تاريخ الواقعة <span className="text-red-500">*</span></Label>
-              <Input
-                type="date"
-                max={today}
-                value={incidentDate}
-                onChange={(e) => setIncidentDate(e.target.value)}
-                className="text-right"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>تاريخ الإنشاء</Label>
-              <Input value={today} readOnly className="bg-gray-50 text-right" />
-            </div>
-          </div>
-
-          {/* Incident type cards */}
-          <div className="space-y-2">
-            <Label>نوع الحادثة <span className="text-red-500">*</span></Label>
-            <div className="grid grid-cols-4 gap-2">
-              {INCIDENT_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setIncidentType(t.value)}
-                  className={cn(
-                    "p-2 rounded-lg border-2 text-center text-xs transition-all",
-                    incidentType === t.value
-                      ? "border-blue-500 bg-blue-50 font-semibold"
-                      : "border-gray-200 hover:border-gray-300",
-                  )}
-                >
-                  <div className="text-lg mb-1">{t.icon}</div>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Dynamic fields */}
-          {(incidentType === "late" || incidentType === "early_leave") && (
-            <div className="space-y-1">
-              <Label>مدة التأخر / المغادرة (دقيقة)</Label>
-              <Input
-                type="number"
-                min={1}
-                value={minutesDuration}
-                onChange={(e) => setMinutesDuration(e.target.value)}
-                className="text-right w-40"
-              />
-            </div>
-          )}
-          {incidentType === "late" && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="disrupted"
-                checked={disruptedOthers}
-                onCheckedChange={(v) => setDisruptedOthers(!!v)}
-              />
-              <Label htmlFor="disrupted">هل عطّل عمالاً آخرين؟</Label>
-            </div>
-          )}
-          {incidentType === "absence" && (
-            <div className="space-y-1">
-              <Label>عدد أيام الغياب</Label>
-              <Input
-                type="number"
-                min={1}
-                value={daysAbsent}
-                onChange={(e) => setDaysAbsent(e.target.value)}
-                className="text-right w-40"
-              />
-            </div>
-          )}
-
-          {/* Description */}
-          <div className="space-y-1">
-            <Label>الوصف <span className="text-red-500">*</span></Label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full border rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 text-right"
-              placeholder="وصف تفصيلي للواقعة…"
-            />
-          </div>
-
-          <Button
+    <div>
+      <label className="text-sm font-medium text-gray-700 mb-2 block">
+        نوع الواقعة <span className="text-red-500">*</span>
+      </label>
+      <p className="text-xs text-gray-500 mb-3">
+        اختر نوع الواقعة — المادة تُحدَّد تلقائياً للأنواع الزمنية
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {INCIDENT_TYPES.map((it) => (
+          <button
+            key={it.value}
             type="button"
-            disabled={!step1Done}
-            onClick={() => { if (step1Done) setOpenStep(1); }}
-            className="w-full"
+            onClick={() =>
+              setValue("incidentType", it.value, { shouldValidate: true })
+            }
+            className={cn(
+              "p-3 rounded-xl border-2 text-right transition-all duration-200",
+              current === it.value
+                ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200 ring-offset-1 scale-[1.02]"
+                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50",
+            )}
           >
-            التالي — الموظف
-          </Button>
-        </AccordionPanel>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">{it.icon}</span>
+              <span className="text-sm font-medium">{it.label}</span>
+            </div>
+            <p className="text-xs text-gray-500">{it.desc}</p>
+          </button>
+        ))}
+      </div>
+      {error && (
+        <p className="text-xs text-red-600 mt-2 animate-in fade-in duration-200">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
-        {/* ── Step 2: Employee ── */}
-        <AccordionPanel
-          open={openStep === 1}
-          locked={!step1Done}
-          title="الموظف"
-          summary={employee ? `${employee.name} · ${employee.jobTitle}` : undefined}
-          onEdit={() => step1Done && setOpenStep(1)}
-        >
-          <div className="space-y-1">
-            <Label>بحث عن موظف <span className="text-red-500">*</span></Label>
-            <EmployeeSearch
-              value={employee?.name || ""}
-              onSelect={(emp) => setEmployee(emp)}
-            />
+// ─── Step 1: Incident Details ────────────────────────────────────────────────
+
+function StepIncident() {
+  const { watch, register, formState: { errors } } = useFormContext<ViolationForm>();
+  const incidentType = watch("incidentType") as IncidentType;
+  const showDuration = incidentType === "late" || incidentType === "early_leave";
+  const showAbsence = incidentType === "absence";
+  const showDisrupts = incidentType === "late";
+
+  const today = new Date().toISOString().split("T")[0];
+
+  return (
+    <div className="space-y-5">
+      <FormGrid cols={2}>
+        <div className="space-y-1.5">
+          <label htmlFor="incidentDate" className="text-sm font-medium">
+            تاريخ الواقعة <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="incidentDate"
+            type="date"
+            max={today}
+            className={cn(
+              "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              errors.incidentDate && "border-red-500",
+            )}
+            {...register("incidentDate")}
+          />
+          {errors.incidentDate?.message && (
+            <p className="text-xs text-red-600">{errors.incidentDate.message as string}</p>
+          )}
+          <p className="text-xs text-gray-500">
+            حدد تاريخ وقوع المخالفة الفعلي، وليس تاريخ اليوم
+          </p>
+        </div>
+        <CreationDateField />
+      </FormGrid>
+
+      <IncidentTypeSelector />
+
+      {/* Dynamic fields based on incident type */}
+      {showDuration && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+          <FormGrid cols={showDisrupts ? 2 : 1}>
+            <div>
+              <FormNumberField
+                name="durationMinutes"
+                label="مدة التأخر (دقائق)"
+                placeholder="15"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                المدة تحدد المادة المطبّقة تلقائياً
+              </p>
+            </div>
+            {showDisrupts && (
+              <DisruptsOthersCheckbox />
+            )}
+          </FormGrid>
+        </div>
+      )}
+
+      {showAbsence && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+          <FormNumberField
+            name="absenceDays"
+            label="عدد أيام الغياب"
+            placeholder="1"
+          />
+        </div>
+      )}
+
+      <FormTextareaField
+        name="description"
+        label="وصف الواقعة"
+        required
+        placeholder="وصف تفصيلي للواقعة وظروفها..."
+      />
+    </div>
+  );
+}
+
+function DisruptsOthersCheckbox() {
+  const { watch, setValue } = useFormContext<ViolationForm>();
+  const checked = watch("disruptsOthers") || false;
+
+  return (
+    <div className="flex flex-col justify-end">
+      <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) =>
+            setValue("disruptsOthers", e.target.checked, {
+              shouldValidate: true,
+            })
+          }
+          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        <div>
+          <span className="text-sm font-medium">هل عطّل عمالاً آخرين؟</span>
+          <p className="text-xs text-gray-500">
+            يرفع درجة المادة المطبّقة
+          </p>
+        </div>
+      </label>
+    </div>
+  );
+}
+
+// ─── Step 2: Employee Selection ──────────────────────────────────────────────
+
+function StepEmployee({
+  employees,
+  priorMemos,
+  priorMemosLoading,
+}: {
+  employees: any[];
+  priorMemos: any[] | null;
+  priorMemosLoading: boolean;
+}) {
+  const { watch, setValue } = useFormContext<ViolationForm>();
+  const assignmentId = watch("assignmentId");
+
+  const empOptions: AutocompleteOption[] = useMemo(
+    () =>
+      employees.map((emp: any) => ({
+        value: String(emp.assignmentId || emp.id),
+        label: emp.name || "—",
+        subtitle: [emp.jobTitle, emp.departmentName, emp.empNumber ? `#${emp.empNumber}` : ""]
+          .filter(Boolean)
+          .join(" — "),
+        metadata: emp,
+      })),
+    [employees],
+  );
+
+  const selectedEmp = useMemo(
+    () =>
+      employees.find(
+        (e: any) => String(e.assignmentId || e.id) === assignmentId,
+      ),
+    [employees, assignmentId],
+  );
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium text-gray-700 mb-2 block">
+          بحث الموظف <span className="text-red-500">*</span>
+        </label>
+        <p className="text-xs text-gray-500 mb-2">
+          ابحث بالاسم أو الرقم الوظيفي أو رقم الهوية
+        </p>
+        <Autocomplete
+          options={empOptions}
+          value={assignmentId}
+          onChange={(val) =>
+            setValue("assignmentId", String(val), { shouldValidate: true })
+          }
+          placeholder="ابحث عن الموظف..."
+        />
+      </div>
+
+      {/* Employee card after selection */}
+      {selectedEmp && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-200 p-4 bg-gradient-to-l from-blue-50 to-white rounded-xl border border-blue-100">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-lg shrink-0">
+              {(selectedEmp.name || "؟").charAt(0)}
+            </div>
+            <div className="flex-1 space-y-1">
+              <p className="font-semibold text-base">{selectedEmp.name}</p>
+              <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                {selectedEmp.empNumber && (
+                  <Badge variant="outline">#{selectedEmp.empNumber}</Badge>
+                )}
+                {selectedEmp.jobTitle && (
+                  <Badge variant="outline">{selectedEmp.jobTitle}</Badge>
+                )}
+                {selectedEmp.departmentName && (
+                  <Badge variant="outline">{selectedEmp.departmentName}</Badge>
+                )}
+              </div>
+            </div>
           </div>
 
-          {employee && (
-            <div className="p-3 bg-gray-50 rounded-lg border space-y-1 text-sm">
-              <div className="font-semibold text-base">{employee.name}</div>
-              <div className="text-gray-500">#{employee.employeeNumber} · {employee.jobTitle}</div>
-              <div className="text-gray-500">{employee.branch}</div>
-            </div>
-          )}
-
-          <Button
-            type="button"
-            disabled={!step2Done}
-            onClick={() => { if (step2Done) setOpenStep(2); }}
-            className="w-full"
-          >
-            التالي — اللائحة والجزاء
-          </Button>
-        </AccordionPanel>
-
-        {/* ── Step 3: Regulation & Penalty ── */}
-        <AccordionPanel
-          open={openStep === 2}
-          locked={!step2Done}
-          title="اللائحة والجزاء"
-          summary={preview ? preview.regulationTitle : undefined}
-          onEdit={() => step2Done && setOpenStep(2)}
-        >
-          {previewLoading && (
-            <div className="space-y-3">
-              <Skeleton className="h-5 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-              <div className="grid grid-cols-4 gap-2">
-                {[0,1,2,3].map((i) => <Skeleton key={i} className="h-16" />)}
+          {/* Prior memos summary */}
+          <div className="mt-3 pt-3 border-t border-blue-100">
+            {priorMemosLoading ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                جارٍ جلب سجل المخالفات...
               </div>
-              <Skeleton className="h-20" />
-            </div>
-          )}
-
-          {!previewLoading && isManual && regulations.length > 0 && !preview && (
-            <div className="space-y-2">
-              <Label>اختر مادة اللائحة</Label>
-              <div className="space-y-2">
-                {regulations.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setManualRegId(r.id)}
-                    className={cn(
-                      "w-full text-right px-3 py-2 rounded-lg border text-sm transition-all",
-                      manualRegId === r.id ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300",
-                    )}
-                  >
-                    {r.title}
-                  </button>
-                ))}
+            ) : priorMemos && priorMemos.length > 0 ? (
+              <div className="text-xs text-gray-600">
+                <span className="font-medium">
+                  {priorMemos.length} مخالفة سابقة
+                </span>
+                {" — آخرها: "}
+                {priorMemos[0]?.createdAt
+                  ? new Date(priorMemos[0].createdAt).toLocaleDateString("ar-SA")
+                  : "—"}
               </div>
-              {manualRegId && (
-                <Button type="button" className="w-full" onClick={() => {
-                  setPreviewLoading(true);
-                  setPreview(null);
-                  penaltyMut.mutateAsync({
-                    assignmentId: employee!.assignmentId,
-                    incidentType,
-                    regulationId: manualRegId,
-                    ...(minutesDuration ? { minutesDuration: Number(minutesDuration) } : {}),
-                  }).then((res: unknown) => setPreview(res as PenaltyPreview))
-                    .catch(() => {})
-                    .finally(() => setPreviewLoading(false));
-                }}>
-                  عرض الجزاء
-                </Button>
+            ) : (
+              <div className="text-xs text-green-600">
+                لا توجد مخالفات سابقة مسجّلة
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Penalty Scale Card ─────────────────────────────────────────────────────
+
+function PenaltyScaleCard({
+  regulation,
+  occurrenceCount,
+}: {
+  regulation: RegulationRow;
+  occurrenceCount: number;
+}) {
+  const penalties = [
+    { label: "المرة 1", value: regulation.penalty1 },
+    { label: "المرة 2", value: regulation.penalty2 },
+    { label: "المرة 3", value: regulation.penalty3 },
+    { label: "المرة 4", value: regulation.penalty4 },
+  ];
+
+  return (
+    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+      <div className="flex items-center gap-2 mb-3">
+        <Shield className="h-4 w-4 text-blue-600" />
+        <span className="text-sm font-semibold">
+          مادة #{regulation.articleNumber} — {regulation.title}
+        </span>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">
+        قسم: {regulation.section}
+        {regulation.legalReference && ` — ${regulation.legalReference}`}
+      </p>
+      <div className="grid grid-cols-4 gap-2">
+        {penalties.map((p, i) => {
+          const isCurrent = i + 1 === occurrenceCount;
+          const isPast = i + 1 < occurrenceCount;
+          const isFuture = i + 1 > occurrenceCount;
+          return (
+            <div
+              key={i}
+              className={cn(
+                "p-2 rounded-lg border text-center text-xs transition-all",
+                isCurrent &&
+                  "border-blue-400 bg-blue-50 ring-2 ring-blue-200 font-bold",
+                isPast && "border-green-200 bg-green-50 text-green-700",
+                isFuture && "border-gray-200 bg-white text-gray-400",
               )}
-            </div>
-          )}
-
-          {!previewLoading && preview && (
-            <div className="space-y-4">
-              {/* Regulation info */}
-              <div className="p-3 bg-gray-50 rounded-lg border text-sm">
-                <div className="font-semibold">{preview.regulationTitle}</div>
-                <div className="text-gray-500 text-xs">{preview.regulationSection}</div>
-              </div>
-
-              {/* Occurrence warning */}
-              {preview.occurrenceCount >= 2 && (
-                <div className={cn(
-                  "flex items-center gap-2 p-3 rounded-lg text-sm font-medium",
-                  preview.occurrenceCount >= 3 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200",
-                )}>
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {preview.occurrenceCount >= 3 ? `مخالفة متكررة — المرة ${preview.occurrenceCount}` : "مخالفة سابقة مسجلة — المرة الثانية"}
+            >
+              <div className="font-medium mb-1">{p.label}</div>
+              <div className="leading-tight">{p.value || "—"}</div>
+              {isPast && (
+                <Check className="h-3 w-3 text-green-500 mx-auto mt-1" />
+              )}
+              {isCurrent && (
+                <div className="text-[10px] text-blue-600 mt-1">
+                  ← أنت هنا
                 </div>
               )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-              {/* Warning / Termination badges */}
-              {preview.warningOnly && (
-                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
-                  إنذار فقط — لا يوجد خصم مالي
-                </Badge>
-              )}
-              {preview.isTermination && (
-                <div className="p-3 bg-red-50 border border-red-400 rounded-lg text-red-700 font-semibold text-sm">
-                  ⚠️ هذه المخالفة تستوجب الفصل من العمل ({preview.terminationType})
-                </div>
-              )}
+// ─── Step 3: Regulation & Penalty ───────────────────────────────────────────
 
-              {/* Penalty breakdown */}
-              {!preview.warningOnly && (
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  {[
-                    { label: "الأجر اليومي", val: preview.dailyWage },
-                    { label: "الخصم الأساسي", val: preview.baseDeductionAmount },
-                    { label: "الخصم الإضافي", val: preview.extraDeductionAmount },
-                    { label: "إجمالي الخصم", val: preview.totalDeductionAmount, bold: true },
-                  ].map((row) => (
-                    <div key={row.label} className={cn("p-3 bg-gray-50 rounded-lg border", row.bold && "border-blue-300 bg-blue-50")}>
-                      <div className="text-gray-500 text-xs">{row.label}</div>
-                      <div className={cn("font-semibold", row.bold && "text-blue-700")}>
-                        {row.val?.toLocaleString("ar")} {getCurrencySymbol()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+function StepPenalty({
+  preview,
+  previewLoading,
+  priorMemos,
+  employees,
+}: {
+  preview: PenaltyPreviewResponse | null;
+  previewLoading: boolean;
+  priorMemos: any[] | null;
+  employees: any[];
+}) {
+  const { watch, setValue } = useFormContext<ViolationForm>();
+  const incidentType = watch("incidentType") as IncidentType;
+  const manualOverrideAmount = watch("manualOverrideAmount");
+  const manualOverrideReason = watch("manualOverrideReason");
+  const [showManualOverride, setShowManualOverride] = useState(false);
 
-              {/* Manual override */}
-              <details className="text-sm">
-                <summary className="cursor-pointer text-gray-500 hover:text-gray-700">تعديل مبلغ الخصم يدوياً</summary>
-                <div className="mt-2 space-y-2">
-                  <Input
-                    type="number"
-                    placeholder="المبلغ البديل"
-                    value={overrideAmount}
-                    onChange={(e) => setOverrideAmount(e.target.value)}
-                    className="text-right"
-                  />
-                  {overrideAmount && (
-                    <Input
-                      placeholder="سبب التعديل (مطلوب)"
-                      value={overrideReason}
-                      onChange={(e) => setOverrideReason(e.target.value)}
-                      className="text-right"
-                    />
+  const isTimeBased = TIME_BASED_TYPES.includes(incidentType);
+  const isBehavioral = !isTimeBased && !!incidentType;
+
+  // For behavioral types — manual regulation selection
+  const regulationSection =
+    incidentType === "behavior" ? "conduct" : "work_organization";
+  const { data: regulationsData } = useApiQuery<{ data: RegulationRow[] }>(
+    ["regulations", regulationSection],
+    `/hr/discipline/regulation?section=${regulationSection}`,
+    { enabled: isBehavioral },
+  );
+  const regulations = regulationsData?.data || [];
+
+  const regulationOptions: AutocompleteOption[] = useMemo(
+    () =>
+      regulations.map((r) => ({
+        value: r.id,
+        label: `مادة #${r.articleNumber} — ${r.title}`,
+        subtitle: r.section,
+      })),
+    [regulations],
+  );
+
+  if (previewLoading) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          جارٍ تحليل المخالفة...
+        </div>
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-4 bg-gray-200 rounded animate-pulse"
+              style={{ width: `${70 + i * 10}%` }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const resolution = preview?.resolution;
+  const dailyWage = preview?.dailyWage || 0;
+
+  return (
+    <div className="space-y-5">
+      {/* Manual regulation picker for behavioral types */}
+      {isBehavioral && (
+        <div className="animate-in fade-in duration-200">
+          <label className="text-sm font-medium text-gray-700 mb-2 block">
+            اختر المادة المطبّقة
+          </label>
+          <Autocomplete
+            options={regulationOptions}
+            value={watch("regulationId") || ""}
+            onChange={(val) =>
+              setValue("regulationId", Number(val), { shouldValidate: true })
+            }
+            placeholder="ابحث عن المادة بالعنوان أو الرقم..."
+          />
+        </div>
+      )}
+
+      {/* Regulation article card */}
+      {resolution && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
+          <PenaltyScaleCard
+            regulation={resolution.regulation}
+            occurrenceCount={resolution.occurrenceCount}
+          />
+
+          {/* Occurrence warning */}
+          {resolution.occurrenceCount > 1 && (
+            <div
+              className={cn(
+                "p-4 rounded-xl border animate-in fade-in duration-300",
+                resolution.occurrenceCount >= 4 || resolution.isTermination
+                  ? "bg-red-50 border-red-300 text-red-800"
+                  : resolution.occurrenceCount >= 3
+                    ? "bg-red-50 border-red-200 text-red-700"
+                    : "bg-amber-50 border-amber-200 text-amber-800",
+              )}
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold">
+                    هذه المخالفة هي التكرار رقم {resolution.occurrenceCount}{" "}
+                    لنفس المادة خلال السنة العقدية
+                  </p>
+                  {/* Show prior memos filtered by same regulation */}
+                  {priorMemos && priorMemos.length > 0 && (
+                    <ul className="mt-2 space-y-1 text-xs">
+                      {priorMemos
+                        .filter(
+                          (m: any) =>
+                            m.regulationId === resolution.regulation.id,
+                        )
+                        .slice(0, 5)
+                        .map((m: any, i: number) => (
+                          <li key={i}>
+                            •{" "}
+                            {m.createdAt
+                              ? new Date(m.createdAt).toLocaleDateString(
+                                  "ar-SA",
+                                )
+                              : "—"}{" "}
+                            — {m.penaltyLabel || m.status || "—"}
+                            {m.memoNumber && ` (${m.memoNumber})`}
+                          </li>
+                        ))}
+                    </ul>
                   )}
                 </div>
-              </details>
+              </div>
             </div>
           )}
 
-          {!previewLoading && preview && (
-            <Button type="button" className="w-full" onClick={() => setOpenStep(3)}>
-              التالي — التوثيق
-            </Button>
-          )}
-        </AccordionPanel>
+          {/* Penalty details */}
+          <div className="p-4 rounded-xl border border-gray-200 bg-white">
+            <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Shield className="h-4 w-4 text-blue-600" />
+              تفاصيل الجزاء المحسوب
+            </h4>
 
-        {/* ── Step 4: Documentation (always accessible once step3 unlocked) ── */}
-        <AccordionPanel
-          open={openStep === 3}
-          locked={!step3Done}
-          title="التوثيق"
-          onEdit={() => step3Done && setOpenStep(3)}
-        >
-          {/* Witnesses */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label>الشهود</Label>
-              <Button type="button" variant="outline" size="sm" className="gap-1" onClick={addWitness}>
-                <Plus className="h-3 w-3" /> إضافة شاهد
-              </Button>
-            </div>
-            {witnesses.map((w, i) => (
-              <div key={i} className="p-3 border rounded-lg space-y-2 bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateWitness(i, { type: "employee", selectedEmployee: null, search: "" })}
-                      className={cn("flex items-center gap-1 text-xs px-2 py-1 rounded border", w.type === "employee" ? "border-blue-400 bg-blue-50" : "border-gray-200")}
-                    >
-                      <UserCheck className="h-3 w-3" /> موظف
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateWitness(i, { type: "external" })}
-                      className={cn("flex items-center gap-1 text-xs px-2 py-1 rounded border", w.type === "external" ? "border-blue-400 bg-blue-50" : "border-gray-200")}
-                    >
-                      <User className="h-3 w-3" /> خارجي
-                    </button>
+            {/* Warning only badge */}
+            {resolution.warningOnly && (
+              <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                هذا الجزاء إنذار كتابي فقط — لا خصم مالي
+              </div>
+            )}
+
+            {/* Termination alert */}
+            {resolution.isTermination && (
+              <div className="mb-3 p-3 bg-red-50 border border-red-300 rounded-lg text-sm text-red-800 font-semibold">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  هذا الجزاء يستوجب إنهاء الخدمة
+                </div>
+                {resolution.terminationType && (
+                  <p className="text-xs mt-1 font-normal">
+                    النوع:{" "}
+                    {resolution.terminationType === "with_benefits"
+                      ? "فصل مع المكافأة"
+                      : "فصل بدون مكافأة"}
+                    {" — يتطلب موافقة المدير العام"}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">نص الجزاء</span>
+                <span className="font-medium">{resolution.penaltyLabel}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">الأجر اليومي</span>
+                <span>
+                  {dailyWage.toFixed(2)} {getCurrencySymbol()}
+                </span>
+              </div>
+              {!resolution.warningOnly && (
+                <>
+                  <hr className="border-gray-100" />
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">الخصم الأساسي</span>
+                    <span>
+                      {resolution.baseDeductionAmount.toFixed(2)}{" "}
+                      {getCurrencySymbol()}
+                    </span>
                   </div>
-                  <button type="button" onClick={() => removeWitness(i)}>
-                    <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
-                  </button>
-                </div>
-                {w.type === "employee" ? (
-                  <EmployeeSearch
-                    value={w.selectedEmployee?.name || ""}
-                    onSelect={(emp) => updateWitness(i, { selectedEmployee: emp, search: emp.name })}
+                  {resolution.extraDeductionAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">الخصم الإضافي</span>
+                      <span>
+                        {resolution.extraDeductionAmount.toFixed(2)}{" "}
+                        {getCurrencySymbol()}
+                      </span>
+                    </div>
+                  )}
+                  <hr className="border-gray-200" />
+                  <div className="flex justify-between font-bold text-base">
+                    <span>الإجمالي</span>
+                    <span className="text-red-600">
+                      {resolution.totalDeductionAmount.toFixed(2)}{" "}
+                      {getCurrencySymbol()}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Manual override */}
+            {!resolution.warningOnly && (
+              <div className="mt-4 pt-3 border-t border-gray-100">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showManualOverride}
+                    onChange={(e) => {
+                      setShowManualOverride(e.target.checked);
+                      if (!e.target.checked) {
+                        setValue("manualOverrideAmount", undefined);
+                        setValue("manualOverrideReason", "");
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600"
                   />
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="الاسم" value={w.externalName} onChange={(e) => updateWitness(i, { externalName: e.target.value })} className="text-right" />
-                    <Input placeholder="المسمى الوظيفي" value={w.externalTitle} onChange={(e) => updateWitness(i, { externalTitle: e.target.value })} className="text-right" />
+                  <span className="text-sm text-gray-700">
+                    تعديل يدوي للمبلغ
+                  </span>
+                </label>
+                {showManualOverride && (
+                  <div className="mt-3 space-y-3 animate-in fade-in duration-200">
+                    <FormGrid cols={2}>
+                      <FormNumberField
+                        name="manualOverrideAmount"
+                        label={`المبلغ (${getCurrencySymbol()})`}
+                        placeholder="0"
+                      />
+                      <FormTextField
+                        name="manualOverrideReason"
+                        label="سبب التعديل"
+                        required={showManualOverride}
+                        placeholder="سبب التعديل اليدوي (مطلوب)"
+                      />
+                    </FormGrid>
+                    <p className="text-xs text-gray-500">
+                      التعديل اليدوي يُسجَّل في سجل المراجعة
+                    </p>
                   </div>
                 )}
               </div>
-            ))}
+            )}
           </div>
+        </div>
+      )}
 
-          {/* Additional reasons */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>أسباب إضافية</Label>
-              <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => setAdditionalReasons((p) => [...p, ""])}>
-                <Plus className="h-3 w-3" /> إضافة سبب
-              </Button>
-            </div>
-            {additionalReasons.map((r, i) => (
-              <div key={i} className="flex gap-2">
-                <Input
-                  value={r}
-                  onChange={(e) => setAdditionalReasons((prev) => prev.map((x, idx) => idx === i ? e.target.value : x))}
-                  placeholder={`السبب ${i + 1}`}
-                  className="text-right"
-                />
-                <button type="button" onClick={() => setAdditionalReasons((p) => p.filter((_, idx) => idx !== i))}>
-                  <Trash2 className="h-4 w-4 text-red-400" />
+      {/* No resolution found */}
+      {!previewLoading && !resolution && isTimeBased && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
+          <AlertTriangle className="h-4 w-4 inline ml-1" />
+          لم يتم العثور على مادة مطابقة — تأكد من بيانات الواقعة
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Step 4: Documentation ──────────────────────────────────────────────────
+
+function StepDocumentation({
+  witnesses,
+  setWitnesses,
+  reasons,
+  setReasons,
+  relatedParties,
+  setRelatedParties,
+  attachments,
+  setAttachments,
+  employees,
+}: {
+  witnesses: WitnessEntry[];
+  setWitnesses: (w: WitnessEntry[]) => void;
+  reasons: string[];
+  setReasons: (r: string[]) => void;
+  relatedParties: RelatedPartyEntry[];
+  setRelatedParties: (p: RelatedPartyEntry[]) => void;
+  attachments: Attachment[];
+  setAttachments: (a: Attachment[]) => void;
+  employees: any[];
+}) {
+  const empOptions: AutocompleteOption[] = useMemo(
+    () =>
+      employees.map((emp: any) => ({
+        value: String(emp.assignmentId || emp.id),
+        label: emp.name || "—",
+        subtitle: emp.jobTitle || "",
+      })),
+    [employees],
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Witnesses */}
+      <div>
+        <label className="text-sm font-medium text-gray-700 mb-1 block">
+          الشهود
+        </label>
+        <p className="text-xs text-gray-500 mb-3">
+          أضف شهوداً على الواقعة — موظفين أو من خارج المنشأة
+        </p>
+        <div className="space-y-3">
+          {witnesses.map((w, i) => (
+            <div
+              key={i}
+              className="p-3 rounded-lg border border-gray-200 bg-gray-50/50 animate-in fade-in duration-150"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1 text-xs">
+                    <input
+                      type="radio"
+                      name={`witness-type-${i}`}
+                      checked={w.type === "employee"}
+                      onChange={() => {
+                        const next = [...witnesses];
+                        next[i] = { type: "employee" };
+                        setWitnesses(next);
+                      }}
+                      className="h-3 w-3"
+                    />
+                    موظف
+                  </label>
+                  <label className="flex items-center gap-1 text-xs">
+                    <input
+                      type="radio"
+                      name={`witness-type-${i}`}
+                      checked={w.type === "external"}
+                      onChange={() => {
+                        const next = [...witnesses];
+                        next[i] = { type: "external" };
+                        setWitnesses(next);
+                      }}
+                      className="h-3 w-3"
+                    />
+                    خارجي
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setWitnesses(witnesses.filter((_, j) => j !== i))
+                  }
+                  className="text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-            ))}
-          </div>
-
-          {/* File attachments */}
-          <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات المخالفة (صور، مستندات)" />
-        </AccordionPanel>
+              {w.type === "employee" ? (
+                <Autocomplete
+                  options={empOptions}
+                  value={w.employeeId || ""}
+                  onChange={(val, opt) => {
+                    const next = [...witnesses];
+                    next[i] = {
+                      ...next[i],
+                      employeeId: String(val),
+                      employeeName: opt?.label,
+                    };
+                    setWitnesses(next);
+                  }}
+                  placeholder="ابحث عن الموظف..."
+                />
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={w.name || ""}
+                    onChange={(e) => {
+                      const next = [...witnesses];
+                      next[i] = { ...next[i], name: e.target.value };
+                      setWitnesses(next);
+                    }}
+                    placeholder="الاسم"
+                    className="text-sm border rounded-md px-3 py-2"
+                  />
+                  <input
+                    type="text"
+                    value={w.role || ""}
+                    onChange={(e) => {
+                      const next = [...witnesses];
+                      next[i] = { ...next[i], role: e.target.value };
+                      setWitnesses(next);
+                    }}
+                    placeholder="الصفة"
+                    className="text-sm border rounded-md px-3 py-2"
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-2"
+          onClick={() =>
+            setWitnesses([...witnesses, { type: "employee" }])
+          }
+        >
+          <Plus className="h-3 w-3 ml-1" />
+          أضف شاهداً
+        </Button>
       </div>
 
-      {/* ── Sticky bottom bar ── */}
-      <div className="fixed bottom-0 right-0 left-0 z-50 bg-white border-t shadow-lg px-6 py-3 flex justify-between items-center" dir="rtl">
-        <Button type="button" variant="outline" onClick={() => setLocation("/hr/violations")}>إلغاء</Button>
-        <div className="flex gap-2">
+      {/* Additional reasons */}
+      <div>
+        <label className="text-sm font-medium text-gray-700 mb-1 block">
+          أسباب إضافية
+        </label>
+        <p className="text-xs text-gray-500 mb-3">
+          أضف أسباباً توضيحية إن وجدت
+        </p>
+        <div className="space-y-2">
+          {reasons.map((r, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={r}
+                onChange={(e) => {
+                  const next = [...reasons];
+                  next[i] = e.target.value;
+                  setReasons(next);
+                }}
+                placeholder={`سبب ${i + 1}`}
+                className="flex-1 text-sm border rounded-md px-3 py-2"
+              />
+              <button
+                type="button"
+                onClick={() => setReasons(reasons.filter((_, j) => j !== i))}
+                className="text-gray-400 hover:text-red-500"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-2"
+          onClick={() => setReasons([...reasons, ""])}
+        >
+          <Plus className="h-3 w-3 ml-1" />
+          أضف سبباً
+        </Button>
+      </div>
+
+      {/* Related parties */}
+      <div>
+        <label className="text-sm font-medium text-gray-700 mb-1 block">
+          أطراف مرتبطة
+        </label>
+        <p className="text-xs text-gray-500 mb-3">
+          أشخاص لهم علاقة بالواقعة (غير الشهود)
+        </p>
+        <div className="space-y-3">
+          {relatedParties.map((p, i) => (
+            <div
+              key={i}
+              className="p-3 rounded-lg border border-gray-200 bg-gray-50/50"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1 text-xs">
+                    <input
+                      type="radio"
+                      name={`party-type-${i}`}
+                      checked={p.type === "employee"}
+                      onChange={() => {
+                        const next = [...relatedParties];
+                        next[i] = { type: "employee" };
+                        setRelatedParties(next);
+                      }}
+                      className="h-3 w-3"
+                    />
+                    موظف
+                  </label>
+                  <label className="flex items-center gap-1 text-xs">
+                    <input
+                      type="radio"
+                      name={`party-type-${i}`}
+                      checked={p.type === "external"}
+                      onChange={() => {
+                        const next = [...relatedParties];
+                        next[i] = { type: "external" };
+                        setRelatedParties(next);
+                      }}
+                      className="h-3 w-3"
+                    />
+                    خارجي
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setRelatedParties(
+                      relatedParties.filter((_, j) => j !== i),
+                    )
+                  }
+                  className="text-gray-400 hover:text-red-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              {p.type === "employee" ? (
+                <Autocomplete
+                  options={empOptions}
+                  value={p.employeeId || ""}
+                  onChange={(val, opt) => {
+                    const next = [...relatedParties];
+                    next[i] = {
+                      ...next[i],
+                      employeeId: String(val),
+                      employeeName: opt?.label,
+                    };
+                    setRelatedParties(next);
+                  }}
+                  placeholder="ابحث عن الموظف..."
+                />
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={p.name || ""}
+                    onChange={(e) => {
+                      const next = [...relatedParties];
+                      next[i] = { ...next[i], name: e.target.value };
+                      setRelatedParties(next);
+                    }}
+                    placeholder="الاسم"
+                    className="text-sm border rounded-md px-3 py-2"
+                  />
+                  <input
+                    type="text"
+                    value={p.role || ""}
+                    onChange={(e) => {
+                      const next = [...relatedParties];
+                      next[i] = { ...next[i], role: e.target.value };
+                      setRelatedParties(next);
+                    }}
+                    placeholder="الدور"
+                    className="text-sm border rounded-md px-3 py-2"
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-2"
+          onClick={() =>
+            setRelatedParties([...relatedParties, { type: "employee" }])
+          }
+        >
+          <Plus className="h-3 w-3 ml-1" />
+          أضف طرفاً
+        </Button>
+      </div>
+
+      {/* Attachments */}
+      <FileDropZone
+        files={attachments}
+        onFilesChange={setAttachments}
+        label="مرفقات المخالفة (صور، مستندات، تسجيلات)"
+      />
+    </div>
+  );
+}
+
+// ─── Main Page Component ────────────────────────────────────────────────────
+
+export default function ViolationsCreate() {
+  const [, setLocation] = useLocation();
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [witnesses, setWitnesses] = useState<WitnessEntry[]>([]);
+  const [reasons, setReasons] = useState<string[]>([]);
+  const [relatedParties, setRelatedParties] = useState<RelatedPartyEntry[]>([]);
+  const [openStep, setOpenStep] = useState(0);
+
+  // Employee data
+  const { data: empData } = useApiQuery<{ data: any[] }>(
+    ["employees-list"],
+    "/employees",
+  );
+  const employees = empData?.data || [];
+
+  // Draft defaults
+  const draftDefaults = loadDraftDefaults();
+  const clearDraft = useCallback(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+  }, []);
+
+  // Memo creation mutation
+  const createMemo = useApiMutation(
+    "/hr/discipline/memos",
+    "POST",
+    [["discipline-memos"], ["violations"]],
+    { successMessage: "تم تسجيل المخالفة بنجاح" },
+  );
+
+  return (
+    <CreatePageLayout title="تسجيل مخالفة" backPath="/hr/violations">
+      <FormShell
+        schema={violationSchema}
+        defaultValues={draftDefaults}
+        submitLabel="تسجيل المخالفة"
+        submitVariant="destructive"
+        secondaryActions={
           <Button
             type="button"
             variant="outline"
-            disabled={!step1Done || createMut.isPending}
-            onClick={() => handleSubmit(true)}
+            onClick={() => setLocation("/hr/violations")}
           >
-            حفظ كمسودة
+            إلغاء
           </Button>
-          <Button
-            type="button"
-            disabled={!canSubmit || createMut.isPending || (!!overrideAmount && !overrideReason)}
-            onClick={() => handleSubmit(false)}
-            className="bg-red-600 hover:bg-red-700 text-white"
-          >
-            {createMut.isPending ? "جاري التسجيل…" : "تسجيل المخالفة"}
-          </Button>
-        </div>
-      </div>
+        }
+        onSubmit={async (values) => {
+          await createMemo.mutateAsync({
+            assignmentId: Number(values.assignmentId),
+            incidentType: values.incidentType,
+            incidentDate: values.incidentDate,
+            incidentDurationMinutes: values.durationMinutes || undefined,
+            absenceDays: values.absenceDays || undefined,
+            incidentDescription: values.description,
+            regulationId: values.regulationId || undefined,
+            disruptsOthers: values.disruptsOthers || false,
+            ...(witnesses.length > 0 ? { witnesses } : {}),
+            ...(relatedParties.length > 0 ? { relatedParties } : {}),
+            ...(reasons.filter(Boolean).length > 0
+              ? { reasons: reasons.filter(Boolean) }
+              : {}),
+            ...(attachments.length > 0 ? { attachments } : {}),
+            ...(values.manualOverrideAmount
+              ? {
+                  manualOverrideAmount: values.manualOverrideAmount,
+                  manualOverrideReason: values.manualOverrideReason,
+                }
+              : {}),
+          });
+          clearDraft();
+          setLocation("/hr/violations");
+        }}
+      >
+        <DraftManager defaults={DEFAULTS} />
+        <WizardFormContent
+          employees={employees}
+          openStep={openStep}
+          setOpenStep={setOpenStep}
+          attachments={attachments}
+          setAttachments={setAttachments}
+          witnesses={witnesses}
+          setWitnesses={setWitnesses}
+          reasons={reasons}
+          setReasons={setReasons}
+          relatedParties={relatedParties}
+          setRelatedParties={setRelatedParties}
+        />
+      </FormShell>
     </CreatePageLayout>
+  );
+}
+
+// Inner component that has access to FormProvider context
+function WizardFormContent({
+  employees,
+  openStep,
+  setOpenStep,
+  attachments,
+  setAttachments,
+  witnesses,
+  setWitnesses,
+  reasons,
+  setReasons,
+  relatedParties,
+  setRelatedParties,
+}: {
+  employees: any[];
+  openStep: number;
+  setOpenStep: (s: number) => void;
+  attachments: Attachment[];
+  setAttachments: (a: Attachment[]) => void;
+  witnesses: WitnessEntry[];
+  setWitnesses: (w: WitnessEntry[]) => void;
+  reasons: string[];
+  setReasons: (r: string[]) => void;
+  relatedParties: RelatedPartyEntry[];
+  setRelatedParties: (p: RelatedPartyEntry[]) => void;
+}) {
+  const { watch } = useFormContext<ViolationForm>();
+  const [
+    incidentDate, incidentType, assignmentId,
+    durationMinutes, absenceDays, disruptsOthers, regulationId,
+  ] = watch([
+    "incidentDate", "incidentType", "assignmentId",
+    "durationMinutes", "absenceDays", "disruptsOthers", "regulationId",
+  ]);
+
+  // Step completion logic
+  const step1Complete = !!incidentDate && !!incidentType;
+  const step2Complete = step1Complete && !!assignmentId;
+  const isTimeBased = TIME_BASED_TYPES.includes(incidentType as IncidentType);
+
+  // Penalty preview query — fires when step 1+2 are complete
+  // Re-triggers on any relevant field change (debounced 500ms)
+  const previewBody = useMemo(() => {
+    if (!step2Complete) return null;
+    return {
+      assignmentId: Number(assignmentId),
+      incidentType,
+      incidentDate,
+      ...(durationMinutes ? { durationMinutes: Number(durationMinutes) } : {}),
+      ...(absenceDays ? { absenceDays: Number(absenceDays) } : {}),
+      ...(disruptsOthers ? { disruptsOthers: true } : {}),
+      ...(regulationId ? { regulationId: Number(regulationId) } : {}),
+    };
+  }, [step2Complete, assignmentId, incidentType, incidentDate, durationMinutes, absenceDays, disruptsOthers, regulationId]);
+
+  // Use a debounced mutation for penalty preview
+  const [preview, setPreview] = useState<PenaltyPreviewResponse | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    if (!previewBody) {
+      setPreview(null);
+      return;
+    }
+    setPreviewLoading(true);
+    clearTimeout(previewTimer.current);
+    previewTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/hr/discipline/penalty-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(previewBody),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPreview(data);
+        }
+      } catch {
+        // silent
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(previewTimer.current);
+  }, [previewBody]);
+
+  // Prior memos for the selected employee
+  const { data: memosData, isLoading: memosLoading } = useApiQuery<{
+    data: any[];
+  }>(
+    ["prior-memos", assignmentId],
+    assignmentId
+      ? `/hr/discipline/memos?assignmentId=${assignmentId}&status=approved`
+      : null,
+    { enabled: !!assignmentId },
+  );
+  const priorMemos = memosData?.data || null;
+
+  // Step statuses
+  const step3Complete = step2Complete && (!!preview?.resolution || !isTimeBased);
+  const statuses: StepStatus[] = [
+    step1Complete ? (openStep === 0 ? "active" : "completed") : "active",
+    !step1Complete
+      ? "locked"
+      : step2Complete
+        ? openStep === 1
+          ? "active"
+          : "completed"
+        : openStep === 1
+          ? "active"
+          : "locked",
+    !step2Complete ? "locked" : openStep === 2 ? "active" : step3Complete ? "completed" : "active",
+    "active", // docs always accessible
+  ];
+
+  // Auto-advance to next step
+  const prevStep1 = useRef(step1Complete);
+  const prevStep2 = useRef(step2Complete);
+
+  useEffect(() => {
+    if (step1Complete && !prevStep1.current) {
+      setOpenStep(1);
+    }
+    prevStep1.current = step1Complete;
+  }, [step1Complete, setOpenStep]);
+
+  useEffect(() => {
+    if (step2Complete && !prevStep2.current) {
+      setOpenStep(2);
+    }
+    prevStep2.current = step2Complete;
+  }, [step2Complete, setOpenStep]);
+
+  // Build step 1 summary
+  const incidentLabel =
+    INCIDENT_TYPES.find((t) => t.value === incidentType)?.label || "";
+  const step1Summary = step1Complete
+    ? `${incidentLabel} — ${incidentDate}`
+    : undefined;
+
+  // Build step 2 summary
+  const selectedEmp = employees.find(
+    (e: any) => String(e.assignmentId || e.id) === assignmentId,
+  );
+  const step2Summary = selectedEmp ? selectedEmp.name : undefined;
+
+  return (
+    <div className="space-y-4">
+      <StepIndicator
+        steps={STEP_LABELS}
+        statuses={statuses}
+        onStepClick={(i) => setOpenStep(i)}
+      />
+
+      {/* Step 1: Incident */}
+      <WizardSection
+        title="الواقعة"
+        summary={step1Summary}
+        status={statuses[0]}
+        isOpen={openStep === 0}
+        onToggle={() => setOpenStep(openStep === 0 ? -1 : 0)}
+      >
+        <StepIncident />
+      </WizardSection>
+
+      {/* Step 2: Employee */}
+      <WizardSection
+        title="الموظف"
+        summary={step2Summary}
+        status={statuses[1]}
+        isOpen={openStep === 1}
+        onToggle={() => setOpenStep(openStep === 1 ? -1 : 1)}
+      >
+        <StepEmployee
+          employees={employees}
+          priorMemos={priorMemos}
+          priorMemosLoading={memosLoading}
+        />
+      </WizardSection>
+
+      {/* Step 3: Regulation & Penalty */}
+      <WizardSection
+        title="اللائحة والجزاء"
+        summary={
+          preview?.resolution
+            ? preview.resolution.penaltyLabel
+            : undefined
+        }
+        status={statuses[2]}
+        isOpen={openStep === 2}
+        onToggle={() => setOpenStep(openStep === 2 ? -1 : 2)}
+      >
+        <StepPenalty
+          preview={preview}
+          previewLoading={previewLoading}
+          priorMemos={priorMemos}
+          employees={employees}
+        />
+      </WizardSection>
+
+      {/* Step 4: Documentation */}
+      <WizardSection
+        title="التوثيق"
+        status={statuses[3]}
+        isOpen={openStep === 3}
+        onToggle={() => setOpenStep(openStep === 3 ? -1 : 3)}
+      >
+        <StepDocumentation
+          witnesses={witnesses}
+          setWitnesses={setWitnesses}
+          reasons={reasons}
+          setReasons={setReasons}
+          relatedParties={relatedParties}
+          setRelatedParties={setRelatedParties}
+          attachments={attachments}
+          setAttachments={setAttachments}
+          employees={employees}
+        />
+      </WizardSection>
+
+      {/* Submit hint */}
+      <p className="text-xs text-gray-500 text-center">
+        سيتم إنشاء محضر تحقيق تلقائياً بعد التسجيل
+      </p>
+    </div>
   );
 }
