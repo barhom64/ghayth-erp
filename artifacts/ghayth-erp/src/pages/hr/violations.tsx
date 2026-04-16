@@ -8,7 +8,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   Plus, AlertTriangle, Scale, DollarSign, Shield,
-  Clock, Ban, Gavel, ScrollText, MapPin, PenLine, DoorOpen, FileText,
+  Clock, Ban, Gavel, ScrollText, MapPin, PenLine, DoorOpen, FileText, Radar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -207,12 +207,20 @@ export default function ViolationsPage() {
       subtitle="محاضر الاستفسار والإجراءات التأديبية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/violations/create">
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            تسجيل مخالفة
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/hr/violations/auto-detection">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Radar className="h-4 w-4" />
+              الرصد التلقائي
+            </Button>
+          </Link>
+          <Link href="/hr/violations/create">
+            <Button size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              تسجيل مخالفة
+            </Button>
+          </Link>
+        </div>
       }
     >
       {/* KPI cards */}

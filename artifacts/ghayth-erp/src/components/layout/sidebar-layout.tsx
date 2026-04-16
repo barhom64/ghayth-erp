@@ -15,7 +15,7 @@ import {
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
-  Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen,
+  Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -661,9 +661,15 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     ],
     "/hr/violations": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
+      { label: "الرصد التلقائي", icon: Radar, link: "/hr/violations/auto-detection" },
       { label: "إدارة المخالفات", icon: ClipboardList, link: "/hr/violations/management" },
       { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
       { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
+    ],
+    "/hr/violations/auto-detection": [
+      { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
+      { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
     ],
     "/hr/violations/management": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
