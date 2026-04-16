@@ -8,6 +8,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -167,7 +168,7 @@ export default function OfficialLettersPage() {
                 </Select>
               </div>
               <div><Label>الموضوع</Label><Input className="mt-1" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></div>
-              <div className="md:col-span-2"><Label>المحتوى</Label><textarea className="w-full border rounded-md p-2 mt-1 h-24" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
+              <div className="md:col-span-2"><Label>المحتوى</Label><Textarea className="mt-1 h-24" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
               <div><Button onClick={handleSubmit} disabled={!form.subject || createMut.isPending}>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button></div>
             </div>
           </CardContent>
