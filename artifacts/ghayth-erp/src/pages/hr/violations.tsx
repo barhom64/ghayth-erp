@@ -4,124 +4,218 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-// Phase A — HR violations on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Plus, AlertTriangle, Scale, DollarSign, Shield } from "lucide-react";
+import {
+  Plus, AlertTriangle, Scale, DollarSign, Shield,
+  Clock, Ban, Gavel, ScrollText, MapPin, PenLine, DoorOpen, FileText,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
-// Status options for filter + edit form. Visual rendering goes through
-// the canonical PageStatusBadge (shared domain).
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "active",    label: "نشط"         },
-  { value: "open",      label: "مفتوح"       },
-  { value: "resolved",  label: "تم الحل"     },
-  { value: "appealed",  label: "تم الاستئناف" },
-  { value: "cancelled", label: "ملغي"        },
-  { value: "escalated", label: "تصعيد"       },
+  { value: "draft",                label: "مسودة"            },
+  { value: "pending_employee",     label: "بانتظار الموظف"   },
+  { value: "pending_manager",      label: "بانتظار المدير"   },
+  { value: "pending_hr_decision",  label: "بانتظار HR"       },
+  { value: "approved",             label: "مُنفَّذ"          },
+  { value: "rejected",             label: "مرفوض"            },
+  { value: "appealed",             label: "استئناف"           },
+  { value: "cancelled",            label: "ملغي"             },
 ];
 
-// Severity is a separate domain from status — not in STATUS_MAP. Kept
-// here as a labels-only list; severity chip uses a custom <Badge>
-// below with a tone mapped to severity level.
-const SEVERITY_OPTIONS: ReadonlyArray<{ value: string; label: string; tone: string }> = [
-  { value: "low",      label: "منخفض", tone: "bg-emerald-100 text-emerald-700" },
-  { value: "medium",   label: "متوسط", tone: "bg-amber-100 text-amber-700"     },
-  { value: "high",     label: "مرتفع", tone: "bg-orange-100 text-orange-700"   },
-  { value: "critical", label: "حرج",   tone: "bg-red-100 text-red-700"         },
-];
+const INCIDENT_LABELS: Record<string, { label: string; Icon: typeof Clock; color: string }> = {
+  late:             { label: "تأخر",         Icon: Clock,      color: "text-amber-600 bg-amber-50"   },
+  early_leave:      { label: "مغادرة مبكرة", Icon: DoorOpen,   color: "text-orange-600 bg-orange-50" },
+  absence:          { label: "غياب",         Icon: Ban,        color: "text-red-600 bg-red-50"       },
+  behavior:         { label: "سلوك",         Icon: Gavel,      color: "text-purple-600 bg-purple-50" },
+  organization:     { label: "تنظيم",        Icon: ScrollText, color: "text-blue-600 bg-blue-50"     },
+  gps_out_of_range: { label: "خروج GPS",     Icon: MapPin,     color: "text-emerald-600 bg-emerald-50" },
+  custom:           { label: "مخصّص",        Icon: PenLine,    color: "text-slate-600 bg-slate-50"   },
+};
 
 export default function ViolationsPage() {
   const [filters, setFilters] = useFilters();
-  const { data, refetch } = useApiQuery<any>(["violations"], "/hr/violations");
-  const { data: stats } = useApiQuery<any>(["violations-stats"], "/hr/violations-stats");
+  const { data } = useApiQuery<{ data: any[]; total: number }>(
+    ["discipline-memos"],
+    "/hr/discipline/memos",
+  );
   const items = data?.data || [];
 
-  const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
-
-  const kpis = [
-    { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-    { label: "مخالفات نشطة", value: stats?.active ?? items.filter((v: any) => v.status === "active").length, icon: Scale, color: "text-yellow-600 bg-yellow-50" },
-    { label: "إجمالي الخصومات", value: formatCurrency(stats?.totalDeductions ?? items.reduce((s: number, v: any) => s + Number(v.deduction || 0), 0)), icon: DollarSign, color: "text-orange-600 bg-orange-50" },
-    { label: "تم الحل", value: items.filter((v: any) => v.status === "resolved" || v.status === "cancelled").length, icon: Shield, color: "text-green-600 bg-green-50" },
-  ];
-
-  const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
-    endpoint: "/hr/violations",
-    queryKeys: [["violations"], ["violations-stats"]],
-    onSuccess: () => refetch(),
+  const filtered = applyFilters(items, filters, {
+    searchFields: ["employeeName", "memoNumber"],
+    statusField: "status",
+    dateField: "createdAt",
   });
 
-  const editFields = [
-    { key: "type", label: "نوع المخالفة" },
-    { key: "description", label: "الوصف" },
-    { key: "severity", label: "الشدة", type: "select" as const, options: SEVERITY_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
-    { key: "deduction", label: "الخصم", type: "number" as const },
-    { key: "status", label: "الحالة", type: "select" as const, options: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
+  // KPIs
+  const totalDeductions = items.reduce(
+    (s: number, v: any) => s + Number(v.appliedDeductionAmount || 0) + Number(v.appliedExtraDeduction || 0),
+    0,
+  );
+  const approvedCount = items.filter((v: any) => v.status === "approved").length;
+  const pendingCount = items.filter((v: any) =>
+    v.status?.startsWith("pending") || v.status === "draft",
+  ).length;
+  const terminationCount = items.filter((v: any) => v.terminationDecided).length;
+
+  const kpis = [
+    { label: "إجمالي المحاضر", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+    { label: "بانتظار الإجراء", value: pendingCount, icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
+    { label: "إجمالي الخصومات", value: formatCurrency(totalDeductions), icon: DollarSign, color: "text-red-600 bg-red-50" },
+    { label: "منفّذ", value: approvedCount, icon: Shield, color: "text-green-600 bg-green-50" },
   ];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "memoNumber",
+      header: "رقم المحضر",
+      sortable: true,
+      render: (v) => (
+        <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+          {v.memoNumber || `#${v.id}`}
+        </span>
+      ),
+    },
     {
       key: "employeeName",
       header: "الموظف",
       sortable: true,
       render: (v) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold">
+          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold shrink-0">
             {(v.employeeName || "؟").charAt(0)}
           </div>
-          <span className="font-medium">{v.employeeName}</span>
+          <div>
+            <span className="font-medium text-sm block">{v.employeeName}</span>
+            {v.empNumber && (
+              <span className="text-xs text-gray-400">#{v.empNumber}</span>
+            )}
+          </div>
         </div>
       ),
     },
-    { key: "type", header: "نوع المخالفة", sortable: true, render: (v) => v.type || "-" },
-    { key: "description", header: "الوصف", sortable: true, className: "text-gray-500 max-w-48 truncate", render: (v) => v.description || "-" },
     {
-      key: "severity",
-      header: "الشدة",
+      key: "incidentType",
+      header: "نوع الواقعة",
       sortable: true,
       render: (v) => {
-        const sev = SEVERITY_OPTIONS.find((o) => o.value === v.severity);
-        return <Badge className={sev?.tone || ""}>{sev?.label || v.severity || "-"}</Badge>;
+        const inc = INCIDENT_LABELS[v.incidentType];
+        if (!inc) return <span className="text-gray-400">{v.incidentType || "-"}</span>;
+        return (
+          <div className="flex items-center gap-1.5">
+            <div className={cn("w-6 h-6 rounded flex items-center justify-center", inc.color.split(" ")[1])}>
+              <inc.Icon className={cn("h-3.5 w-3.5", inc.color.split(" ")[0])} />
+            </div>
+            <span className="text-sm">{inc.label}</span>
+          </div>
+        );
       },
     },
     {
-      key: "deduction",
+      key: "incidentDate",
+      header: "تاريخ الواقعة",
+      sortable: true,
+      render: (v) => (
+        <span className="text-sm text-gray-600">
+          {v.incidentDate
+            ? new Date(v.incidentDate).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
+            : "-"}
+        </span>
+      ),
+    },
+    {
+      key: "occurrenceCount",
+      header: "التكرار",
+      sortable: true,
+      render: (v) => {
+        const count = v.occurrenceCount || 0;
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-xs",
+              count >= 4 ? "border-red-300 text-red-700 bg-red-50" :
+              count >= 3 ? "border-orange-300 text-orange-700 bg-orange-50" :
+              count >= 2 ? "border-amber-300 text-amber-700 bg-amber-50" :
+              "border-gray-200",
+            )}
+          >
+            المرة {count}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "appliedPenaltyLabel",
+      header: "الجزاء",
+      sortable: true,
+      render: (v) => {
+        if (v.terminationDecided) {
+          return (
+            <Badge className="bg-red-600 text-white text-xs">
+              فصل
+            </Badge>
+          );
+        }
+        return (
+          <span className="text-sm">
+            {v.appliedPenaltyLabel || "-"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "appliedDeductionAmount",
       header: "الخصم",
       sortable: true,
-      className: "text-red-600 font-medium",
-      render: (v) => formatCurrency(Number(v.deduction || 0)),
+      render: (v) => {
+        const total = Number(v.appliedDeductionAmount || 0) + Number(v.appliedExtraDeduction || 0);
+        if (!total) return <span className="text-gray-400">-</span>;
+        return (
+          <span className="text-sm font-semibold text-red-600">
+            {formatCurrency(total)}
+          </span>
+        );
+      },
     },
-    { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
     {
-      key: "actions",
-      header: "إجراءات",
-      render: (v) => (
-        <div onClick={(e) => e.stopPropagation()}>
-          <RowActions
-            onEdit={() => startEdit(v.id, { type: v.type || "", description: v.description || "", severity: v.severity || "medium", deduction: v.deduction || 0, status: v.status || "active" })}
-            onDelete={() => startDelete(v.id)}
-          />
-        </div>
-      ),
+      key: "regTitle",
+      header: "المادة",
+      sortable: true,
+      render: (v) => {
+        if (!v.regArticle) return <span className="text-gray-400">-</span>;
+        return (
+          <span className="text-xs text-gray-600">
+            مادة {v.regArticle}
+          </span>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (v) => <PageStatusBadge status={v.status} />,
     },
   ];
 
   return (
     <PageShell
-      title="المخالفات"
-      subtitle="إدارة مخالفات الموظفين والإجراءات التأديبية"
+      title="المخالفات والجزاءات"
+      subtitle="محاضر الاستفسار والإجراءات التأديبية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <Link href="/hr/violations/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة مخالفة</Button>
+          <Button size="sm" className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            تسجيل مخالفة
+          </Button>
         </Link>
       }
     >
-
+      {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -138,9 +232,20 @@ export default function ViolationsPage() {
         ))}
       </div>
 
+      {/* Termination alert */}
+      {terminationCount > 0 && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>
+            يوجد <strong>{terminationCount}</strong> محضر يتضمن قرار فصل — يرجى المراجعة
+          </span>
+        </div>
+      )}
+
+      {/* Filters */}
       <AdvancedFilters
         config={{
-          searchPlaceholder: "بحث بالاسم...",
+          searchPlaceholder: "بحث بالاسم أو رقم المحضر...",
           statuses: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
           showDateRange: true,
         }}
@@ -149,39 +254,13 @@ export default function ViolationsPage() {
         resultCount={filtered.length}
       />
 
+      {/* Table */}
       <DataTable
         columns={columns}
         data={filtered}
         noToolbar
-        emptyMessage="لا توجد مخالفات"
+        emptyMessage="لا توجد محاضر مخالفات — سجّل مخالفة جديدة للبدء"
         pageSize={20}
-        renderRowExtras={(v) => {
-          if (editingId === v.id) {
-            return (
-              <InlineEditForm
-                fields={editFields}
-                form={editForm}
-                setForm={setEditForm}
-                onSave={() => handleSave(v.id, editForm)}
-                onCancel={cancelEdit}
-                isPending={isPending}
-              />
-            );
-          }
-          if (deletingId === v.id) {
-            return (
-              <InlineDeleteConfirm
-                onConfirm={() => handleDelete(v.id)}
-                onCancel={cancelDelete}
-                isPending={isPending}
-                itemName={v.employeeName}
-                entityType="violation"
-                entityId={v.id}
-              />
-            );
-          }
-          return null;
-        }}
       />
     </PageShell>
   );
