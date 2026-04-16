@@ -1450,7 +1450,7 @@ function WizardFormContent({
   relatedParties: RelatedPartyEntry[];
   setRelatedParties: (p: RelatedPartyEntry[]) => void;
 }) {
-  const { watch } = useFormContext<ViolationForm>();
+  const { watch, formState: { errors, submitCount } } = useFormContext<ViolationForm>();
   const [
     incidentDate, incidentType, assignmentId,
     durationMinutes, absenceDays, disruptsOthers, regulationId,
@@ -1458,6 +1458,29 @@ function WizardFormContent({
     "incidentDate", "incidentType", "assignmentId",
     "durationMinutes", "absenceDays", "disruptsOthers", "regulationId",
   ]);
+
+  // ─── Auto-open first step with errors after failed submit ─────────────
+  const STEP_FIELDS: Record<number, (keyof ViolationForm)[]> = {
+    0: ["incidentDate", "incidentType", "description", "durationMinutes", "absenceDays"],
+    1: ["assignmentId"],
+    2: ["regulationId", "manualOverrideAmount", "manualOverrideReason"],
+  };
+
+  const prevSubmitCount = useRef(submitCount);
+  useEffect(() => {
+    if (submitCount > prevSubmitCount.current) {
+      const errorKeys = Object.keys(errors) as (keyof ViolationForm)[];
+      if (errorKeys.length > 0) {
+        for (const [stepIdx, fields] of Object.entries(STEP_FIELDS)) {
+          if (fields.some((f) => errorKeys.includes(f))) {
+            setOpenStep(Number(stepIdx));
+            break;
+          }
+        }
+      }
+    }
+    prevSubmitCount.current = submitCount;
+  }, [submitCount, errors, setOpenStep]);
 
   // Step completion logic
   const step1Complete = !!incidentDate && !!incidentType;
@@ -1645,6 +1668,21 @@ function WizardFormContent({
           employees={employees}
         />
       </WizardSection>
+
+      {/* Validation error banner */}
+      {submitCount > 0 && Object.keys(errors).length > 0 && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+          <div className="text-sm text-red-700">
+            <p className="font-medium">يرجى تصحيح الأخطاء التالية:</p>
+            <ul className="mt-1 list-disc list-inside text-xs space-y-0.5">
+              {Object.values(errors).map((err, i) => (
+                <li key={i}>{(err?.message as string) || "حقل مطلوب"}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* Submit hint */}
       <p className="text-xs text-gray-500 text-center">
