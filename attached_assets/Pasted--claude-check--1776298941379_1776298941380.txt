@@ -1,0 +1,62 @@
+ملخص الوضع الحالي لبدء محادثة جديدة:
+
+---
+
+## 📌 أين نحن الآن
+
+**الفرع النشط:** `claude/check-system-status-DIHUm` (up to date مع origin، working tree clean)
+
+**الوحدة:** HR — النموذج المرجعي الموحّد ✅ مكتمل static-wise
+
+## ✅ ما تم إنجازه (4 Sprints)
+
+كل HR موحّد على الأعمدة الأربعة:
+1. **PageShell** — 40/43 صفحة (الثلاثة الباقية stubs/re-exports)
+2. **PageStatusBadge + STATUS_MAP** — 100% (memo/leave/attendance/shared)
+3. **Typed Errors** — 100% في الواجهة (`useApiMutation` + `successMessage`) والـ backend (`ValidationError` / `NotFoundError` / `ConflictError` / `ForbiddenError` / `IntegrationError` → `handleRouteError`)
+4. **useApiQuery** — 100% للقراءة
+
+**الحصيلة:**
+- `0` رسالة "حدث خطأ" مرئية للمستخدم في `pages/hr` + `pages/create/hr`
+- `0` legacy `res.status(4xx).json({error})` في ملفات HR routes
+- `pnpm lint:patterns` + `typecheck` (api-server + ghayth-erp) كلها نظيفة
+
+**الكوميتات على الفرع:**
+- `060d9d0` HR-U1/U2 (layout + typed mutations)
+- `b543e82` HR-U3 (status-map unification)
+- `c57f5ab` HR-U4 (typed errors completeness)
+
+**التوثيق:** `docs/HR_REFERENCE_MODEL.md` — وثيقة مرجعية كاملة لشكل الدومين الموحّد لنسخها على باقي الوحدات.
+
+## ⏳ المهمة المعلّقة (التي توقفنا عندها)
+
+إنشاء **`docs/hr-smoke-test-checklist.md`** — checklist اختبار تشغيلي فعلي، يغطي 12 flow على الأقل:
+
+1. إنشاء موظف
+2. تعديل موظف
+3. فتح صفحة موظف موجود
+4. فتح موظف غير موجود
+5. تقديم طلب إجازة
+6. اعتماد/رفض/إلغاء إجازة
+7. تسجيل حضور/انصراف
+8. تسجيل مخالفة
+9. إنشاء مذكرة تأديبية
+10. تصعيد/اعتماد/إغلاق المذكرة
+11. خطاب HR رسمي
+12. تكامل HR ↔ رواتب/خصومات
+
+**في كل سيناريو:** الخطوات · النتيجة المتوقعة · رسائل الخطأ المتوقعة · ما يظهر للمستخدم · ما يعتبر فشلًا.
+
+## 🔜 الخطوة التالية بعد الملف
+
+بدء **جلسة smoke test تشغيلية فعلية** على Replit معك، end-to-end على HR. **لا نتحرك لأي وحدة أخرى** حتى يتأكد أن HR يعمل فعلًا.
+
+## 🧭 قواعد الحوكمة التي اتفقنا عليها
+
+- **فرع واحد فقط:** كل شيء على `claude/check-system-status-DIHUm`. أنت من يدمج على `main` بنفسك.
+- **لا أتحرك لأي وحدة غير HR** حتى تعطي الإذن.
+- **لا PRs جديدة** بدون طلب صريح.
+
+---
+
+**للجلسة الجديدة ابدأ بـ:** "اكتب `docs/hr-smoke-test-checklist.md` الآن كما اتفقنا، ثم ارفعه على `claude/check-system-status-DIHUm`."

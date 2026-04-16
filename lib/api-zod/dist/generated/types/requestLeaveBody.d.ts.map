@@ -1,0 +1,1 @@
+{"version":3,"file":"requestLeaveBody.d.ts","sourceRoot":"","sources":["../../../src/generated/types/requestLeaveBody.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,gBAAgB;IAC/B,WAAW,EAAE,MAAM,CAAC;IACpB,SAAS,EAAE,MAAM,CAAC;IAClB,OAAO,EAAE,MAAM,CAAC;IAChB,MAAM,CAAC,EAAE,MAAM,CAAC;CACjB"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"listClientsParams.d.ts","sourceRoot":"","sources":["../../../src/generated/types/listClientsParams.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,MAAM,iBAAiB,GAAG;IAC9B,MAAM,CAAC,EAAE,MAAM,CAAC;IAChB,cAAc,CAAC,EAAE,MAAM,CAAC;IACxB,IAAI,CAAC,EAAE,MAAM,CAAC;CACf,CAAC"}

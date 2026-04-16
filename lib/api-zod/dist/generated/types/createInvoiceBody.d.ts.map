@@ -1,0 +1,1 @@
+{"version":3,"file":"createInvoiceBody.d.ts","sourceRoot":"","sources":["../../../src/generated/types/createInvoiceBody.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,0BAA0B,EAAE,MAAM,8BAA8B,CAAC;AAE/E,MAAM,WAAW,iBAAiB;IAChC,QAAQ,EAAE,MAAM,CAAC;IACjB,WAAW,CAAC,EAAE,MAAM,CAAC;IACrB,KAAK,EAAE,0BAA0B,EAAE,CAAC;IACpC,SAAS,CAAC,EAAE,MAAM,CAAC;CACpB"}

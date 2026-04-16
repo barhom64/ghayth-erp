@@ -1,0 +1,1 @@
+{"version":3,"file":"createInvoiceResponse.d.ts","sourceRoot":"","sources":["../../../src/generated/types/createInvoiceResponse.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,qBAAqB;IACpC,SAAS,EAAE,MAAM,CAAC;IAClB,GAAG,EAAE,MAAM,CAAC;IACZ,KAAK,EAAE,MAAM,CAAC;IACd,OAAO,CAAC,EAAE,MAAM,CAAC;CAClB"}
