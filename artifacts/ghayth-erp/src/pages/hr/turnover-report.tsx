@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TrendingDown, Users, DollarSign, BarChart3, PieChart } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart as RechartsPie, Pie } from "recharts";
+import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
@@ -152,31 +155,63 @@ export default function TurnoverReportPage() {
       )}
 
       {data?.recentTerminations?.length > 0 && (
-        <Card>
+        <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-sm">آخر المغادرين</CardTitle></CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-start">الموظف</th>
-                    <th className="px-3 py-2 text-start">القسم</th>
-                    <th className="px-3 py-2 text-start">سبب المغادرة</th>
-                    <th className="px-3 py-2 text-start">تاريخ المغادرة</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {data.recentTerminations.map((t: any, i: number) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="px-3 py-2">{t.employeeName}</td>
-                      <td className="px-3 py-2 text-gray-500">{t.deptName || "—"}</td>
-                      <td className="px-3 py-2">{REASON_LABELS[t.terminationType] || t.terminationType}</td>
-                      <td className="px-3 py-2 text-gray-500">{t.terminationDate?.split("T")[0]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={[
+                {
+                  key: "employeeName",
+                  header: "الموظف",
+                  sortable: true,
+                  render: (v: any) => (
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold shrink-0">
+                        {(v.employeeName || "؟").charAt(0)}
+                      </div>
+                      <span className="font-medium text-sm">{v.employeeName}</span>
+                    </div>
+                  ),
+                },
+                {
+                  key: "deptName",
+                  header: "القسم",
+                  sortable: true,
+                  render: (v: any) => <span className="text-sm text-gray-500">{v.deptName || "—"}</span>,
+                },
+                {
+                  key: "terminationType",
+                  header: "سبب المغادرة",
+                  sortable: true,
+                  render: (v: any) => (
+                    <Badge variant="outline" className={cn(
+                      "text-xs",
+                      v.terminationType === "termination" ? "border-red-300 text-red-700 bg-red-50" :
+                      v.terminationType === "resignation" ? "border-amber-300 text-amber-700 bg-amber-50" :
+                      "border-gray-200",
+                    )}>
+                      {REASON_LABELS[v.terminationType] || v.terminationType}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: "terminationDate",
+                  header: "تاريخ المغادرة",
+                  sortable: true,
+                  render: (v: any) => (
+                    <span className="text-sm text-gray-500">
+                      {v.terminationDate
+                        ? new Date(v.terminationDate).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
+                        : "-"}
+                    </span>
+                  ),
+                },
+              ] as DataTableColumn<any>[]}
+              data={data.recentTerminations}
+              noToolbar
+              emptyMessage="لا يوجد مغادرين"
+              pageSize={10}
+            />
           </CardContent>
         </Card>
       )}

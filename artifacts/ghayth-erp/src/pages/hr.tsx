@@ -10,6 +10,7 @@ import {
   Briefcase, Scale, CalendarClock, Network, UserPlus, ChevronLeft,
   TrendingUp, AlertCircle, CheckCircle2, ClipboardCheck,
   Wallet, Timer, LogOut, ArrowRightLeft, Star, Award,
+  FileText, BookOpen, CalendarOff, BarChart3,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -189,6 +190,8 @@ export default function HR() {
             <QuickLink label="تفعيل الموظفين" icon={UserPlus} iconColor="text-indigo-600 bg-indigo-50" path="/hr/employee-activation" description="تفعيل حسابات الموظفين الجدد" />
             <QuickLink label="مراجعة التعيين" icon={ClipboardCheck} iconColor="text-violet-600 bg-violet-50" path="/hr/onboarding-review" description="متابعة إجراءات التعيين" />
             <QuickLink label="الهيكل التنظيمي" icon={Network} iconColor="text-sky-600 bg-sky-50" path="/hr/organization" description="عرض وإدارة الهيكل التنظيمي" />
+            <QuickLink label="الوثائق المنتهية" icon={FileText} iconColor="text-red-600 bg-red-50" path="/hr/expiring-documents" description="متابعة الإقامات والتصاريح" />
+            <QuickLink label="الخطابات الرسمية" icon={FileText} iconColor="text-gray-600 bg-gray-50" path="/hr/official-letters" description="خطابات التعريف والشهادات" />
           </div>
         </div>
 
@@ -202,6 +205,7 @@ export default function HR() {
             <QuickLink label="تقارير الحضور" icon={CheckCircle2} iconColor="text-purple-500 bg-purple-50" path="/hr/attendance/reports" description="تقارير وإحصاءات الحضور" />
             <QuickLink label="الإجازات وإدارتها" icon={Calendar} iconColor="text-emerald-600 bg-emerald-50" path="/hr/leaves" description="طلبات الإجازة وإدارتها" />
             <QuickLink label="الورديات" icon={CalendarClock} iconColor="text-teal-600 bg-teal-50" path="/hr/shifts" description="جداول وإدارة الورديات" />
+            <QuickLink label="العطل الرسمية" icon={CalendarOff} iconColor="text-green-600 bg-green-50" path="/hr/public-holidays" description="إدارة العطل والمناسبات" />
           </div>
         </div>
 
@@ -218,6 +222,8 @@ export default function HR() {
             <QuickLink label="تقييم 360°" icon={Star} iconColor="text-amber-600 bg-amber-50" path="/hr/evaluation-360" description="تقييم شامل متعدد الأطراف" />
             <QuickLink label="التدريب" icon={GraduationCap} iconColor="text-cyan-600 bg-cyan-50" path="/hr/training" description="البرامج التدريبية للموظفين" />
             <QuickLink label="مكافأة نهاية الخدمة" icon={Award} iconColor="text-green-600 bg-green-50" path="/hr/gratuity" description="حساب وتقدير المكافآت" />
+            <QuickLink label="خطط التطوير" icon={BookOpen} iconColor="text-indigo-600 bg-indigo-50" path="/hr/idp" description="خطط التطوير الفردي للموظفين" />
+            <QuickLink label="تقرير الدوران" icon={BarChart3} iconColor="text-rose-600 bg-rose-50" path="/hr/turnover-report" description="تحليل معدل الدوران والتكاليف" />
           </div>
         </div>
 
