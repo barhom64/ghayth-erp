@@ -264,10 +264,12 @@ router.get("/memos", requirePermission("hr:read"), async (req, res) => {
     const scope = req.scope!;
     const status = (req.query.status as string) || null;
     const assignmentId = req.query.assignmentId ? Number(req.query.assignmentId) : null;
+    const regulationId = req.query.regulationId ? Number(req.query.regulationId) : null;
     const params: any[] = [scope.companyId];
     let where = `m."companyId" = $1 AND m."deletedAt" IS NULL`;
     if (status) { params.push(status); where += ` AND m.status = $${params.length}`; }
     if (assignmentId) { params.push(assignmentId); where += ` AND m."assignmentId" = $${params.length}`; }
+    if (regulationId) { params.push(regulationId); where += ` AND m."regulationId" = $${params.length}`; }
     const rows = await rawQuery<any>(
       `SELECT m.id, m."memoNumber", m."incidentType", m."incidentDate",
               m."incidentDurationMinutes", m.status, m.source,
@@ -322,6 +324,10 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       incidentDescription,
       regulationId,
       disruptsOthers,
+      witnesses,
+      relatedParties,
+      additionalReasons,
+      incidentLocation,
     } = req.body as any;
 
     if (!assignmentId || !incidentType || !incidentDate) {
@@ -384,7 +390,13 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
     await logMemoEvent({
       memoId, companyId: scope.companyId, actorId: scope.userId,
       actorRole: "hr", action: "created",
-      payload: { incidentType, incidentDate, penaltyPreview },
+      payload: {
+        incidentType, incidentDate, penaltyPreview,
+        ...(witnesses?.length ? { witnesses } : {}),
+        ...(relatedParties?.length ? { relatedParties } : {}),
+        ...(additionalReasons?.length ? { additionalReasons } : {}),
+        ...(incidentLocation ? { incidentLocation } : {}),
+      },
       note: "إنشاء محضر استفسار يدوي",
     });
 
