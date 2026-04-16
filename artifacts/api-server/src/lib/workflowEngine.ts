@@ -118,6 +118,36 @@ const DOMAIN_RECORD_HANDLERS: Record<
     const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
     await rawExecute(`UPDATE expenses SET status = $1 WHERE id = $2`, [status, refId]);
   },
+  hr_employee_loans: async (refId, outcome, approvedBy) => {
+    if (outcome === "approved") {
+      await rawExecute(
+        `UPDATE hr_employee_loans SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`,
+        [approvedBy ?? null, refId]
+      );
+    } else if (outcome === "rejected") {
+      await rawExecute(`UPDATE hr_employee_loans SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [refId]);
+    }
+  },
+  hr_overtime_requests: async (refId, outcome, approvedBy) => {
+    if (outcome === "approved") {
+      await rawExecute(
+        `UPDATE hr_overtime_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`,
+        [approvedBy ?? null, refId]
+      );
+    } else if (outcome === "rejected") {
+      await rawExecute(`UPDATE hr_overtime_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [refId]);
+    }
+  },
+  hr_exit_requests: async (refId, outcome, approvedBy) => {
+    if (outcome === "approved") {
+      await rawExecute(
+        `UPDATE hr_exit_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`,
+        [approvedBy ?? null, refId]
+      );
+    } else if (outcome === "rejected") {
+      await rawExecute(`UPDATE hr_exit_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [refId]);
+    }
+  },
 };
 
 async function propagateDomainStatus(

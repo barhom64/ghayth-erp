@@ -302,7 +302,7 @@ export async function reverseAccountBalances(
   }
 }
 
-export type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement";
+export type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
 
 export interface ApprovalChainResult {
   requiresApproval: boolean;
@@ -488,6 +488,7 @@ function chainTypeLabel(t: ApprovalChainType): string {
   const map: Record<string, string> = {
     leaves: "إجازات", purchases: "مشتريات", expenses: "مصروفات",
     advances: "سلفة/عهدة", letters: "خطاب رسمي", procurement: "مشتريات",
+    loans: "سلفة موظف", overtime: "وقت إضافي", exit: "نهاية خدمة",
   };
   return map[t] ?? t;
 }
@@ -498,6 +499,8 @@ export function refTypeToChainType(refType: string): ApprovalChainType | null {
     expense: "expenses", salary_advance: "advances",
     custody: "advances", official_letter: "letters",
     purchase_request: "procurement",
+    hr_employee_loan: "loans", hr_overtime_request: "overtime",
+    hr_exit_request: "exit",
   };
   return map[refType] ?? null;
 }

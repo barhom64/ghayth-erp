@@ -14,7 +14,11 @@ const stageStatus: Record<string, { label: string; color: string; icon: any }> =
 
 const roleMap: Record<string, string> = {
   manager: "المدير المباشر",
+  branch_manager: "مدير الفرع",
   hr: "الموارد البشرية",
+  hr_manager: "مدير الموارد البشرية",
+  general_manager: "المدير العام",
+  finance_manager: "المدير المالي",
   owner: "المالك",
 };
 

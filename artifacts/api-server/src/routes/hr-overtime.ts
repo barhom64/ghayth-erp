@@ -20,7 +20,10 @@ import {
   createNotification,
   emitEvent,
   getManagerAssignmentId,
+  initiateApprovalChain,
+  processApprovalStep,
 } from "../lib/businessHelpers.js";
+import { submitWorkflow } from "../lib/workflowEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -203,15 +206,40 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       ]
     );
 
-    // إشعار المدير
-    const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId).catch(() => null);
-    if (managerId) {
-      createNotification({
-        companyId: scope.companyId, assignmentId: managerId,
-        type: "overtime_request", title: "طلب وقت إضافي",
-        body: `طلب ${hours} ساعات إضافية بتاريخ ${b.overtimeDate} — ${requestNumber}`,
-        priority: "normal", refType: "hr_overtime_request", refId: insertId,
-      }).catch(console.error);
+    // ── سلسلة الموافقات ──
+    const approvalResult = await initiateApprovalChain({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId,
+      chainType: "overtime",
+      refType: "hr_overtime_request",
+      refId: insertId,
+      amount: totalAmount,
+    }).catch(() => null);
+
+    // ── محرك سير العمل ──
+    submitWorkflow({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId,
+      requestType: "overtime",
+      refTable: "hr_overtime_requests",
+      refId: insertId,
+      title: `طلب وقت إضافي ${requestNumber} — ${hours} ساعات`,
+      submittedBy: scope.activeAssignmentId,
+      submittedByName: scope.userName,
+      data: { requestNumber, hours, totalAmount, overtimeDate: b.overtimeDate },
+    }).catch(console.error);
+
+    // ── إشعار المدير (fallback) ──
+    if (!approvalResult?.requiresApproval) {
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      if (managerId) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: managerId,
+          type: "overtime_request", title: "طلب وقت إضافي",
+          body: `طلب ${hours} ساعات إضافية بتاريخ ${b.overtimeDate} — ${requestNumber}`,
+          priority: "normal", refType: "hr_overtime_request", refId: insertId,
+        }).catch(console.error);
+      }
     }
 
     await createAuditLog({
@@ -220,7 +248,10 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       reason: `طلب وقت إضافي: ${requestNumber} — ${hours} ساعات`,
     });
 
-    res.status(201).json({ id: insertId, requestNumber, totalAmount });
+    res.status(201).json({
+      id: insertId, requestNumber, totalAmount,
+      approval: approvalResult ?? { requiresApproval: false },
+    });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء طلب الوقت الإضافي");
   }
@@ -232,12 +263,43 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    if (!["owner", "hr_manager", "general_manager", "branch_manager"].includes(scope.role)) {
+      throw new ForbiddenError(
+        "صلاحية اعتماد الوقت الإضافي محصورة بالمدير أو HR أو المالك",
+        { fix: "اطلب من مديرك المباشر تنفيذ الموافقة.", meta: { yourRole: scope.role } }
+      );
+    }
+
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [req.params.id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
+
+    // منع الموظف من اعتماد طلبه الخاص
+    if (item.assignmentId === scope.activeAssignmentId) {
+      throw new ForbiddenError("لا يمكنك اعتماد طلبك الخاص");
+    }
+
+    // ── معالجة خطوة الموافقة في السلسلة ──
+    const chainResult = await processApprovalStep({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      refType: "hr_overtime_request",
+      refId: item.id,
+      approved: true,
+      decidedBy: scope.activeAssignmentId,
+      requesterId: item.assignmentId,
+    }).catch(() => ({ status: "approved" as const, message: "" }));
+
+    if (chainResult.status === "pending_next_step") {
+      res.json({
+        success: true, status: "pending_next_step",
+        message: `تمت موافقتك — بانتظار موافقة ${chainResult.nextRole ?? "المرحلة التالية"}`,
+      });
+      return;
+    }
 
     await rawExecute(
       `UPDATE hr_overtime_requests
@@ -271,6 +333,10 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
 router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    if (!["owner", "hr_manager", "general_manager", "branch_manager"].includes(scope.role)) {
+      throw new ForbiddenError("صلاحية رفض طلبات الوقت الإضافي محصورة بالمدير أو HR أو المالك");
+    }
+
     const b = req.body as any;
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -278,6 +344,12 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن رفض طلب بحالة: " + item.status);
+
+    processApprovalStep({
+      companyId: scope.companyId, branchId: scope.branchId,
+      refType: "hr_overtime_request", refId: item.id,
+      approved: false, decidedBy: scope.activeAssignmentId, reason: b.reason,
+    }).catch(console.error);
 
     await rawExecute(
       `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,

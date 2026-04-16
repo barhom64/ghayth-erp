@@ -20,7 +20,11 @@ import {
   createNotification,
   emitEvent,
   getManagerAssignmentId,
+  initiateApprovalChain,
+  processApprovalStep,
 } from "../lib/businessHelpers.js";
+import { submitWorkflow } from "../lib/workflowEngine.js";
+import { requireMinLevel } from "../middlewares/roleGuard.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -234,15 +238,40 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       ]
     );
 
-    // إشعار المدير
-    const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId).catch(() => null);
-    if (managerId) {
-      createNotification({
-        companyId: scope.companyId, assignmentId: managerId,
-        type: "loan_request", title: "طلب سلفة جديد",
-        body: `طلب سلفة بمبلغ ${amount.toLocaleString()} ريال — ${loanNumber}`,
-        priority: "high", refType: "hr_employee_loan", refId: insertId,
-      }).catch(console.error);
+    // ── سلسلة الموافقات ──
+    const approvalResult = await initiateApprovalChain({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId,
+      chainType: "loans",
+      refType: "hr_employee_loan",
+      refId: insertId,
+      amount,
+    }).catch(() => null);
+
+    // ── محرك سير العمل ──
+    submitWorkflow({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId,
+      requestType: "loan",
+      refTable: "hr_employee_loans",
+      refId: insertId,
+      title: `طلب سلفة ${loanNumber} — ${amount.toLocaleString()} ريال`,
+      submittedBy: scope.activeAssignmentId,
+      submittedByName: scope.userName,
+      data: { loanNumber, amount, installmentCount, loanType: b.loanType },
+    }).catch(console.error);
+
+    // ── إشعار المدير (fallback إذا لم توجد سلسلة) ──
+    if (!approvalResult?.requiresApproval) {
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      if (managerId) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: managerId,
+          type: "loan_request", title: "طلب سلفة جديد",
+          body: `طلب سلفة بمبلغ ${amount.toLocaleString()} ريال — ${loanNumber}`,
+          priority: "high", refType: "hr_employee_loan", refId: insertId,
+        }).catch(console.error);
+      }
     }
 
     await createAuditLog({
@@ -251,7 +280,10 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       reason: `سلفة جديدة: ${loanNumber} بمبلغ ${amount}`,
     });
 
-    res.status(201).json({ id: insertId, loanNumber });
+    res.status(201).json({
+      id: insertId, loanNumber,
+      approval: approvalResult ?? { requiresApproval: false },
+    });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء السلفة");
   }
@@ -263,8 +295,15 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager", "cfo"].includes(scope.role)) {
-      throw new ForbiddenError("غير مصرح باعتماد السلف");
+    // التحقق من الأدوار: المدير المباشر، مدير HR، المدير العام، المالك، المدير المالي
+    if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
+      throw new ForbiddenError(
+        "صلاحية اعتماد السلف محصورة بالمدير أو HR أو المدير المالي أو المالك",
+        {
+          fix: "اطلب من مديرك المباشر أو مدير الموارد البشرية تنفيذ الموافقة.",
+          meta: { yourRole: scope.role },
+        }
+      );
     }
 
     const [loan] = await rawQuery<any>(
@@ -274,6 +313,33 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن اعتماد سلفة بحالة: " + loan.status);
 
+    // منع الموظف من اعتماد سلفته الخاصة
+    if (loan.assignmentId === scope.activeAssignmentId) {
+      throw new ForbiddenError("لا يمكنك اعتماد سلفتك الخاصة");
+    }
+
+    // ── معالجة خطوة الموافقة في سلسلة الموافقات ──
+    const chainResult = await processApprovalStep({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      refType: "hr_employee_loan",
+      refId: loan.id,
+      approved: true,
+      decidedBy: scope.activeAssignmentId,
+      requesterId: loan.assignmentId,
+    }).catch(() => ({ status: "approved" as const, message: "" }));
+
+    // إذا بقيت خطوات موافقة إضافية
+    if (chainResult.status === "pending_next_step") {
+      res.json({
+        success: true,
+        status: "pending_next_step",
+        message: `تمت موافقتك — بانتظار موافقة ${chainResult.nextRole ?? "المرحلة التالية"}`,
+      });
+      return;
+    }
+
+    // ── الموافقة النهائية: تفعيل السلفة ──
     await rawExecute(
       `UPDATE hr_employee_loans
        SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
@@ -324,6 +390,10 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
+      throw new ForbiddenError("صلاحية رفض السلف محصورة بالمدير أو HR أو المدير المالي أو المالك");
+    }
+
     const b = req.body as any;
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -331,6 +401,17 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن رفض سلفة بحالة: " + loan.status);
+
+    // ── تحديث سلسلة الموافقات ──
+    processApprovalStep({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      refType: "hr_employee_loan",
+      refId: loan.id,
+      approved: false,
+      decidedBy: scope.activeAssignmentId,
+      reason: b.reason,
+    }).catch(console.error);
 
     await rawExecute(
       `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,

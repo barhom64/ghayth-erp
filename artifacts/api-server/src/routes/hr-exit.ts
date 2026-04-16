@@ -19,7 +19,11 @@ import {
   createAuditLog,
   createNotification,
   emitEvent,
+  initiateApprovalChain,
+  processApprovalStep,
+  getManagerAssignmentId,
 } from "../lib/businessHelpers.js";
+import { submitWorkflow } from "../lib/workflowEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -276,6 +280,42 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       );
     }
 
+    // ── سلسلة الموافقات — نهاية الخدمة تحتاج موافقة HR + المدير العام ──
+    const approvalResult = await initiateApprovalChain({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId,
+      chainType: "exit",
+      refType: "hr_exit_request",
+      refId: insertId,
+      amount: netSettlement,
+    }).catch(() => null);
+
+    // ── محرك سير العمل ──
+    submitWorkflow({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId,
+      requestType: "exit",
+      refTable: "hr_exit_requests",
+      refId: insertId,
+      title: `طلب نهاية خدمة ${exitNumber} — ${b.exitType === "resignation" ? "استقالة" : b.exitType === "termination" ? "فصل" : b.exitType}`,
+      submittedBy: scope.activeAssignmentId,
+      submittedByName: scope.userName,
+      data: { exitNumber, exitType: b.exitType, netSettlement, gratuity },
+    }).catch(console.error);
+
+    // ── إشعار المدير (fallback) ──
+    if (!approvalResult?.requiresApproval) {
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      if (managerId) {
+        createNotification({
+          companyId: scope.companyId, assignmentId: managerId,
+          type: "exit_request", title: "طلب نهاية خدمة جديد",
+          body: `طلب ${b.exitType === "resignation" ? "استقالة" : "نهاية خدمة"} — ${exitNumber}`,
+          priority: "high", refType: "hr_exit_request", refId: insertId,
+        }).catch(console.error);
+      }
+    }
+
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "exit.created", entity: "hr_exit_requests", entityId: insertId,
@@ -287,7 +327,10 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       action: "hr.exit.created", entity: "hr_exit_requests", entityId: insertId,
     });
 
-    res.status(201).json({ id: insertId, exitNumber, netSettlement, gratuityAmount: gratuity });
+    res.status(201).json({
+      id: insertId, exitNumber, netSettlement, gratuityAmount: gratuity,
+      approval: approvalResult ?? { requiresApproval: false },
+    });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء طلب نهاية الخدمة");
   }
@@ -299,8 +342,15 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    // نهاية الخدمة تتطلب مستوى أعلى: HR أو المدير العام أو المالك
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
-      throw new ForbiddenError("غير مصرح باعتماد طلبات نهاية الخدمة");
+      throw new ForbiddenError(
+        "صلاحية اعتماد نهاية الخدمة محصورة بمدير HR أو المدير العام أو المالك",
+        {
+          fix: "هذا الإجراء يتطلب صلاحية إدارية عليا.",
+          meta: { yourRole: scope.role, requiredRoles: ["hr_manager", "general_manager", "owner"] },
+        }
+      );
     }
 
     const [item] = await rawQuery<any>(
@@ -309,6 +359,24 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
+
+    // ── معالجة خطوة الموافقة في السلسلة ──
+    const chainResult = await processApprovalStep({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      refType: "hr_exit_request",
+      refId: item.id,
+      approved: true,
+      decidedBy: scope.activeAssignmentId,
+    }).catch(() => ({ status: "approved" as const, message: "" }));
+
+    if (chainResult.status === "pending_next_step") {
+      res.json({
+        success: true, status: "pending_next_step",
+        message: `تمت موافقتك — بانتظار موافقة ${chainResult.nextRole ?? "المرحلة التالية"}`,
+      });
+      return;
+    }
 
     await rawExecute(
       `UPDATE hr_exit_requests

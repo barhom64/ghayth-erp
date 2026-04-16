@@ -2368,7 +2368,7 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
     if (!name || !chainType) {
       throw new ValidationError("الاسم ونوع السلسلة مطلوبان", { field: name ? "chainType" : "name" });
     }
-    const validTypes = ["leaves", "purchases", "expenses", "advances", "letters"];
+    const validTypes = ["leaves", "purchases", "expenses", "advances", "letters", "loans", "overtime", "exit"];
     if (!validTypes.includes(chainType)) {
       throw new ValidationError(
         `نوع السلسلة يجب أن يكون أحد: ${validTypes.join(", ")}`,
