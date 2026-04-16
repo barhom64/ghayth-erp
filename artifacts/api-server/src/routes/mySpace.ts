@@ -112,7 +112,46 @@ router.get("/", async (req, res) => {
         console.error("my-space custodyReqs error:", e);
       }
 
-      openRequests = [...leaveReqs, ...advanceReqs, ...letterReqs, ...custodyReqs]
+      let loanReqs: any[] = [];
+      try {
+        loanReqs = await rawQuery<any>(
+          `SELECT id, 'loan' AS type, CONCAT('سلفة ', "loanNumber") AS title, status, "createdAt"
+           FROM hr_employee_loans
+           WHERE "assignmentId" = $1 AND status IN ('pending') AND "deletedAt" IS NULL
+           ORDER BY "createdAt" DESC LIMIT 5`,
+          [scope.activeAssignmentId]
+        );
+      } catch (e) {
+        console.error("my-space loanReqs error:", e);
+      }
+
+      let overtimeReqs: any[] = [];
+      try {
+        overtimeReqs = await rawQuery<any>(
+          `SELECT id, 'overtime' AS type, CONCAT('وقت إضافي ', "overtimeNumber") AS title, status, "createdAt"
+           FROM hr_overtime_requests
+           WHERE "assignmentId" = $1 AND status IN ('pending') AND "deletedAt" IS NULL
+           ORDER BY "createdAt" DESC LIMIT 5`,
+          [scope.activeAssignmentId]
+        );
+      } catch (e) {
+        console.error("my-space overtimeReqs error:", e);
+      }
+
+      let exitReqs: any[] = [];
+      try {
+        exitReqs = await rawQuery<any>(
+          `SELECT id, 'exit' AS type, CONCAT('نهاية خدمة #', id) AS title, status, "createdAt"
+           FROM hr_exit_requests
+           WHERE "assignmentId" = $1 AND status IN ('pending','in_progress') AND "deletedAt" IS NULL
+           ORDER BY "createdAt" DESC LIMIT 5`,
+          [scope.activeAssignmentId]
+        );
+      } catch (e) {
+        console.error("my-space exitReqs error:", e);
+      }
+
+      openRequests = [...leaveReqs, ...advanceReqs, ...letterReqs, ...custodyReqs, ...loanReqs, ...overtimeReqs, ...exitReqs]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch (e) {
       console.error("my-space openRequests error:", e);
@@ -121,7 +160,7 @@ router.get("/", async (req, res) => {
     let pendingApprovals: any[] = [];
     try {
       if (scope.role !== "employee") {
-        pendingApprovals = await rawQuery<any>(
+        const leaveApprovals = await rawQuery<any>(
           `SELECT lr.id, 'leave' AS type, e.name AS "employeeName", lt.name AS title, lr.status, lr."createdAt"
            FROM hr_leave_requests lr
            JOIN employees e ON e.id = lr."employeeId"
@@ -135,7 +174,52 @@ router.get("/", async (req, res) => {
              )
            ORDER BY lr."createdAt" DESC LIMIT 10`,
           [scope.companyId, scope.role, scope.activeAssignmentId]
-        ).catch((e) => { console.error("my-space pendingApprovals error:", e); return []; });
+        ).catch((e) => { console.error("my-space leaveApprovals error:", e); return []; });
+
+        let loanApprovals: any[] = [];
+        try {
+          loanApprovals = await rawQuery<any>(
+            `SELECT l.id, 'loan' AS type, e.name AS "employeeName",
+                    CONCAT('سلفة ', l."loanNumber", ' — ', l.amount, ' ر.س') AS title,
+                    l.status, l."createdAt"
+             FROM hr_employee_loans l
+             JOIN employees e ON e.id = l."employeeId"
+             WHERE l."companyId" = $1 AND l.status = 'pending' AND l."deletedAt" IS NULL
+             ORDER BY l."createdAt" DESC LIMIT 5`,
+            [scope.companyId]
+          );
+        } catch (e) { console.error("my-space loanApprovals error:", e); }
+
+        let overtimeApprovals: any[] = [];
+        try {
+          overtimeApprovals = await rawQuery<any>(
+            `SELECT o.id, 'overtime' AS type, e.name AS "employeeName",
+                    CONCAT('وقت إضافي ', o."overtimeNumber", ' — ', o.hours, ' ساعة') AS title,
+                    o.status, o."createdAt"
+             FROM hr_overtime_requests o
+             JOIN employees e ON e.id = o."employeeId"
+             WHERE o."companyId" = $1 AND o.status = 'pending' AND o."deletedAt" IS NULL
+             ORDER BY o."createdAt" DESC LIMIT 5`,
+            [scope.companyId]
+          );
+        } catch (e) { console.error("my-space overtimeApprovals error:", e); }
+
+        let exitApprovals: any[] = [];
+        try {
+          exitApprovals = await rawQuery<any>(
+            `SELECT x.id, 'exit' AS type, e.name AS "employeeName",
+                    CONCAT('نهاية خدمة #', x.id) AS title,
+                    x.status, x."createdAt"
+             FROM hr_exit_requests x
+             JOIN employees e ON e.id = x."employeeId"
+             WHERE x."companyId" = $1 AND x.status = 'pending' AND x."deletedAt" IS NULL
+             ORDER BY x."createdAt" DESC LIMIT 5`,
+            [scope.companyId]
+          );
+        } catch (e) { console.error("my-space exitApprovals error:", e); }
+
+        pendingApprovals = [...leaveApprovals, ...loanApprovals, ...overtimeApprovals, ...exitApprovals]
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
     } catch (e) {
       console.error("my-space pendingApprovals error:", e);
@@ -227,6 +311,20 @@ router.get("/", async (req, res) => {
       );
     } catch (e) {
       console.error("my-space violations error:", e);
+    }
+
+    let activeLoans: any[] = [];
+    try {
+      activeLoans = await rawQuery<any>(
+        `SELECT id, "loanNumber", "loanType", amount, "remainingAmount",
+                "installmentAmount", "installmentCount", "paidAmount", status, "createdAt"
+         FROM hr_employee_loans
+         WHERE "assignmentId" = $1 AND status IN ('active','pending') AND "deletedAt" IS NULL
+         ORDER BY "createdAt" DESC LIMIT 5`,
+        [scope.activeAssignmentId]
+      );
+    } catch (e) {
+      console.error("my-space activeLoans error:", e);
     }
 
     let currentShift: any = null;
@@ -454,6 +552,7 @@ router.get("/", async (req, res) => {
       notifications,
       custodies,
       violations,
+      activeLoans,
       currentShift,
       monthlyStats,
       recentActions,

@@ -1928,7 +1928,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const absenceMap = new Map<number, number>();
     for (const row of absenceRows) absenceMap.set(Number(row.assignmentId), Number(row.absentDays ?? 0));
 
-    // Loan installments per assignment
+    // Loan installments per assignment (legacy loan_accounts)
     const loanRows = await rawQuery<any>(
       `SELECT la."assignmentId", COALESCE(SUM(la."monthlyInstallment"), 0) AS "installment"
        FROM loan_accounts la
@@ -1939,7 +1939,20 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const loanMap = new Map<number, number>();
     for (const row of loanRows) loanMap.set(Number(row.assignmentId), Number(row.installment ?? 0));
 
-    // Overtime per assignment
+    // HR loan installments per assignment (hr_employee_loans module)
+    const hrLoanRows = await rawQuery<any>(
+      `SELECT li."assignmentId", COALESCE(SUM(li.amount), 0) AS "installment"
+       FROM hr_loan_installments li
+       WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
+       GROUP BY li."assignmentId"`,
+      [scope.companyId, targetPeriod]
+    ).catch(() => [] as any[]);
+    for (const row of hrLoanRows) {
+      const aId = Number(row.assignmentId);
+      loanMap.set(aId, (loanMap.get(aId) ?? 0) + Number(row.installment ?? 0));
+    }
+
+    // Overtime per assignment (from attendance records)
     const overtimeRows = await rawQuery<any>(
       `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
        FROM attendance a
@@ -1949,6 +1962,17 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     );
     const overtimeMap = new Map<number, number>();
     for (const row of overtimeRows) overtimeMap.set(Number(row.assignmentId), Number(row.totalOvertimeMinutes ?? 0));
+
+    // Approved overtime requests (HR module — with correct multipliers)
+    const hrOtRows = await rawQuery<any>(
+      `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
+       FROM hr_overtime_requests
+       WHERE "companyId" = $1 AND TO_CHAR(date, 'YYYY-MM') = $2 AND status = 'approved'
+       GROUP BY "assignmentId"`,
+      [scope.companyId, targetPeriod]
+    ).catch(() => [] as any[]);
+    const hrOtMap = new Map<number, number>();
+    for (const row of hrOtRows) hrOtMap.set(Number(row.assignmentId), Number(row.otAmount ?? 0));
 
     // ── Build per-assignment payroll lines (12 items each) ──
     let totalNet = 0;
@@ -2004,7 +2028,10 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       const overtimeMinutes = overtimeMap.get(aId) ?? 0;
       const overtimeHours = Math.round((overtimeMinutes / 60) * 100) / 100;
       const hourlyRate = basic / (30 * 8);
-      const overtime = Math.round(overtimeHours * hourlyRate * 1.5 * 100) / 100;
+      const attendanceOt = Math.round(overtimeHours * hourlyRate * 1.5 * 100) / 100;
+      const hrOtAmount = hrOtMap.get(aId) ?? 0;
+      // استخدام الأعلى بين وقت الحضور ومبلغ طلبات OT المعتمدة (لتجنب الاحتساب المزدوج)
+      const overtime = Math.max(attendanceOt, hrOtAmount);
 
       const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee;
       const net = Math.max(0, Math.round((gross + overtime - totalDeductions) * 100) / 100);
@@ -2068,6 +2095,35 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
                status = CASE WHEN "remainingAmount" - "monthlyInstallment" <= 0 THEN 'settled' ELSE status END
            WHERE "companyId" = $1 AND status = 'active' AND "assignmentId" = ANY($2::int[])`,
           [scope.companyId, assignmentIdsWithLoans]
+        );
+      }
+
+      // تحديث أقساط سلف HR كـ "مدفوعة" وتحديث رصيد السلفة
+      if (hrLoanRows.length > 0) {
+        await client.query(
+          `UPDATE hr_loan_installments SET status = 'paid', "paidAt" = NOW()
+           WHERE "companyId" = $1 AND period = $2 AND status = 'pending'`,
+          [scope.companyId, targetPeriod]
+        );
+        await client.query(
+          `UPDATE hr_employee_loans l SET
+             "paidAmount" = COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0),
+             "remainingAmount" = l.amount - COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0),
+             status = CASE
+               WHEN l.amount - COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0) <= 0
+               THEN 'completed' ELSE l.status END,
+             "updatedAt" = NOW()
+           WHERE l."companyId" = $1 AND l.status = 'active'`,
+          [scope.companyId]
+        );
+      }
+
+      // تحديث حالة طلبات الوقت الإضافي المعتمدة كـ "مدفوعة"
+      if (hrOtRows.length > 0) {
+        await client.query(
+          `UPDATE hr_overtime_requests SET status = 'paid', "updatedAt" = NOW()
+           WHERE "companyId" = $1 AND TO_CHAR(date, 'YYYY-MM') = $2 AND status = 'approved'`,
+          [scope.companyId, targetPeriod]
         );
       }
 
