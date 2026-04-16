@@ -268,6 +268,8 @@ router.get("/memos", requirePermission("hr:read"), async (req, res) => {
     let where = `m."companyId" = $1 AND m."deletedAt" IS NULL`;
     if (status) { params.push(status); where += ` AND m.status = $${params.length}`; }
     if (assignmentId) { params.push(assignmentId); where += ` AND m."assignmentId" = $${params.length}`; }
+    const regulationIdFilter = req.query.regulationId ? Number(req.query.regulationId) : null;
+    if (regulationIdFilter) { params.push(regulationIdFilter); where += ` AND m."regulationId" = $${params.length}`; }
     const rows = await rawQuery<any>(
       `SELECT m.id, m."memoNumber", m."incidentType", m."incidentDate",
               m."incidentDurationMinutes", m.status, m.source,
@@ -322,6 +324,11 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       incidentDescription,
       regulationId,
       disruptsOthers,
+      witnesses,
+      relatedParties,
+      reasons,
+      manualOverrideAmount,
+      manualOverrideReason,
     } = req.body as any;
 
     if (!assignmentId || !incidentType || !incidentDate) {
@@ -384,7 +391,13 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
     await logMemoEvent({
       memoId, companyId: scope.companyId, actorId: scope.userId,
       actorRole: "hr", action: "created",
-      payload: { incidentType, incidentDate, penaltyPreview },
+      payload: {
+        incidentType, incidentDate, penaltyPreview,
+        ...(witnesses ? { witnesses } : {}),
+        ...(relatedParties ? { relatedParties } : {}),
+        ...(reasons ? { reasons } : {}),
+        ...(manualOverrideAmount ? { manualOverrideAmount, manualOverrideReason } : {}),
+      },
       note: "إنشاء محضر استفسار يدوي",
     });
 
