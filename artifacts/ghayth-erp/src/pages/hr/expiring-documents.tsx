@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, FileText, Clock, Shield } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { PageShell } from "@/components/page-shell";

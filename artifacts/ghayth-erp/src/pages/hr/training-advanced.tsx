@@ -1,5 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,29 +18,20 @@ export default function TrainingAdvancedPage() {
   const completionRate = stats.totalEnrollments > 0
     ? Math.round((stats.completedEnrollments / stats.totalEnrollments) * 100) : 0;
 
+  const kpis = [
+    { label: "إجمالي البرامج", value: stats.totalPrograms ?? programs.length, icon: BookOpen, color: "text-blue-600 bg-blue-50" },
+    { label: "برامج نشطة", value: stats.activePrograms ?? 0, icon: GraduationCap, color: "text-green-600 bg-green-50" },
+    { label: "نسبة الإكمال", value: completionRate + "%", icon: Award, color: "text-purple-600 bg-purple-50" },
+    { label: "المشاركين", value: stats.totalEnrollments ?? enrollments.length, icon: Users, color: "text-orange-600 bg-orange-50" },
+  ];
+
   return (
     <PageShell
       title="تحليلات التدريب المتقدمة"
       subtitle="متابعة فعالية البرامج التدريبية ونتائجها"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التدريب المتقدمة" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "إجمالي البرامج", value: stats.totalPrograms ?? programs.length, icon: BookOpen, color: "text-blue-600 bg-blue-50" },
-          { label: "برامج نشطة", value: stats.activePrograms ?? 0, icon: GraduationCap, color: "text-green-600 bg-green-50" },
-          { label: "نسبة الإكمال", value: completionRate + "%", icon: Award, color: "text-purple-600 bg-purple-50" },
-          { label: "المشاركين", value: stats.totalEnrollments ?? enrollments.length, icon: Users, color: "text-orange-600 bg-orange-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-2xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">البرامج حسب الحالة</CardTitle></CardHeader>

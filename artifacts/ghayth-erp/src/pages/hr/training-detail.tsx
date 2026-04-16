@@ -1,6 +1,8 @@
 import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -76,9 +78,7 @@ export default function TrainingDetailPage() {
       sortable: true,
       render: (e) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-xs font-bold shrink-0">
-            {(e.employeeName || "؟").charAt(0)}
-          </div>
+          <AvatarInitial name={e.employeeName} color="purple" />
           <span className="font-medium text-sm">{e.employeeName || "-"}</span>
         </div>
       ),
@@ -144,21 +144,7 @@ export default function TrainingDetailPage() {
       ]}
     >
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       {/* Program details */}
       <Card className="border-0 shadow-sm">

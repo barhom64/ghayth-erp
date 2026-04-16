@@ -1,5 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Briefcase, Users, UserCheck, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,29 +28,20 @@ export default function RecruitmentAdvancedPage() {
     count: apps.filter((a: any) => (a.status || a.stage) === key).length,
   }));
 
+  const kpis = [
+    { label: "وظائف مفتوحة", value: stats?.openPostings ?? 0, icon: Briefcase, color: "text-blue-600 bg-blue-50" },
+    { label: "إجمالي المتقدمين", value: stats?.totalApplications ?? apps.length, icon: Users, color: "text-green-600 bg-green-50" },
+    { label: "تم التوظيف", value: apps.filter((a: any) => a.status === "hired").length, icon: UserCheck, color: "text-purple-600 bg-purple-50" },
+    { label: "معدل التحويل", value: apps.length > 0 ? Math.round((apps.filter((a: any) => a.status === "hired").length / apps.length) * 100) + "%" : "0%", icon: BarChart3, color: "text-orange-600 bg-orange-50" },
+  ];
+
   return (
     <PageShell
       title="تحليلات التوظيف المتقدمة"
       subtitle="إحصائيات ومؤشرات عمليات التوظيف"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التوظيف المتقدمة" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "وظائف مفتوحة", value: stats?.openPostings ?? 0, icon: Briefcase, color: "text-blue-600 bg-blue-50" },
-          { label: "إجمالي المتقدمين", value: stats?.totalApplications ?? apps.length, icon: Users, color: "text-green-600 bg-green-50" },
-          { label: "تم التوظيف", value: apps.filter((a: any) => a.status === "hired").length, icon: UserCheck, color: "text-purple-600 bg-purple-50" },
-          { label: "معدل التحويل", value: apps.length > 0 ? Math.round((apps.filter((a: any) => a.status === "hired").length / apps.length) * 100) + "%" : "0%", icon: BarChart3, color: "text-orange-600 bg-orange-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-2xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={kpis} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">مسار التوظيف</CardTitle></CardHeader>

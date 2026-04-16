@@ -8,7 +8,6 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Users, Plus, Sun, Moon, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
