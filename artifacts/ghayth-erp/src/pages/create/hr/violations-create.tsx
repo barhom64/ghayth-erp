@@ -1482,7 +1482,7 @@ function WizardFormContent({
   // Use a debounced mutation for penalty preview
   const [preview, setPreview] = useState<PenaltyPreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const previewTimer = useRef<ReturnType<typeof setTimeout>>();
+  const previewTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (!previewBody) {
