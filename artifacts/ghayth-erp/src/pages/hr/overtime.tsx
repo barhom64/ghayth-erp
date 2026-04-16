@@ -18,12 +18,14 @@ import { useToast } from "@/hooks/use-toast";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "pending",  label: "بانتظار الموافقة" },
   { value: "approved", label: "معتمد"            },
+  { value: "paid",     label: "مدفوع"            },
   { value: "rejected", label: "مرفوض"            },
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending:  { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700 border-amber-300" },
   approved: { label: "معتمد",            color: "bg-green-100 text-green-700 border-green-300" },
+  paid:     { label: "مدفوع",            color: "bg-blue-100 text-blue-700 border-blue-300"    },
   rejected: { label: "مرفوض",            color: "bg-red-100 text-red-700 border-red-300"       },
 };
 

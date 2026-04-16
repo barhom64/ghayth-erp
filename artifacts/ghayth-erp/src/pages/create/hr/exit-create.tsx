@@ -9,9 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { formatCurrency } from "@/lib/formatters";
 import { LogOut, User, Calendar, Info, DollarSign, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const DRAFT_KEY = "hr_exit_create";
 
 const EXIT_TYPES = [
   { value: "resignation",  label: "استقالة"        },
@@ -32,7 +35,7 @@ export default function ExitCreate() {
   const employeesQ = useApiQuery<any>(["employees-list"], "/employees?limit=500");
   const employees = asList<any>(employeesQ.data);
 
-  const [form, setForm] = useState({
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
     assignmentId: "",
     exitType: "resignation",
     lastWorkingDay: "",
@@ -87,6 +90,7 @@ export default function ExitCreate() {
         exitReason: form.exitReason || undefined,
         otherDeductions: Number(form.otherDeductions || 0),
       });
+      clearDraft();
       setLocation("/hr/exit");
     } catch {}
   };
@@ -100,6 +104,16 @@ export default function ExitCreate() {
       isDirty={Boolean(form.assignmentId)}
     >
       <form onSubmit={handleSubmit} className="space-y-6">
+        {hasDraft && (
+          <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+            <Info className="h-4 w-4 shrink-0" />
+            <span>تم استعادة مسودة سابقة — يمكنك متابعة التعبئة أو مسحها</span>
+            <Button type="button" size="sm" variant="ghost" onClick={clearDraft} className="mr-auto text-xs">
+              مسح المسودة
+            </Button>
+          </div>
+        )}
+
         {/* بيانات الموظف */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">

@@ -1,5 +1,5 @@
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ const LOAN_TYPE_MAP: Record<string, string> = {
 };
 
 export default function LoansPage() {
+  const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -301,6 +302,7 @@ export default function LoansPage() {
         noToolbar
         emptyMessage="لا توجد سلف — قدّم طلب سلفة جديدة للبدء"
         pageSize={20}
+        onRowClick={(item) => navigate(`/hr/loans/${item.id}`)}
       />
     </PageShell>
   );
