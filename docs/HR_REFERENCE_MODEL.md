@@ -178,18 +178,42 @@ refactors. HR-U5 finishes the job:
   in `hr.ts` is **0** (single remaining hit is a code comment on
   line 754 explaining the old pattern).
 
+### HR-U6 — FormShell pilot (Sprint 6)
+
+First FormShell adoption on an HR create page, validating the pattern
+before rolling it out to the remaining 9 pages:
+
+* `violations-create.tsx` — fully rewritten onto `<FormShell>`:
+  - Zod schema (`violationSchema`) replaces manual `if (!form.X) toast()`
+    validation (3 required-field checks → Zod `min(1)` rules).
+  - `useAutoDraft` replaced with `<DraftManager />` — a renderless
+    component inside FormShell that subscribes to `form.watch()` for
+    debounced localStorage saves and provides a banner + clear button
+    via `useFormContext.reset()`. The pattern is reusable across all
+    FormShell create pages.
+  - Custom button grids (violation type 6-card, severity 3-card) use
+    `useFormContext` `watch` + `setValue` — no `Controller` needed since
+    the components are direct children of `FormProvider`.
+  - `createMut.mutateAsync` used inside `onSubmit` so FormShell controls
+    `isSubmitting` state. `useApiMutation`'s default `onError` still fires
+    the typed toast; FormShell additionally bridges `VALIDATION_ERROR`
+    field errors to the matching input (dual feedback: toast + field).
+  - `submitVariant="destructive"` leverages a new `submitVariant` prop
+    added to `FormShell` (3-line enhancement — benefits all future adopters).
+* `form-shell.tsx` — added `submitVariant` prop (default `"default"`).
+  Passes through to `<Button variant={…}>`.
+
 ---
 
 ## 5. Intentionally deferred (P2)
 
 | Item | Why deferred | Blueprint |
 | ---- | ------------ | --------- |
-| **`FormShell` adoption across HR create pages** | All 10 `pages/create/hr/*-create.tsx` files still use `useState` + manual `toast` validation. They are _not_ broken — error paths are already typed via `useApiMutation`'s default `onError`. Converting them to `FormShell` requires writing a Zod schema per page, replacing custom button grids (severity, violation types, shift slots) with `Controller`-driven custom fields, and reconciling the `useAutoDraft` hook with `react-hook-form` state. That is ~2 days of mechanical but risky work and should land as a separate PR. | `components/form-shell.tsx` is ready. Start with `violations-create.tsx` (most self-contained) as the first adoption. |
-| **Read-only `apiFetch` inside `employee-detail.tsx`** | Two internal `apiFetch` calls (`operational-status`, `print-template` fetch) live inside event handlers and fall through to a silent `.catch()`. They're not user-visible error paths; migrating them to `useApiQuery` / typed mutations is mostly cosmetic. | Apply the same `useApiQuery` pattern as `employees.tsx` in HR-U4. |
+| **`FormShell` adoption across HR create pages** | **1 of 10** done (`violations-create.tsx`). Remaining 9 `pages/create/hr/*-create.tsx` files still use `useState` + manual `toast` validation. They are _not_ broken — error paths are already typed via `useApiMutation`'s default `onError`. Each conversion follows the same pilot pattern: Zod schema + `<FormShell>` + custom fields via `useFormContext` `watch`/`setValue`. | Pilot: `violations-create.tsx` (HR-U6). Next candidates by complexity: `leaves-create.tsx` (simplest), `attendance-create.tsx`, then pages with custom grids (`shifts-create.tsx`, `evaluation-360-create.tsx`). |
+| **Read-only `apiFetch` inside `employee-detail.tsx`** | The file `employee-detail.tsx` no longer exists under `pages/hr/`. This item is stale and can be removed. | — |
 
-Everything else in HR is unified. These two items are the only known
-deltas, and both are tracked here (not in `KNOWN_ISSUES.md`) so they
-don't get lost.
+Everything else in HR is unified. The FormShell adoption (9 remaining
+pages) is the only known delta.
 
 ---
 

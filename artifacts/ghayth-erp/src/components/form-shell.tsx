@@ -87,6 +87,8 @@ export interface FormShellProps<TSchema extends FieldValues> {
   ) => Promise<void> | void;
   /** Primary submit button label. Defaults to "حفظ". */
   submitLabel?: string;
+  /** Primary submit button variant. Defaults to "default". */
+  submitVariant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
   /** Secondary button slot (Cancel, Save draft, …). Rendered start-aligned. */
   secondaryActions?: ReactNode;
   /** Override disabled-state logic (e.g. disable until a dependency loads). */
@@ -102,6 +104,7 @@ export function FormShell<TSchema extends FieldValues>({
   defaultValues,
   onSubmit,
   submitLabel = "حفظ",
+  submitVariant = "default",
   secondaryActions,
   disabled,
   className,
@@ -167,6 +170,7 @@ export function FormShell<TSchema extends FieldValues>({
           <div className="flex items-center gap-2">{secondaryActions}</div>
           <Button
             type="submit"
+            variant={submitVariant}
             disabled={disabled || submitting}
             className="min-w-[7rem]"
           >
