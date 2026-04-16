@@ -7,18 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Star, Plus, X } from "lucide-react";
+import { Save, Star, Plus, X, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { CreatePageLayout } from "@/components/create-page-layout";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+
+const DRAFT_KEY = "hr_evaluation_360_create";
 
 export default function Evaluation360Create() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { scopeQueryString } = useAppContext();
-  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
-  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
-  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
+
   const createMut = useApiMutation("/hr/evaluation-360", "POST", [["evaluation-360"]], {
     successMessage: "تم بدء دورة التقييم بنجاح",
   });
@@ -26,7 +27,11 @@ export default function Evaluation360Create() {
   const { data: empResp } = useApiQuery<any>(["employees-list", scopeQueryString], `/employees?${scopeQueryString || ""}&limit=500`);
   const employees = asList(empResp);
 
-  const [form, setForm] = useState({ employeeId: "", period: "", notes: "" });
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
+    employeeId: "",
+    period: "",
+    notes: "",
+  });
   const [participants, setParticipants] = useState<{ evaluatorId: string; evaluatorRole: "manager" | "peer"; name: string }[]>([]);
   const [addingParticipant, setAddingParticipant] = useState({ evaluatorId: "", evaluatorRole: "peer" as "manager" | "peer" });
 
@@ -61,6 +66,7 @@ export default function Evaluation360Create() {
       },
       {
         onSuccess: () => {
+          clearDraft();
           setLocation("/hr/evaluation-360");
         },
       },
@@ -72,8 +78,18 @@ export default function Evaluation360Create() {
       title="بدء دورة تقييم جديدة"
       subtitle="تقييم 360° — تقييم شامل متعدد الأطراف"
       backPath="/hr/evaluation-360"
+      isDirty={Boolean(form.employeeId || form.period)}
     >
       <div className="space-y-6">
+        {hasDraft && (
+          <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+            <Info className="h-4 w-4 shrink-0" />
+            <span>تم استعادة مسودة سابقة — يمكنك متابعة التعبئة أو مسحها</span>
+            <Button type="button" size="sm" variant="ghost" onClick={clearDraft} className="mr-auto text-xs">
+              مسح المسودة
+            </Button>
+          </div>
+        )}
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
             <Star className="h-5 w-5 text-amber-500" /> بيانات التقييم
