@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, DollarSign, TrendingUp, Percent, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -122,18 +123,24 @@ export default function SalaryComponentsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div><Label>الاسم</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
               <div><Label>النوع</Label>
-                <select className="w-full border rounded-md p-2 mt-1" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                  <option value="fixed">ثابت</option>
-                  <option value="percentage">نسبة</option>
-                  <option value="variable">متغير</option>
-                </select>
+                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixed">ثابت</SelectItem>
+                    <SelectItem value="percentage">نسبة</SelectItem>
+                    <SelectItem value="variable">متغير</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div><Label>التصنيف</Label>
-                <select className="w-full border rounded-md p-2 mt-1" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                  <option value="allowance">بدل</option>
-                  <option value="deduction">خصم</option>
-                  <option value="benefit">مزايا</option>
-                </select>
+                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="allowance">بدل</SelectItem>
+                    <SelectItem value="deduction">خصم</SelectItem>
+                    <SelectItem value="benefit">مزايا</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div><Label>القيمة</Label><Input className="mt-1" type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></div>
               <div className="flex items-end">

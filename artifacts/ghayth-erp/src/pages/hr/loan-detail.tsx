@@ -5,7 +5,7 @@ import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Wallet, Calendar, DollarSign, CheckCircle, Clock, ArrowRight } from "lucide-react";
+import { Wallet, Calendar, DollarSign, CheckCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
@@ -38,15 +38,7 @@ export default function LoanDetail() {
   const { data, isLoading } = useApiQuery<any>(["hr-loan-detail", id], `/hr/loans/${id}`);
   const loan = data?.data ?? data;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="animate-spin text-primary" size={32} />
-      </div>
-    );
-  }
-
-  if (!loan) {
+  if (!isLoading && !loan) {
     return (
       <PageShell title="السلفة غير موجودة" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/loans", label: "سلف الموظفين" }]}>
         <Card>
@@ -71,12 +63,13 @@ export default function LoanDetail() {
 
   return (
     <PageShell
-      title={`سلفة ${loan.loanNumber}`}
-      subtitle={`${loan.employeeName} — ${LOAN_TYPE_MAP[loan.loanType] ?? loan.loanType}`}
+      title={`سلفة ${loan?.loanNumber || ""}`}
+      subtitle={loan ? `${loan.employeeName} — ${LOAN_TYPE_MAP[loan.loanType] ?? loan.loanType}` : undefined}
+      loading={isLoading}
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
         { href: "/hr/loans", label: "سلف الموظفين" },
-        { label: loan.loanNumber },
+        { label: loan?.loanNumber || "..." },
       ]}
       actions={
         <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>

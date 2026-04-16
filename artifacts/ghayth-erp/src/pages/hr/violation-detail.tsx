@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import {
-  Loader2, AlertTriangle, Shield, DollarSign, Calendar, User, FileText,
+  AlertTriangle, Shield, DollarSign, Calendar, User, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -35,15 +35,7 @@ export default function ViolationDetail() {
   const { data, isLoading } = useApiQuery<any>(["hr-violation-detail", id], `/hr/violations/${id}`);
   const item = data?.data ?? data;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="animate-spin text-primary" size={32} />
-      </div>
-    );
-  }
-
-  if (!item) {
+  if (!isLoading && !item) {
     return (
       <PageShell title="المخالفة غير موجودة" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/violations", label: "المخالفات" }]}>
         <Card>
@@ -64,12 +56,13 @@ export default function ViolationDetail() {
 
   return (
     <PageShell
-      title={`مخالفة — ${item.employeeName}`}
-      subtitle={`${VIOLATION_TYPES[item.type] || item.type} — ${item.period}`}
+      title={`مخالفة — ${item?.employeeName || ""}`}
+      subtitle={item ? `${VIOLATION_TYPES[item.type] || item.type} — ${item.period}` : undefined}
+      loading={isLoading}
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
         { href: "/hr/violations", label: "المخالفات" },
-        { label: item.employeeName },
+        { label: item?.employeeName || "..." },
       ]}
       actions={
         <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>

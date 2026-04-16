@@ -5,7 +5,7 @@ import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Timer, Calendar, DollarSign, Clock, User } from "lucide-react";
+import { Timer, Calendar, DollarSign, Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -22,15 +22,7 @@ export default function OvertimeDetail() {
   const { data, isLoading } = useApiQuery<any>(["hr-overtime-detail", id], `/hr/overtime/${id}`);
   const item = data?.data ?? data;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="animate-spin text-primary" size={32} />
-      </div>
-    );
-  }
-
-  if (!item) {
+  if (!isLoading && !item) {
     return (
       <PageShell title="الطلب غير موجود" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/overtime", label: "الوقت الإضافي" }]}>
         <Card>
@@ -57,8 +49,9 @@ export default function OvertimeDetail() {
 
   return (
     <PageShell
-      title={`طلب وقت إضافي ${item.requestNumber}`}
-      subtitle={`${item.employeeName} — ${item.jobTitle || ""}`}
+      title={`طلب وقت إضافي ${item?.requestNumber || ""}`}
+      subtitle={item ? `${item.employeeName} — ${item.jobTitle || ""}` : undefined}
+      loading={isLoading}
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
         { href: "/hr/overtime", label: "الوقت الإضافي" },

@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Loader2, LogOut, Calendar, DollarSign, CheckCircle, Clock,
-  User, Briefcase, AlertTriangle,
+  LogOut, Calendar, DollarSign, CheckCircle, Clock,
+  User, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -52,15 +52,7 @@ export default function ExitDetail() {
     queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="animate-spin text-primary" size={32} />
-      </div>
-    );
-  }
-
-  if (!item) {
+  if (!isLoading && !item) {
     return (
       <PageShell title="الطلب غير موجود" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/exit", label: "نهاية الخدمة" }]}>
         <Card>
@@ -86,12 +78,13 @@ export default function ExitDetail() {
 
   return (
     <PageShell
-      title={`طلب نهاية خدمة — ${item.employeeName}`}
-      subtitle={`${EXIT_TYPE_MAP[item.exitType] || item.exitType} — ${item.jobTitle || ""}`}
+      title={`طلب نهاية خدمة — ${item?.employeeName || ""}`}
+      subtitle={item ? `${EXIT_TYPE_MAP[item.exitType] || item.exitType} — ${item.jobTitle || ""}` : undefined}
+      loading={isLoading}
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
         { href: "/hr/exit", label: "نهاية الخدمة" },
-        { label: item.employeeName },
+        { label: item?.employeeName || "..." },
       ]}
       actions={
         <div className="flex items-center gap-2">
