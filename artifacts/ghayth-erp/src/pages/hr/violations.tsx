@@ -1,5 +1,5 @@
 import { formatCurrency } from "@/lib/formatters";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ const INCIDENT_LABELS: Record<string, { label: string; Icon: typeof Clock; color
 };
 
 export default function ViolationsPage() {
+  const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const { data } = useApiQuery<{ data: any[]; total: number }>(
     ["discipline-memos"],
@@ -269,6 +270,7 @@ export default function ViolationsPage() {
         noToolbar
         emptyMessage="لا توجد محاضر مخالفات — سجّل مخالفة جديدة للبدء"
         pageSize={20}
+        onRowClick={(item) => navigate(`/hr/discipline/memos/${item.id}`)}
       />
     </PageShell>
   );

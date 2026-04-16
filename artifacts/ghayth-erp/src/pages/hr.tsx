@@ -9,7 +9,7 @@ import {
   Users, Clock, Calendar, DollarSign, GraduationCap, Target,
   Briefcase, Scale, CalendarClock, Network, UserPlus, ChevronLeft,
   TrendingUp, AlertCircle, CheckCircle2, ClipboardCheck,
-  Wallet, Timer, LogOut,
+  Wallet, Timer, LogOut, ArrowRightLeft, Star, Award,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -90,6 +90,7 @@ export default function HR() {
   const { data: loansResp } = useApiQuery<any>(["loans-active", scopeQueryString], `/hr/loans?status=active&page=1&limit=1${scopeSuffix}`);
   const { data: overtimeResp } = useApiQuery<any>(["overtime-pending", scopeQueryString], `/hr/overtime?status=pending&page=1&limit=1${scopeSuffix}`);
   const { data: exitResp } = useApiQuery<any>(["exit-pending", scopeQueryString], `/hr/exit?status=pending&page=1&limit=1${scopeSuffix}`);
+  const { data: violationsResp } = useApiQuery<any>(["violations-stats", scopeQueryString], `/hr/violations-stats?${scopeQueryString || ""}`);
 
   const totalEmployees = employeesResp?.total ?? "—";
   const pendingLeaves = pendingLeavesResp?.total ?? "—";
@@ -98,6 +99,7 @@ export default function HR() {
   const activeLoans = loansResp?.total ?? 0;
   const pendingOvertime = overtimeResp?.total ?? 0;
   const pendingExit = exitResp?.total ?? 0;
+  const violationsThisMonth = violationsResp?.thisMonth ?? 0;
 
   return (
     <PageShell
@@ -166,6 +168,14 @@ export default function HR() {
           iconColor="text-rose-600 bg-rose-50"
           onClick={() => navigate("/hr/exit")}
         />
+        <KPICard
+          title="مخالفات الشهر"
+          value={violationsThisMonth}
+          subtitle="مخالفات مسجلة"
+          icon={Scale}
+          iconColor="text-red-600 bg-red-50"
+          onClick={() => navigate("/hr/violations")}
+        />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -205,7 +215,9 @@ export default function HR() {
             <QuickLink label="سلف الموظفين" icon={Wallet} iconColor="text-orange-600 bg-orange-50" path="/hr/loans" description="إدارة سلف وقروض الموظفين" />
             <QuickLink label="الوقت الإضافي" icon={Timer} iconColor="text-cyan-600 bg-cyan-50" path="/hr/overtime" description="طلبات ساعات العمل الإضافية" />
             <QuickLink label="تقييم الأداء" icon={Target} iconColor="text-orange-600 bg-orange-50" path="/hr/performance" description="تقييمات الأداء الدورية" />
+            <QuickLink label="تقييم 360°" icon={Star} iconColor="text-amber-600 bg-amber-50" path="/hr/evaluation-360" description="تقييم شامل متعدد الأطراف" />
             <QuickLink label="التدريب" icon={GraduationCap} iconColor="text-cyan-600 bg-cyan-50" path="/hr/training" description="البرامج التدريبية للموظفين" />
+            <QuickLink label="مكافأة نهاية الخدمة" icon={Award} iconColor="text-green-600 bg-green-50" path="/hr/gratuity" description="حساب وتقدير المكافآت" />
           </div>
         </div>
 
@@ -219,6 +231,7 @@ export default function HR() {
             <QuickLink label="المتقدمين" icon={Users} iconColor="text-pink-600 bg-pink-50" path="/hr/recruitment/applications" description="طلبات التقديم المستلمة" />
             <QuickLink label="المخالفات والجزاءات" icon={Scale} iconColor="text-red-600 bg-red-50" path="/hr/violations" description="سجل المخالفات والجزاءات" />
             <QuickLink label="نهاية الخدمة" icon={LogOut} iconColor="text-gray-600 bg-gray-50" path="/hr/exit" description="طلبات إنهاء الخدمة والتسوية" />
+            <QuickLink label="نقل الموظفين" icon={ArrowRightLeft} iconColor="text-blue-600 bg-blue-50" path="/hr/transfers" description="طلبات النقل بين الفروع" />
           </div>
         </div>
 

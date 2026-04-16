@@ -1,5 +1,5 @@
 import { formatCurrency } from "@/lib/formatters";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ const EXIT_TYPE_MAP: Record<string, string> = {
 };
 
 export default function ExitRequestsPage() {
+  const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -274,6 +275,7 @@ export default function ExitRequestsPage() {
         noToolbar
         emptyMessage="لا توجد طلبات نهاية خدمة"
         pageSize={20}
+        onRowClick={(item) => navigate(`/hr/exit/${item.id}`)}
       />
     </PageShell>
   );

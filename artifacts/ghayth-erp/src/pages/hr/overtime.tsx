@@ -1,5 +1,5 @@
 import { formatCurrency } from "@/lib/formatters";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export default function OvertimePage() {
+  const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -272,6 +273,7 @@ export default function OvertimePage() {
         noToolbar
         emptyMessage="لا توجد طلبات وقت إضافي — سجّل طلب جديد للبدء"
         pageSize={20}
+        onRowClick={(item) => navigate(`/hr/overtime/${item.id}`)}
       />
     </PageShell>
   );

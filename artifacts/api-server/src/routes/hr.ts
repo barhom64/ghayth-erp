@@ -2217,6 +2217,35 @@ router.get("/violations", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { console.error("Get violations error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
+router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [item] = await rawQuery<any>(
+      `SELECT ev.*, e.name AS "employeeName", e."empNumber",
+              ea."jobTitle", ea.salary, b.name AS "branchName"
+       FROM employee_violations ev
+       JOIN employee_assignments ea ON ea.id = ev."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN branches b ON b.id = ea."branchId"
+       WHERE ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`,
+      [req.params.id, scope.companyId]
+    );
+    if (!item) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+
+    // جلب محضر التحقيق المرتبط إن وجد
+    const memos = await rawQuery<any>(
+      `SELECT dm.id, dm."memoNumber", dm.status, dm."penaltyLabel",
+              dm."baseDeductionAmount", dm."totalDeductionAmount", dm."createdAt"
+       FROM discipline_memos dm
+       WHERE dm."violationId" = $1 AND dm."companyId" = $2
+       ORDER BY dm."createdAt" DESC`,
+      [item.id, scope.companyId]
+    ).catch(() => [] as any[]);
+
+    res.json({ ...item, memos });
+  } catch (err) { console.error("Get violation detail error:", err); res.status(500).json({ error: "خطأ في الخادم" }); }
+});
+
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2723,21 +2752,22 @@ router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) =>
 router.get("/violations-stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const currentMonth = new Date().toISOString().slice(0, 7);
     const [total] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
-    const [active] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
+    const [thisMonthRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL AND period = $2`, [scope.companyId, currentMonth]
     );
     const [totalDeductions] = await rawQuery<any>(
       `SELECT COALESCE(SUM(deduction),0) AS total FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
     res.json({
       total: Number(total?.count ?? 0),
-      active: Number(active?.count ?? 0),
+      thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     });
-  } catch (_e) { res.json({ total: 0, active: 0, totalDeductions: 0 }); }
+  } catch (_e) { res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
 });
 
 router.patch("/violations/:id", requirePermission("hr:update"), async (req, res) => {

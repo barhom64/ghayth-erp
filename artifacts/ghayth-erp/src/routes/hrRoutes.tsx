@@ -23,10 +23,13 @@ const Loans = lazy(() => import("@/pages/hr/loans"));
 const LoanDetail = lazy(() => import("@/pages/hr/loan-detail"));
 const LoansCreate = lazy(() => import("@/pages/create/hr/loans-create"));
 const Overtime = lazy(() => import("@/pages/hr/overtime"));
+const OvertimeDetail = lazy(() => import("@/pages/hr/overtime-detail"));
 const OvertimeCreate = lazy(() => import("@/pages/create/hr/overtime-create"));
 const ExitRequests = lazy(() => import("@/pages/hr/exit-requests"));
+const ExitDetail = lazy(() => import("@/pages/hr/exit-detail"));
 const ExitCreate = lazy(() => import("@/pages/create/hr/exit-create"));
 const Violations = lazy(() => import("@/pages/hr/violations"));
+const ViolationDetail = lazy(() => import("@/pages/hr/violation-detail"));
 const ViolationsCreate = lazy(() => import("@/pages/create/hr/violations-create"));
 const Shifts = lazy(() => import("@/pages/hr/shifts"));
 const ShiftsCreate = lazy(() => import("@/pages/create/hr/shifts-create"));
@@ -103,10 +106,13 @@ export const hrRoutes = [
   { path: "/hr/loans/:id", component: LoanDetail, subKey: "payroll" },
   { path: "/hr/overtime", component: Overtime, subKey: "attendance" },
   { path: "/hr/overtime/create", component: OvertimeCreate, subKey: "attendance" },
+  { path: "/hr/overtime/:id", component: OvertimeDetail, subKey: "attendance" },
   { path: "/hr/exit", component: ExitRequests, subKey: "employees" },
   { path: "/hr/exit/create", component: ExitCreate, subKey: "employees" },
+  { path: "/hr/exit/:id", component: ExitDetail, subKey: "employees" },
   { path: "/hr/violations", component: Violations, subKey: "violations" },
   { path: "/hr/violations/create", component: ViolationsCreate, subKey: "violations" },
+  { path: "/hr/violations/:id", component: ViolationDetail, subKey: "violations" },
   { path: "/hr/violations/management", component: ViolationsManagement, subKey: "violations" },
   { path: "/hr/violations/penalty-escalation", component: PenaltyEscalation, subKey: "violations" },
   { path: "/hr/violations/auto-detection", component: AutoDetection, subKey: "violations" },
