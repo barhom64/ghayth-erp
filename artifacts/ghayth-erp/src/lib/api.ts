@@ -428,3 +428,15 @@ export async function apiPatch<T = any>(path: string, body: Record<string, any>)
 export async function apiDelete<T = any>(path: string): Promise<T> {
   return apiFetch<T>(path, { method: "DELETE" });
 }
+
+export function buildErrorToast(err: unknown): { title: string; description?: string; variant: "destructive" } {
+  if (err instanceof ApiError) {
+    return {
+      title: err.message,
+      description: err.fix ?? err.field ? `الحقل: ${err.field}` : undefined,
+      variant: "destructive",
+    };
+  }
+  const msg = err instanceof Error ? err.message : "حدث خطأ غير متوقع";
+  return { title: msg, variant: "destructive" };
+}

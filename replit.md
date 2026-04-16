@@ -77,3 +77,35 @@ The project is structured as a pnpm workspace monorepo.
 -   **UI Library**: TailwindCSS, shadcn/ui
 -   **Maps**: Leaflet, react-leaflet
 -   **Object Storage**: Replit Object Storage (GCS-backed) via `@google-cloud/storage`
+
+# Error Prevention System
+
+**Health Check Script:** `bash scripts/health-check.sh`
+
+Run before every deployment or after merging branches. Checks:
+1. **Broken imports** — all imports from `api.ts` are actually exported
+2. **Missing routes** — page files exist but not registered in route files
+3. **Dangling routes** — route files reference non-existent page files
+4. **DB column mismatches** — code references columns/tables that don't exist
+5. **API endpoints** — all endpoints respond (401 = auth required = OK)
+6. **Service health** — all 4 services are running
+
+**Common Bugs & Prevention Rules:**
+
+| Bug Pattern | Root Cause | Prevention |
+|------------|-----------|------------|
+| Import not found | Branch adds function but doesn't export it in shared file | Always add `export` in `api.ts` when creating new utility functions |
+| Route 404 | Page file created but not registered in `*Routes.tsx` | Every new `.tsx` page MUST have a matching route entry |
+| DB column error | Code queries column that doesn't exist | Check `information_schema.columns` before using new column names |
+| CRON crash | CRON job assumes table/column exists | Wrap CRON queries in try-catch; use `ensureXxxTable()` pattern |
+
+**Critical Schema Facts (do NOT violate):**
+- `employees` has NO `companyId`, NO `deletedAt` — company link is via `employee_assignments`
+- `invoices` has NO `updatedAt` — use `skipUpdatedAt: true` in lifecycleEngine
+- `official_letters` has NO `branchId` — never query it
+- `company_settings` does NOT exist — wrap in try-catch with empty fallback
+- `obligations` created dynamically via `ensureObligationsTable()` — not in base schema
+- `purchase_requests` uses `expectedDelivery` (not `expectedDate`); items use `name` (not `itemName`), `totalPrice` (not `lineTotal`)
+- `property_buildings` has NO `branchId`, `floors`, `description`
+
+**JSX Rule:** NEVER use `<DataTable<any>` — Babel JSX parser fails on generic type params. Use `(DataTable as any)` or remove generic.
