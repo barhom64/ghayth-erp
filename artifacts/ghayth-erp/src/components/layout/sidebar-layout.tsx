@@ -72,6 +72,8 @@ const allNavSections: NavSection[] = [
       { label: "طلب إجازة", path: "/my-leave-request", icon: Calendar },
       { label: "حضوري وانصرافي", path: "/my-attendance", icon: Clock },
       { label: "كشف راتبي", path: "/my-payslip", icon: DollarSign },
+      { label: "سلفي", path: "/my-loans", icon: Wallet },
+      { label: "ساعاتي الإضافية", path: "/my-overtime", icon: Timer },
       { label: "تقييمي", path: "/my-performance", icon: Target },
       { label: "مستنداتي", path: "/my-documents", icon: FileText },
       { label: "إشعاراتي", path: "/notifications", icon: Bell },
