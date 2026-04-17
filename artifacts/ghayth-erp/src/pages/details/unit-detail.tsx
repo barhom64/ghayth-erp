@@ -17,8 +17,10 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { FinancialTab } from "@/components/shared/financial-tab";
+import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
-import { CheckSquare } from "lucide-react";
+import { CheckSquare, BookOpen } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 
 const TABS = [
@@ -26,6 +28,7 @@ const TABS = [
   { key: "contracts", label: "العقود", icon: FileText },
   { key: "payments", label: "المدفوعات والمتأخرات", icon: Banknote },
   { key: "maintenance", label: "الصيانة", icon: Wrench },
+  { key: "finance", label: "الملف المالي", icon: BookOpen },
   { key: "tasks", label: "المهام", icon: CheckSquare },
   { key: "documents", label: "المستندات", icon: FileText },
   { key: "timeline", label: "السجل الزمني", icon: Clock },
@@ -682,6 +685,30 @@ export default function UnitDetail() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === "finance" && id && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-blue-600" />
+                الملف المالي الشامل للوحدة
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EntityFinancialProfile entityType="property" entityId={id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">دفتر الأستاذ المساعد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FinancialTab entityType="property" entityId={id} />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "tasks" && id && (

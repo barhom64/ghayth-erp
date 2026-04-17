@@ -8,9 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { FinancialTab } from "@/components/shared/financial-tab";
+import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import {
   Users2, ArrowRight, Phone, Mail, CreditCard, FileText,
-  Banknote, CheckCircle, AlertTriangle, Building2, Home, Clock
+  Banknote, CheckCircle, AlertTriangle, Building2, Home, Clock, BookOpen
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -20,6 +22,7 @@ const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Users2 },
   { key: "contracts", label: "العقود", icon: FileText },
   { key: "payments", label: "المدفوعات", icon: Banknote },
+  { key: "finance", label: "الملف المالي", icon: BookOpen },
   { key: "documents", label: "المستندات", icon: CreditCard },
   { key: "timeline", label: "السجل الزمني", icon: Clock },
 ] as const;
@@ -257,6 +260,30 @@ export default function TenantDetail() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === "finance" && id && (
+        <div className="space-y-6">
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-blue-600" />
+                الملف المالي الشامل للمستأجر
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EntityFinancialProfile entityType="contract" entityId={id} />
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">دفتر الأستاذ المساعد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FinancialTab entityType="client" entityId={id} />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "documents" && (

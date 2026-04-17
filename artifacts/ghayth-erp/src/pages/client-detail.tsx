@@ -20,6 +20,7 @@ import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { FinancialTab } from "@/components/shared/financial-tab";
+import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { useToast } from "@/hooks/use-toast";
 
@@ -458,17 +459,27 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "finance" && id && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-600" />
-              الملف المالي للعميل
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FinancialTab entityType="client" entityId={id} />
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-blue-600" />
+                الملف المالي الشامل للعميل
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EntityFinancialProfile entityType="vendor" entityId={id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">دفتر الأستاذ المساعد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FinancialTab entityType="client" entityId={id} />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "tasks" && id && (

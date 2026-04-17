@@ -72,6 +72,7 @@ export default function VehicleDetail() {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   const { data: vehicle, isLoading, isError, error } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
+  const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -746,6 +747,61 @@ export default function VehicleDetail() {
 
       {activeTab === "finance" && id && (
         <div className="space-y-6">
+          {tco && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Gauge className="h-4 w-4 text-orange-600" />
+                  تحليل التكلفة الكلية (TCO)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <p className="text-lg font-bold text-blue-700">{formatCurrency(Number(tco.totalCost || 0))}</p>
+                    <p className="text-[10px] text-blue-600">التكلفة الإجمالية</p>
+                  </div>
+                  <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-100">
+                    <p className="text-lg font-bold text-orange-700">{formatCurrency(Number(tco.costPerKm || 0))}</p>
+                    <p className="text-[10px] text-orange-600">تكلفة/كم</p>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg border">
+                    <p className="text-lg font-bold">{Number(tco.totalKm || 0).toLocaleString("ar-SA")}</p>
+                    <p className="text-[10px] text-gray-500">إجمالي الكيلومترات</p>
+                  </div>
+                  <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-100">
+                    <p className="text-lg font-bold text-purple-700">{Number(tco.totalTrips || 0)}</p>
+                    <p className="text-[10px] text-purple-600">إجمالي الرحلات</p>
+                  </div>
+                </div>
+                {tco.breakdown && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-gray-500 mb-2">تفصيل التكاليف</p>
+                    {[
+                      { label: "سعر الشراء", value: tco.breakdown.purchase, color: "bg-blue-500" },
+                      { label: "الاستهلاك", value: tco.breakdown.depreciation, color: "bg-gray-500" },
+                      { label: "الوقود", value: tco.breakdown.fuel, color: "bg-amber-500" },
+                      { label: "الصيانة", value: tco.breakdown.maintenance, color: "bg-orange-500" },
+                      { label: "التأمين", value: tco.breakdown.insurance, color: "bg-emerald-500" },
+                      { label: "المخالفات", value: tco.breakdown.fines, color: "bg-red-500" },
+                    ].filter(item => Number(item.value) > 0).map(item => {
+                      const pct = tco.totalCost > 0 ? Math.round((Number(item.value) / tco.totalCost) * 100) : 0;
+                      return (
+                        <div key={item.label} className="flex items-center gap-3 text-sm">
+                          <span className="w-20 text-xs text-gray-500">{item.label}</span>
+                          <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                            <div className={cn("h-full rounded-full", item.color)} style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="w-24 text-xs font-bold text-left">{formatCurrency(Number(item.value))}</span>
+                          <span className="w-10 text-[10px] text-gray-400 text-left">{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BookOpen className="h-5 w-5 text-blue-600" /> الملف المالي الشامل</CardTitle></CardHeader>
             <CardContent>

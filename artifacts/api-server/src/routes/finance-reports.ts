@@ -359,6 +359,32 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", async (req, res) =
       movements = poRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
       const totalOrdered = poRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
       sections = { orders: { label: "أوامر الشراء", amount: totalOrdered, count: poRows.length } };
+
+    } else if (entityType === "vehicle" || entityType === "property" || entityType === "project" || entityType === "product") {
+      const columnMap: Record<string, string> = { vehicle: "vehicleId", property: "propertyId", project: "projectId", product: "productId" };
+      const col = columnMap[entityType];
+      const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
+      const journalRows = await rawQuery<any>(
+        `SELECT je.id, je.ref, je.description, je."createdAt" AS date, je.type AS "movementType",
+                COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND jl."${col}" = $2
+         ${dateFilter.replace(/"createdAt"/g, 'je."createdAt"')}
+         GROUP BY je.id, je.ref, je.description, je."createdAt", je.type
+         ORDER BY je."createdAt" ASC`,
+        [scope.companyId, id, ...dateDates]
+      );
+      let runningBalance = 0;
+      movements = journalRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
+      const typeGroups: Record<string, { label: string; amount: number; count: number }> = {};
+      for (const m of journalRows) {
+        const t = m.movementType || "other";
+        if (!typeGroups[t]) typeGroups[t] = { label: t, amount: 0, count: 0 };
+        typeGroups[t].amount += Number(m.debit);
+        typeGroups[t].count++;
+      }
+      sections = typeGroups;
     }
 
     const totalDebit = movements.reduce((s: number, m: any) => s + Number(m.debit), 0);

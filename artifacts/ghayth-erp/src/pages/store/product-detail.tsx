@@ -8,6 +8,8 @@ import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-det
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
+import { FinancialTab } from "@/components/shared/financial-tab";
+import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   Package,
@@ -23,6 +25,7 @@ import {
   Box,
   DollarSign,
   TrendingUp,
+  BookOpen,
 } from "lucide-react";
 
 export default function ProductDetailPage() {
@@ -178,6 +181,25 @@ export default function ProductDetailPage() {
         ) : (
           <DataTable columns={poColumns} data={purchaseOrders} pageSize={10} emptyMessage="لا توجد أوامر" noToolbar />
         ),
+    },
+    {
+      key: "finance",
+      label: "الملف المالي",
+      icon: BookOpen,
+      content: () => (
+        <div className="space-y-6">
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-6">
+              <EntityFinancialProfile entityType="product" entityId={id} />
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-6">
+              <FinancialTab entityType="product" entityId={id} />
+            </CardContent>
+          </Card>
+        </div>
+      ),
     },
     {
       key: "documents",

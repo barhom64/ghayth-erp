@@ -11,7 +11,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 interface FinancialTabProps {
-  entityType: "employee" | "vehicle" | "property" | "supplier" | "client" | "project";
+  entityType: "employee" | "vehicle" | "property" | "supplier" | "client" | "project" | "product";
   entityId: string | number;
   sections?: string[];
 }
