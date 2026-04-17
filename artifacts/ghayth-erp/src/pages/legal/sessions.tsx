@@ -3,7 +3,6 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 interface Session {
   id: number;
@@ -41,11 +40,6 @@ const columns: DataTableColumn<Session>[] = [
 export default function LegalSessions() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["legal-sessions"], "/legal/sessions/upcoming");
   const rows = asList(data?.data || data);
-  const [filters, setFilters] = useFilters();
-  const filtered = applyFilters(rows, filters, {
-    searchFields: ["caseTitle", "location", "judge", "lawyerName"],
-    statusField: "priority",
-  });
 
   return (
     <PageShell
@@ -54,8 +48,7 @@ export default function LegalSessions() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الجلسات القادمة" }]}
       loading={isLoading}
     >
-      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
-      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} />
+      <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>
   );
 }

@@ -3,7 +3,6 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { createNotification, createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -13,7 +12,7 @@ router.get("/postings", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM job_postings WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "List job postings"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/postings", async (req, res) => {
@@ -25,7 +24,7 @@ router.post("/postings", async (req, res) => {
       [title, department, location, type || "full-time", description, requirements, salaryMin, salaryMax, status || "open", closingDate, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create job posting"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/postings/:id", async (req, res) => {
@@ -34,7 +33,7 @@ router.get("/postings/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get job posting"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/postings/:id", async (req, res) => {
@@ -60,7 +59,7 @@ router.patch("/postings/:id", async (req, res) => {
     if (result.affectedRows === 0) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update job posting"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // Close a job posting with cascade to open applications + candidate notifications.
@@ -140,7 +139,7 @@ router.delete("/postings/:id", async (req, res) => {
     const result = await rawExecute(`DELETE FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
     res.json({ message: "تم حذف الإعلان الوظيفي بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete job posting"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/applications", async (req, res) => {
@@ -152,7 +151,7 @@ router.get("/applications", async (req, res) => {
     if (postingId) { params.push(postingId); where += ` AND a."postingId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE ${where} ORDER BY a."createdAt" DESC`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "List job applications"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/applications", async (req, res) => {
@@ -166,7 +165,7 @@ router.post("/applications", async (req, res) => {
       [postingId, applicantName, email, phone, resumeUrl, status || "new", notes, rating]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create job application"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/applications/:id", async (req, res) => {
@@ -175,7 +174,7 @@ router.get("/applications/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get job application"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/applications/:id", async (req, res) => {
@@ -194,61 +193,9 @@ router.patch("/applications/:id", async (req, res) => {
     if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
     params.push(id);
     await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(
-      `SELECT a.*, jp.title AS "postingTitle", jp.department, jp."companyId", jp."salaryMin"
-       FROM job_applications a JOIN job_postings jp ON a."postingId" = jp.id WHERE a.id = $1`,
-      [id]
-    );
-
-    if (b.status === "hired" && row && !row.createdEmployeeId) {
-      try {
-        const { insertId: empId } = await rawExecute(
-          `INSERT INTO employees (name, email, phone, status) VALUES ($1, $2, $3, 'active')`,
-          [row.applicantName, row.email, row.phone]
-        );
-        const { insertId: asnId } = await rawExecute(
-          `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "jobTitle", role, salary, "hireDate", status, "isPrimary")
-           VALUES ($1, $2, $3, $4, 'employee', $5, CURRENT_DATE, 'active', true)`,
-          [empId, row.companyId, scope.branchId, row.postingTitle || "موظف جديد", row.salaryMin ?? 0]
-        );
-        await rawExecute(
-          `INSERT INTO employee_contracts ("employeeId", "assignmentId", "companyId", "contractType", "startDate", "probationEndDate", status)
-           VALUES ($1, $2, $3, 'full_time', CURRENT_DATE, CURRENT_DATE + INTERVAL '90 days', 'active')`,
-          [empId, asnId, row.companyId]
-        );
-        await rawExecute(
-          `UPDATE job_applications SET "createdEmployeeId" = $1, "onboardedAt" = NOW() WHERE id = $2`,
-          [empId, id]
-        );
-        row.createdEmployeeId = empId;
-
-        createAuditLog({
-          companyId: row.companyId, branchId: scope.branchId, userId: scope.userId,
-          action: "recruitment_hired", entity: "job_application", entityId: id,
-          after: { employeeId: empId, assignmentId: asnId, applicantName: row.applicantName },
-        }).catch(console.error);
-
-        const [hrMgr] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role = 'hr_manager' AND status = 'active' LIMIT 1`,
-          [row.companyId]
-        );
-        if (hrMgr) {
-          createNotification({
-            companyId: row.companyId, assignmentId: hrMgr.id,
-            type: "onboarding_new_hire",
-            title: "موظف جديد — يتطلب إكمال التعيين",
-            body: `تم تعيين ${row.applicantName} من طلب التوظيف #${id}. يرجى استكمال بياناته.`,
-            priority: "high", refType: "employee", refId: empId,
-            actionUrl: `/employees/${empId}`,
-          }).catch(console.error);
-        }
-      } catch (e) {
-        console.error("Auto-onboard from recruitment failed:", e);
-      }
-    }
-
+    const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update job application"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/applications/:id", async (req, res) => {
@@ -259,7 +206,7 @@ router.delete("/applications/:id", async (req, res) => {
     if (!existing) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
     await rawExecute(`DELETE FROM job_applications WHERE id=$1`, [id]);
     res.json({ message: "تم حذف طلب التوظيف بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete job application"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/stats", async (req, res) => {
@@ -276,7 +223,7 @@ router.get("/stats", async (req, res) => {
       newApplications: Number(newApps.count),
       scheduledInterviews: Number(interviews.count),
     });
-  } catch (err) { handleRouteError(err, res, "Get recruitment stats"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;

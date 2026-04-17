@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -71,13 +70,16 @@ export default function MaintenanceCreate() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label>المركبة <span className="text-red-500">*</span></Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن المركبة..."
-            value={form.vehicleId}
-            onChange={(v) => setForm((f) => ({ ...f, vehicleId: String(v) }))}
-            options={vehicles.map((v: any) => ({ value: String(v.id), label: `${v.plateNumber} - ${v.make || ""} ${v.model || ""}` }))}
-          />
+          <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="اختر المركبة" />
+            </SelectTrigger>
+            <SelectContent>
+              {vehicles.map((v: any) => (
+                <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>نوع الصيانة</Label>
@@ -117,16 +119,6 @@ export default function MaintenanceCreate() {
           <Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
         </div>
       </div>
-      {Number(form.cost) > 0 && (
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-          <p className="font-semibold mb-1">العمليات المالية المرتبطة:</p>
-          <ul className="list-disc list-inside space-y-1 text-blue-700">
-            <li>عند إكمال الصيانة: سيتم إنشاء قيد محاسبي تلقائي بمبلغ {Number(form.cost).toLocaleString("ar-SA")} ريال</li>
-            <li>القيد: مدين مصروف صيانة مركبات / دائن النقدية</li>
-            <li>يتم ربط القيد بالمركبة لتتبع إجمالي تكاليف الصيانة لكل مركبة</li>
-          </ul>
-        </div>
-      )}
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات الصيانة" />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/fleet/maintenance")}>إلغاء</Button>

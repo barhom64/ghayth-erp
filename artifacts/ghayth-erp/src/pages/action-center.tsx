@@ -3,7 +3,6 @@ import { formatDateAr } from "@/lib/formatters";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { useApiMutation } from "@/lib/api";
-import { LOAN_TYPES, EXIT_TYPES } from "@/lib/hr-type-maps";
 import { useAppContext } from "@/contexts/app-context";
 import { useAuth } from "@/lib/auth";
 import {
@@ -320,7 +319,8 @@ export default function ActionCenter() {
             </div>
           </div>
         );
-      case "loans":
+      case "loans": {
+        const loanTypeLabels: Record<string, string> = { salary_advance: "سلفة راتب", personal: "سلفة شخصية", emergency: "سلفة طارئة" };
         return (
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
@@ -328,10 +328,11 @@ export default function ActionCenter() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{LOAN_TYPES[item.loanType] || item.loanType} — {Number(item.amount).toLocaleString("ar-SA")} ر.س</p>
+              <p className="text-xs text-gray-500">{loanTypeLabels[item.loanType] || item.loanType} — {Number(item.amount).toLocaleString("ar-SA")} ر.س</p>
             </div>
           </div>
         );
+      }
       case "overtime":
         return (
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -344,7 +345,8 @@ export default function ActionCenter() {
             </div>
           </div>
         );
-      case "exit":
+      case "exit": {
+        const exitTypeLabels: Record<string, string> = { resignation: "استقالة", termination: "فصل", retirement: "تقاعد", contract_end: "انتهاء عقد", mutual: "اتفاق متبادل" };
         return (
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center shrink-0">
@@ -352,10 +354,11 @@ export default function ActionCenter() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{EXIT_TYPES[item.exitType] || item.exitType}</p>
+              <p className="text-xs text-gray-500">{exitTypeLabels[item.exitType] || item.exitType}</p>
             </div>
           </div>
         );
+      }
       default:
         return null;
     }

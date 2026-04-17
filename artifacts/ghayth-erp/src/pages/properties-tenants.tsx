@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { PageShell } from "@/components/page-shell";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -125,16 +124,16 @@ export default function PropertiesTenants() {
   ];
 
   return (
-    <PageShell
-      title="المستأجرون"
-      subtitle="سجل كامل لجميع المستأجرين الحاليين والسابقين"
-      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
-      actions={
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">المستأجرون</h1>
+          <p className="text-gray-500 text-sm mt-1">سجل كامل لجميع المستأجرين الحاليين والسابقين</p>
+        </div>
         <Link href="/properties/tenants/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> مستأجر جديد</Button>
         </Link>
-      }
-    >
+      </div>
 
       <AdvancedFilters
         config={{
@@ -205,6 +204,6 @@ export default function PropertiesTenants() {
           />
         </CardContent>
       </Card>
-    </PageShell>
+    </div>
   );
 }

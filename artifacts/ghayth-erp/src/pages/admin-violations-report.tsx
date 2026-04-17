@@ -3,8 +3,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { PageShell } from "@/components/page-shell";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -12,6 +11,7 @@ import {
   CheckCircle2,
   ShieldAlert,
   TrendingUp,
+  Filter,
   BarChart3,
   Building2,
 } from "lucide-react";
@@ -61,7 +61,7 @@ export default function ViolationsReportPage() {
   if (filters.status) queryParams.set("status", filters.status);
   if (filters.department) queryParams.set("department", filters.department);
 
-  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
+  const { data, isLoading } = useApiQuery<any>(
     ["violations-report", filters.type, filters.priority, filters.status, filters.department],
     `/admin/violations-report?${queryParams.toString()}`
   );
@@ -80,6 +80,10 @@ export default function ViolationsReportPage() {
   );
   const resolving = resolveMut.isPending ? resolveMut.variables?.id ?? null : null;
 
+  const handleResolve = (id: number) => {
+    resolveMut.mutate({ id });
+  };
+
   const summaryCards = [
     { label: "مخالفات اليوم", value: Number(summary.total || 0), icon: ShieldAlert, color: "text-gray-700 bg-gray-100" },
     { label: "مفتوحة اليوم", value: Number(summary.open || 0), icon: AlertTriangle, color: "text-red-600 bg-red-50" },
@@ -87,65 +91,8 @@ export default function ViolationsReportPage() {
     { label: "حرجة اليوم", value: Number(summary.critical || 0), icon: TrendingUp, color: "text-red-700 bg-red-100" },
   ];
 
-  const columns: DataTableColumn<any>[] = [
-    {
-      key: "type",
-      header: "النوع",
-      sortable: true,
-      render: (v) => <Badge variant="outline" className="text-xs">{TYPE_LABELS[v.type] || v.type}</Badge>,
-    },
-    {
-      key: "department",
-      header: "القسم",
-      sortable: true,
-      render: (v) => <span className="text-xs text-gray-600">{DEPARTMENT_LABELS[v.department] || v.department || "-"}</span>,
-    },
-    {
-      key: "description",
-      header: "الوصف",
-      sortable: true,
-      className: "max-w-[200px] truncate",
-    },
-    {
-      key: "priority",
-      header: "الأولوية",
-      sortable: true,
-      render: (v) => {
-        const pc = PRIORITY_CONFIG[v.priority] || PRIORITY_CONFIG.medium;
-        return <Badge className={cn("text-xs", pc.bg, pc.color)}>{pc.label}</Badge>;
-      },
-    },
-    {
-      key: "status",
-      header: "الحالة",
-      sortable: true,
-      render: (v) => v.status === "resolved"
-        ? <Badge className="bg-green-100 text-green-700 text-xs">تم الحل</Badge>
-        : <Badge className="bg-red-100 text-red-700 text-xs">مفتوحة</Badge>,
-    },
-    {
-      key: "auditDate",
-      header: "التاريخ",
-      sortable: true,
-      render: (v) => v.auditDate ? formatDateAr(v.auditDate) : "-",
-    },
-    {
-      key: "action",
-      header: "إجراء",
-      render: (v) => v.status === "open" ? (
-        <Button size="sm" variant="outline" className="text-xs" disabled={resolving === v.id} onClick={() => resolveMut.mutate({ id: v.id })}>
-          <CheckCircle2 className="h-3 w-3 me-1" /> تم المعالجة
-        </Button>
-      ) : null,
-    },
-  ];
-
   return (
-    <PageShell
-      title="تقرير المخالفات"
-      subtitle="رصد ومتابعة المخالفات التشغيلية عبر أقسام النظام"
-      breadcrumbs={[{ href: "/admin", label: "إدارة النظام" }]}
-    >
+    <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {summaryCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -175,7 +122,10 @@ export default function ViolationsReportPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                   <YAxis allowDecimals={false} />
-                  <Tooltip labelFormatter={(v) => `التاريخ: ${v}`} formatter={(v: any) => [`${v} مخالفة`, "العدد"]} />
+                  <Tooltip
+                    labelFormatter={(v) => `التاريخ: ${v}`}
+                    formatter={(v: any) => [`${v} مخالفة`, "العدد"]}
+                  />
                   <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -189,7 +139,8 @@ export default function ViolationsReportPage() {
           <Card>
             <CardContent className="p-4">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-orange-500" /> حسب النوع
+                <ShieldAlert className="h-4 w-4 text-orange-500" />
+                حسب النوع
               </h3>
               {byType.length > 0 ? (
                 <div className="space-y-2 max-h-[100px] overflow-y-auto">
@@ -208,7 +159,8 @@ export default function ViolationsReportPage() {
           <Card>
             <CardContent className="p-4">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-purple-500" /> حسب القسم
+                <Building2 className="h-4 w-4 text-purple-500" />
+                حسب القسم
               </h3>
               {byDepartment.length > 0 ? (
                 <div className="space-y-2">
@@ -229,31 +181,57 @@ export default function ViolationsReportPage() {
 
       <Card>
         <CardContent className="p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-500" />
+            تصفية
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="text-xs font-medium block mb-1">النوع</label>
-              <select className="w-full border rounded-lg p-2 bg-white text-sm" value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}>
+              <Label className="text-xs">النوع</Label>
+              <select
+                className="w-full border rounded-lg p-2 bg-white text-sm"
+                value={filters.type}
+                onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+              >
                 <option value="">الكل</option>
-                {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium block mb-1">القسم</label>
-              <select className="w-full border rounded-lg p-2 bg-white text-sm" value={filters.department} onChange={(e) => setFilters({ ...filters, department: e.target.value })}>
+              <Label className="text-xs">القسم</Label>
+              <select
+                className="w-full border rounded-lg p-2 bg-white text-sm"
+                value={filters.department}
+                onChange={(e) => setFilters({ ...filters, department: e.target.value })}
+              >
                 <option value="">الكل</option>
-                {Object.entries(DEPARTMENT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {Object.entries(DEPARTMENT_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium block mb-1">الأولوية</label>
-              <select className="w-full border rounded-lg p-2 bg-white text-sm" value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })}>
+              <Label className="text-xs">الأولوية</Label>
+              <select
+                className="w-full border rounded-lg p-2 bg-white text-sm"
+                value={filters.priority}
+                onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
+              >
                 <option value="">الكل</option>
-                {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                {Object.entries(PRIORITY_CONFIG).map(([k, v]) => (
+                  <option key={k} value={k}>{v.label}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium block mb-1">الحالة</label>
-              <select className="w-full border rounded-lg p-2 bg-white text-sm" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+              <Label className="text-xs">الحالة</Label>
+              <select
+                className="w-full border rounded-lg p-2 bg-white text-sm"
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              >
                 <option value="">الكل</option>
                 <option value="open">مفتوحة</option>
                 <option value="resolved">تم حلها</option>
@@ -265,19 +243,78 @@ export default function ViolationsReportPage() {
 
       <Card>
         <CardContent className="p-0">
-          <DataTable
-            columns={columns}
-            data={violations}
-            isLoading={isLoading}
-            isError={isError}
-            error={error as Error | null}
-            onRetry={() => refetch()}
-            emptyMessage="لا توجد مخالفات مطابقة"
-            emptyIcon={<ShieldAlert className="h-6 w-6 text-slate-400" />}
-            noToolbar
-          />
+          {isLoading ? (
+            <p className="p-8 text-center text-gray-400">جاري التحميل...</p>
+          ) : violations.length === 0 ? (
+            <p className="p-8 text-center text-gray-400">لا توجد مخالفات مطابقة</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="p-3 text-start">النوع</th>
+                    <th className="p-3 text-start">القسم</th>
+                    <th className="p-3 text-start">الوصف</th>
+                    <th className="p-3 text-start">الأولوية</th>
+                    <th className="p-3 text-start">الحالة</th>
+                    <th className="p-3 text-start">التاريخ</th>
+                    <th className="p-3 text-start">إجراء</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {violations.map((v: any) => {
+                    const pc = PRIORITY_CONFIG[v.priority] || PRIORITY_CONFIG.medium;
+                    return (
+                      <tr key={v.id} className="border-b hover:bg-gray-50">
+                        <td className="p-3">
+                          <Badge variant="outline" className="text-xs">
+                            {TYPE_LABELS[v.type] || v.type}
+                          </Badge>
+                        </td>
+                        <td className="p-3 text-xs text-gray-600">
+                          {DEPARTMENT_LABELS[v.department] || v.department || "-"}
+                        </td>
+                        <td className="p-3 max-w-xs truncate" title={v.description}>
+                          {v.description}
+                        </td>
+                        <td className="p-3">
+                          <Badge className={cn("text-xs", pc.bg, pc.color)}>
+                            {pc.label}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          {v.status === "resolved" ? (
+                            <Badge className="bg-green-100 text-green-700 text-xs">تم الحل</Badge>
+                          ) : (
+                            <Badge className="bg-red-100 text-red-700 text-xs">مفتوحة</Badge>
+                          )}
+                        </td>
+                        <td className="p-3 text-xs text-gray-400">
+                          {v.auditDate ? formatDateAr(v.auditDate) : "-"}
+                        </td>
+                        <td className="p-3">
+                          {v.status === "open" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs"
+                              disabled={resolving === v.id}
+                              onClick={() => handleResolve(v.id)}
+                            >
+                              <CheckCircle2 className="h-3 w-3 me-1" />
+                              تم المعالجة
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
-    </PageShell>
+    </div>
   );
 }

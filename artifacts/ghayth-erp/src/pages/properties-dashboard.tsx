@@ -10,10 +10,6 @@ import {
 import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { KpiGrid } from "@/components/shared/kpi-card";
-import { Badge } from "@/components/ui/badge";
 
 export default function PropertiesDashboard() {
   const { scopeQueryString } = useAppContext();
@@ -41,140 +37,72 @@ export default function PropertiesDashboard() {
   const openMaintenanceTickets = s.openMaintenanceTickets || 0;
   const buildingPerf: any[] = s.buildingPerformance || [];
 
-  const kpiItems = [
-    {
-      label: `${buildingPerf.length} مبنى / مجمع`,
-      value: totalUnits,
-      icon: Home,
-      color: "text-blue-600 bg-blue-50",
-      trend: "إجمالي الوحدات",
-    },
-    {
-      label: `${rented} مؤجرة · ${available} شاغرة`,
-      value: `${occupancyRate}%`,
-      icon: TrendingUp,
-      color: occupancyRate >= 80
-        ? "text-emerald-600 bg-emerald-50"
-        : occupancyRate >= 50
-          ? "text-amber-600 bg-amber-50"
-          : "text-red-600 bg-red-50",
-      trend: "نسبة الإشغال",
-    },
-    {
-      label: `من ${formatCurrency(s.monthlyExpected || 0)}`,
-      value: formatCurrency(s.monthlyCollected || 0),
-      icon: Banknote,
-      color: "text-violet-600 bg-violet-50",
-      trend: "تحصيل الشهر الحالي",
-    },
-    {
-      label: `${s.overduePayments || 0} دفعة متأخرة`,
-      value: formatCurrency(overdueAmount),
-      icon: AlertTriangle,
-      color: overdueAmount > 0
-        ? "text-red-600 bg-red-50"
-        : "text-gray-600 bg-gray-50",
-      trend: "المتأخرات",
-    },
-  ];
-
-  const buildingColumns: DataTableColumn<any>[] = [
-    {
-      key: "rank",
-      header: "#",
-      width: "60px",
-      render: (row: any, index: number) => {
-        const isTop = index === 0 && buildingPerf.length > 1;
-        const isBottom = index === buildingPerf.length - 1 && buildingPerf.length > 1;
-        if (isTop) return <Trophy className="h-3.5 w-3.5 text-amber-500 inline" />;
-        if (isBottom) return <TrendingDown className="h-3.5 w-3.5 text-red-400 inline" />;
-        return <span className="text-gray-400 font-mono">{index + 1}</span>;
-      },
-    },
-    {
-      key: "name",
-      header: "المبنى",
-      searchable: true,
-      render: (row: any) => (
-        <Link href={`/properties/buildings/${row.id}`} className="font-medium hover:text-blue-600 hover:underline">
-          {row.name}
-        </Link>
-      ),
-    },
-    {
-      key: "totalUnits",
-      header: "الوحدات",
-      sortable: true,
-      render: (row: any) => <span className="font-mono text-sm">{row.totalUnits || 0}</span>,
-    },
-    {
-      key: "rentedUnits",
-      header: "مؤجرة",
-      sortable: true,
-      render: (row: any) => <span className="font-mono text-sm text-blue-600">{row.rentedUnits || 0}</span>,
-    },
-    {
-      key: "occupancyRate",
-      header: "الإشغال",
-      sortable: true,
-      render: (row: any) => (
-        <div className="flex items-center gap-2">
-          <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={cn(
-                "h-full rounded-full",
-                row.occupancyRate >= 80 ? "bg-emerald-500" : row.occupancyRate >= 50 ? "bg-amber-500" : "bg-red-400"
-              )}
-              style={{ width: `${row.occupancyRate || 0}%` }}
-            />
-          </div>
-          <span className="text-xs font-medium">{row.occupancyRate || 0}%</span>
-        </div>
-      ),
-    },
-    {
-      key: "totalRevenue",
-      header: "الإيرادات",
-      sortable: true,
-      render: (row: any) => <span className="font-bold text-emerald-600">{formatCurrency(row.totalRevenue || 0)}</span>,
-    },
-    {
-      key: "performance",
-      header: "الأداء",
-      render: (row: any, index: number) => {
-        const isTop = index === 0 && buildingPerf.length > 1;
-        const isBottom = index === buildingPerf.length - 1 && buildingPerf.length > 1;
-        if (isTop) return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-0">الأفضل</Badge>;
-        if (isBottom) return <Badge className="bg-red-100 text-red-600 hover:bg-red-100 border-0">الأدنى</Badge>;
-        return null;
-      },
-    },
-  ];
-
-  const actions = (
-    <>
-      <Link href="/properties/buildings/create">
-        <Button variant="outline" size="sm" className="gap-1">
-          <Plus className="h-4 w-4" /> مبنى جديد
-        </Button>
-      </Link>
-      <Link href="/properties/create">
-        <Button size="sm" className="gap-1">
-          <Plus className="h-4 w-4" /> وحدة جديدة
-        </Button>
-      </Link>
-    </>
-  );
-
   return (
-    <PageShell
-      title="لوحة تحكم الأملاك"
-      subtitle="نظرة شاملة على أداء المحفظة العقارية"
-      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
-      actions={actions}
-      contentClassName="space-y-6"
-    >
-      <KpiGrid items={kpiItems} />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">لوحة تحكم الأملاك</h1>
+          <p className="text-gray-500 text-sm mt-1">نظرة شاملة على أداء المحفظة العقارية</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/properties/buildings/create">
+            <Button variant="outline" size="sm" className="gap-1">
+              <Plus className="h-4 w-4" /> مبنى جديد
+            </Button>
+          </Link>
+          <Link href="/properties/create">
+            <Button size="sm" className="gap-1">
+              <Plus className="h-4 w-4" /> وحدة جديدة
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-0">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-blue-100 text-sm font-medium">إجمالي الوحدات</p>
+              <Home className="h-5 w-5 text-blue-200" />
+            </div>
+            <p className="text-3xl font-bold">{totalUnits}</p>
+            <p className="text-blue-200 text-xs mt-1">{buildingPerf.length} مبنى / مجمع</p>
+          </CardContent>
+        </Card>
+
+        <Card className={cn("border-0 text-white", occupancyRate >= 80 ? "bg-gradient-to-br from-emerald-500 to-emerald-600" : occupancyRate >= 50 ? "bg-gradient-to-br from-amber-500 to-amber-600" : "bg-gradient-to-br from-red-500 to-red-600")}>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-white/80 text-sm font-medium">نسبة الإشغال</p>
+              <TrendingUp className="h-5 w-5 text-white/70" />
+            </div>
+            <p className="text-3xl font-bold">{occupancyRate}%</p>
+            <p className="text-white/70 text-xs mt-1">{rented} مؤجرة · {available} شاغرة</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-violet-600 to-violet-700 text-white border-0">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-violet-100 text-sm font-medium">تحصيل الشهر الحالي</p>
+              <Banknote className="h-5 w-5 text-violet-200" />
+            </div>
+            <p className="text-2xl font-bold">{formatCurrency(s.monthlyCollected || 0)}</p>
+            <p className="text-violet-200 text-xs mt-1">من {formatCurrency(s.monthlyExpected || 0)}</p>
+          </CardContent>
+        </Card>
+
+        <Card className={cn("border-0 text-white", overdueAmount > 0 ? "bg-gradient-to-br from-red-500 to-red-600" : "bg-gradient-to-br from-gray-500 to-gray-600")}>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-white/80 text-sm font-medium">المتأخرات</p>
+              <AlertTriangle className="h-5 w-5 text-white/70" />
+            </div>
+            <p className="text-2xl font-bold">{formatCurrency(overdueAmount)}</p>
+            <p className="text-white/70 text-xs mt-1">{s.overduePayments || 0} دفعة متأخرة</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="border-0 shadow-sm">
@@ -258,9 +186,7 @@ export default function PropertiesDashboard() {
               <div>
                 <p className="text-xs text-gray-500">طلب مفتوح</p>
                 {s.criticalMaintenanceTickets > 0 && (
-                  <Badge className="bg-red-100 text-red-600 hover:bg-red-100 border-0 text-xs">
-                    {s.criticalMaintenanceTickets} حرج
-                  </Badge>
+                  <p className="text-xs text-red-500 font-medium">{s.criticalMaintenanceTickets} حرج</p>
                 )}
               </div>
             </div>
@@ -333,22 +259,52 @@ export default function PropertiesDashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <DataTable
-              columns={buildingColumns}
-              data={buildingPerf}
-              pageSize={0}
-              noToolbar
-              searchPlaceholder={null}
-              rowClassName={(row: any) => {
-                const idx = buildingPerf.indexOf(row);
-                const isTop = idx === 0 && buildingPerf.length > 1;
-                const isBottom = idx === buildingPerf.length - 1 && buildingPerf.length > 1;
-                return cn(
-                  isTop && "bg-amber-50/30",
-                  isBottom && "bg-red-50/20"
-                );
-              }}
-            />
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="p-3 text-start text-xs text-gray-500">#</th>
+                    <th className="p-3 text-start text-xs text-gray-500">المبنى</th>
+                    <th className="p-3 text-start text-xs text-gray-500">الوحدات</th>
+                    <th className="p-3 text-start text-xs text-gray-500">مؤجرة</th>
+                    <th className="p-3 text-start text-xs text-gray-500">الإشغال</th>
+                    <th className="p-3 text-start text-xs text-gray-500">الإيرادات</th>
+                    <th className="p-3 text-start text-xs text-gray-500">الأداء</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {buildingPerf.map((b: any, idx: number) => {
+                    const isTop = idx === 0 && buildingPerf.length > 1;
+                    const isBottom = idx === buildingPerf.length - 1 && buildingPerf.length > 1;
+                    return (
+                      <tr key={b.id} className={cn("border-b hover:bg-gray-50/50 transition-colors", isTop && "bg-amber-50/30", isBottom && "bg-red-50/20")}>
+                        <td className="p-3 text-xs text-gray-400 font-mono">
+                          {isTop ? <Trophy className="h-3.5 w-3.5 text-amber-500 inline" /> : isBottom ? <TrendingDown className="h-3.5 w-3.5 text-red-400 inline" /> : idx + 1}
+                        </td>
+                        <td className="p-3">
+                          <Link href={`/properties/buildings/${b.id}`} className="font-medium hover:text-blue-600 hover:underline">{b.name}</Link>
+                        </td>
+                        <td className="p-3 font-mono text-sm">{b.totalUnits || 0}</td>
+                        <td className="p-3 font-mono text-sm text-blue-600">{b.rentedUnits || 0}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className={cn("h-full rounded-full", b.occupancyRate >= 80 ? "bg-emerald-500" : b.occupancyRate >= 50 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${b.occupancyRate || 0}%` }} />
+                            </div>
+                            <span className="text-xs font-medium">{b.occupancyRate || 0}%</span>
+                          </div>
+                        </td>
+                        <td className="p-3 font-bold text-emerald-600">{formatCurrency(b.totalRevenue || 0)}</td>
+                        <td className="p-3">
+                          {isTop && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">الأفضل</span>}
+                          {isBottom && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">الأدنى</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -374,6 +330,6 @@ export default function PropertiesDashboard() {
           </Link>
         ))}
       </div>
-    </PageShell>
+    </div>
   );
 }

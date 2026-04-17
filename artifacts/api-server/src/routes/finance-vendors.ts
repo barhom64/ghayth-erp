@@ -11,7 +11,6 @@ import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { assertRole } from "../lib/roleGuards.js";
-import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 
 export const vendorsRouter = Router();
 vendorsRouter.use(authMiddleware);
@@ -67,7 +66,6 @@ vendorsRouter.post("/vendors", async (req, res) => {
       after: { name },
     }).catch((err) => console.error("[audit] vendor.created:", err));
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "vendor", insertId, name).catch(console.error);
     res.status(201).json({ id: insertId, ...req.body });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
@@ -108,7 +106,6 @@ vendorsRouter.post("/vendors/create", async (req, res) => {
       after: { name, source: "procurement" },
     }).catch((err) => console.error("[audit] vendor.created:", err));
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "vendor", insertId, name).catch(console.error);
     res.status(201).json({ id: insertId, name, contactPerson, phone, email, taxNumber });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");

@@ -149,7 +149,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
     const scope = req.scope!;
     const b = req.body as any;
 
-    if (!b.assignmentId && !b.employeeId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
+    if (!b.assignmentId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
     if (!b.overtimeDate) throw new ValidationError("تاريخ الوقت الإضافي مطلوب", { field: "overtimeDate" });
     if (!b.startTime || !b.endTime) throw new ValidationError("وقت البداية والنهاية مطلوبان");
     if (!b.hours || Number(b.hours) <= 0) throw new ValidationError("عدد الساعات مطلوب", { field: "hours" });
@@ -157,22 +157,11 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
     const hours = Number(b.hours);
     if (hours > 12) throw new ValidationError("لا يمكن تسجيل أكثر من 12 ساعة إضافية في اليوم");
 
-    // resolve assignmentId from employeeId if needed
-    let assignmentId = b.assignmentId ? Number(b.assignmentId) : null;
-    if (!assignmentId && b.employeeId) {
-      const [resolved] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
-        [Number(b.employeeId), scope.companyId]
-      );
-      if (resolved) assignmentId = resolved.id;
-    }
-    if (!assignmentId) throw new ValidationError("لم يتم العثور على تعيين نشط للموظف", { field: "assignmentId" });
-
     // جلب بيانات الموظف
     const [emp] = await rawQuery<any>(
       `SELECT ea.salary, ea."employeeId", ea."branchId"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2`,
-      [assignmentId, scope.companyId]
+      [b.assignmentId, scope.companyId]
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
 
@@ -185,7 +174,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       `SELECT id FROM hr_overtime_requests
        WHERE "assignmentId" = $1 AND "overtimeDate" = $2
          AND "companyId" = $3 AND "deletedAt" IS NULL AND status != 'rejected'`,
-      [assignmentId, b.overtimeDate, scope.companyId]
+      [b.assignmentId, b.overtimeDate, scope.companyId]
     );
     if (existing) {
       throw new ConflictError("يوجد طلب وقت إضافي لنفس الموظف في نفس التاريخ");
@@ -202,7 +191,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',$14,NOW())
        RETURNING id`,
       [
-        scope.companyId, emp.branchId, assignmentId, emp.employeeId,
+        scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
         requestNumber, b.overtimeDate, b.startTime, b.endTime,
         hours, hourlyRate, multiplier, totalAmount,
         b.reason || null, period,
@@ -241,7 +230,6 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
           type: "overtime_request", title: "طلب وقت إضافي",
           body: `طلب ${hours} ساعات إضافية بتاريخ ${b.overtimeDate} — ${requestNumber}`,
           priority: "normal", refType: "hr_overtime_request", refId: insertId,
-          actionUrl: `/hr/overtime/${insertId}`,
         }).catch(console.error);
       }
     }
@@ -281,17 +269,9 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
 
+    // منع الموظف من اعتماد طلبه الخاص
     if (item.assignmentId === scope.activeAssignmentId) {
       throw new ForbiddenError("لا يمكنك اعتماد طلبك الخاص");
-    }
-
-    const [contract] = await rawQuery<any>(
-      `SELECT "overtimeEligible" FROM employee_contracts
-       WHERE "assignmentId" = $1 AND status = 'active' ORDER BY "startDate" DESC LIMIT 1`,
-      [item.assignmentId]
-    );
-    if (contract?.overtimeEligible === false) {
-      throw new ConflictError("عقد الموظف لا يسمح بالعمل الإضافي");
     }
 
     // ── معالجة خطوة الموافقة في السلسلة ──
@@ -325,7 +305,6 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       type: "overtime_approved", title: "تمت الموافقة على الوقت الإضافي",
       body: `تمت الموافقة على ${item.hours} ساعات إضافية — ${item.requestNumber}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
-      actionUrl: `/hr/overtime/${item.id}`,
     }).catch(console.error);
 
     await createAuditLog({
@@ -374,7 +353,6 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
       body: `تم رفض الطلب ${item.requestNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
-      actionUrl: `/hr/overtime/${item.id}`,
     }).catch(console.error);
 
     res.json({ success: true });

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
 import { Textarea } from "@/components/ui/textarea";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -86,33 +85,43 @@ export default function TripsCreate() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label>المركبة <span className="text-red-500">*</span></Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن المركبة..."
-            value={form.vehicleId}
-            onChange={(v) => setForm((f) => ({ ...f, vehicleId: String(v) }))}
-            options={vehicles.map((v: any) => ({ value: String(v.id), label: `${v.plateNumber} - ${v.make || ""} ${v.model || ""}` }))}
-          />
+          <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="اختر المركبة" />
+            </SelectTrigger>
+            <SelectContent>
+              {vehicles.map((v: any) => (
+                <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>السائق <span className="text-red-500">*</span></Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن السائق..."
-            value={form.driverId}
-            onChange={(v) => setForm((f) => ({ ...f, driverId: String(v) }))}
-            options={drivers.map((d: any) => ({ value: String(d.id), label: d.name }))}
-          />
+          <Select value={form.driverId} onValueChange={(v) => setForm((f) => ({ ...f, driverId: v }))}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="اختر السائق" />
+            </SelectTrigger>
+            <SelectContent>
+              {drivers.map((d: any) => (
+                <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>العميل</Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن العميل..."
-            value={form.clientId}
-            onChange={(v) => setForm((f) => ({ ...f, clientId: String(v) }))}
-            options={clients.map((c: any) => ({ value: String(c.id), label: c.name }))}
-          />
+          <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="— بدون عميل —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">— بدون عميل —</SelectItem>
+              {clients.map((c: any) => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div><Label>من</Label><Input className="mt-1" value={form.fromLocation} onChange={(e) => setForm((f) => ({ ...f, fromLocation: e.target.value }))} placeholder="نقطة الانطلاق" /></div>
         <div><Label>إلى</Label><Input className="mt-1" value={form.toLocation} onChange={(e) => setForm((f) => ({ ...f, toLocation: e.target.value }))} placeholder="الوجهة" /></div>
@@ -140,13 +149,6 @@ export default function TripsCreate() {
         </div>
       </div>
       
-      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-        <p className="font-semibold mb-1">العمليات المالية عند إكمال الرحلة:</p>
-        <ul className="list-disc list-inside space-y-1 text-blue-700">
-          <li>قيد محاسبي تلقائي: مصروف وقود + أجرة سائق + إهلاك مركبة</li>
-          <li>ربط القيد بالمركبة لتتبع التكاليف التشغيلية</li>
-        </ul>
-      </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/fleet/trips")}>إلغاء</Button>

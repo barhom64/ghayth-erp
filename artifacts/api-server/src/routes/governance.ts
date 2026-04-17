@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -22,7 +21,7 @@ router.get("/policies", async (req, res) => {
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "Policies list"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/policies", async (req, res) => {
@@ -44,7 +43,7 @@ router.post("/policies", async (req, res) => {
     }
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1`, [r.insertId]);
     res.status(201).json(row);
-  } catch (err) { handleRouteError(err, res, "Create policy"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/policies/:id", async (req, res) => {
@@ -66,7 +65,7 @@ router.get("/policies/:id", async (req, res) => {
     );
     row.versions = versions;
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get policy"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/policies/:id", async (req, res) => {
@@ -102,7 +101,7 @@ router.patch("/policies/:id", async (req, res) => {
 
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update policy"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/policies/:id/new-version", async (req, res) => {
@@ -153,7 +152,7 @@ router.post("/policies/:id/new-version", async (req, res) => {
 
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1`, [r.insertId]);
     res.status(201).json(row);
-  } catch (err) { handleRouteError(err, res, "New policy version"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/policies/:id/module-links", async (req, res) => {
@@ -170,7 +169,7 @@ router.get("/policies/:id/module-links", async (req, res) => {
       [policyId]
     );
     res.json({ data: rows });
-  } catch (err) { handleRouteError(err, res, "Policy module links"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/module-policies/:module", async (req, res) => {
@@ -188,7 +187,7 @@ router.get("/module-policies/:module", async (req, res) => {
       [mod, scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err) { handleRouteError(err, res, "Policy module links"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/policies/:id", async (req, res) => {
@@ -198,7 +197,7 @@ router.delete("/policies/:id", async (req, res) => {
     const result = await rawExecute(`DELETE FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "السياسة غير موجودة" }); return; }
     res.json({ message: "تم حذف السياسة بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete policy"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/risks", async (req, res) => {
@@ -206,7 +205,7 @@ router.get("/risks", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_risks WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "Risks list"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/risks", async (req, res) => {
@@ -218,7 +217,7 @@ router.post("/risks", async (req, res) => {
       [title, description, severity, likelihood, impact, status || "open", mitigationPlan, assignedTo, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create risk"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/risks/:id", async (req, res) => {
@@ -227,7 +226,7 @@ router.get("/risks/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get risk"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/risks/:id", async (req, res) => {
@@ -250,7 +249,7 @@ router.patch("/risks/:id", async (req, res) => {
     if (result.affectedRows === 0) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update risk"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/risks/:id", async (req, res) => {
@@ -260,7 +259,7 @@ router.delete("/risks/:id", async (req, res) => {
     const result = await rawExecute(`DELETE FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
     res.json({ message: "تم حذف المخاطرة بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete risk"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/audits", async (req, res) => {
@@ -268,7 +267,7 @@ router.get("/audits", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_audits WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "Audits list"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/audits", async (req, res) => {
@@ -280,7 +279,7 @@ router.post("/audits", async (req, res) => {
       [title, auditScope, status || "planned", auditorName, startDate, endDate, findings, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create audit"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/audits/:id", async (req, res) => {
@@ -289,7 +288,7 @@ router.get("/audits/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "المراجعة غير موجودة" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get audit"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/audits/:id", async (req, res) => {
@@ -310,7 +309,7 @@ router.patch("/audits/:id", async (req, res) => {
     if (result.affectedRows === 0) { res.status(404).json({ error: "المراجعة غير موجودة" }); return; }
     const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update audit"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/audits/:id", async (req, res) => {
@@ -320,7 +319,7 @@ router.delete("/audits/:id", async (req, res) => {
     const result = await rawExecute(`DELETE FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "المراجعة غير موجودة" }); return; }
     res.json({ message: "تم حذف المراجعة بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete audit"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/compliance", async (req, res) => {
@@ -328,7 +327,7 @@ router.get("/compliance", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_compliance WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "Compliance list"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/compliance", async (req, res) => {
@@ -340,7 +339,7 @@ router.post("/compliance", async (req, res) => {
       [regulation, description, status || "compliant", dueDate, responsiblePerson, notes, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create compliance"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/compliance/:id", async (req, res) => {
@@ -349,7 +348,7 @@ router.get("/compliance/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "بند الامتثال غير موجود" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get compliance"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/compliance/:id", async (req, res) => {
@@ -371,7 +370,7 @@ router.patch("/compliance/:id", async (req, res) => {
     if (result.affectedRows === 0) { res.status(404).json({ error: "بند الامتثال غير موجود" }); return; }
     const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update compliance"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/compliance/:id", async (req, res) => {
@@ -381,7 +380,7 @@ router.delete("/compliance/:id", async (req, res) => {
     const result = await rawExecute(`DELETE FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "بند الامتثال غير موجود" }); return; }
     res.json({ message: "تم حذف بند الامتثال بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete compliance"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/stats", async (req, res) => {
@@ -408,7 +407,7 @@ router.get("/stats", async (req, res) => {
       openCapas: Number(openCapas?.count || 0),
       risksNoTreatment: Number(risksNoTreatment?.count || 0),
     });
-  } catch (err) { handleRouteError(err, res, "Governance stats"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/compliance-dashboard", async (req, res) => {
@@ -434,7 +433,7 @@ router.get("/compliance-dashboard", async (req, res) => {
       policiesNoActions: Number(policiesNoActions?.count || 0),
       recentCapas: capas,
     });
-  } catch (err) { handleRouteError(err, res, "Compliance dashboard"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/compliance-actions", async (req, res) => {
@@ -442,7 +441,7 @@ router.get("/compliance-actions", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "companyId"=$1 ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "Compliance actions"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/compliance-actions", async (req, res) => {
@@ -455,7 +454,7 @@ router.post("/compliance-actions", async (req, res) => {
     );
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
     res.status(201).json(row);
-  } catch (err) { handleRouteError(err, res, "Create compliance action"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/compliance-actions/:actionId", async (req, res) => {
@@ -474,7 +473,7 @@ router.patch("/compliance-actions/:actionId", async (req, res) => {
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update compliance action"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/compliance-actions/:actionId", async (req, res) => {
@@ -483,7 +482,7 @@ router.delete("/compliance-actions/:actionId", async (req, res) => {
     const id = Number(req.params.actionId);
     await rawExecute(`DELETE FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "Delete compliance action"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/policies/:id/compliance-actions", async (req, res) => {
@@ -492,7 +491,7 @@ router.get("/policies/:id/compliance-actions", async (req, res) => {
     const policyId = Number(req.params.id);
     const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "policyId"=$1 AND "companyId"=$2 ORDER BY "createdAt"`, [policyId, scope.companyId]);
     res.json({ data: rows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "Policy compliance actions"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/policies/:id/compliance-actions", async (req, res) => {
@@ -506,7 +505,7 @@ router.post("/policies/:id/compliance-actions", async (req, res) => {
     );
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
     res.status(201).json(row);
-  } catch (err) { handleRouteError(err, res, "Create policy compliance action"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/compliance-actions/:id", async (req, res) => {
@@ -525,7 +524,7 @@ router.patch("/compliance-actions/:id", async (req, res) => {
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update compliance action"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/risks/:id/treatment", async (req, res) => {
@@ -543,7 +542,7 @@ router.patch("/risks/:id/treatment", async (req, res) => {
     await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Risk treatment"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/capa", async (req, res) => {
@@ -551,7 +550,7 @@ router.get("/capa", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "CAPA list"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/capa", async (req, res) => {
@@ -564,7 +563,7 @@ router.post("/capa", async (req, res) => {
     );
     const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1`, [r.insertId]);
     res.status(201).json(row);
-  } catch (err) { handleRouteError(err, res, "Create CAPA"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/capa/:id", async (req, res) => {
@@ -585,7 +584,7 @@ router.patch("/capa/:id", async (req, res) => {
     await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update CAPA"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;

@@ -4,7 +4,7 @@ import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Autocomplete } from "@/components/ui/autocomplete";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -70,23 +70,30 @@ export default function FuelCreate() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label>المركبة <span className="text-red-500">*</span></Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن المركبة..."
-            value={form.vehicleId}
-            onChange={(v) => setForm((f) => ({ ...f, vehicleId: String(v) }))}
-            options={vehicles.map((v: any) => ({ value: String(v.id), label: `${v.plateNumber} - ${v.make || ""} ${v.model || ""}` }))}
-          />
+          <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="اختر المركبة" />
+            </SelectTrigger>
+            <SelectContent>
+              {vehicles.map((v: any) => (
+                <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>السائق</Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن السائق..."
-            value={form.driverId}
-            onChange={(v) => setForm((f) => ({ ...f, driverId: String(v) }))}
-            options={drivers.map((d: any) => ({ value: String(d.id), label: d.name }))}
-          />
+          <Select value={form.driverId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, driverId: v === "_none" ? "" : v }))}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="— اختياري —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">— اختياري —</SelectItem>
+              {drivers.map((d: any) => (
+                <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div><Label>اللترات <span className="text-red-500">*</span></Label><Input className="mt-1" type="number" value={form.liters} onChange={(e) => setForm((f) => ({ ...f, liters: e.target.value }))} /></div>
         <div><Label>سعر اللتر</Label><Input className="mt-1" type="number" step="0.01" value={form.costPerLiter} onChange={(e) => setForm((f) => ({ ...f, costPerLiter: e.target.value }))} /></div>
@@ -97,15 +104,6 @@ export default function FuelCreate() {
         <div><Label>المحطة</Label><Input className="mt-1" value={form.stationName} onChange={(e) => setForm((f) => ({ ...f, stationName: e.target.value }))} /></div>
         <div><Label>التاريخ</Label><div className="mt-1"><DatePicker value={form.fuelDate} onChange={(v) => setForm((f) => ({ ...f, fuelDate: v }))} /></div></div>
       </div>
-      {totalCost > 0 && (
-        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-          <p className="font-semibold mb-1">سيتم تلقائياً عند الحفظ:</p>
-          <ul className="list-disc list-inside space-y-1 text-green-700">
-            <li>إنشاء قيد محاسبي: مدين مصروف وقود / دائن النقدية بمبلغ {totalCost.toFixed(2)} ريال</li>
-            <li>ربط القيد بالمركبة المحددة لتتبع تكاليف الوقود لكل مركبة</li>
-          </ul>
-        </div>
-      )}
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/fleet/fuel")}>إلغاء</Button>
         <Button onClick={handleSubmit} disabled={createMut.isPending}>

@@ -11,7 +11,6 @@ import {
   getTimeline,
   getTimelineByRef,
 } from "../lib/workflowEngine.js";
-import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -36,8 +35,8 @@ router.post("/submit", async (req, res) => {
       data,
     });
     res.status(201).json(result);
-  } catch (err) {
-    handleRouteError(err, res, "Submit workflow");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -55,8 +54,11 @@ router.post("/:id/approve", async (req, res) => {
       overrideReason: req.body.overrideReason,
     });
     res.json(result);
-  } catch (err) {
-    handleRouteError(err, res, "Approve workflow");
+  } catch (e: any) {
+    const code = e.message.includes("غير موجودة") ? 404 :
+                 e.message.includes("شروط غير مستوفاة") ? 422 :
+                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
+    res.status(code).json({ error: e.message });
   }
 });
 
@@ -77,8 +79,10 @@ router.post("/:id/reject", async (req, res) => {
       overrideReason: req.body.overrideReason,
     });
     res.json(result);
-  } catch (err) {
-    handleRouteError(err, res, "Reject workflow");
+  } catch (e: any) {
+    const code = e.message.includes("غير موجودة") ? 404 :
+                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
+    res.status(code).json({ error: e.message });
   }
 });
 
@@ -102,8 +106,10 @@ router.post("/:id/refer", async (req, res) => {
       overrideReason,
     });
     res.json(result);
-  } catch (err) {
-    handleRouteError(err, res, "Refer workflow");
+  } catch (e: any) {
+    const code = e.message.includes("غير موجودة") ? 404 :
+                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
+    res.status(code).json({ error: e.message });
   }
 });
 
@@ -120,8 +126,10 @@ router.post("/:id/escalate", async (req, res) => {
       overrideReason: req.body.overrideReason,
     });
     res.json(result);
-  } catch (err) {
-    handleRouteError(err, res, "Escalate workflow");
+  } catch (e: any) {
+    const code = e.message.includes("غير موجودة") ? 404 :
+                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
+    res.status(code).json({ error: e.message });
   }
 });
 
@@ -142,8 +150,10 @@ router.post("/:id/return", async (req, res) => {
       overrideReason: req.body.overrideReason,
     });
     res.json(result);
-  } catch (err) {
-    handleRouteError(err, res, "Return workflow");
+  } catch (e: any) {
+    const code = e.message.includes("غير موجودة") ? 404 :
+                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
+    res.status(code).json({ error: e.message });
   }
 });
 
@@ -152,8 +162,8 @@ router.get("/:id/timeline", async (req, res) => {
     const scope = req.scope!;
     const result = await getTimeline(Number(req.params.id), scope.companyId);
     res.json(result);
-  } catch (err) {
-    handleRouteError(err, res, "Workflow timeline");
+  } catch (e: any) {
+    res.status(e.message.includes("غير موجودة") ? 404 : 500).json({ error: e.message });
   }
 });
 
@@ -162,8 +172,8 @@ router.get("/timeline/:refTable/:refId", async (req, res) => {
     const scope = req.scope!;
     const result = await getTimelineByRef(req.params.refTable, Number(req.params.refId), scope.companyId);
     res.json(result);
-  } catch (err) {
-    handleRouteError(err, res, "Workflow timeline by ref");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -193,8 +203,8 @@ router.get("/", async (req, res) => {
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) {
-    handleRouteError(err, res, "Workflow instances");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -218,8 +228,8 @@ router.get("/pending", async (req, res) => {
       [scope.companyId, scope.activeAssignmentId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) {
-    handleRouteError(err, res, "Pending workflows");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -234,8 +244,8 @@ router.get("/definitions", async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: defs, total: defs.length });
-  } catch (err) {
-    handleRouteError(err, res, "Workflow definitions");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -252,8 +262,8 @@ router.get("/definitions/:id", async (req, res) => {
       [def.id]
     );
     res.json({ ...def, steps });
-  } catch (err) {
-    handleRouteError(err, res, "Get workflow definition");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -281,8 +291,8 @@ router.post("/definitions", async (req, res) => {
       }
     }
     res.status(201).json({ id: insertId });
-  } catch (err) {
-    handleRouteError(err, res, "Create workflow definition");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -316,8 +326,8 @@ router.put("/definitions/:id", async (req, res) => {
     const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
     const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`, [id]);
     res.json({ ...def, steps: updatedSteps });
-  } catch (err) {
-    handleRouteError(err, res, "Update workflow definition");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -326,8 +336,8 @@ router.delete("/definitions/:id", async (req, res) => {
     const scope = req.scope!;
     await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [Number(req.params.id), scope.companyId]);
     res.json({ message: "تم الحذف" });
-  } catch (err) {
-    handleRouteError(err, res, "Delete workflow definition");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -339,8 +349,8 @@ router.get("/sla-definitions", async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) {
-    handleRouteError(err, res, "SLA definitions");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -358,8 +368,8 @@ router.post("/sla-definitions", async (req, res) => {
       [scope.companyId, requestType, warningHours ?? 24, deadlineHours ?? 48, escalationHours ?? 72, autoApproveOnTimeout ?? false, escalateTo ?? "hr_manager"]
     );
     res.status(201).json({ id: insertId });
-  } catch (err) {
-    handleRouteError(err, res, "Create SLA definition");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -376,8 +386,8 @@ router.get("/stats", async (req, res) => {
       slaWarning: Number(slaWarning.count),
       escalated: Number(escalated.count),
     });
-  } catch (err) {
-    handleRouteError(err, res, "Workflow stats");
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

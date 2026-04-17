@@ -18,7 +18,6 @@ const INITIAL = {
   fuelType: "gasoline", currentMileage: "", fuelCapacity: "", status: "active",
   insuranceExpiry: "", registrationExpiry: "", notes: "",
   registrationNumber: "", plateType: "", sequenceNumber: "", inspectionDate: "", nextInspectionDate: "",
-  purchasePrice: "", purchaseDate: "", salvageValue: "", usefulLifeYears: "5",
 };
 
 export default function VehiclesCreate() {
@@ -53,10 +52,6 @@ export default function VehiclesCreate() {
         inspectionDate: form.inspectionDate || undefined,
         nextInspectionDate: form.nextInspectionDate || undefined,
         notes: form.notes || undefined,
-        purchasePrice: form.purchasePrice ? Number(form.purchasePrice) : undefined,
-        purchaseDate: form.purchaseDate || undefined,
-        salvageValue: form.salvageValue ? Number(form.salvageValue) : undefined,
-        usefulLifeYears: form.usefulLifeYears ? Number(form.usefulLifeYears) : undefined,
       });
       clearDraft();
       toast({ title: "تمت إضافة المركبة بنجاح" });
@@ -137,29 +132,6 @@ export default function VehiclesCreate() {
             <div><Label>تاريخ آخر فحص دوري</Label><div className="mt-1"><DatePicker value={form.inspectionDate} onChange={(v) => setForm((f) => ({ ...f, inspectionDate: v }))} /></div></div>
             <div><Label>تاريخ الفحص الدوري القادم</Label><div className="mt-1"><DatePicker value={form.nextInspectionDate} onChange={(v) => setForm((f) => ({ ...f, nextInspectionDate: v }))} /></div></div>
           </div>
-        </div>
-
-        <div className="border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-green-700 mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-            البيانات المالية — الربط المحاسبي التلقائي
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><Label>سعر الشراء (ريال)</Label><Input className="mt-1" type="number" min="0" step="0.01" value={form.purchasePrice} onChange={(e) => setForm((f) => ({ ...f, purchasePrice: e.target.value }))} placeholder="قيمة شراء المركبة" /></div>
-            <div><Label>تاريخ الشراء</Label><div className="mt-1"><DatePicker value={form.purchaseDate} onChange={(v) => setForm((f) => ({ ...f, purchaseDate: v }))} /></div></div>
-            <div><Label>قيمة الخردة (ريال)</Label><Input className="mt-1" type="number" min="0" step="0.01" value={form.salvageValue} onChange={(e) => setForm((f) => ({ ...f, salvageValue: e.target.value }))} placeholder="القيمة المتبقية بعد الإهلاك" /></div>
-            <div><Label>العمر الإنتاجي (سنوات)</Label><Input className="mt-1" type="number" min="1" max="50" value={form.usefulLifeYears} onChange={(e) => setForm((f) => ({ ...f, usefulLifeYears: e.target.value }))} placeholder="5" /></div>
-          </div>
-          {form.purchasePrice && Number(form.purchasePrice) > 0 && (
-            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-              <p className="font-semibold mb-1">سيتم تلقائياً عند الحفظ:</p>
-              <ul className="list-disc list-inside space-y-1 text-green-700">
-                <li>إنشاء قيد محاسبي لإثبات الأصل (مدين: أصول مركبات / دائن: النقدية)</li>
-                <li>تسجيل المركبة كأصل ثابت في نظام الإهلاك</li>
-                <li>فتح حسابات فرعية مرتبطة بالمركبة في شجرة الحسابات</li>
-              </ul>
-            </div>
-          )}
         </div>
 
         <div><Label>ملاحظات</Label><Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية..." /></div>

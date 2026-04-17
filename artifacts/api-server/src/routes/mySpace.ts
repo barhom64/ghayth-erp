@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -160,25 +159,7 @@ router.get("/", async (req, res) => {
 
     let pendingApprovals: any[] = [];
     try {
-      let hasMgrDuties = scope.role !== "employee";
-      if (!hasMgrDuties) {
-        const [deptChk] = await rawQuery<any>(
-          `SELECT d.id FROM departments d
-           JOIN employee_assignments ea ON ea."employeeId" = d."managerId"
-           WHERE ea.id = $1 AND ea.status = 'active' AND d.status = 'active' LIMIT 1`,
-          [scope.activeAssignmentId]
-        ).catch(() => [null]);
-        if (deptChk) hasMgrDuties = true;
-      }
-      if (!hasMgrDuties) {
-        const [wfChk] = await rawQuery<any>(
-          `SELECT id FROM workflow_instances
-           WHERE "currentAssignee" = $1 AND status IN ('pending','in_review','escalated') LIMIT 1`,
-          [scope.activeAssignmentId]
-        ).catch(() => [null]);
-        if (wfChk) hasMgrDuties = true;
-      }
-      if (hasMgrDuties) {
+      if (scope.role !== "employee") {
         const leaveApprovals = await rawQuery<any>(
           `SELECT lr.id, 'leave' AS type, e.name AS "employeeName", lt.name AS title, lr.status, lr."createdAt"
            FROM hr_leave_requests lr
@@ -237,23 +218,7 @@ router.get("/", async (req, res) => {
           );
         } catch (e) { console.error("my-space exitApprovals error:", e); }
 
-        let workflowApprovals: any[] = [];
-        try {
-          workflowApprovals = await rawQuery<any>(
-            `SELECT wi.id, wi."requestType" AS type,
-                    COALESCE(e.name, wi."submittedByName") AS "employeeName",
-                    wi.title, wi.status, wi."createdAt"
-             FROM workflow_instances wi
-             LEFT JOIN employee_assignments ea ON ea.id = wi."submittedBy"
-             LEFT JOIN employees e ON e.id = ea."employeeId"
-             WHERE wi."currentAssignee" = $1
-               AND wi.status IN ('pending','in_review','escalated')
-             ORDER BY wi."createdAt" DESC LIMIT 10`,
-            [scope.activeAssignmentId]
-          );
-        } catch (e) { console.error("my-space workflowApprovals error:", e); }
-
-        pendingApprovals = [...leaveApprovals, ...loanApprovals, ...overtimeApprovals, ...exitApprovals, ...workflowApprovals]
+        pendingApprovals = [...leaveApprovals, ...loanApprovals, ...overtimeApprovals, ...exitApprovals]
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
     } catch (e) {
@@ -309,7 +274,7 @@ router.get("/", async (req, res) => {
     let notifications: any[] = [];
     try {
       notifications = await rawQuery<any>(
-        `SELECT id, type, title, body, priority, "isRead", "createdAt", "requiresAck", "acknowledgedAt"
+        `SELECT id, type, title, body, priority, "isRead", "createdAt"
          FROM notifications
          WHERE "assignmentId" = $1
          ORDER BY "createdAt" DESC LIMIT 10`,
@@ -317,19 +282,6 @@ router.get("/", async (req, res) => {
       );
     } catch (e) {
       console.error("my-space notifications error:", e);
-    }
-
-    let pendingAck: any[] = [];
-    try {
-      pendingAck = await rawQuery<any>(
-        `SELECT id, type, title, body, priority, "createdAt", "refType", "refId"
-         FROM notifications
-         WHERE "assignmentId" = $1 AND "requiresAck" = true AND "acknowledgedAt" IS NULL
-         ORDER BY "createdAt" DESC`,
-        [scope.activeAssignmentId]
-      );
-    } catch (e) {
-      console.error("my-space pendingAck error:", e);
     }
 
     let custodies: any[] = [];
@@ -598,7 +550,6 @@ router.get("/", async (req, res) => {
       lastPayslip,
       todayTasks,
       notifications,
-      pendingAck,
       custodies,
       violations,
       activeLoans,
@@ -611,7 +562,10 @@ router.get("/", async (req, res) => {
       roleEntities,
       role: scope.role,
     });
-  } catch (err) { handleRouteError(err, res, "My space dashboard"); }
+  } catch (err) {
+    console.error("My-space error:", err);
+    res.status(500).json({ error: "خطأ في الخادم" });
+  }
 });
 
 router.get("/attendance", async (req, res) => {
@@ -660,7 +614,10 @@ router.get("/attendance", async (req, res) => {
     );
 
     res.json({ data: rows, total: rows.length, monthly: monthlyStats ?? null });
-  } catch (err) { handleRouteError(err, res, "My attendance"); }
+  } catch (err) {
+    console.error("my-attendance error:", err);
+    res.status(500).json({ error: "خطأ في الخادم" });
+  }
 });
 
 router.get("/payslip", async (req, res) => {
@@ -695,7 +652,10 @@ router.get("/payslip", async (req, res) => {
       params
     );
     res.json({ data: ps || null });
-  } catch (err) { handleRouteError(err, res, "My payslip"); }
+  } catch (err) {
+    console.error("my-payslip error:", err);
+    res.status(500).json({ error: "خطأ في الخادم" });
+  }
 });
 
 router.get("/performance", async (req, res) => {
@@ -710,7 +670,10 @@ router.get("/performance", async (req, res) => {
       [scope.employeeId, scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err) { handleRouteError(err, res, "My performance"); }
+  } catch (err) {
+    console.error("my-performance error:", err);
+    res.status(500).json({ error: "خطأ في الخادم" });
+  }
 });
 
 router.get("/documents", async (req, res) => {
@@ -724,7 +687,10 @@ router.get("/documents", async (req, res) => {
       [scope.employeeId]
     );
     res.json({ data: rows });
-  } catch (err) { handleRouteError(err, res, "My documents"); }
+  } catch (err) {
+    console.error("my-documents error:", err);
+    res.status(500).json({ error: "خطأ في الخادم" });
+  }
 });
 
 router.get("/requests", async (req, res) => {
@@ -767,7 +733,10 @@ router.get("/requests", async (req, res) => {
     ).catch(() => []);
 
     res.json({ data: rows, leaveRequests: leaveRows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "My requests"); }
+  } catch (err) {
+    console.error("my-requests error:", err);
+    res.status(500).json({ error: "خطأ في الخادم" });
+  }
 });
 
 export default router;

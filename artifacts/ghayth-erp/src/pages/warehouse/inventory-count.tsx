@@ -1,25 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  ClipboardCheck, Plus, Package, CheckCircle, ChevronDown, ChevronUp,
-  ArrowUp, ArrowDown, FileText, Clock, AlertTriangle,
-} from "lucide-react";
+import { ClipboardCheck, Plus, Package, CheckCircle, ChevronDown, ChevronUp, ArrowUp, ArrowDown } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { KpiGrid } from "@/components/shared/kpi-card";
-
-const STATUS_OPTIONS = [
-  { value: "draft", label: "مسودة" },
-  { value: "approved", label: "مُعتمد" },
-];
 
 export default function InventoryCountPage() {
   const [showForm, setShowForm] = useState(false);
@@ -27,7 +15,6 @@ export default function InventoryCountPage() {
   const [countItems, setCountItems] = useState<Record<number, any[]>>({});
   const [physicalCounts, setPhysicalCounts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ countDate: new Date().toISOString().split("T")[0], notes: "", warehouseLocation: "" });
-  const [filters, setFilters] = useFilters();
 
   const { data, refetch } = useApiQuery<any>(["inventory-counts"], "/warehouse/inventory-counts");
   const counts = asList(data?.data || data);
@@ -72,6 +59,11 @@ export default function InventoryCountPage() {
     if (!confirm("اعتماد الجرد وتحديث المخزون تلقائياً؟")) return;
     try {
       const res = await apiFetch<any>(`/warehouse/inventory-counts/${countId}/approve`, { method: "POST", body: JSON.stringify({}) });
+      // P02-MED2 — the server now returns a `warning` field when one
+      // or more GL postings failed (or were skipped due to missing
+      // unit cost). Surface it as a destructive-style toast so the
+      // accountant doesn't walk away thinking the journal entries
+      // are in place when they aren't.
       if (res?.warning) {
         toast({
           variant: "destructive",
@@ -85,269 +77,20 @@ export default function InventoryCountPage() {
     } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };
 
-  // --- Filtering ---
-  const filtered = applyFilters(counts, filters, {
-    searchFields: ["warehouseLocation", "notes", "conductedByName"],
-    statusField: "status",
-    dateField: "countDate",
-  });
-
-  // --- KPI stats ---
-  const stats = useMemo(() => {
-    const total = counts.length;
-    const draft = counts.filter((c: any) => c.status !== "approved").length;
-    const approved = counts.filter((c: any) => c.status === "approved").length;
-    return { total, draft, approved };
-  }, [counts]);
-
-  const kpis = [
-    {
-      label: "إجمالي الجلسات",
-      value: stats.total,
-      icon: FileText,
-      color: "text-blue-600 bg-blue-50",
-    },
-    {
-      label: "مسودة",
-      value: stats.draft,
-      icon: Clock,
-      color: "text-amber-600 bg-amber-50",
-    },
-    {
-      label: "مُعتمد",
-      value: stats.approved,
-      icon: CheckCircle,
-      color: "text-green-600 bg-green-50",
-    },
-    {
-      label: "إجمالي المنتجات",
-      value: productList.length,
-      icon: Package,
-      color: "text-purple-600 bg-purple-50",
-    },
-  ];
-
-  // --- Main counts table columns ---
-  const columns: DataTableColumn<any>[] = [
-    {
-      key: "countDate",
-      header: "تاريخ الجرد",
-      sortable: true,
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${row.status === "approved" ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"}`}>
-            {row.status === "approved" ? <CheckCircle className="w-4 h-4" /> : <ClipboardCheck className="w-4 h-4" />}
-          </div>
-          <span className="font-medium text-sm">جرد {row.countDate?.split("T")[0]}</span>
-        </div>
-      ),
-    },
-    {
-      key: "warehouseLocation",
-      header: "موقع المستودع",
-      sortable: true,
-      render: (row) => (
-        <span className="text-sm text-gray-600">{row.warehouseLocation || "—"}</span>
-      ),
-    },
-    {
-      key: "conductedByName",
-      header: "بواسطة",
-      sortable: true,
-      render: (row) => (
-        <span className="text-sm text-gray-500">{row.conductedByName || "—"}</span>
-      ),
-    },
-    {
-      key: "notes",
-      header: "ملاحظات",
-      render: (row) => (
-        <span className="text-xs text-gray-400 truncate max-w-[200px] block">{row.notes || "—"}</span>
-      ),
-    },
-    {
-      key: "status",
-      header: "الحالة",
-      sortable: true,
-      render: (row) => (
-        <Badge className={row.status === "approved" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
-          {row.status === "approved" ? "مُعتمد" : "مسودة"}
-        </Badge>
-      ),
-    },
-    {
-      key: "actions",
-      header: "إجراءات",
-      render: (row) => (
-        <div className="flex items-center gap-1">
-          {row.status !== "approved" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-green-700 hover:bg-green-50"
-              onClick={(e) => { e.stopPropagation(); handleApprove(row.id); }}
-            >
-              <CheckCircle className="w-3.5 h-3.5 me-1" /> اعتماد
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2"
-            onClick={(e) => { e.stopPropagation(); loadItems(row.id); }}
-          >
-            {expandedCount === row.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </Button>
-        </div>
-      ),
-    },
-  ];
-
-  // --- Expanded row: product items table ---
-  const renderRowExtras = (count: any) => {
-    if (expandedCount !== count.id) return null;
-
-    const itemColumns: DataTableColumn<any>[] = [
-      {
-        key: "name",
-        header: "المنتج",
-        render: (_row, _idx) => {
-          const p = _row;
-          return <span className="text-xs">{p.name}</span>;
-        },
-      },
-      {
-        key: "sku",
-        header: "رمز المنتج",
-        align: "center",
-        render: (_row) => <span className="text-xs text-gray-400">{_row.sku || "—"}</span>,
-      },
-      {
-        key: "systemStock",
-        header: "المخزون النظامي",
-        align: "center",
-        render: (_row) => {
-          const existing = (countItems[count.id] || []).find((i: any) => i.productId === _row.id);
-          const sysStock = existing?.systemStock ?? _row.currentStock;
-          return <span className="text-xs font-medium">{sysStock}</span>;
-        },
-      },
-      {
-        key: "physicalCount",
-        header: "الفعلي",
-        align: "center",
-        render: (_row) => {
-          const existing = (countItems[count.id] || []).find((i: any) => i.productId === _row.id);
-          const key = `${count.id}-${_row.id}`;
-          const physVal = physicalCounts[key] ?? (existing ? String(existing.physicalCount) : "");
-          if (count.status === "approved") {
-            return <span className="text-xs">{existing ? existing.physicalCount : "—"}</span>;
-          }
-          return (
-            <Input
-              type="number"
-              min="0"
-              className="h-7 w-20 text-center mx-auto text-xs"
-              value={physVal}
-              onChange={(e) => setPhysicalCounts((prev) => ({ ...prev, [key]: e.target.value }))}
-              onClick={(e) => e.stopPropagation()}
-            />
-          );
-        },
-      },
-      {
-        key: "variance",
-        header: "الفرق",
-        align: "center",
-        render: (_row) => {
-          const existing = (countItems[count.id] || []).find((i: any) => i.productId === _row.id);
-          const key = `${count.id}-${_row.id}`;
-          const physVal = physicalCounts[key] ?? (existing ? String(existing.physicalCount) : "");
-          const sysStock = existing?.systemStock ?? _row.currentStock;
-          const variance = existing?.variance ?? (physVal !== "" ? Number(physVal) - Number(sysStock) : null);
-          if (variance === null) return null;
-          return (
-            <span className={`flex items-center justify-center gap-0.5 font-medium text-xs ${variance > 0 ? "text-green-600" : variance < 0 ? "text-red-600" : "text-gray-400"}`}>
-              {variance > 0 ? <ArrowUp className="w-3 h-3" /> : variance < 0 ? <ArrowDown className="w-3 h-3" /> : null}
-              {Math.abs(variance)}
-            </span>
-          );
-        },
-      },
-    ];
-
-    // Add save action column only for drafts
-    if (count.status !== "approved") {
-      itemColumns.push({
-        key: "saveAction",
-        header: "",
-        render: (_row) => {
-          const existing = (countItems[count.id] || []).find((i: any) => i.productId === _row.id);
-          const sysStock = existing?.systemStock ?? _row.currentStock;
-          return (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 text-xs"
-              onClick={(e) => { e.stopPropagation(); handleSaveItem(count.id, _row.id, sysStock); }}
-            >
-              حفظ
-            </Button>
-          );
-        },
-      });
-    }
-
-    return (
-      <div className="p-4 bg-muted/30 border-t">
-        {count.status !== "approved" && (
-          <div className="mb-3 p-3 bg-blue-50 rounded text-xs text-blue-700">
-            أدخل الكمية الفعلية لكل منتج ثم احفظ — يُحدَّث المخزون عند الاعتماد.
-          </div>
-        )}
-        <DataTable
-          columns={itemColumns}
-          data={productList}
-          noToolbar
-          pageSize={0}
-          emptyMessage="لا توجد منتجات"
-          rowClassName={(p: any) => {
-            const existing = (countItems[count.id] || []).find((i: any) => i.productId === p.id);
-            const key = `${count.id}-${p.id}`;
-            const physVal = physicalCounts[key] ?? (existing ? String(existing.physicalCount) : "");
-            const sysStock = existing?.systemStock ?? p.currentStock;
-            const variance = existing?.variance ?? (physVal !== "" ? Number(physVal) - Number(sysStock) : null);
-            if (variance !== null && variance !== 0) {
-              return variance > 0 ? "bg-green-50/50" : "bg-red-50/50";
-            }
-            return undefined;
-          }}
-        />
-      </div>
-    );
-  };
-
   return (
-    <PageShell
-      title="جرد المخزن"
-      subtitle="إجراء جلسات الجرد الدوري ومطابقة المخزون الفعلي"
-      breadcrumbs={[{ href: "/warehouse", label: "إدارة المخازن" }]}
-      actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
-          <Plus className="w-4 h-4" /> جلسة جرد جديدة
-        </Button>
-      }
-    >
-      <KpiGrid items={kpis} />
-
-      {stats.draft > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>
-            يوجد <strong>{stats.draft}</strong> جلسة جرد بحالة مسودة بانتظار الاعتماد
-          </span>
+    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <ClipboardCheck className="w-6 h-6 text-primary" />
+          <div>
+            <h1 className="text-xl font-bold">جرد المخزن</h1>
+            <p className="text-sm text-gray-500">إجراء جلسات الجرد الدوري ومطابقة المخزون الفعلي</p>
+          </div>
         </div>
-      )}
+        <Button onClick={() => setShowForm(!showForm)} size="sm">
+          <Plus className="w-4 h-4 me-1" /> جلسة جرد جديدة
+        </Button>
+      </div>
 
       {showForm && (
         <Card className="border-2 border-primary/20">
@@ -373,26 +116,113 @@ export default function InventoryCountPage() {
         </Card>
       )}
 
-      <AdvancedFilters
-        config={{
-          searchPlaceholder: "بحث بالموقع أو الملاحظات أو اسم المسؤول...",
-          statuses: STATUS_OPTIONS,
-          showDateRange: true,
-        }}
-        values={filters}
-        onChange={setFilters}
-        resultCount={filtered.length}
-      />
+      <div className="space-y-3">
+        {counts.length === 0 ? (
+          <Card><CardContent className="py-8 text-center text-gray-400">لا توجد جلسات جرد</CardContent></Card>
+        ) : counts.map((count: any) => (
+          <Card key={count.id} className={`transition-shadow hover:shadow-md ${count.status === "approved" ? "border-green-200" : ""}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${count.status === "approved" ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"}`}>
+                    {count.status === "approved" ? <CheckCircle className="w-5 h-5" /> : <ClipboardCheck className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <div className="font-medium">جرد {count.countDate?.split("T")[0]}</div>
+                    <div className="text-sm text-gray-500">
+                      {count.warehouseLocation && `${count.warehouseLocation} · `}
+                      {count.conductedByName && `بواسطة: ${count.conductedByName}`}
+                    </div>
+                    {count.notes && <div className="text-xs text-gray-400">{count.notes}</div>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge className={count.status === "approved" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                    {count.status === "approved" ? "مُعتمد" : "مسودة"}
+                  </Badge>
+                  {count.status !== "approved" && (
+                    <Button size="sm" variant="outline" onClick={() => handleApprove(count.id)}>
+                      <CheckCircle className="w-3.5 h-3.5 me-1" /> اعتماد
+                    </Button>
+                  )}
+                  <button onClick={() => loadItems(count.id)}>
+                    {expandedCount === count.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        noToolbar
-        emptyMessage="لا توجد جلسات جرد — أنشئ جلسة جرد جديدة للبدء"
-        pageSize={20}
-        renderRowExtras={renderRowExtras}
-        onRowClick={(row) => loadItems(row.id)}
-      />
-    </PageShell>
+              {expandedCount === count.id && (
+                <div className="mt-4 border-t pt-3">
+                  {count.status !== "approved" && (
+                    <div className="mb-3 p-3 bg-blue-50 rounded text-xs text-blue-700">
+                      أدخل الكمية الفعلية لكل منتج ثم احفظ — يُحدَّث المخزون عند الاعتماد.
+                    </div>
+                  )}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-start">المنتج</th>
+                          <th className="px-3 py-2 text-center">رمز المنتج</th>
+                          <th className="px-3 py-2 text-center">المخزون النظامي</th>
+                          <th className="px-3 py-2 text-center">الفعلي</th>
+                          <th className="px-3 py-2 text-center">الفرق</th>
+                          {count.status !== "approved" && <th className="px-3 py-2"></th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {productList.map((p: any) => {
+                          const existing = (countItems[count.id] || []).find((i: any) => i.productId === p.id);
+                          const key = `${count.id}-${p.id}`;
+                          const physVal = physicalCounts[key] ?? (existing ? String(existing.physicalCount) : "");
+                          const sysStock = existing?.systemStock ?? p.currentStock;
+                          const variance = existing?.variance ?? (physVal !== "" ? Number(physVal) - Number(sysStock) : null);
+                          return (
+                            <tr key={p.id} className={`hover:bg-gray-50 ${variance !== null && variance !== 0 ? (variance > 0 ? "bg-green-50/50" : "bg-red-50/50") : ""}`}>
+                              <td className="px-3 py-1.5">{p.name}</td>
+                              <td className="px-3 py-1.5 text-center text-gray-400">{p.sku || "—"}</td>
+                              <td className="px-3 py-1.5 text-center font-medium">{sysStock}</td>
+                              <td className="px-3 py-1.5 text-center">
+                                {count.status === "approved"
+                                  ? existing ? existing.physicalCount : "—"
+                                  : (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      className="h-7 w-20 text-center mx-auto"
+                                      value={physVal}
+                                      onChange={(e) => setPhysicalCounts((prev) => ({ ...prev, [key]: e.target.value }))}
+                                    />
+                                  )
+                                }
+                              </td>
+                              <td className="px-3 py-1.5 text-center">
+                                {variance !== null && (
+                                  <span className={`flex items-center justify-center gap-0.5 font-medium ${variance > 0 ? "text-green-600" : variance < 0 ? "text-red-600" : "text-gray-400"}`}>
+                                    {variance > 0 ? <ArrowUp className="w-3 h-3" /> : variance < 0 ? <ArrowDown className="w-3 h-3" /> : null}
+                                    {Math.abs(variance)}
+                                  </span>
+                                )}
+                              </td>
+                              {count.status !== "approved" && (
+                                <td className="px-3 py-1.5">
+                                  <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => handleSaveItem(count.id, p.id, sysStock)}>
+                                    حفظ
+                                  </Button>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }

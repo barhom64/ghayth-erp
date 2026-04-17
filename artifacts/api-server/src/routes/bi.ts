@@ -11,7 +11,7 @@ router.get("/dashboards", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "List dashboards"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/dashboards", async (req, res) => {
@@ -23,7 +23,7 @@ router.post("/dashboards", async (req, res) => {
       [title, description, layout ? JSON.stringify(layout) : '{}', isDefault || false, scope.userId, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create dashboard"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/kpis", async (req, res) => {
@@ -31,7 +31,7 @@ router.get("/kpis", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "List KPIs"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/kpis", async (req, res) => {
@@ -43,7 +43,7 @@ router.post("/kpis", async (req, res) => {
       [name, description, module, formula, target, currentValue, unit, frequency || "monthly", scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create KPI"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/reports", async (req, res) => {
@@ -51,7 +51,7 @@ router.get("/reports", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "List reports"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/reports", async (req, res) => {
@@ -63,7 +63,7 @@ router.post("/reports", async (req, res) => {
       [title, description, type, query, filters ? JSON.stringify(filters) : '{}', scheduledAt || null, scope.userId, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create report"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/overview", async (req, res) => {
@@ -90,7 +90,7 @@ router.get("/overview", async (req, res) => {
       openTickets: Number(row.openTickets),
       totalRevenue: Number(row.totalRevenue),
     });
-  } catch (err) { handleRouteError(err, res, "BI overview"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/operations/sla-delays", async (req, res) => {

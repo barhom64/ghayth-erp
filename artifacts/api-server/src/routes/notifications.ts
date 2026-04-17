@@ -11,8 +11,7 @@ router.get("/", async (req, res) => {
     const scope = req.scope!;
 
     const notifications = await rawQuery<any>(
-      `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl",
-              "requiresAck", "acknowledgedAt"
+      `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
        FROM notifications
        WHERE "assignmentId" = $1
        ORDER BY "createdAt" DESC
@@ -90,44 +89,6 @@ router.post("/preferences", async (req, res) => {
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Save notification preference error:");
-  }
-});
-
-router.patch("/:id/acknowledge", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { id } = req.params;
-
-    const { affectedRows } = await rawExecute(
-      `UPDATE notifications SET "acknowledgedAt" = NOW(), "acknowledgedBy" = $1, "isRead" = true, "readAt" = COALESCE("readAt", NOW())
-       WHERE id = $2 AND "assignmentId" = $3 AND "requiresAck" = true RETURNING id`,
-      [scope.userId, Number(id), scope.activeAssignmentId]
-    );
-
-    if (!affectedRows) {
-      res.status(404).json({ error: "الإشعار غير موجود أو لا يتطلب إقراراً" });
-      return;
-    }
-
-    res.json({ message: "تم الإقرار بالاستلام" });
-  } catch (err) {
-    handleRouteError(err, res, "إقرار بالإشعار");
-  }
-});
-
-router.get("/pending-ack", async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const rows = await rawQuery<any>(
-      `SELECT id, type, title, body, priority, "createdAt", "refType", "refId"
-       FROM notifications
-       WHERE "assignmentId" = $1 AND "requiresAck" = true AND "acknowledgedAt" IS NULL
-       ORDER BY "createdAt" DESC`,
-      [scope.activeAssignmentId]
-    );
-    res.json({ data: rows, total: rows.length });
-  } catch (err) {
-    handleRouteError(err, res, "إشعارات تحتاج إقرار");
   }
 });
 

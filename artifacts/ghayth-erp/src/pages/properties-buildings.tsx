@@ -1,228 +1,134 @@
-import { Link, useLocation } from "wouter";
+import { useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { KpiGrid } from "@/components/shared/kpi-card";
-import { Building2, Home, Plus, Eye, Pencil, TrendingUp, CheckCircle } from "lucide-react";
+import { Building2, Home, Plus, Eye, Pencil, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
 
-const TYPE_MAP: Record<string, string> = {
-  residential: "سكني",
-  commercial: "تجاري",
-  mixed: "مختلط",
-};
-
-const TYPE_OPTIONS = [
-  { value: "residential", label: "سكني" },
-  { value: "commercial", label: "تجاري" },
-  { value: "mixed", label: "مختلط" },
-];
-
 export default function PropertiesBuildings() {
-  const [, navigate] = useLocation();
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
-  const [filters, setFilters] = useFilters();
-
   const { data: buildingsResp, isLoading } = useApiQuery<any>(
     ["property-buildings", scopeQueryString],
     `/properties/buildings?${scopeQueryString || ""}`
   );
   const buildings = asList(buildingsResp);
+  const [search, setSearch] = useState("");
 
-  const filtered = applyFilters(buildings, filters, {
-    searchFields: ["name", "address", "city"],
-    statusField: "type",
-  });
+  const filtered = buildings.filter((b: any) =>
+    !search || b.name?.includes(search) || b.address?.includes(search) || b.city?.includes(search)
+  );
 
-  const totalUnits = buildings.reduce((sum: number, b: any) => sum + (b.totalUnits || 0), 0);
-  const totalRented = buildings.reduce((sum: number, b: any) => sum + (b.rentedUnits || 0), 0);
-  const totalAvailable = buildings.reduce((sum: number, b: any) => sum + (b.availableUnits || 0), 0);
-  const totalRevenue = buildings.reduce((sum: number, b: any) => sum + (Number(b.totalRevenue) || 0), 0);
-
-  const kpis = [
-    {
-      label: "إجمالي المباني",
-      value: buildings.length,
-      icon: Building2,
-      color: "text-blue-600 bg-blue-50",
-    },
-    {
-      label: "إجمالي الوحدات",
-      value: totalUnits,
-      icon: Home,
-      color: "text-purple-600 bg-purple-50",
-    },
-    {
-      label: "الوحدات المؤجرة",
-      value: totalRented,
-      icon: CheckCircle,
-      color: "text-emerald-600 bg-emerald-50",
-    },
-    {
-      label: "إجمالي الإيرادات",
-      value: formatCurrency(totalRevenue),
-      icon: TrendingUp,
-      color: "text-green-600 bg-green-50",
-    },
-  ];
-
-  const columns: DataTableColumn<any>[] = [
-    {
-      key: "name",
-      header: "اسم المبنى",
-      sortable: true,
-      render: (b) => (
-        <div className="min-w-0">
-          <span className="font-medium text-sm block truncate">{b.name}</span>
-          {b.address && (
-            <span className="text-xs text-gray-400 truncate block">
-              {b.address}{b.city ? ` — ${b.city}` : ""}
-            </span>
-          )}
-          {b.deedNumber && (
-            <span className="text-[10px] text-gray-400">صك: {b.deedNumber}</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "type",
-      header: "النوع",
-      sortable: true,
-      render: (b) => (
-        <Badge variant="outline" className="text-xs">
-          {TYPE_MAP[b.type] || b.type}
-        </Badge>
-      ),
-    },
-    {
-      key: "totalUnits",
-      header: "إجمالي الوحدات",
-      sortable: true,
-      align: "center",
-      render: (b) => (
-        <span className="text-sm font-semibold">{b.totalUnits || 0}</span>
-      ),
-    },
-    {
-      key: "rentedUnits",
-      header: "مؤجرة",
-      sortable: true,
-      align: "center",
-      render: (b) => (
-        <span className="text-sm font-semibold text-blue-600">{b.rentedUnits || 0}</span>
-      ),
-    },
-    {
-      key: "availableUnits",
-      header: "شاغرة",
-      sortable: true,
-      align: "center",
-      render: (b) => (
-        <span className="text-sm font-semibold text-emerald-600">{b.availableUnits || 0}</span>
-      ),
-    },
-    {
-      key: "occupancy",
-      header: "نسبة الإشغال",
-      sortable: true,
-      render: (b) => {
-        const occupancy = b.totalUnits > 0 ? Math.round((b.rentedUnits / b.totalUnits) * 100) : 0;
-        return (
-          <div className="min-w-[80px]">
-            <span className={cn(
-              "text-sm font-bold",
-              occupancy >= 80 ? "text-emerald-600" : occupancy >= 50 ? "text-amber-600" : "text-red-500"
-            )}>
-              {occupancy}%
-            </span>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all",
-                  occupancy >= 80 ? "bg-emerald-500" : occupancy >= 50 ? "bg-amber-500" : "bg-red-400"
-                )}
-                style={{ width: `${occupancy}%` }}
-              />
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      key: "totalRevenue",
-      header: "الإيرادات",
-      sortable: true,
-      render: (b) => (
-        <span className={cn("text-sm font-semibold", b.totalRevenue > 0 ? "text-emerald-600" : "text-gray-400")}>
-          {b.totalRevenue > 0 ? formatCurrency(b.totalRevenue) : "-"}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "إجراءات",
-      render: (b) => (
-        <div className="flex items-center gap-1">
-          <Link href={`/properties/buildings/${b.id}`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs">
-              <Eye className="h-3 w-3" /> عرض
-            </Button>
-          </Link>
-          {canManage && (
-            <Link href={`/properties/buildings/${b.id}/edit`}>
-              <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs">
-                <Pencil className="h-3 w-3" />
-              </Button>
-            </Link>
-          )}
-        </div>
-      ),
-    },
-  ];
+  if (isLoading) return (
+    <div className="space-y-6">
+      <Skeleton className="h-10 w-64" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1,2,3].map(i => <Skeleton key={i} className="h-48" />)}
+      </div>
+    </div>
+  );
 
   return (
-    <PageShell
-      title="المباني والمجمعات"
-      subtitle={`${buildings.length} مبنى مسجل`}
-      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
-      loading={isLoading}
-      actions={
-        canManage ? (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">المباني والمجمعات</h1>
+          <p className="text-gray-500 text-sm mt-1">{buildings.length} مبنى مسجل</p>
+        </div>
+        {canManage && (
           <Link href="/properties/buildings/create">
-            <Button size="sm" className="gap-1.5">
+            <Button className="gap-2">
               <Plus className="h-4 w-4" /> إضافة مبنى
             </Button>
           </Link>
-        ) : undefined
-      }
-    >
-      <KpiGrid items={kpis} />
+        )}
+      </div>
 
-      <AdvancedFilters
-        config={{
-          searchPlaceholder: "بحث بالاسم أو العنوان أو المدينة...",
-          statuses: TYPE_OPTIONS,
-        }}
-        values={filters}
-        onChange={setFilters}
-        resultCount={filtered.length}
-      />
+      <div className="relative max-w-sm">
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Input className="ps-9" placeholder="بحث بالاسم أو العنوان..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        noToolbar
-        emptyMessage="لا توجد مباني مسجلة"
-        pageSize={20}
-        onRowClick={(item) => navigate(`/properties/buildings/${item.id}`)}
-      />
-    </PageShell>
+      {filtered.length === 0 ? (
+        <div className="text-center py-16">
+          <Building2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+          <p className="text-gray-500 font-medium">لا توجد مباني مسجلة</p>
+          {canManage && (
+            <Link href="/properties/buildings/create">
+              <Button className="mt-4 gap-2"><Plus className="h-4 w-4" /> إضافة أول مبنى</Button>
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((b: any) => {
+            const occupancy = b.totalUnits > 0 ? Math.round((b.rentedUnits / b.totalUnits) * 100) : 0;
+            return (
+              <Card key={b.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-base truncate">{b.name}</CardTitle>
+                      {b.address && <p className="text-xs text-gray-400 mt-0.5 truncate">{b.address}{b.city ? ` — ${b.city}` : ""}</p>}
+                      {b.deedNumber && <p className="text-[10px] text-gray-400 mt-0.5">صك: {b.deedNumber}</p>}
+                    </div>
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      {b.type === "residential" ? "سكني" : b.type === "commercial" ? "تجاري" : b.type === "mixed" ? "مختلط" : b.type}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="text-lg font-bold">{b.totalUnits || 0}</p>
+                      <p className="text-[10px] text-gray-500">إجمالي</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-2">
+                      <p className="text-lg font-bold text-blue-600">{b.rentedUnits || 0}</p>
+                      <p className="text-[10px] text-gray-500">مؤجرة</p>
+                    </div>
+                    <div className="bg-emerald-50 rounded-lg p-2">
+                      <p className="text-lg font-bold text-emerald-600">{b.availableUnits || 0}</p>
+                      <p className="text-[10px] text-gray-500">شاغرة</p>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>نسبة الإشغال</span>
+                      <span className="font-bold">{occupancy}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={cn("h-full rounded-full transition-all", occupancy >= 80 ? "bg-emerald-500" : occupancy >= 50 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${occupancy}%` }} />
+                    </div>
+                  </div>
+                  {b.totalRevenue > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-500">الإيرادات</span>
+                      <span className="font-bold text-emerald-600">{formatCurrency(b.totalRevenue)}</span>
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <Link href={`/properties/buildings/${b.id}`} className="flex-1">
+                      <Button variant="outline" size="sm" className="w-full gap-1 text-xs"><Eye className="h-3 w-3" /> عرض الوحدات</Button>
+                    </Link>
+                    {canManage && (
+                      <Link href={`/properties/buildings/${b.id}/edit`}>
+                        <Button variant="ghost" size="sm" className="gap-1 text-xs"><Pencil className="h-3 w-3" /></Button>
+                      </Link>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

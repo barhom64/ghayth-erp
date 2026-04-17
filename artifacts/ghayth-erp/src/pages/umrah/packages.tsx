@@ -2,7 +2,6 @@ import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Package, Check, X } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
 
 interface UmrahPackage {
   id: number;
@@ -44,12 +43,12 @@ export default function UmrahPackages() {
   const rows = asList(data?.data || data);
 
   return (
-    <PageShell
-      title="باقات العمرة"
-      subtitle="إدارة باقات العمرة والأسعار والتفاصيل"
-      breadcrumbs={[{ href: "/umrah", label: "العمرة" }]}
-    >
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2"><Package className="h-6 w-6" /> باقات العمرة</h1>
+        <p className="text-muted-foreground mt-1">إدارة باقات العمرة والأسعار والتفاصيل</p>
+      </div>
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </PageShell>
+    </div>
   );
 }

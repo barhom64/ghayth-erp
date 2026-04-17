@@ -12,7 +12,6 @@ import {
   AlertTriangle, CheckCircle, XCircle, Clock, Settings2,
   ChevronDown, ChevronUp,
 } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
 
 interface BusinessRule {
   id: number;
@@ -418,19 +417,23 @@ export default function SettingsRulesPage() {
   const handleDelete = (ruleId: number) => deleteMut.mutate({ id: ruleId });
 
   return (
-    <PageShell
-      title="محرك قواعد الأعمال"
-      subtitle="إعداد القواعد التلقائية: إذا حدث شيء... فعندها يتم تنفيذ إجراء"
-      breadcrumbs={[{ href: "/settings", label: "الإعدادات" }]}
-      actions={
+    <div className="p-4 md:p-6 space-y-6" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Settings2 className="h-5 w-5" /> محرك قواعد الأعمال
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            إعداد القواعد التلقائية: إذا حدث شيء... فعندها يتم تنفيذ إجراء
+          </p>
+        </div>
         <div className="flex items-center gap-3 text-sm">
           <Badge variant="default" className="gap-1">
             <Zap className="h-3 w-3" /> {activeRules.length} مفعّلة
           </Badge>
           <Badge variant="secondary">{rules.length} إجمالي</Badge>
         </div>
-      }
-    >
+      </div>
 
       <Tabs defaultValue="rules" dir="rtl">
         <TabsList>
@@ -484,6 +487,6 @@ export default function SettingsRulesPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </PageShell>
+    </div>
   );
 }

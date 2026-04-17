@@ -1,4 +1,3 @@
-import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
   import { authMiddleware } from "../middlewares/authMiddleware.js";
   import { logPageView } from "../lib/activityTracker.js";
@@ -18,8 +17,8 @@ import { Router } from "express";
         sessionId,
       });
       res.json({ ok: true });
-    } catch (err) {
-      handleRouteError(err, res, "Activity ingest error:");
+    } catch {
+      res.status(500).json({ error: "خطأ في تسجيل النشاط" });
     }
   });
 

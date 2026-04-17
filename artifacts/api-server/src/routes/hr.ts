@@ -17,7 +17,6 @@ import {
   emitEvent,
   createAuditLog,
   getManagerAssignmentId,
-  isSubmitterDeptManager,
   initiateApprovalChain,
   processApprovalStep,
   createJournalEntry,
@@ -348,7 +347,6 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
         type: "late_warning", title: "تنبيه تأخر",
         body: `تم تسجيل تأخرك ${lateMinutes} دقيقة اليوم. ${penaltyLabel ? `العقوبة: ${penaltyLabel}` : ""}`,
         priority: "high", refType: "attendance", refId: attendanceId,
-        actionUrl: `/hr?tab=violations`,
       }).catch(console.error);
     }
 
@@ -361,7 +359,6 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
             type: "late_arrival", title: "تأخر موظف",
             body: `تأخر الموظف ${lateMinutes} دقيقة اليوم ${today}${penaltyLevel > 0 ? ` (مستوى العقوبة: ${penaltyLevel})` : ""}`,
             priority: "high", refType: "attendance", refId: attendanceId,
-            actionUrl: `/hr?tab=violations`,
           }).catch(console.error);
         }
       }).catch(console.error);
@@ -563,7 +560,6 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
         type: "early_departure_warning", title: "تنبيه خروج مبكر",
         body: `تم تسجيل خروجك المبكر بمقدار ${earlyDepartureMinutes} دقيقة اليوم.`,
         priority: "high", refType: "attendance", refId: existing.id,
-        actionUrl: `/hr?tab=violations`,
       }).catch(console.error);
 
       // ── Notify manager ──
@@ -574,7 +570,6 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
             type: "early_departure", title: "خروج مبكر لموظف",
             body: `غادر الموظف مبكراً بمقدار ${earlyDepartureMinutes} دقيقة اليوم ${today}`,
             priority: "high", refType: "attendance", refId: existing.id,
-            actionUrl: `/hr?tab=violations`,
           }).catch(console.error);
         }
       }).catch(console.error);
@@ -1012,7 +1007,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         [scope.activeAssignmentId, scope.companyId]
       );
       managerAssignmentId = directManagerRow?.managerAssignmentId ?? null;
-    } catch (_e) { console.error("HR query fallback error:", _e); }
+    } catch (_e) {}
     if (!managerAssignmentId) {
       managerAssignmentId = await getManagerAssignmentId(scope.companyId, scope.branchId);
     }
@@ -1050,7 +1045,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) { console.error("HR query fallback error:", _e); }
+    } catch (_e) {}
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1215,15 +1210,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
       }
 
       if (!currentStage.assignedTo) {
-        let roleMatchesStage =
+        const roleMatchesStage =
           (stageRequiredRole === "manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
           (stageRequiredRole === "hr" && scope.role === "hr_manager") ||
           (stageRequiredRole === "branch_manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
           (stageRequiredRole === "hr_manager" && scope.role === "hr_manager") ||
           (stageRequiredRole === scope.role);
-        if (!roleMatchesStage && stageRequiredRole === "dept_manager") {
-          roleMatchesStage = await isSubmitterDeptManager(scope.companyId, scope.activeAssignmentId);
-        }
         if (!roleMatchesStage) {
           throw new ForbiddenError(
             `هذه المرحلة تتطلب موافقة ${stageRequiredRole}`,
@@ -1278,7 +1270,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           type: "leave_rejected", title: "تم رفض طلب الإجازة",
           body: `تم رفض طلب الإجازة. السبب: ${reason ?? "لم يحدد"}`,
           priority: "high", refType: "leave_request", refId: Number(id),
-          actionUrl: `/hr/leaves`,
         }).catch(console.error);
       }
 
@@ -1288,12 +1279,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           [Number(id), reason || null, scope.userId, scope.companyId]
         );
       } catch (e) { console.error("Failed to log approval action:", e); }
-
-      rawExecute(
-        `UPDATE workflow_instances SET status = 'rejected', "completedAt" = NOW()
-         WHERE "refTable" = 'hr_leave_requests' AND "refId" = $1 AND status IN ('pending','in_review','escalated')`,
-        [Number(id)]
-      ).catch((e) => console.error("Close leave workflow_instance:", e));
 
       emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.rejected",
         entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
@@ -1340,7 +1325,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           type: "leave_returned", title: "تم إرجاع طلب الإجازة",
           body: `تم إرجاع طلب الإجازة للمراجعة. السبب: ${reason}`,
           priority: "medium", refType: "leave_request", refId: Number(id),
-          actionUrl: `/hr/leaves`,
         }).catch(console.error);
       }
 
@@ -1350,12 +1334,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           [Number(id), reason, scope.userId, scope.companyId]
         );
       } catch (e) { console.error("Failed to log approval action:", e); }
-
-      rawExecute(
-        `UPDATE workflow_instances SET status = 'returned', "completedAt" = NOW()
-         WHERE "refTable" = 'hr_leave_requests' AND "refId" = $1 AND status IN ('pending','in_review','escalated')`,
-        [Number(id)]
-      ).catch((e) => console.error("Close leave workflow_instance:", e));
 
       emitEvent({
         companyId: scope.companyId, userId: scope.userId,
@@ -1391,7 +1369,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) { console.error("HR query fallback error:", _e); }
+    } catch (_e) {}
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1426,7 +1404,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           type: "leave_request", title: `طلب إجازة يتطلب مراجعة ${nextStep.requiredRole}`,
           body: `أقر المرحلة ${currentStageNum} على طلب إجازة لمدة ${request.days} أيام`,
           priority: "high", refType: "leave_request", refId: Number(id),
-          actionUrl: `/hr/leaves`,
         }).catch(console.error);
 
         emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `leave.stage${currentStageNum}_approved`,
@@ -1542,7 +1519,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
         type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
         body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
         priority: "high", refType: "leave_request", refId: Number(id),
-        actionUrl: `/hr/leaves`,
       }).catch(console.error);
 
       getManagerAssignmentId(asn.companyId, asn.branchId).then((mgr) => {
@@ -1552,7 +1528,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
             type: "leave_approved", title: "موظف في إجازة معتمدة",
             body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
             priority: "normal", refType: "leave_request", refId: Number(id),
-            actionUrl: `/hr/leaves`,
           }).catch(console.error);
         }
       }).catch(console.error);
@@ -1564,12 +1539,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
         [Number(id), reason || null, scope.userId, scope.companyId]
       );
     } catch (e) { console.error("Failed to log approval action:", e); }
-
-    rawExecute(
-      `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW()
-       WHERE "refTable" = 'hr_leave_requests' AND "refId" = $1 AND status IN ('pending','in_review','escalated')`,
-      [Number(id)]
-    ).catch((e) => console.error("Close leave workflow_instance:", e));
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.approved",
       entity: "hr_leave_requests", entityId: Number(id),
@@ -1636,7 +1605,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) { console.error("HR query fallback error:", _e); }
+    } catch (_e) {}
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1725,7 +1694,6 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
         type: "leave_escalated", title: "تصعيد طلب إجازة",
         body: `تم تصعيد طلب إجازة (${id}) لعدم البت فيه خلال المهلة المحددة`,
         priority: "urgent", refType: "leave_request", refId: Number(id),
-        actionUrl: `/hr/leaves`,
       }).catch(console.error);
     }
 
@@ -2163,12 +2131,11 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     });
 
     try {
-      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
+      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
         getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
         getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
         getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
         getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_deductions_payable", "credit", "2210"),
       ]);
 
       await createJournalEntry({
@@ -2177,13 +2144,12 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
         createdBy: scope.activeAssignmentId,
         ref: `PAYROLL-${targetPeriod}`,
         description: `صرف رواتب ${targetPeriod} – ${lines.length} موظف`,
-        type: "payroll", sourceType: "payroll_run", sourceId: runId,
         lines: [
           { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
           { accountCode: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0 },
           { accountCode: bankCode, debit: 0, credit: totalBankPayout },
           { accountCode: gosiPayableCode, debit: 0, credit: totalGosiPayable },
-          { accountCode: deductionsPayableCode, debit: 0, credit: Math.round((totalGross - totalNet - totalGosiEmployee) * 100) / 100 || 0 },
+          { accountCode: "2210", debit: 0, credit: Math.round((totalGross - totalNet - totalGosiEmployee) * 100) / 100 || 0 },
         ].filter(l => l.debit > 0 || l.credit > 0),
       });
     } catch (journalErr) {
@@ -2277,22 +2243,14 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
     ).catch(() => [] as any[]);
 
     res.json({ ...item, memos });
-  } catch (err) { handleRouteError(err, res, "Get violation detail error:"); }
+  } catch (err) { console.error("Get violation detail error:", err); res.status(500).json({ error: "خطأ في الخادم" }); }
 });
 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    let { assignmentId, employeeId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
+    const { assignmentId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
     const period = reqPeriod || new Date().toISOString().slice(0, 7);
-    // resolve assignmentId from employeeId if needed
-    if (!assignmentId && employeeId) {
-      const [resolved] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
-        [Number(employeeId), scope.companyId]
-      );
-      if (resolved) assignmentId = resolved.id;
-    }
     const { insertId } = await rawExecute(
       `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -2359,27 +2317,12 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
     const finalEmployeeId = employeeId || assignmentId;
     const finalScores = scores || categories ? JSON.stringify(scores || categories) : null;
     const finalComments = comments || notes || null;
-
-    const trainings = await rawQuery<any>(
-      `SELECT te.id, tp.name, te.score
-       FROM training_enrollments te
-       JOIN training_programs tp ON tp.id = te."programId"
-       WHERE te."employeeId" = $1 AND te.status = 'completed'
-       ORDER BY te."completedAt" DESC LIMIT 20`,
-      [finalEmployeeId]
-    );
-    const trainingIds = trainings.map((t: any) => t.id);
-    const avgTrainingScore = trainings.length > 0
-      ? trainings.reduce((s: number, t: any) => s + (Number(t.score) || 0), 0) / trainings.length
-      : null;
-
     const { insertId } = await rawExecute(
-      `INSERT INTO performance_reviews ("companyId","employeeId",period,"overallScore",scores,comments,status,"trainingIds","trainingScore")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, finalEmployeeId, period, overallScore ?? 0, finalScores, finalComments, status ?? "pending",
-       JSON.stringify(trainingIds), avgTrainingScore]
+      `INSERT INTO performance_reviews ("companyId","employeeId",period,"overallScore",scores,comments,status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scope.companyId, finalEmployeeId, period, overallScore ?? 0, finalScores, finalComments, status ?? "pending"]
     );
-    res.status(201).json({ id: insertId, trainingIds, trainingScore: avgTrainingScore, ...req.body });
+    res.status(201).json({ id: insertId, ...req.body });
   } catch (err) { handleRouteError(err, res, "Create performance error:"); }
 });
 
@@ -2410,7 +2353,7 @@ router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) =
       totalEmployees: Number(totalEmp?.count ?? 0),
       month,
     });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
+  } catch (_e) { res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
 });
 
 router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
@@ -2434,7 +2377,7 @@ router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
       rejected: Number(rejected?.count ?? 0),
       total: Number(total?.count ?? 0),
     });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
+  } catch (_e) { res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
 });
 
 router.get("/salary-components", requirePermission("hr:read"), async (req, res) => {
@@ -2444,7 +2387,7 @@ router.get("/salary-components", requirePermission("hr:read"), async (req, res) 
       `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name`, [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
+  } catch (_e) { res.json({ data: [], total: 0 }); }
 });
 
 router.post("/salary-components", requirePermission("hr:create"), async (req, res) => {
@@ -2476,7 +2419,7 @@ router.get("/approval-chains", requirePermission("hr:read"), async (req, res) =>
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
+  } catch (_e) { res.json({ data: [], total: 0 }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2497,7 +2440,7 @@ router.get("/approval-chain-definitions", requirePermission("hr:read"), async (r
       [scope.companyId]
     );
     res.json({ data: chains, total: chains.length });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
+  } catch (_e) { res.json({ data: [], total: 0 }); }
 });
 
 router.post("/approval-chain-definitions", requirePermission("hr:create"), async (req, res) => {
@@ -2573,7 +2516,7 @@ router.get("/approval-requests", requirePermission("hr:read"), async (req, res) 
       [scope.companyId, statusFilter]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
+  } catch (_e) { res.json({ data: [], total: 0 }); }
 });
 
 router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), async (req, res) => {
@@ -2719,7 +2662,7 @@ router.get("/attendance-policy", requirePermission("hr:read"), async (req, res) 
       penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
       penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
     });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: null, error: "خطأ في جلب البيانات" }); }
+  } catch (_e) { res.json({}); }
 });
 
 router.put("/attendance-policy", requirePermission("hr:update"), async (req, res) => {
@@ -2824,7 +2767,7 @@ router.get("/violations-stats", requirePermission("hr:read"), async (req, res) =
       thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
+  } catch (_e) { res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
 });
 
 router.patch("/violations/:id", requirePermission("hr:update"), async (req, res) => {
@@ -2911,7 +2854,7 @@ router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) 
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
+  } catch (_e) { res.json({ data: [], total: 0 }); }
 });
 
 router.post("/shift-assignments", requirePermission("hr:create"), async (req, res) => {
@@ -2947,7 +2890,7 @@ router.get("/official-letters", requirePermission("hr:read"), async (req, res) =
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
+  } catch (_e) { res.json({ data: [], total: 0 }); }
 });
 
 router.post("/official-letters", requirePermission("hr:create"), async (req, res) => {
@@ -3029,7 +2972,7 @@ router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res)
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
+  } catch (_e) { res.json({ data: [], total: 0 }); }
 });
 
 // ─── Leave requests general PATCH/DELETE ──────────────────────
@@ -3685,7 +3628,7 @@ router.get("/deductions", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
+  } catch (_e) { res.json({ data: [], total: 0 }); }
 });
 
 router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) => {
@@ -3700,7 +3643,7 @@ router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) =
       res.json({ data: val }); return;
     }
     res.json({ data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] });
-  } catch (e) { console.error("HR endpoint error:", e); res.json({ data: [] }); }
+  } catch { res.json({ data: [] }); }
 });
 
 router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res) => {

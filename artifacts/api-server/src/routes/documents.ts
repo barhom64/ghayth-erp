@@ -5,7 +5,6 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
 import { createAuditLog } from "../lib/businessHelpers.js";
-import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -46,7 +45,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
 
     const rows = await rawQuery(`SELECT * FROM documents ${where} ORDER BY "createdAt" DESC`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "Documents list"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/", requirePermission("documents:create"), async (req: Request, res: Response) => {
@@ -63,7 +62,7 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
       [title, description || null, type || 'document', folder || title, `doc-${Date.now()}`, scope.companyId, scope.userId]
     );
     res.status(201).json({ id: r.insertId, title, type, department });
-  } catch (err) { handleRouteError(err, res, "Create document"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/upload", requirePermission("documents:create"), async (req: Request, res: Response) => {
@@ -112,7 +111,7 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
     res.status(201).json(doc);
-  } catch (err) { handleRouteError(err, res, "Upload document"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/:id/download", requirePermission("documents:download"), async (req: Request, res: Response) => {
@@ -146,7 +145,7 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
     } catch {
       res.status(404).json({ error: "الملف غير موجود في التخزين" });
     }
-  } catch (err) { handleRouteError(err, res, "Download document"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // P02-S4-HIGH — `POST /:id/versions` used to read documents with the
@@ -187,7 +186,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
 
     const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [docId, scope.companyId]);
     res.json(updated);
-  } catch (err) { handleRouteError(err, res, "Create document version"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/:id/versions", requirePermission("documents:read"), async (req: Request, res: Response) => {
@@ -205,7 +204,7 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
       [docId]
     );
     res.json({ data: versions });
-  } catch (err) { handleRouteError(err, res, "Document versions"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/:id/status", requirePermission("documents:update"), async (req: Request, res: Response) => {
@@ -252,7 +251,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
     res.json({ ...(doc as any), impact });
-  } catch (err) { handleRouteError(err, res, "Update document status"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/:id/entity-links", requirePermission("documents:update"), async (req: Request, res: Response) => {
@@ -273,7 +272,7 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
       [docId, entityType, entityId]
     );
     res.json({ message: "تم الربط بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Link document entity"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/:id/entity-links", requirePermission("documents:read"), async (req: Request, res: Response) => {
@@ -292,7 +291,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
       [docId]
     );
     res.json({ data: links });
-  } catch (err) { handleRouteError(err, res, "Document entity links"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/folders", requirePermission("documents:read"), async (req, res) => {
@@ -300,7 +299,7 @@ router.get("/folders", requirePermission("documents:read"), async (req, res) => 
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY name`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "Document folders"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/folders", requirePermission("documents:create"), async (req, res) => {
@@ -312,7 +311,7 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
       [name, parentId, color, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create folder"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/templates", requirePermission("documents:read"), async (req, res) => {
@@ -323,7 +322,7 @@ router.get("/templates", requirePermission("documents:read"), async (req, res) =
       [scope.companyId]
     );
     res.json(rows);
-  } catch (err) { handleRouteError(err, res, "Document templates"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/templates/:id", requirePermission("documents:read"), async (req, res) => {
@@ -332,7 +331,7 @@ router.get("/templates/:id", requirePermission("documents:read"), async (req, re
     const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "القالب غير موجود" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get template"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/templates", requirePermission("documents:create"), async (req, res) => {
@@ -344,7 +343,7 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
       [name, description, content, category, type || 'letter', JSON.stringify(variables || []), htmlContent || '', branchId || null, signatureUrl || null, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create template"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // P02-S4-MED — both PUT and DELETE on /templates/:id used to read the
@@ -377,7 +376,7 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
     );
     const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update template"); }
+  } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء تحديث القالب" }); }
 });
 
 router.delete("/templates/:id", requirePermission("documents:delete"), async (req, res) => {
@@ -389,7 +388,7 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
     await rawExecute(`DELETE FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف القالب بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete template"); }
+  } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء حذف القالب" }); }
 });
 
 function fillTemplate(htmlContent: string, data: Record<string, any>): string {
@@ -541,7 +540,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       signatureUrl: template.signatureUrl,
       variables: entityData,
     });
-  } catch (err) { handleRouteError(err, res, "Generate from template"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/templates/:id/variables", requirePermission("documents:read"), async (req, res) => {
@@ -553,7 +552,7 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
     let variables = [];
     try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch { variables = []; }
     res.json({ variables });
-  } catch (err) { handleRouteError(err, res, "Template variables"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/stats", requirePermission("documents:read"), async (req, res) => {
@@ -572,7 +571,7 @@ router.get("/stats", requirePermission("documents:read"), async (req, res) => {
       draftDocuments: Number(drafts.count),
       approvedDocuments: Number(approved.count),
     });
-  } catch (err) { handleRouteError(err, res, "Document stats"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/:id", requirePermission("documents:read"), async (req, res) => {
@@ -581,7 +580,7 @@ router.get("/:id", requirePermission("documents:read"), async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "المستند غير موجود" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get document"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/:id", requirePermission("documents:update"), async (req, res) => {
@@ -604,7 +603,7 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     if (result.affectedRows === 0) { res.status(404).json({ error: "المستند غير موجود" }); return; }
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update document"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/:id", requirePermission("documents:delete"), async (req, res) => {
@@ -614,7 +613,7 @@ router.delete("/:id", requirePermission("documents:delete"), async (req, res) =>
     const result = await rawExecute(`DELETE FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "المستند غير موجود" }); return; }
     res.json({ message: "تم حذف المستند بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete document"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;

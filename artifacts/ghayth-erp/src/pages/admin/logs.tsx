@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PaginationBar } from "@/components/data-table-wrapper";
-import { PageShell } from "@/components/page-shell";
 
 const ACTION_LABELS: Record<string, string> = {
   create: "إنشاء",
@@ -128,19 +127,22 @@ export default function AdminLogsPage() {
   };
 
   return (
-    <PageShell
-      title="سجل التدقيق"
-      subtitle="عرض وتصفية جميع العمليات والتغييرات في النظام"
-      breadcrumbs={[{ href: "/admin", label: "إدارة النظام" }]}
-      actions={
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <ScrollText className="w-8 h-8 text-amber-600" />
+            سجل التدقيق
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">عرض وتصفية جميع العمليات والتغييرات في النظام</p>
+        </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <Download className="h-4 w-4 me-1" />تصدير جدولي
           </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
         </div>
-      }
-    >
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -272,6 +274,6 @@ export default function AdminLogsPage() {
           <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
         </CardContent>
       </Card>
-    </PageShell>
+    </div>
   );
 }

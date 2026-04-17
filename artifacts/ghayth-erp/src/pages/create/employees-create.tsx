@@ -26,7 +26,6 @@ const OPERATIONS = [
   { key: "attendance_policy", label: "ربط سياسة الحضور", icon: Clock },
   { key: "salary_structure", label: "إعداد الهيكل الوظيفي", icon: DollarSign },
   { key: "bank_account", label: "إعداد حساب بنكي", icon: CreditCard },
-  { key: "gl_accounts", label: "فتح حسابات فرعية في شجرة الحسابات (سُلف، عهد، رواتب)", icon: DollarSign },
   { key: "onboarding_tasks", label: "إنشاء مهام التأهيل", icon: Briefcase },
   { key: "notification", label: "إرسال إشعار للإدارة", icon: AlertCircle },
 ];

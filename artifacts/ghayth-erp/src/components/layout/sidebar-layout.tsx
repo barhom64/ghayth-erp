@@ -14,7 +14,7 @@ import {
   LineChart, Menu, X, LogOut, Headphones, CheckCircle,
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
-  Sparkles, Brain, Search, ArrowLeftRight, Landmark,
+  Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -184,10 +184,9 @@ const allNavSections: NavSection[] = [
         { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
       ]},
-      { label: "الأصول والعهد والخزينة", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
+      { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
-        { label: "الخزينة", path: "/finance/treasury", icon: Landmark },
       ]},
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },

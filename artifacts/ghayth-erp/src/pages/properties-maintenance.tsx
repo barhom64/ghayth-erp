@@ -1,11 +1,12 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { PageShell } from "@/components/page-shell";
 import { ApprovalActions } from "@/components/approval-actions";
 import { Wrench, Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
@@ -17,9 +18,13 @@ export default function PropertiesMaintenance() {
   );
   const requests = asList(requestsResp);
   const [filters, setFilters] = useFilters();
+  const [maintSearch, setMaintSearch] = useState("");
   const { permissions, roleLevel } = useAppContext();
   const canApprove = permissions.canManageProperty || roleLevel >= 70;
-  const filtered = applyFilters(requests, filters, {
+  const searchFiltered = requests.filter((r: any) =>
+    !maintSearch || r.unitNumber?.includes(maintSearch) || r.buildingName?.includes(maintSearch) || r.description?.includes(maintSearch)
+  );
+  const filtered = applyFilters(searchFiltered, filters, {
     searchFields: ["unitNumber", "buildingName", "description"] as any,
     statusField: "status" as any,
   });
@@ -53,17 +58,21 @@ export default function PropertiesMaintenance() {
   ];
 
   return (
-    <PageShell
-      title="طلبات الصيانة"
-      subtitle="إدارة ومتابعة طلبات الصيانة"
-      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
-      actions={
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">طلبات الصيانة</h1>
+          <p className="text-gray-500 text-sm mt-1">إدارة ومتابعة طلبات الصيانة</p>
+        </div>
         <Link href="/properties/maintenance/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> طلب صيانة جديد</Button>
         </Link>
-      }
-    >
-      <AdvancedFilters
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="flex-1 flex flex-col gap-2">
+          <Input placeholder="بحث سريع..." value={maintSearch} onChange={(e) => setMaintSearch(e.target.value)} />
+          <AdvancedFilters
             config={{
               searchPlaceholder: "بحث بالوحدة أو المبنى أو الوصف...",
               statuses: [
@@ -86,6 +95,8 @@ export default function PropertiesMaintenance() {
             ], "طلبات_الصيانة")}
             resultCount={filtered?.length}
           />
+        </div>
+      </div>
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5 text-orange-500" /> طلبات الصيانة</CardTitle></CardHeader>
@@ -103,6 +114,6 @@ export default function PropertiesMaintenance() {
           />
         </CardContent>
       </Card>
-    </PageShell>
+    </div>
   );
 }
