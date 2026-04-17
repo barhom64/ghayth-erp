@@ -10,6 +10,8 @@ import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 const VIOLATION_TYPES: Record<string, string> = {
   speeding: "تجاوز السرعة",
@@ -20,8 +22,14 @@ const VIOLATION_TYPES: Record<string, string> = {
   other: "أخرى",
 };
 
+const STATUS_OPTIONS = [
+  { value: "pending", label: "غير مدفوعة" },
+  { value: "paid", label: "مدفوعة" },
+];
+
 export default function TrafficViolationsPage() {
   const [showForm, setShowForm] = useState(false);
+  const [filters, setFilters] = useFilters();
   const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
 
   const { data, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
@@ -50,6 +58,87 @@ export default function TrafficViolationsPage() {
     try { await apiFetch(`/fleet/traffic-violations/${id}/pay`, { method: "PATCH", body: JSON.stringify({}) }); refetch(); toast({ title: "تم تسجيل الدفع" }); }
     catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };
+
+  const filtered = applyFilters(violations, filters, {
+    searchFields: ["plateNumber", "driverName", "violationNumber", "location"],
+    statusField: "status",
+    dateField: "violationDate",
+  });
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "plateNumber",
+      header: "المركبة",
+      sortable: true,
+      searchable: true,
+      render: (v) => (
+        <div>
+          <div className="font-medium">{v.plateNumber}</div>
+          {v.driverName && <div className="text-xs text-gray-500">{v.driverName}</div>}
+        </div>
+      ),
+    },
+    {
+      key: "violationType",
+      header: "نوع المخالفة",
+      sortable: true,
+      render: (v) => (
+        <Badge variant="outline">{VIOLATION_TYPES[v.violationType] || v.violationType}</Badge>
+      ),
+    },
+    {
+      key: "violationDate",
+      header: "التاريخ",
+      sortable: true,
+      render: (v) => v.violationDate?.split("T")[0] || "-",
+    },
+    {
+      key: "violationNumber",
+      header: "رقم المخالفة",
+      sortable: true,
+      searchable: true,
+      render: (v) => v.violationNumber ? (
+        <span className="font-mono text-xs">#{v.violationNumber}</span>
+      ) : "-",
+    },
+    {
+      key: "location",
+      header: "الموقع",
+      searchable: true,
+      render: (v) => v.location || "-",
+    },
+    {
+      key: "fineAmount",
+      header: "الغرامة",
+      sortable: true,
+      align: "end",
+      render: (v) => (
+        <span className="font-bold text-red-600">{Number(v.fineAmount || 0).toFixed(0)} ر.س</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (v) => (
+        <Badge className={v.status === "paid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+          {v.status === "paid" ? "مدفوعة" : "غير مدفوعة"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      align: "center",
+      render: (v) => v.status !== "paid" ? (
+        <Button size="sm" variant="outline" onClick={() => handlePay(v.id)}>
+          <DollarSign className="w-3.5 h-3.5 me-1" /> دفع
+        </Button>
+      ) : (
+        <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
+      ),
+    },
+  ];
 
   return (
     <PageShell
@@ -136,37 +225,33 @@ export default function TrafficViolationsPage() {
         </Card>
       )}
 
-      <div className="space-y-2">
-        {violations.length === 0 ? (
-          <Card><CardContent className="py-8 text-center text-gray-400">لا توجد مخالفات مسجلة</CardContent></Card>
-        ) : violations.map((v: any) => (
-          <Card key={v.id} className={`hover:shadow-md ${v.status === "paid" ? "opacity-60" : ""}`}>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${v.status === "paid" ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>
-                  {v.status === "paid" ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                </div>
-                <div>
-                  <div className="font-medium">{v.plateNumber} {v.driverName ? `— ${v.driverName}` : ""}</div>
-                  <div className="text-sm text-gray-500">{VIOLATION_TYPES[v.violationType] || v.violationType} · {v.violationDate?.split("T")[0]} {v.location ? `· ${v.location}` : ""}</div>
-                  {v.violationNumber && <div className="text-xs text-gray-400">مخالفة #{v.violationNumber}</div>}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="text-end">
-                  <div className="font-bold text-red-600">{Number(v.fineAmount || 0).toFixed(0)} ر.س</div>
-                  <Badge className={v.status === "paid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>{v.status === "paid" ? "مدفوعة" : "غير مدفوعة"}</Badge>
-                </div>
-                {v.status !== "paid" && (
-                  <Button size="sm" onClick={() => handlePay(v.id)}>
-                    <DollarSign className="w-3.5 h-3.5 me-1" /> دفع
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <AdvancedFilters
+        config={{
+          showSearch: true,
+          searchPlaceholder: "بحث بالمركبة، السائق، رقم المخالفة...",
+          statuses: STATUS_OPTIONS,
+          showDateRange: true,
+          extraFilters: [
+            ...(vehicleList.length > 0 ? [{
+              key: "violationType",
+              label: "نوع المخالفة",
+              options: Object.entries(VIOLATION_TYPES).map(([value, label]) => ({ value, label })),
+            }] : []),
+          ],
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
+
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا توجد مخالفات مسجلة"
+        emptyIcon={<AlertTriangle className="w-10 h-10 text-gray-300" />}
+        rowClassName={(v) => v.status === "paid" ? "opacity-60" : undefined as any}
+      />
     </PageShell>
   );
 }
