@@ -3,6 +3,11 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  createJournalEntry,
+  getAccountCodeFromMapping,
+  emitEvent,
+} from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -451,6 +456,54 @@ router.post("/agent-invoices/generate", requirePermission("operations:create"), 
         [rows[0].id, agentId, seasonId, scope.companyId]
       );
     }
+
+    try {
+      const arCode = await getAccountCodeFromMapping(scope.companyId, "umrah_agent_receivable", "debit", "1210");
+      const revenueCode = await getAccountCodeFromMapping(scope.companyId, "umrah_revenue", "credit", "4200");
+      const penaltyCode = await getAccountCodeFromMapping(scope.companyId, "umrah_penalty_revenue", "credit", "4210");
+      const commissionCode = await getAccountCodeFromMapping(scope.companyId, "umrah_commission", "debit", "5200");
+
+      const glLines: any[] = [
+        { accountCode: arCode, debit: total, credit: 0, description: `ذمم وكيل عمرة — ${agent.name}`, vendorId: agentId },
+      ];
+      if (servicesTotal > 0) {
+        glLines.push({ accountCode: revenueCode, debit: 0, credit: servicesTotal, description: `إيراد خدمات عمرة — ${agent.name}` });
+      }
+      if (penaltiesTotal > 0) {
+        glLines.push({ accountCode: penaltyCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات تأخر — ${agent.name}` });
+      }
+      if (commission > 0) {
+        glLines.push({ accountCode: commissionCode, debit: commission, credit: 0, description: `عمولة وكيل — ${agent.name}` });
+      }
+
+      const journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        createdBy: scope.userId,
+        ref: `UMRAH-GL-${ref}`,
+        description: `قيد فاتورة وكيل عمرة — ${agent.name}`,
+        sourceType: "umrah_agent_invoice",
+        sourceId: rows[0].id,
+        lines: glLines,
+      });
+
+      await rawExecute(
+        `UPDATE umrah_agent_invoices SET "journalEntryId"=$1 WHERE id=$2`,
+        [journalId, rows[0].id]
+      ).catch(() => {});
+
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "umrah.invoice.gl_posted",
+        entity: "umrah_agent_invoices",
+        entityId: rows[0].id,
+        details: JSON.stringify({ journalId, total, servicesTotal, penaltiesTotal, commission }),
+      }).catch(console.error);
+    } catch (glErr) {
+      console.error("[umrah] GL posting failed for agent invoice", rows[0].id, glErr);
+    }
+
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Generate invoice error"); }
 });
@@ -491,6 +544,30 @@ router.post("/transport", requirePermission("operations:create"), async (req, re
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [scope.companyId, b.seasonId, b.tripDate, b.fromLocation, b.toLocation, b.vehicleId, b.driverId, b.capacity || 45, b.pilgrimCount || 0, b.cost || 0, b.notes]
     );
+
+    const tripCost = Number(b.cost || 0);
+    if (tripCost > 0) {
+      try {
+        const transportExpenseCode = await getAccountCodeFromMapping(scope.companyId, "umrah_transport_expense", "debit", "5300");
+        const cashCode = await getAccountCodeFromMapping(scope.companyId, "umrah_transport_payable", "credit", "2100");
+        await createJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId || 0,
+          createdBy: scope.userId,
+          ref: `UMRAH-TRN-${rows[0].id}`,
+          description: `مصروف نقل عمرة — ${b.fromLocation} → ${b.toLocation}`,
+          sourceType: "umrah_transport",
+          sourceId: rows[0].id,
+          lines: [
+            { accountCode: transportExpenseCode, debit: tripCost, credit: 0, description: `مصروف نقل — ${b.fromLocation} → ${b.toLocation}`, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined },
+            { accountCode: cashCode, debit: 0, credit: tripCost, description: `مستحقات نقل عمرة` },
+          ],
+        });
+      } catch (glErr) {
+        console.error("[umrah] GL posting failed for transport", rows[0].id, glErr);
+      }
+    }
+
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
 });

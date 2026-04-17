@@ -2,6 +2,11 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import {
+  createJournalEntry,
+  getAccountCodeFromMapping,
+  emitEvent,
+} from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -144,6 +149,15 @@ router.patch("/orders/:id", async (req, res) => {
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE store_orders SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1`, [id]);
+
+    if (b.status === "completed" && existing.status !== "completed") {
+      try {
+        await postStoreOrderGl(scope, row);
+      } catch (glErr) {
+        console.error("[store] GL posting failed for order", id, glErr);
+      }
+    }
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update store order"); }
 });
@@ -175,5 +189,67 @@ router.get("/stats", async (req, res) => {
     });
   } catch (err) { handleRouteError(err, res, "Get store stats"); }
 });
+
+async function postStoreOrderGl(scope: any, order: any) {
+  const totalAmount = Number(order.totalAmount || 0);
+  if (totalAmount <= 0) return;
+
+  const orderItems = await rawQuery<any>(
+    `SELECT oi."productId", oi.quantity, oi."unitPrice", sp."costPrice"
+     FROM store_order_items oi
+     LEFT JOIN store_products sp ON sp.id = oi."productId"
+     WHERE oi."orderId" = $1`,
+    [order.id]
+  );
+
+  const revenueCode = await getAccountCodeFromMapping(scope.companyId, "store_revenue", "credit", "4100");
+  const cashCode = await getAccountCodeFromMapping(scope.companyId, "store_cash", "debit", "1100");
+  const cogsCode = await getAccountCodeFromMapping(scope.companyId, "store_cogs", "debit", "5100");
+  const inventoryCode = await getAccountCodeFromMapping(scope.companyId, "store_inventory", "credit", "1300");
+
+  const lines: any[] = [
+    { accountCode: cashCode, debit: totalAmount, credit: 0, description: `مبيعات طلب ${order.orderNumber}` },
+    { accountCode: revenueCode, debit: 0, credit: totalAmount, description: `إيراد طلب ${order.orderNumber}` },
+  ];
+
+  let totalCogs = 0;
+  for (const item of orderItems) {
+    const cost = Number(item.costPrice || 0) * Number(item.quantity || 0);
+    if (cost > 0) totalCogs += cost;
+  }
+
+  if (totalCogs > 0) {
+    lines.push(
+      { accountCode: cogsCode, debit: totalCogs, credit: 0, description: `تكلفة مبيعات طلب ${order.orderNumber}` },
+      { accountCode: inventoryCode, debit: 0, credit: totalCogs, description: `خصم مخزون طلب ${order.orderNumber}` },
+    );
+  }
+
+  const journalId = await createJournalEntry({
+    companyId: scope.companyId,
+    branchId: order.branchId || scope.branchId || 0,
+    createdBy: scope.userId,
+    ref: `STORE-${order.orderNumber}`,
+    description: `قيد مبيعات متجر — طلب ${order.orderNumber}`,
+    sourceType: "store_order",
+    sourceId: order.id,
+    lines,
+  });
+
+  await rawExecute(
+    `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2`,
+    [journalId, order.id]
+  ).catch(() => {});
+
+  emitEvent({
+    companyId: scope.companyId,
+    branchId: order.branchId || scope.branchId,
+    userId: scope.userId,
+    action: "store.order.gl_posted",
+    entity: "store_orders",
+    entityId: order.id,
+    details: JSON.stringify({ journalId, totalAmount, totalCogs }),
+  }).catch(console.error);
+}
 
 export default router;
