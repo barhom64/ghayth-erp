@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -60,17 +61,14 @@ export default function AccountsCreate() {
         </div>
         <div>
           <Label>الحساب الأب</Label>
-          <Select value={form.parentCode || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, parentCode: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="بدون (حساب رئيسي)" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">بدون (حساب رئيسي)</SelectItem>
-              {accounts.map((a: any) => (
-                <SelectItem key={a.code || a.id} value={String(a.code)}>
-                  {a.code} - {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Autocomplete
+            className="mt-1"
+            value={form.parentCode}
+            onChange={(v) => setForm((f) => ({ ...f, parentCode: String(v) }))}
+            options={accounts.map((a: any) => ({ value: String(a.code), label: `${a.code} - ${a.name}` }))}
+            placeholder="ابحث عن حساب أب..."
+            emptyMessage="لا توجد حسابات"
+          />
         </div>
         <div>
           <Label>الطبيعة</Label>

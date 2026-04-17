@@ -183,10 +183,22 @@ export async function createJournalEntry(params: {
   const totalCredit = params.lines.reduce((s, l) => s + Number(l.credit), 0);
   const imbalance = Math.round((totalDebit - totalCredit) * 10000) / 10000;
   if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
-    const [roundingAcc] = await rawQuery<any>(
+    let [roundingAcc] = await rawQuery<any>(
       `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
       [params.companyId]
     );
+    if (!roundingAcc) {
+      await rawExecute(
+        `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, level, "allowPosting")
+         VALUES ($1, '9999', 'فروقات التقريب', 'Rounding Differences', 'expense', 2, true)
+         ON CONFLICT DO NOTHING`,
+        [params.companyId]
+      );
+      [roundingAcc] = await rawQuery<any>(
+        `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
+        [params.companyId]
+      );
+    }
     if (roundingAcc) {
       params.lines.push({
         accountCode: "9999",
@@ -194,10 +206,13 @@ export async function createJournalEntry(params: {
         credit: imbalance > 0 ? imbalance : 0,
         description: "فرق تقريب تلقائي",
       });
-    } else {
-      throw new Error(
-        `قيد غير متوازن: مدين=${totalDebit.toFixed(2)} ≠ دائن=${totalCredit.toFixed(2)} (${params.ref}) — حساب فروقات التقريب 9999 غير موجود`
-      );
+      rawExecute(
+        `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","after")
+         VALUES ($1,$2,'rounding_adjustment','journal_entry',0,$3)`,
+        [params.companyId, params.createdBy, JSON.stringify({
+          ref: params.ref, imbalance, totalDebit, totalCredit,
+        })]
+      ).catch(console.error);
     }
   } else if (Math.abs(imbalance) > 0.05) {
     throw new Error(
@@ -827,7 +842,12 @@ export async function getAccountCodeFromMapping(
     [companyId, operationType]
   );
   if (!mapping) {
-    console.warn(`[accounting_mappings] No mapping found for operationType="${operationType}", company=${companyId}. Using fallback code "${fallbackCode}".`);
+    console.warn(`[accounting_mappings] No mapping for "${operationType}", company=${companyId}. Fallback: "${fallbackCode}".`);
+    rawExecute(
+      `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","after")
+       VALUES ($1,0,'mapping_fallback','accounting_mappings',0,$2)`,
+      [companyId, JSON.stringify({ operationType, side, fallbackCode })]
+    ).catch(console.error);
     return fallbackCode;
   }
   if (side === "debit") {

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
@@ -116,17 +117,13 @@ export default function JournalCreate() {
             {lines.map((line, idx) => (
               <div key={idx} className="space-y-1">
                 <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2">
-                  <Select value={line.accountCode || "_none"} onValueChange={(v) => updateLine(idx, "accountCode", v === "_none" ? "" : v)}>
-                    <SelectTrigger className="text-sm h-9">
-                      <SelectValue placeholder="اختر الحساب" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">اختر الحساب</SelectItem>
-                      {accounts.map((a: any) => (
-                        <SelectItem key={a.code || a.id} value={String(a.code || a.id)}>{a.code} - {a.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Autocomplete
+                    value={line.accountCode}
+                    onChange={(v) => updateLine(idx, "accountCode", String(v))}
+                    options={accounts.map((a: any) => ({ value: String(a.code || a.id), label: `${a.code} - ${a.name}` }))}
+                    placeholder="ابحث عن حساب..."
+                    emptyMessage="لا يوجد حسابات"
+                  />
                   <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="وصف البند" />
                   <Input type="number" value={line.debit} onChange={(e) => updateLine(idx, "debit", e.target.value)} placeholder="0" />
                   <Input type="number" value={line.credit} onChange={(e) => updateLine(idx, "credit", e.target.value)} placeholder="0" />

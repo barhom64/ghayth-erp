@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -119,16 +120,14 @@ export default function PurchaseOrdersCreate() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
           <Label>المورد <span className="text-red-500">*</span></Label>
-          <Select value={form.supplierId} onValueChange={(v) => setForm((f) => ({ ...f, supplierId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر المورد" />
-            </SelectTrigger>
-            <SelectContent>
-              {suppliers.map((s: any) => (
-                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Autocomplete
+            className="mt-1"
+            value={form.supplierId}
+            onChange={(v) => setForm((f) => ({ ...f, supplierId: String(v) }))}
+            options={suppliers.map((s: any) => ({ value: String(s.id), label: s.name }))}
+            placeholder="ابحث عن مورد..."
+            emptyMessage="لا يوجد موردين"
+          />
         </div>
         <div>
           <Label>الفرع <span className="text-red-500">*</span></Label>

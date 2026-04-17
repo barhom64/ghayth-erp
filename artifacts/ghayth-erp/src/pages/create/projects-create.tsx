@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
@@ -71,23 +72,25 @@ export default function ProjectsCreate() {
           <div><Label>اسم المشروع <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم المشروع" /></div>
           <div>
             <Label>العميل</Label>
-            <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="بدون عميل" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">بدون عميل</SelectItem>
-                {clients.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Autocomplete
+              className="mt-1"
+              value={form.clientId}
+              onChange={(v) => setForm((f) => ({ ...f, clientId: String(v) }))}
+              options={clients.map((c: any) => ({ value: String(c.id), label: c.name }))}
+              placeholder="ابحث عن عميل..."
+              emptyMessage="لا يوجد عملاء"
+            />
           </div>
           <div>
             <Label>مدير المشروع</Label>
-            <Select value={form.managerId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, managerId: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المدير" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">اختر المدير</SelectItem>
-                {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Autocomplete
+              className="mt-1"
+              value={form.managerId}
+              onChange={(v) => setForm((f) => ({ ...f, managerId: String(v) }))}
+              options={employees.map((e: any) => ({ value: String(e.id), label: e.name }))}
+              placeholder="ابحث عن مدير..."
+              emptyMessage="لا يوجد موظفين"
+            />
           </div>
           <div>
             <Label>الحالة</Label>
