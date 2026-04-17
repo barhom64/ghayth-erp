@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Building2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 export default function UmrahAgents() {
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
@@ -44,11 +45,12 @@ export default function UmrahAgents() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الوكلاء</h1>
-        <Button onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />إضافة وكيل</Button>
-      </div>
+    <PageShell
+      title="الوكلاء"
+      subtitle="إدارة وكلاء العمرة ومتابعة أدائهم"
+      breadcrumbs={[{ href: "/umrah", label: "العمرة" }]}
+      actions={<Button onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />إضافة وكيل</Button>}
+    >
 
       <div className="grid gap-4 grid-cols-3">
         {kpiCards.map((c) => (
@@ -95,6 +97,6 @@ export default function UmrahAgents() {
         pageSize={pageSize}
         searchPlaceholder="بحث عن وكيل..."
       />
-    </div>
+    </PageShell>
   );
 }

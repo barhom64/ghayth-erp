@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { formatDateAr } from "@/lib/formatters";
 import { Link } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Mail, Send, Inbox, FileText, Search, Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
+import { Mail, Plus } from "lucide-react";
+import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
 
 const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
@@ -16,88 +16,79 @@ const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export default function CommunicationsLetters() {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
-  const { data: logResp } = useApiQuery<any>(["comm-log-letters"], "/communications/log?channel=email");
+  const { data: logResp, isLoading, isError, error, refetch } = useApiQuery<any>(["comm-log-letters"], "/communications/log?channel=email");
   const letters = asList<any>(logResp);
 
-  const incoming = letters.filter((l: any) => l.direction === "inbound").length;
-  const outgoing = letters.filter((l: any) => l.direction === "outbound").length;
-
-  const statCards = [
-    { label: "إجمالي المراسلات", value: letters.length, icon: Mail, color: "text-blue-600 bg-blue-50" },
-    { label: "صادرة", value: outgoing, icon: Send, color: "text-green-600 bg-green-50" },
-    { label: "واردة", value: incoming, icon: Inbox, color: "text-purple-600 bg-purple-50" },
-    { label: "في الانتظار", value: letters.filter((l: any) => l.status === "queued").length, icon: FileText, color: "text-yellow-600 bg-yellow-50" },
-  ];
-
-  const filtered = letters.filter((l: any) => {
-    if (filter !== "all" && l.direction !== filter) return false;
-    if (search && !l.subject?.includes(search) && !l.toNumber?.includes(search)) return false;
-    return true;
+  const [filters, setFilters] = useFilters();
+  const filtered = applyFilters(letters, filters, {
+    searchFields: ["subject", "toNumber", "fromNumber"] as any,
+    statusField: "direction" as any,
   });
 
+  const columns: DataTableColumn<any>[] = [
+    { key: "subject", header: "الموضوع", sortable: true, className: "font-medium", render: (l) => l.subject || "-" },
+    {
+      key: "direction",
+      header: "الاتجاه",
+      sortable: true,
+      render: (l) => <Badge className={DIRECTION_MAP[l.direction]?.color}>{DIRECTION_MAP[l.direction]?.label || l.direction}</Badge>,
+    },
+    { key: "toNumber", header: "المرسل/المستلم", sortable: true, render: (l) => l.toNumber || l.fromNumber || "-" },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "-" },
+    { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status} /> },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">المراسلات</h1>
+    <PageShell
+      title="المراسلات"
+      subtitle="إدارة المراسلات الصادرة والواردة"
+      breadcrumbs={[{ href: "/communications", label: "التواصل" }]}
+      actions={
         <Link href="/communications/letters/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> مراسلة جديدة</Button>
         </Link>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input placeholder="بحث في المراسلات..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
-        </div>
-        <select className="border rounded-md px-3 py-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">الكل</option>
-          <option value="inbound">واردة</option>
-          <option value="outbound">صادرة</option>
-        </select>
-      </div>
+      }
+    >
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث في المراسلات...",
+          statuses: [
+            { value: "inbound", label: "واردة" },
+            { value: "outbound", label: "صادرة" },
+          ],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        onExportCSV={() => exportToCSV(filtered || [], [
+          { key: "subject", label: "الموضوع" },
+          { key: "direction", label: "الاتجاه" },
+          { key: "toNumber", label: "المستلم" },
+          { key: "status", label: "الحالة" },
+        ], "المراسلات")}
+        resultCount={filtered?.length}
+      />
 
       <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-blue-500" /> المراسلات
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">الموضوع</th>
-              <th className="p-3 text-start">الاتجاه</th>
-              <th className="p-3 text-start">المرسل/المستلم</th>
-              <th className="p-3 text-start">التاريخ</th>
-              <th className="p-3 text-start">الحالة</th>
-            </tr></thead>
-            <tbody>
-              {filtered.map((l: any) => (
-                <tr key={l.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium">{l.subject || "-"}</td>
-                  <td className="p-3"><Badge className={DIRECTION_MAP[l.direction]?.color}>{DIRECTION_MAP[l.direction]?.label || l.direction}</Badge></td>
-                  <td className="p-3 text-gray-500">{l.toNumber || l.fromNumber || "-"}</td>
-                  <td className="p-3 text-gray-500">{l.createdAt ? formatDateAr(l.createdAt) : "-"}</td>
-                  <td className="p-3">
-                    <PageStatusBadge status={l.status} />
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد مراسلات</td></tr>}
-            </tbody>
-          </table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد مراسلات"
+            emptyIcon={<Mail className="h-6 w-6 text-slate-400" />}
+            noToolbar
+          />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

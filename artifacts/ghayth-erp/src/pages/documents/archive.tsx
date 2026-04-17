@@ -1,71 +1,94 @@
-import { useState } from "react";
-import { formatDateAr } from "@/lib/formatters";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Archive, FileText, Calendar, Search, FolderArchive } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
+import { Archive, FileText, FolderArchive } from "lucide-react";
+import { formatDateAr } from "@/lib/formatters";
 
 export default function DocumentsArchive() {
-  const [search, setSearch] = useState("");
-  const { data: docsResp } = useApiQuery<any>(["documents-archive"], "/documents");
+  const { data: docsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["documents-archive"], "/documents");
   const docs = asList<any>(docsResp);
 
-  const statCards = [
-    { label: "مستندات مؤرشفة", value: docs.length, icon: FolderArchive, color: "text-blue-600 bg-blue-50" },
-    { label: "عقود", value: docs.filter((d: any) => d.type === "contract").length, icon: FileText, color: "text-green-600 bg-green-50" },
-    { label: "تقارير", value: docs.filter((d: any) => d.type === "report").length, icon: Archive, color: "text-purple-600 bg-purple-50" },
-    { label: "إجمالي", value: docs.length, icon: Calendar, color: "text-orange-600 bg-orange-50" },
+  const [filters, setFilters] = useFilters();
+  const filtered = applyFilters(docs, filters, {
+    searchFields: ["title", "name", "type"] as any,
+  });
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "title",
+      header: "المستند",
+      sortable: true,
+      render: (d) => (
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+          <span className="font-medium">{d.title || d.name || "-"}</span>
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "النوع",
+      sortable: true,
+      render: (d) => <Badge variant="outline">{d.type || "-"}</Badge>,
+    },
+    {
+      key: "createdAt",
+      header: "التاريخ",
+      sortable: true,
+      render: (d) => d.createdAt ? formatDateAr(d.createdAt) : "-",
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (d) => <Badge className="bg-green-100 text-green-700">{d.status || "مؤرشف"}</Badge>,
+    },
   ];
 
-  const filtered = docs.filter((d: any) => !search || d.title?.includes(search) || d.type?.includes(search));
-
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">الأرشيف</h1>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="relative">
-        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <Input placeholder="بحث في الأرشيف..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
-      </div>
+    <PageShell
+      title="الأرشيف"
+      subtitle="إدارة وتصفح المستندات المؤرشفة"
+      breadcrumbs={[{ href: "/documents", label: "إدارة المستندات" }]}
+    >
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث في الأرشيف...",
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        onExportCSV={() => exportToCSV(filtered || [], [
+          { key: "title", label: "المستند" },
+          { key: "type", label: "النوع" },
+          { key: "status", label: "الحالة" },
+        ], "الأرشيف")}
+        resultCount={filtered?.length}
+      />
 
       <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FolderArchive className="h-5 w-5 text-blue-500" /> المستندات المؤرشفة
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">المستند</th>
-              <th className="p-3 text-start">النوع</th>
-              <th className="p-3 text-start">التاريخ</th>
-              <th className="p-3 text-start">الحالة</th>
-            </tr></thead>
-            <tbody>
-              {filtered.map((d: any) => (
-                <tr key={d.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium flex items-center gap-2"><FileText className="w-4 h-4 text-gray-400" />{d.title || d.name || "-"}</td>
-                  <td className="p-3"><Badge variant="outline">{d.type || "-"}</Badge></td>
-                  <td className="p-3 text-gray-500">{d.createdAt ? formatDateAr(d.createdAt) : "-"}</td>
-                  <td className="p-3"><Badge className="bg-green-100 text-green-700">{d.status || "مؤرشف"}</Badge></td>
-                </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد مستندات</td></tr>}
-            </tbody>
-          </table>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد مستندات"
+            emptyIcon={<Archive className="h-6 w-6 text-slate-400" />}
+            noToolbar
+          />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
