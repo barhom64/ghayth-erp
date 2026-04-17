@@ -98,6 +98,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
 
     const employees = await rawQuery<any>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+              ea.id AS "activeAssignmentId",
               e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
               ea.role, ea.salary, ea."branchId",
