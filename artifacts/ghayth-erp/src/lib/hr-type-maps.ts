@@ -95,10 +95,10 @@ export const TERMINATION_TYPES: Record<string, string> = {
 
 // ── حالات السلف ─────────────────────────────────────────────────────
 export const LOAN_STATUS: Record<string, { label: string; color: string }> = {
-  pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700" },
-  active:    { label: "نشطة",             color: "bg-blue-100 text-blue-700"   },
-  completed: { label: "مسددة",            color: "bg-green-100 text-green-700" },
-  rejected:  { label: "مرفوضة",           color: "bg-red-100 text-red-700"     },
+  pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700 border-amber-300" },
+  active:    { label: "نشطة",             color: "bg-blue-100 text-blue-700 border-blue-300"    },
+  completed: { label: "مكتملة",           color: "bg-green-100 text-green-700 border-green-300" },
+  rejected:  { label: "مرفوضة",           color: "bg-red-100 text-red-700 border-red-300"       },
 };
 
 // ── حالات أقساط السلف ──────────────────────────────────────────────
@@ -106,6 +106,31 @@ export const INSTALLMENT_STATUS: Record<string, { label: string; color: string }
   pending: { label: "قادم",   color: "text-amber-600 bg-amber-50" },
   paid:    { label: "مدفوع",  color: "text-green-600 bg-green-50" },
   overdue: { label: "متأخر",  color: "text-red-600 bg-red-50"     },
+};
+
+// ── حالات طلبات نهاية الخدمة ────────────────────────────────────────
+export const EXIT_REQUEST_STATUS: Record<string, { label: string; color: string }> = {
+  pending:     { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700 border-amber-300"  },
+  approved:    { label: "معتمد",            color: "bg-blue-100 text-blue-700 border-blue-300"     },
+  in_progress: { label: "جاري التنفيذ",     color: "bg-purple-100 text-purple-700 border-purple-300" },
+  completed:   { label: "مكتمل",            color: "bg-green-100 text-green-700 border-green-300"  },
+  rejected:    { label: "مرفوض",            color: "bg-red-100 text-red-700 border-red-300"        },
+  cancelled:   { label: "ملغي",             color: "bg-gray-100 text-gray-600 border-gray-300"     },
+};
+
+// ── حالات إخلاء الطرف ──────────────────────────────────────────────
+export const CLEARANCE_STATUS: Record<string, { label: string; color: string }> = {
+  pending:  { label: "معلق",  color: "text-amber-600 bg-amber-50" },
+  cleared:  { label: "تم",    color: "text-green-600 bg-green-50" },
+  rejected: { label: "مرفوض", color: "text-red-600 bg-red-50"     },
+};
+
+// ── حالات سلسلة الموافقات ──────────────────────────────────────────
+export const APPROVAL_CHAIN_STATUS: Record<string, { label: string; color: string }> = {
+  pending:   { label: "معلق",  color: "bg-yellow-100 text-yellow-700 border-yellow-300"  },
+  approved:  { label: "موافق", color: "bg-green-100 text-green-700 border-green-300"     },
+  rejected:  { label: "مرفوض", color: "bg-red-100 text-red-700 border-red-300"           },
+  escalated: { label: "تصعيد", color: "bg-purple-100 text-purple-700 border-purple-300"  },
 };
 
 // ── أنواع السلف ─────────────────────────────────────────────────────

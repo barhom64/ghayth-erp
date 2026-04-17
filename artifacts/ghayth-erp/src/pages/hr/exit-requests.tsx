@@ -15,22 +15,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
-import { EXIT_TYPES } from "@/lib/hr-type-maps";
+import { EXIT_TYPES, EXIT_REQUEST_STATUS } from "@/lib/hr-type-maps";
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "pending",   label: "بانتظار الموافقة" },
-  { value: "approved",  label: "معتمد"            },
-  { value: "completed", label: "مكتمل"            },
-  { value: "rejected",  label: "مرفوض"            },
-];
-
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700 border-amber-300" },
-  approved:  { label: "معتمد — بانتظار إخلاء الطرف", color: "bg-blue-100 text-blue-700 border-blue-300" },
-  completed: { label: "مكتمل",            color: "bg-green-100 text-green-700 border-green-300" },
-  rejected:  { label: "مرفوض",            color: "bg-red-100 text-red-700 border-red-300"       },
-  cancelled: { label: "ملغي",             color: "bg-gray-100 text-gray-600 border-gray-300"    },
-};
+const STATUS_OPTIONS = Object.entries(EXIT_REQUEST_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function ExitRequestsPage() {
   const [, navigate] = useLocation();
@@ -181,7 +168,7 @@ export default function ExitRequestsPage() {
       header: "الحالة",
       sortable: true,
       render: (v) => {
-        const st = STATUS_MAP[v.status] || { label: v.status, color: "bg-gray-100 text-gray-600" };
+        const st = EXIT_REQUEST_STATUS[v.status] || { label: v.status, color: "bg-gray-100 text-gray-600" };
         return (
           <Badge variant="outline" className={cn("text-xs", st.color)}>
             {st.label}

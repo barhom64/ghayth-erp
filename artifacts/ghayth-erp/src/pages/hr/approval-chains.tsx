@@ -7,21 +7,9 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { APPROVAL_ROLES } from "@/lib/hr-type-maps";
+import { APPROVAL_ROLES, APPROVAL_CHAIN_STATUS } from "@/lib/hr-type-maps";
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "pending",   label: "معلق"  },
-  { value: "approved",  label: "موافق" },
-  { value: "rejected",  label: "مرفوض" },
-  { value: "escalated", label: "تصعيد" },
-];
-
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending:   { label: "معلق",  color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
-  approved:  { label: "موافق", color: "bg-green-100 text-green-700 border-green-300"   },
-  rejected:  { label: "مرفوض", color: "bg-red-100 text-red-700 border-red-300"         },
-  escalated: { label: "تصعيد", color: "bg-purple-100 text-purple-700 border-purple-300" },
-};
+const STATUS_OPTIONS = Object.entries(APPROVAL_CHAIN_STATUS).map(([value, { label }]) => ({ value, label }));
 
 
 export default function ApprovalChainsPage() {
@@ -97,7 +85,7 @@ export default function ApprovalChainsPage() {
       header: "الحالة",
       sortable: true,
       render: (v) => {
-        const st = STATUS_MAP[v.status] || STATUS_MAP.pending;
+        const st = APPROVAL_CHAIN_STATUS[v.status] || APPROVAL_CHAIN_STATUS.pending;
         return (
           <Badge variant="outline" className={cn("text-xs", st.color)}>
             {st.label}
