@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
 
 export default function PropertyMaintenanceCreate() {
   const [, setLocation] = useLocation();
@@ -61,13 +60,15 @@ export default function PropertyMaintenanceCreate() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label>الوحدة</Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن الوحدة..."
-            value={form.unitId}
-            onChange={(v) => setForm((f) => ({ ...f, unitId: String(v) }))}
-            options={units.map((u: any) => ({ value: String(u.id), label: `${u.unitNumber} - ${u.buildingName || ""}` }))}
-          />
+          <Select value={form.unitId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, unitId: v === "_none" ? "" : v }))}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">اختر الوحدة</SelectItem>
+              {units.map((u: any) => (
+                <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber} - {u.buildingName || ""}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>الفئة</Label>
@@ -94,14 +95,6 @@ export default function PropertyMaintenanceCreate() {
           </Select>
         </div>
         <div className="md:col-span-2"><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} /></div>
-      </div>
-      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-        <p className="font-semibold mb-1">العمليات المالية المرتبطة:</p>
-        <ul className="list-disc list-inside space-y-1 text-blue-700">
-          <li>عند إكمال الصيانة: سيتم إنشاء قيد محاسبي تلقائي (مدين مصروف صيانة عقار / دائن النقدية)</li>
-          <li>إنشاء فاتورة تلقائية مرتبطة بطلب الصيانة</li>
-          <li>إنشاء مهمة متابعة رضا المستأجر</li>
-        </ul>
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">

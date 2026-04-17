@@ -214,23 +214,6 @@ export default function CustodyDetailPage() {
             </Card>
           </div>
 
-          {data.custodyAccountCode && (
-            <Card className="border-blue-100 bg-blue-50/30">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-100 border border-blue-200">
-                  <KeyRound className="h-5 w-5 text-blue-700" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">الحساب المحاسبي المرتبط</p>
-                  <p className="text-lg font-bold text-blue-700">
-                    <span className="font-mono">{data.custodyAccountCode}</span>
-                    {data.custodyAccountName && <span className="text-sm font-normal text-blue-600 ms-2">— {data.custodyAccountName}</span>}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
@@ -240,13 +223,6 @@ export default function CustodyDetailPage() {
                 <InfoLine label="المرجع" value={<span className="font-mono">{data.ref}</span>} />
                 <InfoLine label="الوصف" value={data.description || "-"} />
                 {data.purpose && <InfoLine label="الغرض" value={data.purpose} />}
-                {data.custodyAccountCode && (
-                  <InfoLine label="الحساب المحاسبي" value={
-                    <Link href={`/finance/ledger/${data.custodyAccountCode}`}>
-                      <span className="font-mono text-blue-600 hover:underline cursor-pointer">{data.custodyAccountCode} — {data.custodyAccountName || ""}</span>
-                    </Link>
-                  } />
-                )}
                 <InfoLine
                   label="تاريخ الإنشاء"
                   value={data.date ? formatDateAr(data.date) : "-"}

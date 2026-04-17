@@ -181,7 +181,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
     const scope = req.scope!;
     const b = req.body as any;
 
-    if (!b.assignmentId && !b.employeeId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
+    if (!b.assignmentId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
     if (!b.amount || Number(b.amount) <= 0) throw new ValidationError("المبلغ مطلوب", { field: "amount" });
     if (!b.installmentCount || Number(b.installmentCount) < 1) throw new ValidationError("عدد الأقساط مطلوب", { field: "installmentCount" });
 
@@ -189,23 +189,12 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
     const installmentCount = Number(b.installmentCount);
     const installmentAmount = Math.round((amount / installmentCount) * 100) / 100;
 
-    // resolve assignmentId from employeeId if needed
-    let assignmentId = b.assignmentId ? Number(b.assignmentId) : null;
-    if (!assignmentId && b.employeeId) {
-      const [resolved] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
-        [Number(b.employeeId), scope.companyId]
-      );
-      if (resolved) assignmentId = resolved.id;
-    }
-    if (!assignmentId) throw new ValidationError("لم يتم العثور على تعيين نشط للموظف", { field: "assignmentId" });
-
     // التحقق من عدم وجود سلفة نشطة
     const [existing] = await rawQuery<any>(
       `SELECT id FROM hr_employee_loans
        WHERE "assignmentId" = $1 AND "companyId" = $2
          AND status IN ('pending','approved','active') AND "deletedAt" IS NULL`,
-      [assignmentId, scope.companyId]
+      [b.assignmentId, scope.companyId]
     );
     if (existing) {
       throw new ConflictError("يوجد سلفة نشطة بالفعل لهذا الموظف", {
@@ -218,7 +207,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
     const [emp] = await rawQuery<any>(
       `SELECT ea.salary, ea."employeeId", ea."branchId"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2`,
-      [assignmentId, scope.companyId]
+      [b.assignmentId, scope.companyId]
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
     const maxLoan = Number(emp.salary || 0) * 3;
@@ -237,7 +226,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',CURRENT_DATE,$12,NOW())
        RETURNING id`,
       [
-        scope.companyId, emp.branchId, assignmentId, emp.employeeId,
+        scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
         loanNumber, b.loanType || "salary_advance",
         amount, installmentCount, installmentAmount, amount,
         b.reason || null, startPeriod,
@@ -276,7 +265,6 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
           type: "loan_request", title: "طلب سلفة جديد",
           body: `طلب سلفة بمبلغ ${amount.toLocaleString()} ريال — ${loanNumber}`,
           priority: "high", refType: "hr_employee_loan", refId: insertId,
-          actionUrl: `/hr/loans/${insertId}`,
         }).catch(console.error);
       }
     }
@@ -377,7 +365,6 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       type: "loan_approved", title: "تمت الموافقة على سلفتك",
       body: `تمت الموافقة على السلفة ${loan.loanNumber} بمبلغ ${Number(loan.amount).toLocaleString()} ريال — سيبدأ الخصم من فترة ${loan.startDeductionPeriod}`,
       priority: "high", refType: "hr_employee_loan", refId: loan.id,
-      actionUrl: `/hr/loans/${loan.id}`,
     }).catch(console.error);
 
     await createAuditLog({
@@ -431,7 +418,6 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       type: "loan_rejected", title: "تم رفض طلب السلفة",
       body: `تم رفض السلفة ${loan.loanNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_employee_loan", refId: loan.id,
-      actionUrl: `/hr/loans/${loan.id}`,
     }).catch(console.error);
 
     res.json({ success: true });

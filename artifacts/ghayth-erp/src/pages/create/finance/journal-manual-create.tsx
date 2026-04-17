@@ -41,7 +41,7 @@ export default function JournalManualCreatePage() {
     },
   );
 
-  const coa = (coaData?.data ?? coaData ?? []).filter((a: any) => a.allowPosting !== false);
+  const coa = coaData?.data ?? coaData ?? [];
 
   const totalDebit = form.lines.reduce((s, l) => s + Number(l.debit || 0), 0);
   const totalCredit = form.lines.reduce((s, l) => s + Number(l.credit || 0), 0);

@@ -1,4 +1,3 @@
-import { handleRouteError } from "../lib/errorHandler.js";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { z } from "zod";
@@ -69,7 +68,8 @@ router.post("/storage/uploads/request-url", authMiddleware, async (req: Request,
       }),
     );
   } catch (error) {
-    handleRouteError(error, res, "Generate upload URL error:");
+    req.log.error({ err: error }, "Error generating upload URL");
+    res.status(500).json({ error: "Failed to generate upload URL" });
   }
 });
 
@@ -94,7 +94,8 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
       res.end();
     }
   } catch (error) {
-    handleRouteError(error, res, "Serve public object error:");
+    req.log.error({ err: error }, "Error serving public object");
+    res.status(500).json({ error: "Failed to serve public object" });
   }
 });
 
@@ -140,7 +141,8 @@ router.get("/storage/objects/*path", authMiddleware, requirePermission("document
       res.status(404).json({ error: "Object not found" });
       return;
     }
-    handleRouteError(error, res, "Serve object error:");
+    req.log.error({ err: error }, "Error serving object");
+    res.status(500).json({ error: "Failed to serve object" });
   }
 });
 

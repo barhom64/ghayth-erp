@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -68,13 +67,15 @@ export default function InsuranceCreate() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label>المركبة <span className="text-red-500">*</span></Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن المركبة..."
-            value={form.vehicleId}
-            onChange={(v) => setForm((f) => ({ ...f, vehicleId: String(v) }))}
-            options={vehicles.map((v: any) => ({ value: String(v.id), label: `${v.plateNumber} - ${v.make || ""} ${v.model || ""}` }))}
-          />
+          <Select value={form.vehicleId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v === "_none" ? "" : v }))}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">اختر المركبة</SelectItem>
+              {vehicles.map((v: any) => (
+                <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>نوع التأمين</Label>
@@ -97,15 +98,6 @@ export default function InsuranceCreate() {
           <Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
         </div>
       </div>
-      {Number(form.premium) > 0 && (
-        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-          <p className="font-semibold mb-1">سيتم تلقائياً عند الحفظ:</p>
-          <ul className="list-disc list-inside space-y-1 text-green-700">
-            <li>إنشاء قيد محاسبي: مدين تأمين مدفوع مقدماً / دائن النقدية بمبلغ {Number(form.premium).toLocaleString("ar-SA")} ريال</li>
-            <li>ربط القيد بالمركبة المحددة لتتبع تكاليف التأمين</li>
-          </ul>
-        </div>
-      )}
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات التأمين" />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/fleet/insurance")}>إلغاء</Button>

@@ -100,17 +100,6 @@ export default function CustodiesPage() {
       render: (c) => <span className="font-medium">{c.employeeName || "-"}</span>,
     },
     {
-      key: "custodyAccountCode",
-      header: "الحساب المحاسبي",
-      sortable: true,
-      render: (c) => c.custodyAccountCode ? (
-        <div className="text-xs">
-          <span className="font-mono text-blue-600">{c.custodyAccountCode}</span>
-          {c.custodyAccountName && <div className="text-gray-400 truncate max-w-[120px]">{c.custodyAccountName}</div>}
-        </div>
-      ) : <span className="text-gray-300">—</span>,
-    },
-    {
       key: "description",
       header: "الوصف",
       sortable: true,
@@ -148,14 +137,6 @@ export default function CustodiesPage() {
             <span className="text-xs text-red-500">{c.daysOverdue} يوم تأخير</span>
           )}
         </div>
-      ),
-    },
-    {
-      key: "approvedAt",
-      header: "تاريخ الاعتماد",
-      sortable: true,
-      render: (c) => (
-        <span className="text-gray-500 text-sm">{c.approvedAt ? formatDateAr(c.approvedAt) : "—"}</span>
       ),
     },
     {
@@ -393,7 +374,7 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
       onSuccess: () => onDone(),
     },
   );
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
+  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const sourceAccounts = (accountsData?.data || []).filter(
     (a: any) => a.type === "asset" || a.code?.startsWith("1"),

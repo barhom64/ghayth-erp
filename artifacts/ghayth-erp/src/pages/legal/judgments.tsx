@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 interface Judgment {
   id: number;
@@ -44,11 +43,6 @@ export default function LegalJudgments() {
   const totalAmount = data?.totalAmount || 0;
   const totalPaid = data?.totalPaid || 0;
   const outstanding = data?.outstanding || 0;
-  const [filters, setFilters] = useFilters();
-  const filtered = applyFilters(rows, filters, {
-    searchFields: ["caseTitle", "verdict", "caseNumber"],
-    statusField: "riskLevel",
-  });
 
   return (
     <PageShell
@@ -62,8 +56,7 @@ export default function LegalJudgments() {
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-green-600">{Number(totalPaid).toLocaleString("ar-SA")} ر.س</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-red-600">{Number(outstanding).toLocaleString("ar-SA")} ر.س</p></CardContent></Card>
       </div>
-      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
-      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} />
+      <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>
   );
 }

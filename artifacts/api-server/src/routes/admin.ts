@@ -312,7 +312,7 @@ router.get("/predefined-roles", async (req, res) => {
     const existing = new Set(customRoles.map((r: any) => r.roleKey));
     const predefined = PREDEFINED_ROLES.filter(r => !existing.has(r.roleKey));
     res.json({ data: [...customRoles, ...predefined] });
-  } catch (err) { handleRouteError(err, res, "Get predefined roles"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/user-roles/:userId", async (req, res) => {
@@ -329,7 +329,7 @@ router.get("/user-roles/:userId", async (req, res) => {
       [userId, scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err) { handleRouteError(err, res, "Get user roles"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/user-roles", async (req, res) => {
@@ -365,7 +365,7 @@ router.post("/user-roles", async (req, res) => {
       [userId, def.roleKey, def.label, JSON.stringify(def.modules), def.level, scope.companyId]
     );
     res.status(201).json({ success: true, roleKey: def.roleKey });
-  } catch (err) { handleRouteError(err, res, "Assign user role"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/user-roles/:id", async (req, res) => {
@@ -382,7 +382,7 @@ router.delete("/user-roles/:id", async (req, res) => {
     const result = await rawExecute(`DELETE FROM user_roles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "الدور غير موجود" }); return; }
     res.json({ message: "تم حذف الدور بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete user role"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/integrations", async (req, res) => {
@@ -394,7 +394,7 @@ router.get("/integrations", async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "List integrations"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/integrations", async (req, res) => {
@@ -409,7 +409,7 @@ router.post("/integrations", async (req, res) => {
     );
     const [row] = await rawQuery(`SELECT * FROM integrations WHERE id=$1`, [r.insertId]);
     res.status(201).json(row);
-  } catch (err) { handleRouteError(err, res, "Create integration"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/integrations/:id", async (req, res) => {
@@ -434,7 +434,7 @@ router.patch("/integrations/:id", async (req, res) => {
     );
     const [row] = await rawQuery(`SELECT * FROM integrations WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update integration"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/integrations/:id", async (req, res) => {
@@ -447,7 +447,7 @@ router.delete("/integrations/:id", async (req, res) => {
     );
     if (result.affectedRows === 0) { res.status(404).json({ error: "التكامل غير موجود" }); return; }
     res.json({ message: "تم حذف التكامل" });
-  } catch (err) { handleRouteError(err, res, "Delete integration"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/integrations/:id/test", async (req, res) => {
@@ -469,7 +469,7 @@ router.post("/integrations/:id/test", async (req, res) => {
     });
 
     res.json({ success: result.success, error: result.error, logId: result.logId });
-  } catch (err) { handleRouteError(err, res, "Test integration"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/integration-logs", async (req, res) => {
@@ -487,7 +487,7 @@ router.get("/integration-logs", async (req, res) => {
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "Get integration logs"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/integration-logs/retry", async (req, res) => {
@@ -496,7 +496,7 @@ router.post("/integration-logs/retry", async (req, res) => {
     const scope = req.scope!;
     const result = await integrationService.retryFailed(scope.companyId);
     res.json(result);
-  } catch (err) { handleRouteError(err, res, "Retry failed integrations"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/system-health", async (req, res) => {
@@ -614,7 +614,7 @@ router.get("/system-health", async (req, res) => {
         employees: Number(employeeCount?.count || 0),
       },
     });
-  } catch (err) { handleRouteError(err, res, "System health check"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/violations-report", async (req, res) => {
@@ -681,7 +681,7 @@ router.get("/violations-report", async (req, res) => {
     );
 
     res.json({ data: violations, summary, byType, byDepartment, trend, total: totalCount?.count || violations.length });
-  } catch (err) { handleRouteError(err, res, "Violations report"); }
+  } catch (e: any) { console.error("Violations report error:", e); res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/violations/:id/resolve", async (req, res) => {
@@ -704,7 +704,7 @@ router.patch("/violations/:id/resolve", async (req, res) => {
 
     const [updated] = await rawQuery(`SELECT * FROM audit_violations WHERE id=$1`, [id]);
     res.json(updated);
-  } catch (err) { handleRouteError(err, res, "Resolve violation"); }
+  } catch (e: any) { console.error("Resolve violation error:", e); res.status(500).json({ error: e.message }); }
 });
 
 router.get("/security-log", async (req, res) => {
@@ -769,7 +769,7 @@ router.get("/security-log", async (req, res) => {
       pageSize,
       summary,
     });
-  } catch (err) { handleRouteError(err, res, "Get security log"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/role-permissions", async (req, res) => {
@@ -785,7 +785,7 @@ router.get("/role-permissions", async (req, res) => {
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "Get role permissions"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/role-permissions", async (req, res) => {
@@ -802,7 +802,7 @@ router.post("/role-permissions", async (req, res) => {
     );
     invalidatePermissionCache(role, scope.companyId);
     res.status(201).json({ success: true, id: r.insertId, role, permission });
-  } catch (err) { handleRouteError(err, res, "Create role permission"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/role-permissions/:id", async (req, res) => {
@@ -817,7 +817,7 @@ router.delete("/role-permissions/:id", async (req, res) => {
     if (result.affectedRows === 0) { res.status(404).json({ error: "الصلاحية غير موجودة أو غير مصرح بحذفها" }); return; }
     invalidatePermissionCache(undefined, scope.companyId);
     res.json({ message: "تم حذف الصلاحية" });
-  } catch (err) { handleRouteError(err, res, "Delete role permission"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.put("/role-permissions/bulk", async (req, res) => {
@@ -845,7 +845,7 @@ router.put("/role-permissions/bulk", async (req, res) => {
     });
     invalidatePermissionCache(role, scope.companyId);
     res.json({ success: true, role, count: permissions.length });
-  } catch (err) { handleRouteError(err, res, "Bulk update role permissions"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;

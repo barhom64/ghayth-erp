@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -535,11 +534,7 @@ export default function RequestsPage() {
   const s = stats || {};
 
   return (
-    <PageShell
-      title="مركز الطلبات"
-      subtitle="إدارة وتتبع الطلبات المختلفة وسير العمل"
-      breadcrumbs={[]}
-    >
+    <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "إجمالي الطلبات", value: s.totalRequests || 0, icon: ClipboardCheck, color: "text-blue-600 bg-blue-50" },
@@ -569,6 +564,6 @@ export default function RequestsPage() {
         <TabsContent value="types"><TypesTab /></TabsContent>
         <TabsContent value="workflows"><WorkflowsTab /></TabsContent>
       </Tabs>
-    </PageShell>
+    </div>
   );
 }

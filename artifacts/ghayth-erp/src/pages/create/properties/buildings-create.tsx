@@ -20,7 +20,6 @@ export default function BuildingsCreate() {
     deedNumber: "", deedDate: "", buildingPermitNumber: "",
     district: "", street: "", buildingNumber: "", postalCode: "", additionalNumber: "",
     latitude: "", longitude: "", totalArea: "", yearBuilt: "", ownerId: "",
-    purchasePrice: "", purchaseDate: "", salvageValue: "", usefulLifeYears: "20",
   });
 
   const buildPayload = () => ({
@@ -31,10 +30,6 @@ export default function BuildingsCreate() {
     latitude: form.latitude ? Number(form.latitude) : undefined,
     longitude: form.longitude ? Number(form.longitude) : undefined,
     ownerId: form.ownerId ? Number(form.ownerId) : undefined,
-    purchasePrice: form.purchasePrice ? Number(form.purchasePrice) : undefined,
-    purchaseDate: form.purchaseDate || undefined,
-    salvageValue: form.salvageValue ? Number(form.salvageValue) : undefined,
-    usefulLifeYears: form.usefulLifeYears ? Number(form.usefulLifeYears) : undefined,
     nationalAddress: (form.district || form.street || form.buildingNumber || form.postalCode) ? {
       district: form.district, street: form.street, buildingNumber: form.buildingNumber,
       postalCode: form.postalCode, additionalNumber: form.additionalNumber,
@@ -163,26 +158,6 @@ export default function BuildingsCreate() {
                 <Input className="mt-1" type="number" step="0.0000001" dir="ltr" value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })} placeholder="46.6753" />
               </div>
             </div>
-          </div>
-
-          <div className="border-t pt-4">
-            <p className="text-sm font-bold text-green-600 mb-3">البيانات المالية — الربط المحاسبي التلقائي</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><Label>سعر الشراء (ريال)</Label><Input className="mt-1" type="number" min="0" step="0.01" value={form.purchasePrice} onChange={e => setForm({ ...form, purchasePrice: e.target.value })} placeholder="قيمة شراء العقار" /></div>
-              <div><Label>تاريخ الشراء</Label><Input className="mt-1" type="date" value={form.purchaseDate} onChange={e => setForm({ ...form, purchaseDate: e.target.value })} /></div>
-              <div><Label>قيمة الخردة (ريال)</Label><Input className="mt-1" type="number" min="0" step="0.01" value={form.salvageValue} onChange={e => setForm({ ...form, salvageValue: e.target.value })} placeholder="القيمة المتبقية" /></div>
-              <div><Label>العمر الإنتاجي (سنوات)</Label><Input className="mt-1" type="number" min="1" max="100" value={form.usefulLifeYears} onChange={e => setForm({ ...form, usefulLifeYears: e.target.value })} placeholder="20" /></div>
-            </div>
-            {form.purchasePrice && Number(form.purchasePrice) > 0 && (
-              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-                <p className="font-semibold mb-1">سيتم تلقائياً عند الحفظ:</p>
-                <ul className="list-disc list-inside space-y-1 text-green-700">
-                  <li>إنشاء قيد محاسبي لإثبات الأصل العقاري (مدين: أصول عقارات / دائن: النقدية)</li>
-                  <li>تسجيل المبنى كأصل ثابت في نظام الإهلاك</li>
-                  <li>فتح حسابات فرعية مرتبطة بالعقار في شجرة الحسابات</li>
-                </ul>
-              </div>
-            )}
           </div>
 
           <div>

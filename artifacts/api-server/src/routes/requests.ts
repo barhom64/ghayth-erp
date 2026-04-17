@@ -1,8 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { createAuditLog, createNotification, emitEvent, getLegalResponsible, getDeptManagerAssignmentId, isSubmitterDeptManager } from "../lib/businessHelpers.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { createAuditLog, createNotification, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 
 const VALID_REQUEST_TRANSITIONS: Record<string, string[]> = {
   pending: ["in_review", "approved", "rejected", "returned"],
@@ -117,7 +116,7 @@ router.get("/", async (req, res) => {
       rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND (r."requesterId"::text=$2 OR r."currentApprover"=$3) ORDER BY r."createdAt" DESC`, [scope.companyId, String(scope.activeAssignmentId), String(scope.activeAssignmentId)]);
     }
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "GET /requests"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/", async (req, res) => {
@@ -131,30 +130,9 @@ router.post("/", async (req, res) => {
         a && typeof a.name === "string" && typeof a.size === "number" && a.size <= 5 * 1024 * 1024
       ).map((a: any) => ({ name: a.name, size: a.size, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
-    let deptManagerId: number | null = null;
-    let autoApproved = false;
-    if (enforcedRequesterId) {
-      deptManagerId = await getDeptManagerAssignmentId(scope.companyId, enforcedRequesterId).catch(() => null);
-      if (deptManagerId && deptManagerId === enforcedRequesterId) {
-        const isMgr = await isSubmitterDeptManager(scope.companyId, enforcedRequesterId);
-        if (isMgr) {
-          autoApproved = true;
-          deptManagerId = null;
-        }
-      }
-    }
-
-    const initialStatus = autoApproved ? "approved" : "pending";
     const r = await rawExecute(
-      `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, "currentApprover"${autoApproved ? ', "reviewedBy", "reviewedAt"' : ''})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11${autoApproved ? ',$12,NOW()' : ''})`,
-      [
-        typeId || null, enforcedRequesterId, requesterName, title, description,
-        initialStatus, priority || "medium", data ? JSON.stringify(data) : '{}',
-        scope.companyId, JSON.stringify(validatedAttachments),
-        deptManagerId,
-        ...(autoApproved ? [scope.userId] : []),
-      ]
+      `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [typeId || null, enforcedRequesterId, requesterName, title, description, "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments)]
     );
     await logCommunication(
       scope.companyId, 'inbound',
@@ -162,27 +140,8 @@ router.post("/", async (req, res) => {
       `تم إنشاء طلب جديد بواسطة ${requesterName || 'مستخدم'} - الأولوية: ${priority || 'متوسطة'} - ${description || ''}`,
       'request', r.insertId
     );
-
-    if (deptManagerId && !autoApproved) {
-      createNotification({
-        companyId: scope.companyId, assignmentId: deptManagerId,
-        type: "request_pending", title: "طلب جديد ينتظر موافقتك",
-        body: `طلب "${title}" من ${requesterName || 'موظف'} — الأولوية: ${priority || 'متوسطة'}`,
-        priority: "high", refType: "request", refId: r.insertId,
-      }).catch(console.error);
-    }
-
-    if (autoApproved) {
-      createNotification({
-        companyId: scope.companyId, assignmentId: enforcedRequesterId,
-        type: "request_approved", title: "تم اعتماد طلبك تلقائياً",
-        body: `طلبك "${title}" تم اعتماده تلقائياً — أنت مرجع القسم`,
-        priority: "normal", refType: "request", refId: r.insertId,
-      }).catch(console.error);
-    }
-
-    res.status(201).json({ id: r.insertId, autoApproved });
-  } catch (err) { handleRouteError(err, res, "POST /requests"); }
+    res.status(201).json({ id: r.insertId });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/catalog", async (req, res) => {
@@ -251,7 +210,7 @@ router.get("/catalog", async (req, res) => {
       role,
       jobTitle,
     });
-  } catch (err) { handleRouteError(err, res, "GET /requests/catalog"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/types", async (req, res) => {
@@ -259,7 +218,7 @@ router.get("/types", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "GET /requests/types"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/types", async (req, res) => {
@@ -271,7 +230,7 @@ router.post("/types", async (req, res) => {
       [name, description, category, requiredFields ? JSON.stringify(requiredFields) : '[]', approvalFlow ? JSON.stringify(approvalFlow) : '[]', isActive !== false, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "POST /requests/types"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/workflows", async (req, res) => {
@@ -279,7 +238,7 @@ router.get("/workflows", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "GET /requests/workflows"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/workflows", async (req, res) => {
@@ -291,7 +250,7 @@ router.post("/workflows", async (req, res) => {
       [name, description, steps ? JSON.stringify(steps) : '[]', scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "POST /requests/workflows"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/stats", async (req, res) => {
@@ -308,7 +267,7 @@ router.get("/stats", async (req, res) => {
       approvedRequests: Number(approved.count),
       activeTypes: Number(types.count),
     });
-  } catch (err) { handleRouteError(err, res, "GET /requests/stats"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/:id", async (req, res) => {
@@ -317,7 +276,7 @@ router.get("/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "GET /requests/:id"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/:id", async (req, res) => {
@@ -398,7 +357,7 @@ router.patch("/:id", async (req, res) => {
       });
     }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "PATCH /requests/:id"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/:id/approve", async (req, res) => {
@@ -456,7 +415,7 @@ router.post("/:id/approve", async (req, res) => {
       before: { status: validation.request!.status }, after: { status: "approved" },
     }).catch(console.error);
     res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "approved" }, notifications: ["إشعار لمقدم الطلب بالاعتماد"], overrideLogged: isOverride } });
-  } catch (err) { handleRouteError(err, res, "POST /requests/:id/approve"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/:id/reject", async (req, res) => {
@@ -514,7 +473,7 @@ router.post("/:id/reject", async (req, res) => {
       before: { status: validation.request!.status }, after: { status: "rejected", reason: notes },
     }).catch(console.error);
     res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "rejected" }, notifications: ["إشعار لمقدم الطلب بالرفض"], overrideLogged: isOverride } });
-  } catch (err) { handleRouteError(err, res, "POST /requests/:id/reject"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/:id/return", async (req, res) => {
@@ -572,7 +531,7 @@ router.post("/:id/return", async (req, res) => {
       before: { status: validation.request!.status }, after: { status: "returned", reason: notes },
     }).catch(console.error);
     res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "returned" }, notifications: ["إشعار لمقدم الطلب بالإرجاع"], overrideLogged: isOverride } });
-  } catch (err) { handleRouteError(err, res, "POST /requests/:id/return"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/:id/actions", async (req, res) => {
@@ -584,7 +543,7 @@ router.get("/:id/actions", async (req, res) => {
       [id, scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err) { handleRouteError(err, res, "GET /requests/:id/actions"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/:id", async (req, res) => {
@@ -633,7 +592,7 @@ router.delete("/:id", async (req, res) => {
     }).catch(console.error);
 
     res.json({ message: "تم حذف الطلب بنجاح" });
-  } catch (err) { handleRouteError(err, res, "DELETE /requests/:id"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/:id/convert", async (req, res) => {
@@ -737,7 +696,7 @@ router.post("/:id/convert", async (req, res) => {
       targetType,
       targetEndpoint,
     });
-  } catch (err) { handleRouteError(err, res, "POST /requests/:id/convert"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;

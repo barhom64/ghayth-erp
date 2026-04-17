@@ -1,4 +1,3 @@
-import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -274,7 +273,8 @@ router.post("/", async (req, res): Promise<void> => {
 
     res.json({ impacts });
   } catch (err) {
-    handleRouteError(err, res, "Impact preview error:");
+    console.error("Impact preview error:", err);
+    res.status(500).json({ error: "خطأ في الخادم" });
   }
 });
 

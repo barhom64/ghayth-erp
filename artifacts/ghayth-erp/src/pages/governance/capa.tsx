@@ -2,7 +2,6 @@ import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Wrench } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
 
 interface CapaItem {
   id: number;
@@ -39,12 +38,12 @@ export default function GovernanceCapa() {
   const rows = asList(data?.data || data);
 
   return (
-    <PageShell
-      title="الإجراءات التصحيحية والوقائية (CAPA)"
-      subtitle="متابعة الإجراءات التصحيحية والوقائية لضمان الجودة والامتثال"
-      breadcrumbs={[{ href: "/governance", label: "الحوكمة" }]}
-    >
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2"><Wrench className="h-6 w-6" /> الإجراءات التصحيحية والوقائية (CAPA)</h1>
+        <p className="text-muted-foreground mt-1">متابعة الإجراءات التصحيحية والوقائية لضمان الجودة والامتثال</p>
+      </div>
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </PageShell>
+    </div>
   );
 }

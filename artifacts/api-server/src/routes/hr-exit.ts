@@ -181,26 +181,15 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
     const scope = req.scope!;
     const b = req.body as any;
 
-    if (!b.assignmentId && !b.employeeId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
+    if (!b.assignmentId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
     if (!b.exitType) throw new ValidationError("نوع نهاية الخدمة مطلوب", { field: "exitType" });
-
-    // resolve assignmentId from employeeId if needed
-    let assignmentId = b.assignmentId ? Number(b.assignmentId) : null;
-    if (!assignmentId && b.employeeId) {
-      const [resolved] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
-        [Number(b.employeeId), scope.companyId]
-      );
-      if (resolved) assignmentId = resolved.id;
-    }
-    if (!assignmentId) throw new ValidationError("لم يتم العثور على تعيين نشط للموظف", { field: "assignmentId" });
 
     // التحقق من عدم وجود طلب سابق
     const [existing] = await rawQuery<any>(
       `SELECT id FROM hr_exit_requests
        WHERE "assignmentId" = $1 AND "companyId" = $2
          AND status NOT IN ('rejected','cancelled') AND "deletedAt" IS NULL`,
-      [assignmentId, scope.companyId]
+      [b.assignmentId, scope.companyId]
     );
     if (existing) {
       throw new ConflictError("يوجد طلب نهاية خدمة سابق لهذا الموظف");
@@ -209,7 +198,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
     const [emp] = await rawQuery<any>(
       `SELECT ea.salary, ea."employeeId", ea."branchId", ea."hireDate"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2`,
-      [assignmentId, scope.companyId]
+      [b.assignmentId, scope.companyId]
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
 
@@ -237,7 +226,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
     const [lb] = await rawQuery<any>(
       `SELECT COALESCE(SUM(balance), 0) AS balance FROM leave_balances
        WHERE "assignmentId" = $1 AND "companyId" = $2`,
-      [assignmentId, scope.companyId]
+      [b.assignmentId, scope.companyId]
     ).catch(() => [{ balance: 0 }]);
     const leaveBalance = Number(lb?.balance ?? 0);
     const dailyRate = salary / 30;
@@ -248,7 +237,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       `SELECT COALESCE(SUM("remainingAmount"), 0) AS remaining
        FROM hr_employee_loans
        WHERE "assignmentId" = $1 AND "companyId" = $2 AND status IN ('active','approved') AND "deletedAt" IS NULL`,
-      [assignmentId, scope.companyId]
+      [b.assignmentId, scope.companyId]
     ).catch(() => [{ remaining: 0 }]);
     const loanDeductions = Number(loans?.remaining ?? 0);
     const otherDeductions = Number(b.otherDeductions || 0);
@@ -268,7 +257,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13,$14,$15,NOW())
        RETURNING id`,
       [
-        scope.companyId, emp.branchId, assignmentId, emp.employeeId,
+        scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
         exitNumber, b.exitType, b.lastWorkingDay || null,
         b.exitReason || null, gratuity, leaveBalance,
         leaveCompensation, loanDeductions, otherDeductions, netSettlement,
@@ -318,7 +307,6 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
           type: "exit_request", title: "طلب نهاية خدمة جديد",
           body: `طلب ${b.exitType === "resignation" ? "استقالة" : "نهاية خدمة"} — ${exitNumber}`,
           priority: "high", refType: "hr_exit_request", refId: insertId,
-          actionUrl: `/hr/exit/${insertId}`,
         }).catch(console.error);
       }
     }
@@ -367,22 +355,6 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
 
-    const [loanBalance] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(l.amount - COALESCE(
-         (SELECT SUM(i.amount) FROM hr_loan_installments i WHERE i."loanId" = l.id AND i.status = 'paid'), 0
-       )), 0) AS outstanding
-       FROM hr_employee_loans l
-       WHERE l."assignmentId" = $1 AND l.status = 'active'`,
-      [item.assignmentId]
-    );
-    const outstandingLoans = Number(loanBalance?.outstanding ?? 0);
-    if (outstandingLoans > 0) {
-      await rawExecute(
-        `UPDATE hr_exit_requests SET "outstandingLoans" = $1 WHERE id = $2`,
-        [outstandingLoans, item.id]
-      );
-    }
-
     // ── معالجة خطوة الموافقة في السلسلة ──
     const chainResult = await processApprovalStep({
       companyId: scope.companyId,
@@ -413,7 +385,6 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
       type: "exit_approved", title: "تمت الموافقة على طلب نهاية الخدمة",
       body: `تمت الموافقة على طلب نهاية الخدمة ${item.exitNumber} — يرجى إكمال إخلاء الطرف`,
       priority: "high", refType: "hr_exit_request", refId: item.id,
-      actionUrl: `/hr/exit/${item.id}`,
     }).catch(console.error);
 
     res.json({ success: true, message: "تم اعتماد طلب نهاية الخدمة" });

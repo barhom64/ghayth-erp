@@ -75,7 +75,7 @@ router.get("/entities", requirePermission("audit:read"), async (req, res) => {
     );
     res.json({ data: rows.map((r: any) => r.entity) });
   } catch (err) {
-    handleRouteError(err, res, "Get audit entities error:");
+    res.status(500).json({ error: "خطأ في الخادم" });
   }
 });
 

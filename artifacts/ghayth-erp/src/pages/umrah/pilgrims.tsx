@@ -5,7 +5,6 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus } from "lucide-react";
 import { Link } from "wouter";
-import { PageShell } from "@/components/page-shell";
 import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
@@ -66,16 +65,16 @@ export default function UmrahPilgrims() {
   ];
 
   return (
-    <PageShell
-      title="المعتمرين"
-      subtitle="متابعة ملفات المعتمرين وحالاتهم"
-      breadcrumbs={[{ href: "/umrah", label: "العمرة" }]}
-      actions={
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">المعتمرين</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">متابعة ملفات المعتمرين وحالاتهم</p>
+        </div>
         <Link href="/umrah/pilgrims/create">
           <Button className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</Button>
         </Link>
-      }
-    >
+      </div>
 
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {kpiCards.map((c) => (
@@ -133,6 +132,6 @@ export default function UmrahPilgrims() {
         onPageChange={setPage}
         noToolbar
       />
-    </PageShell>
+    </div>
   );
 }

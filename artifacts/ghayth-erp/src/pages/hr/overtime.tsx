@@ -1,4 +1,4 @@
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -160,16 +160,6 @@ export default function OvertimePage() {
       ),
     },
     {
-      key: "createdAt",
-      header: "تاريخ التقديم",
-      sortable: true,
-      render: (v) => (
-        <span className="text-sm text-gray-500">
-          {v.createdAt ? formatDateAr(v.createdAt) : "—"}
-        </span>
-      ),
-    },
-    {
       key: "status",
       header: "الحالة",
       sortable: true,
@@ -181,16 +171,6 @@ export default function OvertimePage() {
           </Badge>
         );
       },
-    },
-    {
-      key: "approvedAt",
-      header: "تاريخ الاعتماد",
-      sortable: true,
-      render: (v) => (
-        <span className="text-sm text-gray-500">
-          {v.approvedAt ? formatDateAr(v.approvedAt) : "—"}
-        </span>
-      ),
     },
     {
       key: "actions",

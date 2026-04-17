@@ -9,7 +9,6 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Clock, Mail, FileSpreadsheet, FileText, Calendar, Send, History } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiMutation as useDeleteMutation } from "@/lib/api";
@@ -73,17 +72,20 @@ export default function ScheduledReportsPage() {
   };
 
   return (
-    <PageShell
-      title="التقارير المجدولة"
-      subtitle="جدولة إرسال التقارير تلقائياً بالبريد الإلكتروني"
-      breadcrumbs={[{ href: "/reports", label: "التقارير" }]}
-      actions={
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Clock className="h-7 w-7 text-blue-600" />
+            التقارير المجدولة
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">جدولة إرسال التقارير تلقائياً بالبريد الإلكتروني</p>
+        </div>
         <Button size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />
           {showForm ? "إلغاء" : "جدولة جديدة"}
         </Button>
-      }
-    >
+      </div>
 
       {showForm && (
         <Card className="border-blue-200 bg-blue-50/30">
@@ -190,7 +192,7 @@ export default function ScheduledReportsPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </PageShell>
+    </div>
   );
 }
 

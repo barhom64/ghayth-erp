@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -66,13 +65,17 @@ export default function DriversCreate() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label>ربط بموظف</Label>
-          <Autocomplete
-            className="mt-1"
-            placeholder="ابحث عن الموظف..."
-            value={form.employeeId}
-            onChange={(v) => handleEmployeeSelect(String(v))}
-            options={employees.map((emp: any) => ({ value: String(emp.id), label: `${emp.name} - ${emp.jobTitle || emp.department || ""}` }))}
-          />
+          <Select value={form.employeeId || "_none"} onValueChange={(v) => handleEmployeeSelect(v === "_none" ? "" : v)}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="— اختر موظف أو أدخل يدوياً —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">— اختر موظف أو أدخل يدوياً —</SelectItem>
+              {employees.map((emp: any) => (
+                <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || emp.department || ""}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div><Label>الاسم <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
         <div><Label>الهاتف</Label><Input className="mt-1" dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
@@ -105,12 +108,6 @@ export default function DriversCreate() {
             </SelectContent>
           </Select>
         </div>
-      </div>
-      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-        <p className="font-semibold mb-1">سيتم تلقائياً عند الحفظ:</p>
-        <ul className="list-disc list-inside space-y-1 text-green-700">
-          <li>إنشاء حسابات فرعية للسائق في شجرة الحسابات (سُلف، عهد)</li>
-        </ul>
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">

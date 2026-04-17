@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { PageShell } from "@/components/page-shell";
 import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 
@@ -114,18 +113,20 @@ export default function PropertiesOwners() {
   ];
 
   return (
-    <PageShell
-      title="الملاك"
-      subtitle="سجل ملاك العقارات — للعقارات المُدارة لصالح الغير"
-      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
-      actions={canManage && (
-        <Link href="/properties/owners/create">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" /> إضافة مالك
-          </Button>
-        </Link>
-      )}
-    >
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">الملاك</h1>
+          <p className="text-gray-500 text-sm mt-1">سجل ملاك العقارات — للعقارات المُدارة لصالح الغير</p>
+        </div>
+        {canManage && (
+          <Link href="/properties/owners/create">
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" /> إضافة مالك
+            </Button>
+          </Link>
+        )}
+      </div>
 
       <AdvancedFilters
         config={{ searchPlaceholder: "بحث بالاسم أو الهاتف أو رقم الهوية...", showDateRange: false }}
@@ -161,6 +162,6 @@ export default function PropertiesOwners() {
           />
         </CardContent>
       </Card>
-    </PageShell>
+    </div>
   );
 }

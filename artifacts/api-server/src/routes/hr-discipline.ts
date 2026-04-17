@@ -338,29 +338,18 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       manualOverrideReason,
     } = req.body as any;
 
-    if (!assignmentId && !req.body.employeeId && !incidentType || !incidentDate) {
-      badRequest(res, "assignmentId أو employeeId, incidentType, incidentDate مطلوبة"); return;
+    if (!assignmentId || !incidentType || !incidentDate) {
+      badRequest(res, "assignmentId, incidentType, incidentDate مطلوبة"); return;
     }
     if (!["late", "early_leave", "absence", "behavior", "organization", "gps_out_of_range", "custom"].includes(incidentType)) {
       badRequest(res, "نوع الواقعة غير صحيح"); return;
     }
 
-    // resolve assignmentId from employeeId if needed
-    let resolvedAssignmentId = assignmentId ? Number(assignmentId) : null;
-    if (!resolvedAssignmentId && req.body.employeeId) {
-      const [resolved] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
-        [Number(req.body.employeeId), scope.companyId]
-      );
-      if (resolved) resolvedAssignmentId = resolved.id;
-    }
-    if (!resolvedAssignmentId) { badRequest(res, "لم يتم العثور على تعيين نشط للموظف"); return; }
-
     // جلب بيانات التعيين للتحقق من ملكية الشركة
     const [assignment] = await rawQuery<any>(
       `SELECT id, "companyId", "branchId", "employeeId"
          FROM employee_assignments WHERE id = $1`,
-      [resolvedAssignmentId]
+      [assignmentId]
     );
     if (!assignment || assignment.companyId !== scope.companyId) {
       badRequest(res, "التعيين غير موجود أو خارج نطاق الشركة"); return;
@@ -370,10 +359,10 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
     let resolvedRegulationId: number | null = regulationId ?? null;
     let penaltyPreview: any = null;
     if (!resolvedRegulationId) {
-      const dailyWage = await getDailyWage(resolvedAssignmentId);
+      const dailyWage = await getDailyWage(assignmentId);
       const resolution = await resolvePenalty({
         companyId: scope.companyId,
-        assignmentId: resolvedAssignmentId,
+        assignmentId,
         employeeId: assignment.employeeId,
         dailyWage,
         incidentType: incidentType as IncidentType,
@@ -398,7 +387,7 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
        RETURNING id`,
       [
         scope.companyId, assignment.branchId, memoNumber,
-        resolvedAssignmentId, assignment.employeeId,
+        assignmentId, assignment.employeeId,
         resolvedRegulationId,
         incidentType, incidentDate, incidentDurationMinutes ?? null,
         incidentDescription ?? null,
@@ -422,7 +411,7 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
     // تنبيه الموظف لتقديم التبرير
     createNotification({
       companyId: scope.companyId,
-      assignmentId: resolvedAssignmentId,
+      assignmentId,
       type: "inquiry_memo",
       title: "محضر استفسار جديد",
       body: `تم فتح محضر استفسار رقم ${memoNumber} بشأن ${incidentType}. يُرجى تقديم تبريرك.`,
@@ -743,30 +732,21 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
 router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId: rawAssignmentId, employeeId: rawEmployeeId, incidentType, incidentDate, durationMinutes, absenceDays, disruptsOthers, regulationId } = req.body as any;
-    if (!rawAssignmentId && !rawEmployeeId || !incidentType || !incidentDate) {
-      badRequest(res, "assignmentId أو employeeId, incidentType, incidentDate مطلوبة"); return;
+    const { assignmentId, incidentType, incidentDate, durationMinutes, absenceDays, disruptsOthers, regulationId } = req.body as any;
+    if (!assignmentId || !incidentType || !incidentDate) {
+      badRequest(res, "assignmentId, incidentType, incidentDate مطلوبة"); return;
     }
-    let previewAssignmentId = rawAssignmentId ? Number(rawAssignmentId) : null;
-    if (!previewAssignmentId && rawEmployeeId) {
-      const [resolved] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
-        [Number(rawEmployeeId), scope.companyId]
-      );
-      if (resolved) previewAssignmentId = resolved.id;
-    }
-    if (!previewAssignmentId) { badRequest(res, "لم يتم العثور على تعيين نشط للموظف"); return; }
     const [assignment] = await rawQuery<any>(
       `SELECT id, "employeeId", "companyId" FROM employee_assignments WHERE id = $1`,
-      [previewAssignmentId]
+      [assignmentId]
     );
     if (!assignment || assignment.companyId !== scope.companyId) {
       badRequest(res, "التعيين غير موجود"); return;
     }
-    const dailyWage = await getDailyWage(previewAssignmentId);
+    const dailyWage = await getDailyWage(assignmentId);
     const resolution = await resolvePenalty({
       companyId: scope.companyId,
-      assignmentId: previewAssignmentId, employeeId: assignment.employeeId,
+      assignmentId, employeeId: assignment.employeeId,
       dailyWage,
       incidentType: incidentType as IncidentType,
       incidentDate,

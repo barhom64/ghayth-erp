@@ -12,7 +12,6 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
-import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import {
   createJournalEntry,
   checkFinancialPeriodOpen,
@@ -166,7 +165,6 @@ async function postInventoryMovementGl(params: {
       debit: number;
       credit: number;
       description?: string;
-      productId?: number;
     }[] = [];
     let description = "";
     let operationType: string | undefined;
@@ -187,7 +185,7 @@ async function postInventoryMovementGl(params: {
       );
       description = `استلام مخزون${productLabel} — ${totalValue.toFixed(2)} ريال`;
       lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0, productId: params.productId },
+        { accountCode: drCode, debit: totalValue, credit: 0 },
         { accountCode: crCode, debit: 0, credit: totalValue },
       ];
       operationType = "inventory_receipt";
@@ -207,8 +205,8 @@ async function postInventoryMovementGl(params: {
       );
       description = `صرف مخزون${productLabel} — تكلفة ${totalValue.toFixed(2)} ريال`;
       lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0, productId: params.productId },
-        { accountCode: crCode, debit: 0, credit: totalValue, productId: params.productId },
+        { accountCode: drCode, debit: totalValue, credit: 0 },
+        { accountCode: crCode, debit: 0, credit: totalValue },
       ];
       operationType = "inventory_issue_cogs";
     } else if (params.trigger === "variance_in") {
@@ -227,7 +225,7 @@ async function postInventoryMovementGl(params: {
       );
       description = `فائض جرد${productLabel} — ${totalValue.toFixed(2)} ريال`;
       lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0, productId: params.productId },
+        { accountCode: drCode, debit: totalValue, credit: 0 },
         { accountCode: crCode, debit: 0, credit: totalValue },
       ];
       operationType = "inventory_variance";
@@ -247,8 +245,8 @@ async function postInventoryMovementGl(params: {
       );
       description = `عجز جرد${productLabel} — ${totalValue.toFixed(2)} ريال`;
       lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0, productId: params.productId },
-        { accountCode: crCode, debit: 0, credit: totalValue, productId: params.productId },
+        { accountCode: drCode, debit: totalValue, credit: 0 },
+        { accountCode: crCode, debit: 0, credit: totalValue },
       ];
       operationType = "inventory_variance";
     }
@@ -341,8 +339,6 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
       [scope.companyId, b.sku.trim(), b.name.trim(), b.description, b.categoryId || null, b.unit || 'piece', b.minStock || 0, b.maxStock || 99999, b.currentStock || 0, costPrice, sellPrice, b.location, b.branchId || scope.branchId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1`, [insertId]);
-
-    createSubsidiaryAccountsForEntity(scope.companyId, "product", insertId, b.name.trim()).catch(console.error);
 
     createAuditLog({
       companyId: scope.companyId,

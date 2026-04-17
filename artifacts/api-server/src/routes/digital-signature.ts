@@ -2,7 +2,6 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
-import { handleRouteError } from "../lib/errorHandler.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
 
@@ -58,8 +57,8 @@ router.post("/request-otp", async (req, res: Response) => {
       ip,
       deviceFingerprint,
     });
-  } catch (err) {
-    handleRouteError(err, res, "Request OTP");
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -115,8 +114,8 @@ router.post("/verify", async (req, res: Response) => {
       userAgent,
       verifiedAt: new Date().toISOString(),
     });
-  } catch (err) {
-    handleRouteError(err, res, "Verify signature");
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -133,8 +132,8 @@ router.get("/logs", async (req, res: Response) => {
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) {
-    handleRouteError(err, res, "Signature logs");
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

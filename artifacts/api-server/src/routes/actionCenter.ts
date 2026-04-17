@@ -1,4 +1,3 @@
-import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -12,28 +11,9 @@ router.get("/", async (req, res) => {
     const scope = req.scope!;
 
     const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager", "supervisor"];
-    let isDeptManager = false;
     if (!allowedRoles.includes(scope.role)) {
-      const [deptCheck] = await rawQuery<any>(
-        `SELECT d.id FROM departments d
-         JOIN employee_assignments ea ON ea."employeeId" = d."managerId"
-         WHERE ea.id = $1 AND ea.status = 'active' AND d.status = 'active'
-         LIMIT 1`,
-        [scope.activeAssignmentId]
-      );
-      if (!deptCheck) {
-        const [workflowCheck] = await rawQuery<any>(
-          `SELECT id FROM workflow_instances
-           WHERE "currentAssignee" = $1 AND status IN ('pending','in_review','escalated')
-           LIMIT 1`,
-          [scope.activeAssignmentId]
-        );
-        if (!workflowCheck) {
-          res.status(403).json({ error: "غير مصرح: هذه الصفحة للمدراء فقط" });
-          return;
-        }
-      }
-      isDeptManager = true;
+      res.status(403).json({ error: "غير مصرح: هذه الصفحة للمدراء فقط" });
+      return;
     }
 
     const today = new Date().toISOString().split("T")[0];
@@ -43,7 +23,7 @@ router.get("/", async (req, res) => {
     const LEAVE_APPROVAL_ROLES = ["branch_manager", "hr_manager", "owner"];
 
     let pendingLeaves: any[] = [];
-    if (LEAVE_APPROVAL_ROLES.includes(scope.role) || isDeptManager) {
+    if (LEAVE_APPROVAL_ROLES.includes(scope.role)) {
       try {
         pendingLeaves = await rawQuery<any>(
           `SELECT lr.id, e.name AS "employeeName", lt.name AS "leaveType",
@@ -329,7 +309,8 @@ router.get("/", async (req, res) => {
       role: scope.role,
     });
   } catch (err) {
-    handleRouteError(err, res, "Action center error:");
+    console.error("Action-center error:", err);
+    res.status(500).json({ error: "خطأ في الخادم" });
   }
 });
 

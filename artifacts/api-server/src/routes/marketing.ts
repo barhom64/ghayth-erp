@@ -2,7 +2,6 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
 
 // P02-S3-CRIT — `marketing:*` permissions are seeded for the
 // `general_manager` and `crm_manager` roles in companyBootstrap.ts:195
@@ -22,7 +21,7 @@ router.get("/campaigns", requirePermission("marketing:read"), async (req, res) =
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { handleRouteError(err, res, "List campaigns"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post("/campaigns", requirePermission("marketing:create"), async (req, res) => {
@@ -34,7 +33,7 @@ router.post("/campaigns", requirePermission("marketing:create"), async (req, res
       [name, description, type, channel, status || "draft", budget || 0, spent || 0, startDate, endDate, targetAudience, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (err) { handleRouteError(err, res, "Create campaign"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, res) => {
@@ -43,7 +42,7 @@ router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, re
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "الحملة غير موجودة" }); return; }
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get campaign"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req, res) => {
@@ -70,7 +69,7 @@ router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req
     await rawExecute(`UPDATE marketing_campaigns SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update campaign"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (req, res) => {
@@ -81,7 +80,7 @@ router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (re
     if (!existing) { res.status(404).json({ error: "الحملة غير موجودة" }); return; }
     await rawExecute(`DELETE FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف الحملة بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete campaign"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
@@ -109,7 +108,7 @@ router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
       roas,
       sourceCounts,
     });
-  } catch (err) { handleRouteError(err, res, "Marketing stats"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (req, res) => {
@@ -133,7 +132,7 @@ router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (re
       roas: roas ? Number(roas).toFixed(2) : null,
       leadsGenerated: Number(leads?.[0]?.count || 0),
     });
-  } catch (err) { handleRouteError(err, res, "Campaign ROAS"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
@@ -159,7 +158,7 @@ router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
       };
     });
     res.json({ stages: conversionRates, sourceFunnel });
-  } catch (err) { handleRouteError(err, res, "Marketing funnel"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), async (req, res) => {
@@ -170,7 +169,7 @@ router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), as
     await rawExecute(`UPDATE marketing_campaigns SET revenue=$1 WHERE id=$2 AND "companyId"=$3`, [revenue || 0, id, scope.companyId]);
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update campaign revenue"); }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get("/templates", requirePermission("marketing:read"), async (req, res) => {

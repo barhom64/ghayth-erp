@@ -31,7 +31,7 @@ export default function OpeningBalancesCreatePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
+  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
 
   const [periodStart, setPeriodStart] = useState<string>(firstDayOfFiscalYear());

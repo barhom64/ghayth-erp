@@ -9,7 +9,6 @@ import { KeyRound, CheckCircle, Shield, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
 
 const MODULE_LABELS: Record<string, string> = {
   home: "الرئيسية", hr: "الموارد البشرية", finance: "المالية", fleet: "الأسطول",
@@ -182,16 +181,19 @@ export default function AdminRolesPage() {
   };
 
   return (
-    <PageShell
-      title="إدارة الأدوار والصلاحيات"
-      subtitle="تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات"
-      breadcrumbs={[{ href: "/admin", label: "إدارة النظام" }]}
-      actions={
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <KeyRound className="w-8 h-8 text-purple-600" />
+            إدارة الأدوار والصلاحيات
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات</p>
+        </div>
         <Button size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
           {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
         </Button>
-      }
-    >
+      </div>
 
       <div className="flex gap-2 border-b">
         <button onClick={() => setActiveTab("modules")} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "modules" ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-800")}>
@@ -388,6 +390,6 @@ export default function AdminRolesPage() {
           </CardContent>
         </Card>
       )}
-    </PageShell>
+    </div>
   );
 }
