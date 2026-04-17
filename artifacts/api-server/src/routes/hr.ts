@@ -17,6 +17,7 @@ import {
   emitEvent,
   createAuditLog,
   getManagerAssignmentId,
+  isSubmitterDeptManager,
   initiateApprovalChain,
   processApprovalStep,
   createJournalEntry,
@@ -1210,12 +1211,15 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
       }
 
       if (!currentStage.assignedTo) {
-        const roleMatchesStage =
+        let roleMatchesStage =
           (stageRequiredRole === "manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
           (stageRequiredRole === "hr" && scope.role === "hr_manager") ||
           (stageRequiredRole === "branch_manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
           (stageRequiredRole === "hr_manager" && scope.role === "hr_manager") ||
           (stageRequiredRole === scope.role);
+        if (!roleMatchesStage && stageRequiredRole === "dept_manager") {
+          roleMatchesStage = await isSubmitterDeptManager(scope.companyId, scope.activeAssignmentId);
+        }
         if (!roleMatchesStage) {
           throw new ForbiddenError(
             `هذه المرحلة تتطلب موافقة ${stageRequiredRole}`,
@@ -1280,6 +1284,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
         );
       } catch (e) { console.error("Failed to log approval action:", e); }
 
+      rawExecute(
+        `UPDATE workflow_instances SET status = 'rejected', "completedAt" = NOW()
+         WHERE "refTable" = 'hr_leave_requests' AND "refId" = $1 AND status IN ('pending','in_review','escalated')`,
+        [Number(id)]
+      ).catch((e) => console.error("Close leave workflow_instance:", e));
+
       emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.rejected",
         entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
 
@@ -1334,6 +1344,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           [Number(id), reason, scope.userId, scope.companyId]
         );
       } catch (e) { console.error("Failed to log approval action:", e); }
+
+      rawExecute(
+        `UPDATE workflow_instances SET status = 'returned', "completedAt" = NOW()
+         WHERE "refTable" = 'hr_leave_requests' AND "refId" = $1 AND status IN ('pending','in_review','escalated')`,
+        [Number(id)]
+      ).catch((e) => console.error("Close leave workflow_instance:", e));
 
       emitEvent({
         companyId: scope.companyId, userId: scope.userId,
@@ -1539,6 +1555,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
         [Number(id), reason || null, scope.userId, scope.companyId]
       );
     } catch (e) { console.error("Failed to log approval action:", e); }
+
+    rawExecute(
+      `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW()
+       WHERE "refTable" = 'hr_leave_requests' AND "refId" = $1 AND status IN ('pending','in_review','escalated')`,
+      [Number(id)]
+    ).catch((e) => console.error("Close leave workflow_instance:", e));
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.approved",
       entity: "hr_leave_requests", entityId: Number(id),

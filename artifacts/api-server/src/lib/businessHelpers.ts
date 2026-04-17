@@ -608,8 +608,9 @@ export async function getDeptManagerAssignmentId(
       const [mgrAssignment] = await rawQuery<any>(
         `SELECT ea.id FROM employee_assignments ea
          WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+         ORDER BY CASE WHEN ea."departmentId" = $3 THEN 0 ELSE 1 END
          LIMIT 1`,
-        [dept.managerId, companyId]
+        [dept.managerId, companyId, submitter.departmentId]
       );
       if (mgrAssignment?.id) return mgrAssignment.id;
     }
@@ -619,8 +620,9 @@ export async function getDeptManagerAssignmentId(
     const [directMgr] = await rawQuery<any>(
       `SELECT ea.id FROM employee_assignments ea
        WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+       ORDER BY CASE WHEN ea."departmentId" = $3 THEN 0 ELSE 1 END
        LIMIT 1`,
-      [submitter.managerId, companyId]
+      [submitter.managerId, companyId, submitter.departmentId]
     );
     if (directMgr?.id) return directMgr.id;
   }

@@ -160,7 +160,25 @@ router.get("/", async (req, res) => {
 
     let pendingApprovals: any[] = [];
     try {
-      if (scope.role !== "employee") {
+      let hasMgrDuties = scope.role !== "employee";
+      if (!hasMgrDuties) {
+        const [deptChk] = await rawQuery<any>(
+          `SELECT d.id FROM departments d
+           JOIN employee_assignments ea ON ea."employeeId" = d."managerId"
+           WHERE ea.id = $1 AND ea.status = 'active' AND d.status = 'active' LIMIT 1`,
+          [scope.activeAssignmentId]
+        ).catch(() => [null]);
+        if (deptChk) hasMgrDuties = true;
+      }
+      if (!hasMgrDuties) {
+        const [wfChk] = await rawQuery<any>(
+          `SELECT id FROM workflow_instances
+           WHERE "currentAssignee" = $1 AND status IN ('pending','in_review','escalated') LIMIT 1`,
+          [scope.activeAssignmentId]
+        ).catch(() => [null]);
+        if (wfChk) hasMgrDuties = true;
+      }
+      if (hasMgrDuties) {
         const leaveApprovals = await rawQuery<any>(
           `SELECT lr.id, 'leave' AS type, e.name AS "employeeName", lt.name AS title, lr.status, lr."createdAt"
            FROM hr_leave_requests lr
@@ -219,7 +237,23 @@ router.get("/", async (req, res) => {
           );
         } catch (e) { console.error("my-space exitApprovals error:", e); }
 
-        pendingApprovals = [...leaveApprovals, ...loanApprovals, ...overtimeApprovals, ...exitApprovals]
+        let workflowApprovals: any[] = [];
+        try {
+          workflowApprovals = await rawQuery<any>(
+            `SELECT wi.id, wi."requestType" AS type,
+                    COALESCE(e.name, wi."submittedByName") AS "employeeName",
+                    wi.title, wi.status, wi."createdAt"
+             FROM workflow_instances wi
+             LEFT JOIN employee_assignments ea ON ea.id = wi."submittedBy"
+             LEFT JOIN employees e ON e.id = ea."employeeId"
+             WHERE wi."currentAssignee" = $1
+               AND wi.status IN ('pending','in_review','escalated')
+             ORDER BY wi."createdAt" DESC LIMIT 10`,
+            [scope.activeAssignmentId]
+          );
+        } catch (e) { console.error("my-space workflowApprovals error:", e); }
+
+        pendingApprovals = [...leaveApprovals, ...loanApprovals, ...overtimeApprovals, ...exitApprovals, ...workflowApprovals]
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
     } catch (e) {
@@ -275,7 +309,7 @@ router.get("/", async (req, res) => {
     let notifications: any[] = [];
     try {
       notifications = await rawQuery<any>(
-        `SELECT id, type, title, body, priority, "isRead", "createdAt"
+        `SELECT id, type, title, body, priority, "isRead", "createdAt", "requiresAck", "acknowledgedAt"
          FROM notifications
          WHERE "assignmentId" = $1
          ORDER BY "createdAt" DESC LIMIT 10`,
@@ -283,6 +317,19 @@ router.get("/", async (req, res) => {
       );
     } catch (e) {
       console.error("my-space notifications error:", e);
+    }
+
+    let pendingAck: any[] = [];
+    try {
+      pendingAck = await rawQuery<any>(
+        `SELECT id, type, title, body, priority, "createdAt", "refType", "refId"
+         FROM notifications
+         WHERE "assignmentId" = $1 AND "requiresAck" = true AND "acknowledgedAt" IS NULL
+         ORDER BY "createdAt" DESC`,
+        [scope.activeAssignmentId]
+      );
+    } catch (e) {
+      console.error("my-space pendingAck error:", e);
     }
 
     let custodies: any[] = [];
@@ -551,6 +598,7 @@ router.get("/", async (req, res) => {
       lastPayslip,
       todayTasks,
       notifications,
+      pendingAck,
       custodies,
       violations,
       activeLoans,

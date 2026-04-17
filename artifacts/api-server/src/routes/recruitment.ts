@@ -212,7 +212,7 @@ router.patch("/applications/:id", async (req, res) => {
           [empId, row.companyId, scope.branchId, row.postingTitle || "موظف جديد", row.salaryMin ?? 0]
         );
         await rawExecute(
-          `INSERT INTO employee_contracts ("employeeId", "assignmentId", "companyId", type, "startDate", "probationEndDate", status)
+          `INSERT INTO employee_contracts ("employeeId", "assignmentId", "companyId", "contractType", "startDate", "probationEndDate", status)
            VALUES ($1, $2, $3, 'full_time', CURRENT_DATE, CURRENT_DATE + INTERVAL '90 days', 'active')`,
           [empId, asnId, row.companyId]
         );

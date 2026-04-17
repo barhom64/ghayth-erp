@@ -400,11 +400,17 @@ export async function submitWorkflow(params: SubmitParams) {
     );
   }
 
+  if (firstStep && skipFirstStep && !currentAssignee && steps.length > 1) {
+    throw new Error(
+      "لا يوجد مسؤول لاستلام المرحلة التالية — الرجاء تعيين مسؤول للمرحلة الثانية"
+    );
+  }
+
   const effectiveStepOrder = skipFirstStep
     ? (steps.length > 1 ? steps[1].stepOrder : firstStep?.stepOrder ?? 1)
     : (firstStep?.stepOrder ?? 1);
 
-  const initialStatus = skipFirstStep && !currentAssignee ? "approved" : "pending";
+  const initialStatus = skipFirstStep && !currentAssignee && steps.length <= 1 ? "approved" : "pending";
 
   const { insertId } = await rawExecute(
     `INSERT INTO workflow_instances
