@@ -130,6 +130,7 @@ export default function LeavesPage() {
     dateColumn("startDate", "من"),
     dateColumn("endDate", "إلى"),
     textColumn("days", "الأيام"),
+    dateColumn("createdAt", "تاريخ التقديم"),
     {
       key: "reason",
       header: "السبب",
@@ -143,6 +144,7 @@ export default function LeavesPage() {
       ),
     },
     statusColumn("status", "الحالة", "leave"),
+    dateColumn("approvedAt", "تاريخ الاعتماد"),
     {
       key: "approval",
       header: "إجراءات الموافقة",

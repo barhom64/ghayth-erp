@@ -47,8 +47,9 @@ export default function OfficialLettersPage() {
     { key: "subject", header: "الموضوع", sortable: true, className: "font-medium", render: (l) => l.subject },
     { key: "type", header: "النوع", sortable: true, render: (l) => LETTER_TYPES[l.type] || l.type },
     { key: "employeeName", header: "الموظف", sortable: true, className: "text-gray-500", render: (l) => l.employeeName || "-" },
-    { key: "createdAt", header: "التاريخ", sortable: true, className: "text-gray-500", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "-" },
+    { key: "createdAt", header: "تاريخ التقديم", sortable: true, className: "text-gray-500", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "-" },
     { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status} /> },
+    { key: "approvedAt", header: "تاريخ الاعتماد", sortable: true, className: "text-gray-500", render: (l) => l.approvedAt ? formatDateAr(l.approvedAt) : "—" },
     {
       key: "actions",
       header: "إجراءات",

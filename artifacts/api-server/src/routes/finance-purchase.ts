@@ -226,6 +226,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", async (req, res) => {
         priority: "high",
         refType: "purchase_request",
         refId: Number(id),
+        actionUrl: `/finance/purchase-orders/${id}`,
       }).catch((e) => console.error("notify PR requester failed:", e));
     }
 
@@ -1196,6 +1197,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", async (req, res) => {
         priority: "high",
         refType: "purchase_orders",
         refId: Number(id),
+        actionUrl: `/finance/purchase-orders/${id}`,
       }).catch(console.error);
     }
 

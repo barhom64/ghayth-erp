@@ -140,6 +140,14 @@ export default function CustodiesPage() {
       ),
     },
     {
+      key: "approvedAt",
+      header: "تاريخ الاعتماد",
+      sortable: true,
+      render: (c) => (
+        <span className="text-gray-500 text-sm">{c.approvedAt ? formatDateAr(c.approvedAt) : "—"}</span>
+      ),
+    },
+    {
       key: "expectedReturnDate",
       header: "تاريخ الإرجاع",
       sortable: true,

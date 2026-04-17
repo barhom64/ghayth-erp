@@ -241,6 +241,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
           type: "overtime_request", title: "طلب وقت إضافي",
           body: `طلب ${hours} ساعات إضافية بتاريخ ${b.overtimeDate} — ${requestNumber}`,
           priority: "normal", refType: "hr_overtime_request", refId: insertId,
+          actionUrl: `/hr/overtime/${insertId}`,
         }).catch(console.error);
       }
     }
@@ -324,6 +325,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       type: "overtime_approved", title: "تمت الموافقة على الوقت الإضافي",
       body: `تمت الموافقة على ${item.hours} ساعات إضافية — ${item.requestNumber}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
+      actionUrl: `/hr/overtime/${item.id}`,
     }).catch(console.error);
 
     await createAuditLog({
@@ -372,6 +374,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
       body: `تم رفض الطلب ${item.requestNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
+      actionUrl: `/hr/overtime/${item.id}`,
     }).catch(console.error);
 
     res.json({ success: true });

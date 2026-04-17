@@ -98,6 +98,16 @@ export default function SalaryAdvancesPage() {
       ),
     },
     {
+      key: "approvedAt",
+      header: "تاريخ الاعتماد",
+      sortable: true,
+      render: (s) => (
+        <span className="text-muted-foreground text-sm">
+          {s.approvedAt ? formatDateAr(s.approvedAt) : "—"}
+        </span>
+      ),
+    },
+    {
       key: "actions",
       header: "إجراء",
       hidden: !canApprove,

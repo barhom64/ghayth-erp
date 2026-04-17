@@ -239,6 +239,7 @@ router.patch("/applications/:id", async (req, res) => {
             title: "موظف جديد — يتطلب إكمال التعيين",
             body: `تم تعيين ${row.applicantName} من طلب التوظيف #${id}. يرجى استكمال بياناته.`,
             priority: "high", refType: "employee", refId: empId,
+            actionUrl: `/employees/${empId}`,
           }).catch(console.error);
         }
       } catch (e) {

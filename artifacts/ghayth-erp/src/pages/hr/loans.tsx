@@ -169,6 +169,16 @@ export default function LoansPage() {
       },
     },
     {
+      key: "createdAt",
+      header: "تاريخ التقديم",
+      sortable: true,
+      render: (v) => (
+        <span className="text-sm text-gray-500">
+          {v.createdAt ? formatDateAr(v.createdAt) : "—"}
+        </span>
+      ),
+    },
+    {
       key: "startDeductionPeriod",
       header: "بدء الخصم",
       sortable: true,
@@ -190,6 +200,16 @@ export default function LoansPage() {
           </Badge>
         );
       },
+    },
+    {
+      key: "approvedAt",
+      header: "تاريخ الاعتماد",
+      sortable: true,
+      render: (v) => (
+        <span className="text-sm text-gray-500">
+          {v.approvedAt ? formatDateAr(v.approvedAt) : "—"}
+        </span>
+      ),
     },
     {
       key: "actions",

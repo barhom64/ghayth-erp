@@ -318,6 +318,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
           type: "exit_request", title: "طلب نهاية خدمة جديد",
           body: `طلب ${b.exitType === "resignation" ? "استقالة" : "نهاية خدمة"} — ${exitNumber}`,
           priority: "high", refType: "hr_exit_request", refId: insertId,
+          actionUrl: `/hr/exit/${insertId}`,
         }).catch(console.error);
       }
     }
@@ -412,6 +413,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
       type: "exit_approved", title: "تمت الموافقة على طلب نهاية الخدمة",
       body: `تمت الموافقة على طلب نهاية الخدمة ${item.exitNumber} — يرجى إكمال إخلاء الطرف`,
       priority: "high", refType: "hr_exit_request", refId: item.id,
+      actionUrl: `/hr/exit/${item.id}`,
     }).catch(console.error);
 
     res.json({ success: true, message: "تم اعتماد طلب نهاية الخدمة" });

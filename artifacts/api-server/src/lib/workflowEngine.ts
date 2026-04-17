@@ -4,6 +4,18 @@ import {
   getDeptManagerAssignmentId, isSubmitterDeptManager, createCorrespondenceFromRequest,
 } from "./businessHelpers.js";
 
+function resolveActionUrl(refTable: string | null | undefined, refId: number | null | undefined): string {
+  if (!refTable || !refId) return `/requests/workflows`;
+  switch (refTable) {
+    case "hr_leave_requests": return `/hr/leaves`;
+    case "hr_employee_loans": return `/hr/loans/${refId}`;
+    case "hr_overtime_requests": return `/hr/overtime/${refId}`;
+    case "hr_exit_requests": return `/hr/exit/${refId}`;
+    case "purchase_requests": return `/finance/purchase-orders/${refId}`;
+    default: return `/requests/workflows`;
+  }
+}
+
 async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
   await rawExecute(
     `UPDATE hr_leave_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW() WHERE id = $2`,
@@ -463,6 +475,7 @@ export async function submitWorkflow(params: SubmitParams) {
         priority: "normal",
         refType: refTable ?? requestType,
         refId: refId ?? insertId,
+        actionUrl: resolveActionUrl(refTable, refId),
       }).catch(console.error);
     }
 
@@ -485,6 +498,7 @@ export async function submitWorkflow(params: SubmitParams) {
       priority: "high",
       refType: refTable ?? requestType,
       refId: refId ?? insertId,
+      actionUrl: resolveActionUrl(refTable, refId),
     }).catch(console.error);
   }
 
@@ -680,6 +694,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
             priority: "high",
             refType: instance.refTable ?? instance.requestType,
             refId: instance.refId ?? instanceId,
+            actionUrl: resolveActionUrl(instance.refTable, instance.refId),
           }).catch(console.error);
           actualImpact.notifications!.push(`إشعار للمعتمد التالي (${nextStep.stepName})`);
         }
@@ -715,6 +730,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
             priority: "normal",
             refType: instance.refTable ?? instance.requestType,
             refId: instance.refId ?? instanceId,
+            actionUrl: resolveActionUrl(instance.refTable, instance.refId),
           }).catch(console.error);
           actualImpact.notifications!.push("إشعار لمقدم الطلب بالموافقة النهائية");
         }
@@ -763,6 +779,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           priority: "high",
           refType: instance.refTable ?? instance.requestType,
           refId: instance.refId ?? instanceId,
+          actionUrl: resolveActionUrl(instance.refTable, instance.refId),
         }).catch(console.error);
         actualImpact.notifications!.push("إشعار لمقدم الطلب بالرفض");
       }
@@ -796,6 +813,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           priority: "normal",
           refType: instance.refTable ?? instance.requestType,
           refId: instance.refId ?? instanceId,
+          actionUrl: resolveActionUrl(instance.refTable, instance.refId),
         }).catch(console.error);
         actualImpact.notifications!.push("إشعار لمقدم الطلب بالإرجاع");
       }
@@ -818,6 +836,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         priority: "high",
         refType: instance.refTable ?? instance.requestType,
         refId: instance.refId ?? instanceId,
+        actionUrl: resolveActionUrl(instance.refTable, instance.refId),
       }).catch(console.error);
       actualImpact.notifications!.push(`إشعار إحالة إلى ${referredToName || "المعني"}`);
       message = `تمت الإحالة إلى ${referredToName || "المعني"}`;
@@ -849,6 +868,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           priority: "urgent",
           refType: instance.refTable ?? instance.requestType,
           refId: instance.refId ?? instanceId,
+          actionUrl: resolveActionUrl(instance.refTable, instance.refId),
         }).catch(console.error);
         actualImpact.notifications!.push(`تصعيد إلى ${escalateRole}`);
       }
@@ -984,6 +1004,7 @@ export async function checkSlaStatus(companyId: number) {
             priority: "normal",
             refType: inst.refTable ?? inst.requestType,
             refId: inst.refId ?? inst.id,
+            actionUrl: resolveActionUrl(inst.refTable, inst.refId),
           }).catch(console.error);
         }
         autoApprovals++;
@@ -1012,6 +1033,7 @@ export async function checkSlaStatus(companyId: number) {
             priority: "urgent",
             refType: inst.refTable ?? inst.requestType,
             refId: inst.refId ?? inst.id,
+            actionUrl: resolveActionUrl(inst.refTable, inst.refId),
           }).catch(console.error);
         }
         escalations++;
@@ -1030,6 +1052,7 @@ export async function checkSlaStatus(companyId: number) {
           priority: "urgent",
           refType: inst.refTable ?? inst.requestType,
           refId: inst.refId ?? inst.id,
+          actionUrl: resolveActionUrl(inst.refTable, inst.refId),
         }).catch(console.error);
       }
       warnings++;
@@ -1047,6 +1070,7 @@ export async function checkSlaStatus(companyId: number) {
           priority: "high",
           refType: inst.refTable ?? inst.requestType,
           refId: inst.refId ?? inst.id,
+          actionUrl: resolveActionUrl(inst.refTable, inst.refId),
         }).catch(console.error);
       }
       warnings++;

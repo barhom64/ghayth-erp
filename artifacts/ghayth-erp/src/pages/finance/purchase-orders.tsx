@@ -89,6 +89,16 @@ export default function PurchaseOrdersPage() {
       render: (po) => <span className="font-semibold">{formatCurrency(po.totalAmount)}</span>,
     },
     {
+      key: "createdAt",
+      header: "تاريخ الطلب",
+      sortable: true,
+      render: (po) => (
+        <span className="text-muted-foreground text-sm">
+          {po.createdAt ? formatDateAr(po.createdAt) : "—"}
+        </span>
+      ),
+    },
+    {
       key: "expectedDelivery",
       header: "التسليم المتوقع",
       sortable: true,
@@ -103,6 +113,16 @@ export default function PurchaseOrdersPage() {
       header: "الحالة",
       sortable: true,
       render: (po) => <PageStatusBadge status={po.status} domain="purchase" />,
+    },
+    {
+      key: "approvedAt",
+      header: "تاريخ الاعتماد",
+      sortable: true,
+      render: (po) => (
+        <span className="text-muted-foreground text-sm">
+          {po.approvedAt ? formatDateAr(po.approvedAt) : "—"}
+        </span>
+      ),
     },
     {
       key: "notes",

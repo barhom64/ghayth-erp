@@ -276,6 +276,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
           type: "loan_request", title: "طلب سلفة جديد",
           body: `طلب سلفة بمبلغ ${amount.toLocaleString()} ريال — ${loanNumber}`,
           priority: "high", refType: "hr_employee_loan", refId: insertId,
+          actionUrl: `/hr/loans/${insertId}`,
         }).catch(console.error);
       }
     }
@@ -376,6 +377,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       type: "loan_approved", title: "تمت الموافقة على سلفتك",
       body: `تمت الموافقة على السلفة ${loan.loanNumber} بمبلغ ${Number(loan.amount).toLocaleString()} ريال — سيبدأ الخصم من فترة ${loan.startDeductionPeriod}`,
       priority: "high", refType: "hr_employee_loan", refId: loan.id,
+      actionUrl: `/hr/loans/${loan.id}`,
     }).catch(console.error);
 
     await createAuditLog({
@@ -429,6 +431,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       type: "loan_rejected", title: "تم رفض طلب السلفة",
       body: `تم رفض السلفة ${loan.loanNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_employee_loan", refId: loan.id,
+      actionUrl: `/hr/loans/${loan.id}`,
     }).catch(console.error);
 
     res.json({ success: true });
