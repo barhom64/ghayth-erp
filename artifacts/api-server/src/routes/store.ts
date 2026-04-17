@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -10,7 +11,7 @@ router.get("/products", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM store_products WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "List store products"); }
 });
 
 router.post("/products", async (req, res) => {
@@ -22,7 +23,7 @@ router.post("/products", async (req, res) => {
       [name, description, sku, price || 0, costPrice || 0, quantity || 0, category, status || "active", imageUrl, scope.companyId]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Create store product"); }
 });
 
 router.get("/products/:id", async (req, res) => {
@@ -31,7 +32,7 @@ router.get("/products/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get store product"); }
 });
 
 router.patch("/products/:id", async (req, res) => {
@@ -57,7 +58,7 @@ router.patch("/products/:id", async (req, res) => {
     await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1`, [id]);
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update store product"); }
 });
 
 router.delete("/products/:id", async (req, res) => {
@@ -68,7 +69,7 @@ router.delete("/products/:id", async (req, res) => {
     if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
     await rawExecute(`DELETE FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف المنتج بنجاح" });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Delete store product"); }
 });
 
 router.get("/orders", async (req, res) => {
@@ -76,7 +77,7 @@ router.get("/orders", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM store_orders WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "List store orders"); }
 });
 
 router.post("/orders", async (req, res) => {
@@ -99,7 +100,7 @@ router.post("/orders", async (req, res) => {
       }
     }
     res.status(201).json({ id: orderId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Create store order"); }
 });
 
 router.get("/orders/:id", async (req, res) => {
@@ -122,7 +123,7 @@ router.get("/orders/:id", async (req, res) => {
     try { parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []); } catch {}
     row.items = orderItems.length > 0 ? orderItems : parsedItems;
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get store order"); }
 });
 
 router.patch("/orders/:id", async (req, res) => {
@@ -144,7 +145,7 @@ router.patch("/orders/:id", async (req, res) => {
     await rawExecute(`UPDATE store_orders SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1`, [id]);
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update store order"); }
 });
 
 router.delete("/orders/:id", async (req, res) => {
@@ -155,7 +156,7 @@ router.delete("/orders/:id", async (req, res) => {
     if (!existing) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
     await rawExecute(`DELETE FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف الطلب بنجاح" });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Delete store order"); }
 });
 
 router.get("/stats", async (req, res) => {
@@ -172,7 +173,7 @@ router.get("/stats", async (req, res) => {
       pendingOrders: Number(pendingOrders.count),
       totalRevenue: Number(revenue.total),
     });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get store stats"); }
 });
 
 export default router;

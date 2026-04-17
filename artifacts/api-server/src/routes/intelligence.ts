@@ -315,7 +315,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
 router.post("/ai/categorize", async (req, res): Promise<void> => {
   try {
     const { message, context } = req.body;
-    if (!message) res.status(400).json({ error: "message مطلوب" }); return;
+    if (!message) { res.status(400).json({ error: "message مطلوب" }); return; }
     const result = await aiEngine.receptionCategorize(message, context);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI categorize error:"); }
@@ -324,7 +324,7 @@ router.post("/ai/categorize", async (req, res): Promise<void> => {
 router.post("/ai/draft-reply", async (req, res): Promise<void> => {
   try {
     const { ticketTitle, ticketDescription, history } = req.body;
-    if (!ticketTitle || !ticketDescription) res.status(400).json({ error: "ticketTitle و ticketDescription مطلوبان" }); return;
+    if (!ticketTitle || !ticketDescription) { res.status(400).json({ error: "ticketTitle و ticketDescription مطلوبان" }); return; }
     const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history);
     res.json({ draft });
   } catch (err) { handleRouteError(err, res, "AI draft reply error:"); }
@@ -333,8 +333,8 @@ router.post("/ai/draft-reply", async (req, res): Promise<void> => {
 router.post("/ai/translate", async (req, res): Promise<void> => {
   try {
     const { text, targetLanguage } = req.body;
-    if (!text || !targetLanguage) res.status(400).json({ error: "text و targetLanguage مطلوبان" }); return;
-    if (!["ar", "en"].includes(targetLanguage)) res.status(400).json({ error: "targetLanguage يجب أن يكون ar أو en" }); return;
+    if (!text || !targetLanguage) { res.status(400).json({ error: "text و targetLanguage مطلوبان" }); return; }
+    if (!["ar", "en"].includes(targetLanguage)) { res.status(400).json({ error: "targetLanguage يجب أن يكون ar أو en" }); return; }
     const translated = await aiEngine.translatorTranslate(text, targetLanguage);
     res.json({ translated, targetLanguage });
   } catch (err) { handleRouteError(err, res, "AI translate error:"); }
@@ -343,7 +343,7 @@ router.post("/ai/translate", async (req, res): Promise<void> => {
 router.post("/ai/summarize", async (req, res): Promise<void> => {
   try {
     const { content, maxLength } = req.body;
-    if (!content) res.status(400).json({ error: "content مطلوب" }); return;
+    if (!content) { res.status(400).json({ error: "content مطلوب" }); return; }
     const summary = await aiEngine.summarizerSummarize(content, maxLength);
     res.json({ summary });
   } catch (err) { handleRouteError(err, res, "AI summarize error:"); }
@@ -352,7 +352,7 @@ router.post("/ai/summarize", async (req, res): Promise<void> => {
 router.post("/ai/evaluate-rules", async (req, res): Promise<void> => {
   try {
     const { context, data, rules } = req.body;
-    if (!context || !data) res.status(400).json({ error: "context و data مطلوبان" }); return;
+    if (!context || !data) { res.status(400).json({ error: "context و data مطلوبان" }); return; }
     const result = await aiEngine.rulesEngineEvaluate({ context, data, rules });
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI rules engine error:"); }
@@ -361,7 +361,7 @@ router.post("/ai/evaluate-rules", async (req, res): Promise<void> => {
 router.post("/ai/forecast", async (req, res): Promise<void> => {
   try {
     const { metricName, historicalData, forecastPeriods } = req.body;
-    if (!metricName || !historicalData) res.status(400).json({ error: "metricName و historicalData مطلوبان" }); return;
+    if (!metricName || !historicalData) { res.status(400).json({ error: "metricName و historicalData مطلوبان" }); return; }
     const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods });
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI forecast error:"); }
@@ -381,7 +381,7 @@ router.post("/algorithms/haversine", async (req, res): Promise<void> => {
 router.post("/algorithms/moving-average", async (req, res): Promise<void> => {
   try {
     const { values, periods } = req.body;
-    if (!Array.isArray(values) || !periods) res.status(400).json({ error: "values و periods مطلوبان" }); return;
+    if (!Array.isArray(values) || !periods) { res.status(400).json({ error: "values و periods مطلوبان" }); return; }
     const result = movingAverage(values.map(Number), Number(periods));
     res.json({ result, periods: Number(periods), dataPoints: values.length });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }

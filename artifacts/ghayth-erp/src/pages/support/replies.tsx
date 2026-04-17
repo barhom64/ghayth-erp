@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { MessageSquare, Clock, CheckCircle2, User, Search, Loader2, type LucideIcon } from "lucide-react";
+import { MessageSquare, Clock, CheckCircle2, User, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 interface Reply {
   id: number;
@@ -25,6 +24,28 @@ interface RepliesResponse {
   activeAgents: number;
 }
 
+const columns: DataTableColumn<Reply>[] = [
+  { key: "ticketId", header: "رقم التذكرة", searchable: true, className: "font-mono text-xs" },
+  { key: "ticketTitle", header: "عنوان التذكرة", searchable: true, className: "font-medium" },
+  { key: "reply", header: "الرد", searchable: true, className: "text-gray-600 max-w-xs truncate" },
+  { key: "agent", header: "الوكيل", searchable: true },
+  { key: "date", header: "التاريخ", sortable: true, className: "whitespace-nowrap" },
+  {
+    key: "status", header: "الحالة",
+    render: (r) => (
+      <Badge className={r.status === "resolved" || r.status === "closed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+        {r.status === "resolved" || r.status === "closed" ? "تم الحل" : "بانتظار الرد"}
+      </Badge>
+    ),
+  },
+];
+
+const STATUS_OPTIONS = [
+  { value: "resolved", label: "تم الحل" },
+  { value: "closed", label: "مغلق" },
+  { value: "pending", label: "بانتظار الرد" },
+];
+
 interface StatCard {
   label: string;
   value: number;
@@ -33,8 +54,7 @@ interface StatCard {
 }
 
 export default function SupportReplies() {
-  const [search, setSearch] = useState("");
-  const { data, isLoading, isError } = useApiQuery<RepliesResponse>(["support-replies"], "/support/replies");
+  const { data, isLoading, isError, refetch } = useApiQuery<RepliesResponse>(["support-replies"], "/support/replies");
 
   const replies: Reply[] = data?.data || [];
 
@@ -44,24 +64,6 @@ export default function SupportReplies() {
     { label: "بانتظار الرد", value: data?.pending || 0, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
     { label: "وكلاء نشطون", value: data?.activeAgents || 0, icon: User, color: "text-purple-600 bg-purple-50" },
   ];
-
-  const filtered = replies.filter(r =>
-    !search || r.ticketTitle.includes(search) || r.reply.includes(search) || (r.agent || "").includes(search) || r.ticketId.includes(search)
-  );
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="text-center py-20 text-red-500">حدث خطأ أثناء تحميل البيانات</div>
-    );
-  }
 
   return (
     <PageShell
@@ -85,40 +87,19 @@ export default function SupportReplies() {
         })}
       </div>
 
-      <div className="relative">
-        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <Input placeholder="بحث في الردود..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
-      </div>
-
       <Card>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">رقم التذكرة</th>
-              <th className="p-3 text-start">عنوان التذكرة</th>
-              <th className="p-3 text-start">الرد</th>
-              <th className="p-3 text-start">الوكيل</th>
-              <th className="p-3 text-start">التاريخ</th>
-              <th className="p-3 text-start">الحالة</th>
-            </tr></thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-mono text-xs">{r.ticketId}</td>
-                  <td className="p-3 font-medium">{r.ticketTitle}</td>
-                  <td className="p-3 text-gray-600 max-w-xs truncate">{r.reply}</td>
-                  <td className="p-3 text-gray-500">{r.agent}</td>
-                  <td className="p-3 text-gray-500 whitespace-nowrap">{r.date}</td>
-                  <td className="p-3">
-                    <Badge className={r.status === "resolved" || r.status === "closed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
-                      {r.status === "resolved" || r.status === "closed" ? "تم الحل" : "بانتظار الرد"}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد ردود</td></tr>}
-            </tbody>
-          </table>
+          <DataTable
+            columns={columns}
+            data={replies}
+            isLoading={isLoading}
+            isError={isError}
+            onRetry={refetch}
+            emptyMessage="لا توجد ردود"
+            statusOptions={STATUS_OPTIONS}
+            statusField="status"
+            pageSize={20}
+          />
         </CardContent>
       </Card>
     </PageShell>

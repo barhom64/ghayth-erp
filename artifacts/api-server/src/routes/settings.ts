@@ -137,7 +137,7 @@ router.get("/general", requirePermission("settings:read"), async (_req, res) => 
   try {
     const rows = await rawQuery(`SELECT * FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL ORDER BY key`);
     res.json({ data: rows });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get general settings"); }
 });
 
 router.get("/resolved", requirePermission("settings:read"), async (req, res) => {
@@ -173,7 +173,7 @@ router.get("/resolved", requirePermission("settings:read"), async (req, res) => 
     }
 
     res.json({ data: resolved });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get resolved settings"); }
 });
 
 router.put("/general", requirePermission("settings:write"), async (req, res) => {
@@ -197,7 +197,7 @@ router.put("/general", requirePermission("settings:write"), async (req, res) => 
       reloadCronScheduler().catch((err) => console.error("[SETTINGS] Failed to reload cron after timezone change:", err));
     }
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update general settings"); }
 });
 
 router.get("/branches", requirePermission("settings:read"), async (req, res) => {
@@ -208,7 +208,7 @@ router.get("/branches", requirePermission("settings:read"), async (req, res) => 
       [scope.allowedCompanies]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "List branches"); }
 });
 
 router.get("/branches/:id", requirePermission("settings:read"), async (req, res) => {
@@ -220,7 +220,7 @@ router.get("/branches/:id", requirePermission("settings:read"), async (req, res)
     );
     if (!row) { res.status(404).json({ error: "الفرع غير موجود" }); return; }
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get branch by ID"); }
 });
 
 router.get("/departments", requirePermission("settings:read"), async (req, res) => {
@@ -231,7 +231,7 @@ router.get("/departments", requirePermission("settings:read"), async (req, res) 
       [scope.allowedCompanies]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "List departments"); }
 });
 
 router.get("/companies", requirePermission("settings:read"), async (req, res) => {
@@ -242,7 +242,7 @@ router.get("/companies", requirePermission("settings:read"), async (req, res) =>
       [scope.allowedCompanies]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "List companies"); }
 });
 
 router.get("/audit-log", requirePermission("settings:read"), async (req, res) => {
@@ -253,7 +253,7 @@ router.get("/audit-log", requirePermission("settings:read"), async (req, res) =>
       [scope.allowedCompanies]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get audit log"); }
 });
 
 router.post("/branches", requirePermission("settings:write"), async (req, res) => {
@@ -270,7 +270,7 @@ router.post("/branches", requirePermission("settings:write"), async (req, res) =
       [name, nameEn || null, targetCompanyId, city || null, phone || null, logoUrl || null, address || null, taxNumber || null, crNumber || null, email || null, website || null, footerText || null]
     );
     res.status(201).json({ id: r.insertId, companyId: targetCompanyId, ...req.body });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Create branch"); }
 });
 
 router.put("/branches/:id", requirePermission("settings:write"), async (req, res) => {
@@ -298,7 +298,7 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
     await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1`, [id]);
     res.json(updated);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update branch"); }
 });
 
 router.delete("/branches/:id", requirePermission("settings:write"), async (req, res) => {
@@ -333,7 +333,7 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
 
     await rawExecute(`DELETE FROM branches WHERE id=$1 AND "companyId"=$2 RETURNING id`, [id, scope.companyId]);
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Delete branch"); }
 });
 
 router.post("/departments", requirePermission("settings:write"), async (req, res) => {
@@ -345,7 +345,7 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
     }
     const r = await rawExecute(`INSERT INTO departments (name, "nameEn", manager) VALUES ($1,$2,$3)`, [name, nameEn || null, manager || null]);
     res.status(201).json({ id: r.insertId, ...req.body });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Create department"); }
 });
 
 router.put("/departments/:id", requirePermission("settings:write"), async (req, res) => {
@@ -358,7 +358,7 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
     }
     await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 RETURNING id`, [name, nameEn || null, manager || null, id]);
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update department"); }
 });
 
 router.delete("/departments/:id", requirePermission("settings:write"), async (req, res) => {
@@ -374,7 +374,7 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
     }
     await rawExecute(`DELETE FROM departments WHERE id=$1`, [id]);
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Delete department"); }
 });
 
 router.post("/companies", requirePermission("settings:write"), async (req, res) => {
@@ -429,7 +429,7 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
       ],
       ...req.body,
     });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Create company"); }
 });
 
 router.put("/companies/:id", requirePermission("settings:write"), async (req, res) => {
@@ -442,7 +442,7 @@ router.put("/companies/:id", requirePermission("settings:write"), async (req, re
     }
     await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "taxNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update company"); }
 });
 
 router.delete("/companies/:id", requirePermission("settings:write"), async (req, res) => {
@@ -450,7 +450,7 @@ router.delete("/companies/:id", requirePermission("settings:write"), async (req,
     const { id } = req.params;
     await rawExecute(`DELETE FROM companies WHERE id=$1 RETURNING id`, [id]);
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Delete company"); }
 });
 
 router.get("/timezone", requirePermission("settings:read"), async (_req, res) => {
@@ -473,7 +473,7 @@ router.get("/system-controls", requirePermission("settings:read"), async (_req, 
       try { controls[r.key] = JSON.parse(r.value as string); } catch { controls[r.key] = r.value; }
     }
     res.json({ data: controls });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get system controls"); }
 });
 
 router.put("/system-controls", requirePermission("settings:write"), async (req, res) => {
@@ -489,7 +489,7 @@ router.put("/system-controls", requirePermission("settings:write"), async (req, 
       }
     }
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update system controls"); }
 });
 
 // P02-CRIT1 — both endpoints used to ignore the caller's company
@@ -512,7 +512,7 @@ router.get("/role-modules", requirePermission("settings:read"), async (req, res)
       [scope.companyId]
     );
     res.json({ data: roles });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get role modules"); }
 });
 
 router.put("/role-modules/:roleKey", requirePermission("settings:write"), async (req, res) => {
@@ -526,7 +526,7 @@ router.put("/role-modules/:roleKey", requirePermission("settings:write"), async 
       [JSON.stringify(modules), roleKey, scope.companyId]
     );
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update role modules"); }
 });
 
 router.get("/approval-config", requirePermission("settings:read"), async (req, res) => {
@@ -537,7 +537,7 @@ router.get("/approval-config", requirePermission("settings:read"), async (req, r
       [scope.companyId]
     );
     res.json({ data: chains });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get approval config"); }
 });
 
 router.post("/approval-config", requirePermission("settings:write"), async (req, res) => {
@@ -549,14 +549,14 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
       [scope.companyId, chainType, name || chainType, minAmount || 0, maxAmount || null, isActive !== false]
     );
     res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Create approval config"); }
 });
 
 router.delete("/approval-config/:id", requirePermission("settings:write"), async (req, res) => {
   try {
     await rawExecute(`DELETE FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Delete approval config"); }
 });
 
 const CHANNEL_SETTING_KEYS = [
@@ -590,7 +590,7 @@ router.get("/channels", requirePermission("settings:read"), async (req, res) => 
     }
 
     res.json({ data: result });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Get channels"); }
 });
 
 router.put("/channels", requirePermission("settings:write"), async (req, res) => {
@@ -630,7 +630,7 @@ router.put("/channels", requirePermission("settings:write"), async (req, res) =>
 
     await auditLog(req, "settings", "channels", "update", null, { keys: Object.keys(entries) });
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Update channels"); }
 });
 
 export default router;

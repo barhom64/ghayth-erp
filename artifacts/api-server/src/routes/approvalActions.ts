@@ -1,3 +1,4 @@
+import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -34,8 +35,8 @@ router.get("/overrides/report", async (req, res) => {
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (e) {
+    handleRouteError(e, res, "Overrides report error:");
   }
 });
 
@@ -52,8 +53,8 @@ router.get("/:entityType/:entityId", async (req, res) => {
       [entityType, Number(entityId), scope.companyId]
     );
     res.json({ data: rows });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (e) {
+    handleRouteError(e, res, "Get approval actions error:");
   }
 });
 

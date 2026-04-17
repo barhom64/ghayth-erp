@@ -221,8 +221,7 @@ router.post("/", async (req, res) => {
 
     res.status(201).json(rows[0]);
   } catch (err) {
-    console.error("Create task error:", err);
-    res.status(500).json({ error: "خطأ في إنشاء المهمة" });
+    handleRouteError(err, res, "Create task error:");
   }
 });
 
@@ -296,8 +295,7 @@ router.patch("/:id", async (req, res) => {
 
     res.json(rows[0]);
   } catch (err) {
-    console.error("Update task error:", err);
-    res.status(500).json({ error: "خطأ في تحديث المهمة" });
+    handleRouteError(err, res, "Update task error:");
   }
 });
 
@@ -319,8 +317,7 @@ router.delete("/:id", async (req, res) => {
     if (rows.length === 0) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
     res.json({ success: true });
   } catch (err) {
-    console.error("Delete task error:", err);
-    res.status(500).json({ error: "خطأ في حذف المهمة" });
+    handleRouteError(err, res, "Delete task error:");
   }
 });
 
