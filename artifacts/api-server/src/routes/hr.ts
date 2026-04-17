@@ -2249,8 +2249,16 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
+    let { assignmentId, employeeId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
     const period = reqPeriod || new Date().toISOString().slice(0, 7);
+    // resolve assignmentId from employeeId if needed
+    if (!assignmentId && employeeId) {
+      const [resolved] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
+        [Number(employeeId), scope.companyId]
+      );
+      if (resolved) assignmentId = resolved.id;
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -2353,7 +2361,7 @@ router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) =
       totalEmployees: Number(totalEmp?.count ?? 0),
       month,
     });
-  } catch (_e) { res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
 });
 
 router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
@@ -2377,7 +2385,7 @@ router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
       rejected: Number(rejected?.count ?? 0),
       total: Number(total?.count ?? 0),
     });
-  } catch (_e) { res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
 });
 
 router.get("/salary-components", requirePermission("hr:read"), async (req, res) => {
@@ -2387,7 +2395,7 @@ router.get("/salary-components", requirePermission("hr:read"), async (req, res) 
       `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name`, [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/salary-components", requirePermission("hr:create"), async (req, res) => {
@@ -2419,7 +2427,7 @@ router.get("/approval-chains", requirePermission("hr:read"), async (req, res) =>
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2440,7 +2448,7 @@ router.get("/approval-chain-definitions", requirePermission("hr:read"), async (r
       [scope.companyId]
     );
     res.json({ data: chains, total: chains.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/approval-chain-definitions", requirePermission("hr:create"), async (req, res) => {
@@ -2516,7 +2524,7 @@ router.get("/approval-requests", requirePermission("hr:read"), async (req, res) 
       [scope.companyId, statusFilter]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
 });
 
 router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), async (req, res) => {
@@ -2662,7 +2670,7 @@ router.get("/attendance-policy", requirePermission("hr:read"), async (req, res) 
       penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
       penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
     });
-  } catch (_e) { res.json({}); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: null, error: "خطأ في جلب البيانات" }); }
 });
 
 router.put("/attendance-policy", requirePermission("hr:update"), async (req, res) => {
@@ -2767,7 +2775,7 @@ router.get("/violations-stats", requirePermission("hr:read"), async (req, res) =
       thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     });
-  } catch (_e) { res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
 });
 
 router.patch("/violations/:id", requirePermission("hr:update"), async (req, res) => {
@@ -2854,7 +2862,7 @@ router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) 
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/shift-assignments", requirePermission("hr:create"), async (req, res) => {
@@ -2890,7 +2898,7 @@ router.get("/official-letters", requirePermission("hr:read"), async (req, res) =
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/official-letters", requirePermission("hr:create"), async (req, res) => {
@@ -2972,7 +2980,7 @@ router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res)
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
 });
 
 // ─── Leave requests general PATCH/DELETE ──────────────────────
@@ -3628,7 +3636,7 @@ router.get("/deductions", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { console.error("HR endpoint error:", _e); res.json({ data: [], total: 0 }); }
 });
 
 router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) => {
@@ -3643,7 +3651,7 @@ router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) =
       res.json({ data: val }); return;
     }
     res.json({ data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] });
-  } catch { res.json({ data: [] }); }
+  } catch (e) { console.error("HR endpoint error:", e); res.json({ data: [] }); }
 });
 
 router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res) => {

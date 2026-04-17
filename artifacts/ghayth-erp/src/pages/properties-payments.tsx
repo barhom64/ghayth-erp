@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 import { Banknote, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
@@ -53,20 +54,18 @@ export default function PropertiesPayments() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">مدفوعات الإيجار</h1>
-          <p className="text-gray-500 text-sm mt-1">متابعة وتسجيل مدفوعات الإيجار</p>
-        </div>
-        {canManage && (
-          <Link href="/properties/payments/new/pay">
-            <Button className="gap-2">
-              <Banknote className="h-4 w-4" /> تسجيل دفعة
-            </Button>
-          </Link>
-        )}
-      </div>
+    <PageShell
+      title="مدفوعات الإيجار"
+      subtitle="متابعة وتسجيل مدفوعات الإيجار"
+      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
+      actions={canManage && (
+        <Link href="/properties/payments/new/pay">
+          <Button className="gap-2">
+            <Banknote className="h-4 w-4" /> تسجيل دفعة
+          </Button>
+        </Link>
+      )}
+    >
 
       <AdvancedFilters
         config={{
@@ -110,6 +109,6 @@ export default function PropertiesPayments() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

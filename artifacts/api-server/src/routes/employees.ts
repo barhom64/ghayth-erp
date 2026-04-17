@@ -599,7 +599,7 @@ router.get("/job-titles", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { console.error("Employee endpoint error:", err); res.json({ data: [], total: 0 }); }
 });
 
 router.get("/contracts", requirePermission("hr:read"), async (req, res) => {
@@ -614,7 +614,7 @@ router.get("/contracts", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { console.error("Employee endpoint error:", err); res.json({ data: [], total: 0 }); }
 });
 
 router.get("/documents", requirePermission("hr:read"), async (req, res) => {

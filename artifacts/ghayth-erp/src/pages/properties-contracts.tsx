@@ -10,6 +10,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { TagFilterSelect, useTagFilter, EntityTags } from "@/components/shared/entity-tags";
 import { EntityComments } from "@/components/shared/entity-comments";
+import { PageShell } from "@/components/page-shell";
 import {
   FileText, Plus, ChevronDown, ChevronUp, CalendarDays, Banknote,
   CheckCircle2, Clock, AlertTriangle, RefreshCw, Zap, Droplets, Wifi,
@@ -285,20 +286,17 @@ export default function PropertiesContracts() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">عقود الإيجار</h1>
-          <p className="text-gray-500 text-sm mt-1">إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار</p>
-        </div>
+    <PageShell
+      title="عقود الإيجار"
+      subtitle="إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار"
+      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
+      actions={
         <Link href="/properties/contracts/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة عقد</Button>
         </Link>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <AdvancedFilters
+      }
+    >
+      <AdvancedFilters
             config={{
               searchPlaceholder: "بحث بالمستأجر أو الوحدة أو رقم إيجار...",
               statuses: [
@@ -323,9 +321,7 @@ export default function PropertiesContracts() {
             ], "عقود_الإيجار")}
             resultCount={filtered?.length}
           />
-          <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
-        </div>
-      </div>
+      <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-blue-500" /> قائمة العقود</CardTitle></CardHeader>
@@ -370,6 +366,6 @@ export default function PropertiesContracts() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
