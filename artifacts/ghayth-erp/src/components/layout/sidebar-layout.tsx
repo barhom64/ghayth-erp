@@ -55,6 +55,9 @@ interface NavSection {
 }
 
 const allNavSections: NavSection[] = [
+  // ══════════════════════════════════════════════════════════════════════
+  // 1. الرئيسية
+  // ══════════════════════════════════════════════════════════════════════
   {
     title: "الرئيسية",
     items: [
@@ -65,6 +68,9 @@ const allNavSections: NavSection[] = [
       { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
     ],
   },
+  // ══════════════════════════════════════════════════════════════════════
+  // 2. بوابة الموظف
+  // ══════════════════════════════════════════════════════════════════════
   {
     title: "بوابة الموظف",
     items: [
@@ -79,81 +85,136 @@ const allNavSections: NavSection[] = [
       { label: "إشعاراتي", path: "/notifications", icon: Bell },
     ],
   },
+  // ══════════════════════════════════════════════════════════════════════
+  // 3. الموارد البشرية
+  // ══════════════════════════════════════════════════════════════════════
   {
-    title: "الأعمال الأساسية",
+    title: "الموارد البشرية",
     items: [
-      { label: "الموارد البشرية", path: "/hr", icon: Users, module: "hr", children: [
-        { label: "الموظفين", path: "/employees", icon: Users, subKey: "employees" },
+      { label: "لوحة الموارد البشرية", path: "/hr", icon: Users, module: "hr" },
+      { label: "الموظفون", path: "/employees", icon: Users, module: "hr", children: [
+        { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
+        { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
+        { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
         { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
-        { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, subKey: "attendance", children: [
-          { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3 },
-          { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin },
-          { label: "تسجيل حضور بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode },
-        ]},
-        { label: "الإجازات وإدارتها", path: "/hr/leaves", icon: Calendar, subKey: "leaves", children: [
-          { label: "إدارة الإجازات", path: "/hr/leaves/management", icon: ClipboardList },
-          { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch },
-        ]},
-        { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
-        { label: "الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
+        { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
+      ]},
+      { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, module: "hr", children: [
+        { label: "السجل اليومي", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
+        { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
+        { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
+        { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
+        { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
+      ]},
+      { label: "الإجازات", path: "/hr/leaves", icon: Calendar, module: "hr", children: [
+        { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
+        { label: "إدارة الإجازات", path: "/hr/leaves/management", icon: ClipboardList, subKey: "leaves" },
+        { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch, subKey: "leaves" },
+        { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
+      ]},
+      { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, module: "hr", children: [
+        { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
+        { label: "إدارة الورديات", path: "/hr/shifts/management", icon: Cog, subKey: "shifts" },
+      ]},
+      { label: "الرواتب والمستحقات", path: "/hr/payroll", icon: DollarSign, module: "hr", children: [
+        { label: "مسيرات الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
         { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
-        { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
-        { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
-        { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
-        { label: "التقييم 360°", path: "/hr/evaluation-360", icon: Target, subKey: "performance" },
-        { label: "التدريب", path: "/hr/training", icon: GraduationCap, subKey: "training" },
-        { label: "التوظيف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
-        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
-        { label: "المخالفات والجزاءات", path: "/hr/violations", icon: Scale, subKey: "violations" },
-        { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
-        { label: "خطط التطوير", path: "/hr/development-plans", icon: TrendingUp, subKey: "performance" },
+        { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
       ]},
-      { label: "المالية", path: "/finance", icon: CreditCard, module: "finance", children: [
+      { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, module: "hr", subKey: "employees" },
+      { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
+        { label: "المخالفات", path: "/hr/violations", icon: AlertTriangle, subKey: "violations" },
+        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
+        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
+        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
+        { label: "محاضر الاستفسار", path: "/hr/discipline/memos", icon: FileText, subKey: "violations" },
+        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
+      ]},
+      { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
+        { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
+        { label: "التقييم المتقدم", path: "/hr/performance/advanced", icon: BarChart3, subKey: "performance" },
+        { label: "التقييم 360°", path: "/hr/evaluation-360", icon: Activity, subKey: "performance" },
+        { label: "خطط التطوير", path: "/hr/development-plans", icon: TrendingUp, subKey: "performance" },
+        { label: "خطط التطوير الفردية", path: "/hr/idp", icon: BookOpen, subKey: "performance" },
+        { label: "تقرير الدوران", path: "/hr/turnover-report", icon: FileBarChart, subKey: "performance" },
+      ]},
+      { label: "التدريب", path: "/hr/training", icon: GraduationCap, module: "hr", children: [
+        { label: "البرامج التدريبية", path: "/hr/training", icon: GraduationCap, subKey: "training" },
+        { label: "التدريب المتقدم", path: "/hr/training/advanced", icon: BarChart3, subKey: "training" },
+      ]},
+      { label: "التوظيف", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
+        { label: "الوظائف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
+        { label: "التوظيف المتقدم", path: "/hr/recruitment/advanced", icon: BarChart3, subKey: "recruitment" },
+        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
+      ]},
+      { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, module: "hr", subKey: "employees" },
+    ],
+  },
+  // ══════════════════════════════════════════════════════════════════════
+  // 4. المالية والمحاسبة
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    title: "المالية والمحاسبة",
+    items: [
+      { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
         { label: "القيود اليومية", path: "/finance/journal", icon: ScrollText },
+        { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature },
+        { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
+        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
+      ]},
+      { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, module: "finance", children: [
         { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
         { label: "السندات", path: "/finance/vouchers", icon: FileText },
         { label: "المصروفات", path: "/finance/expenses", icon: Wallet },
-        { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
-        { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
-        { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
-        { label: "الالتزامات", path: "/finance/commitments", icon: FileSignature },
-        { label: "العهد", path: "/finance/custodies", icon: KeyRound },
-        { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
-        { label: "الفترات المالية", path: "/finance/fiscal-periods", icon: Calendar },
-        { label: "الطلبات المالية", path: "/finance/financial-requests", icon: ClipboardCheck },
-        { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
-        { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
-        { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
-        { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
-        { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
-        { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature },
-        { label: "الضمانات البنكية", path: "/finance/bank-guarantees", icon: Shield },
-        { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
-        { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
-        { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
-        { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
-        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
-        { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
-        { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
         { label: "الموردين", path: "/finance/vendors", icon: Users },
       ]},
-      { label: "العملاء والمبيعات", path: "/clients", icon: Target, module: "crm", children: [
-        { label: "العملاء", path: "/clients", icon: Building2 },
-        { label: "الفرص التجارية", path: "/crm", icon: Target },
-        { label: "قمع المبيعات", path: "/crm/pipeline", icon: TrendingUp },
-        { label: "أنشطة علاقات العملاء", path: "/crm/activities", icon: Activity },
+      { label: "النقد والذمم", path: "/finance/bank-reconciliation", icon: Building, module: "finance", children: [
+        { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
+        { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
+        { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
+        { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
+        { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
+      ]},
+      { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
+        { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
+        { label: "العهد", path: "/finance/custodies", icon: KeyRound },
+      ]},
+      { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
+        { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
+        { label: "الفترات المالية", path: "/finance/fiscal-periods", icon: Calendar },
+        { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive },
+      ]},
+      { label: "الالتزامات والضمانات", path: "/finance/commitments", icon: FileSignature, module: "finance", children: [
+        { label: "الالتزامات", path: "/finance/commitments", icon: FileSignature },
+        { label: "الضمانات البنكية", path: "/finance/bank-guarantees", icon: Shield },
+      ]},
+      { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
+        { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
+        { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
+        { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
+      ]},
+      { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
+        { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
+        { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
+      ]},
+      { label: "ارتباطات الموظفين", path: "/finance/salary-advances", icon: DollarSign, module: "finance", children: [
+        { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
+        { label: "الطلبات المالية", path: "/finance/financial-requests", icon: ClipboardCheck },
       ]},
     ],
   },
+  // ══════════════════════════════════════════════════════════════════════
+  // 5. العمليات
+  // ══════════════════════════════════════════════════════════════════════
   {
     title: "العمليات",
     items: [
@@ -196,8 +257,6 @@ const allNavSections: NavSection[] = [
         { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
         { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
       ]},
-      { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support" },
-      { label: "التسويق", path: "/marketing", icon: Megaphone, module: "marketing" },
       { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, children: [
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
         { label: "المعتمرين", path: "/umrah/pilgrims", icon: Users },
@@ -211,8 +270,27 @@ const allNavSections: NavSection[] = [
       ]},
     ],
   },
+  // ══════════════════════════════════════════════════════════════════════
+  // 6. العلاقات
+  // ══════════════════════════════════════════════════════════════════════
   {
-    title: "الإدارة",
+    title: "العلاقات",
+    items: [
+      { label: "العملاء والمبيعات", path: "/clients", icon: Target, module: "crm", children: [
+        { label: "العملاء", path: "/clients", icon: Building2 },
+        { label: "الفرص التجارية", path: "/crm", icon: Target },
+        { label: "قمع المبيعات", path: "/crm/pipeline", icon: TrendingUp },
+        { label: "أنشطة علاقات العملاء", path: "/crm/activities", icon: Activity },
+      ]},
+      { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support" },
+      { label: "التسويق", path: "/marketing", icon: Megaphone, module: "marketing" },
+    ],
+  },
+  // ══════════════════════════════════════════════════════════════════════
+  // 7. الإدارة والحوكمة
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    title: "الإدارة والحوكمة",
     items: [
       { label: "الإقفال اليومي", path: "/daily-close", icon: Shield, minRoleLevel: 40 },
       { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
@@ -247,6 +325,9 @@ const allNavSections: NavSection[] = [
       ]},
     ],
   },
+  // ══════════════════════════════════════════════════════════════════════
+  // 8. النظام
+  // ══════════════════════════════════════════════════════════════════════
   {
     title: "النظام",
     items: [
