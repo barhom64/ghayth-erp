@@ -1262,15 +1262,19 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", async (req, res) =>
       );
     }
 
+    const schedApCode = await getAccountCodeFromMapping(scope.companyId, "purchase_vendor_ap", "debit", "2100");
+    const schedCashCode = await getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100");
     await createJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: `SCHED-PAY-${po.ref}`,
       description: `دفعة مجدولة لأمر الشراء ${po.ref} بتاريخ ${paymentDate}`,
+      sourceType: "purchase_order_payment",
+      sourceId: Number(id),
       lines: [
-        { accountCode: "2100", debit: Number(amount), credit: 0 },
-        { accountCode: "1100", debit: 0, credit: Number(amount) },
+        { accountCode: schedApCode, debit: Number(amount), credit: 0 },
+        { accountCode: schedCashCode, debit: 0, credit: Number(amount) },
       ],
     });
 

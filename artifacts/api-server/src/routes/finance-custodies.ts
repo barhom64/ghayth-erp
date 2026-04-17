@@ -668,6 +668,7 @@ custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
     }
 
     const sourceAcct = sourceAccountCode || "1100";
+    const custodyAcctCode = await getAccountCodeFromMapping(scope.companyId, "custody_account", "debit", "1400");
     const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
     const journalId = await createJournalEntry({
       companyId: scope.companyId,
@@ -675,9 +676,10 @@ custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
       createdBy: scope.activeAssignmentId,
       ref: settleRef,
       description: custody.ref,
+      sourceType: "custody_settlement",
       lines: [
         { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
-        { accountCode: "1400", debit: 0, credit: Number(amount) },
+        { accountCode: custodyAcctCode, debit: 0, credit: Number(amount) },
       ],
     });
 

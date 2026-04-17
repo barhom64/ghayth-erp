@@ -1689,15 +1689,20 @@ router.post("/maintenance-requests/:id/complete", async (req, res) => {
     let journalEntryId: number | null = null;
     if (cost > 0) {
       try {
+        const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
+        const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
         journalEntryId = await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.userId,
           ref: `JE-MAINT-${id}-${Date.now()}`,
           description: `صيانة أملاك — بلاغ #${id} — ${mr.category} — ${cost.toFixed(2)} ريال`,
+          type: "property",
+          sourceType: "maintenance_request",
+          sourceId: id,
           lines: [
-            { accountCode: "5300", debit: cost, credit: 0 },
-            { accountCode: "1000", debit: 0, credit: cost },
+            { accountCode: maintExpCode, debit: cost, credit: 0, propertyId: mr.unitId ? Number(mr.unitId) : undefined },
+            { accountCode: cashCode, debit: 0, credit: cost },
           ],
         });
       } catch (jeErr) { console.error("Journal entry failed:", jeErr); }
@@ -2924,14 +2929,19 @@ router.post("/deposits", async (req, res) => {
     // have a 'held' deposit without a corresponding cash/liability posting,
     // otherwise trial balance is permanently wrong.
     try {
+      const depCashCode = await getAccountCodeFromMapping(scope.companyId, "deposit_cash", "debit", "1100");
+      const depLiabilityCode = await getAccountCodeFromMapping(scope.companyId, "deposit_liability", "credit", "2300");
       await createJournalEntry({
         companyId: scope.companyId, branchId: scope.branchId ?? 0,
         createdBy: scope.activeAssignmentId ?? scope.userId,
         ref: `DEP-${insertId}`,
         description: `استلام وديعة ضمان — عقد #${b.contractId}`,
+        type: "property",
+        sourceType: "security_deposit",
+        sourceId: insertId,
         lines: [
-          { accountCode: "1100", debit: Number(b.amount), credit: 0 },
-          { accountCode: "2300", debit: 0, credit: Number(b.amount) },
+          { accountCode: depCashCode, debit: Number(b.amount), credit: 0, contractId: Number(b.contractId) },
+          { accountCode: depLiabilityCode, debit: 0, credit: Number(b.amount) },
         ],
       });
     } catch (jErr) {
@@ -2992,14 +3002,19 @@ router.patch("/deposits/:id/refund", async (req, res) => {
     // still flipped the status to 'refunded', leaving cash + deposit liability
     // permanently out of sync.
     try {
+      const refLiabilityCode = await getAccountCodeFromMapping(scope.companyId, "deposit_liability", "credit", "2300");
+      const refCashCode = await getAccountCodeFromMapping(scope.companyId, "deposit_cash", "debit", "1100");
       await createJournalEntry({
         companyId: scope.companyId, branchId: scope.branchId ?? 0,
         createdBy: scope.activeAssignmentId ?? scope.userId,
         ref: `DEP-REF-${id}`,
         description: `إرجاع وديعة ضمان — عقد #${deposit.contractId} / السبب: ${b.refundReason || 'إنهاء العقد'}`,
+        type: "property",
+        sourceType: "security_deposit_refund",
+        sourceId: id,
         lines: [
-          { accountCode: "2300", debit: refundAmount, credit: 0 },
-          { accountCode: "1100", debit: 0, credit: refundAmount },
+          { accountCode: refLiabilityCode, debit: refundAmount, credit: 0, contractId: deposit.contractId ? Number(deposit.contractId) : undefined },
+          { accountCode: refCashCode, debit: 0, credit: refundAmount },
         ],
       });
     } catch (jErr) {

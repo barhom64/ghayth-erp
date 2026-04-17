@@ -2506,17 +2506,20 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
     const fineAmount = Number(existing.fineAmount || 0);
     if (fineAmount > 0) {
       try {
+        const payableCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_payable", "credit", "2100");
+        const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
         await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.userId,
           ref: `TV-${id}-PAY`,
           description: `سداد مخالفة مرورية #${existing.violationNumber ?? id}`,
+          type: "fleet",
           sourceType: "fleet_traffic_violation_payment",
           sourceId: id,
           lines: [
-            { accountCode: "2100", debit: fineAmount, credit: 0 }, // clear AP
-            { accountCode: "1100", debit: 0, credit: fineAmount }, // cash out
+            { accountCode: payableCode, debit: fineAmount, credit: 0, vehicleId: existing.vehicleId ? Number(existing.vehicleId) : undefined },
+            { accountCode: cashCode, debit: 0, credit: fineAmount },
           ],
         });
       } catch (jeErr) {

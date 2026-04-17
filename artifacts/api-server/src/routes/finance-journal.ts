@@ -219,7 +219,10 @@ journalRouter.post("/expenses", async (req, res) => {
     if (costCenter) entityLink.costCenter = costCenter;
 
     const journalLines: any[] = [{ accountCode: accountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
-    if (computedVat > 0) { journalLines.push({ accountCode: "1400", debit: computedVat, credit: 0 }); }
+    if (computedVat > 0) {
+      const inputVatCode = await getAccountCodeFromMapping(effectiveCompanyId, "vat_input", "debit", "1400");
+      journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0 });
+    }
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
@@ -450,15 +453,17 @@ journalRouter.post("/vouchers", async (req, res) => {
     }
 
     const cashAcct = sourceAccountCode || "1100";
+    const outputVatCode = computedVat > 0 ? await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2300") : "2300";
+    const inputVatCode2 = computedVat > 0 ? await getAccountCodeFromMapping(scope.companyId, "vat_input", "debit", "1400") : "1400";
     const journalLines: { accountCode: string; debit: number; credit: number }[] = isReceipt
       ? [
           { accountCode: cashAcct, debit: totalWithVat, credit: 0 },
-          ...(computedVat > 0 ? [{ accountCode: "2300", debit: 0, credit: computedVat }] : []),
+          ...(computedVat > 0 ? [{ accountCode: outputVatCode, debit: 0, credit: computedVat }] : []),
           { accountCode: subAccountCode || accountCode, debit: 0, credit: baseAmount },
         ]
       : [
           { accountCode: subAccountCode || accountCode, debit: baseAmount, credit: 0 },
-          ...(computedVat > 0 ? [{ accountCode: "1400", debit: computedVat, credit: 0 }] : []),
+          ...(computedVat > 0 ? [{ accountCode: inputVatCode2, debit: computedVat, credit: 0 }] : []),
           { accountCode: cashAcct, debit: 0, credit: totalWithVat },
         ];
 
