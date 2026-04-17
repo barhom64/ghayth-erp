@@ -29,7 +29,7 @@ export default function JournalCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/journal", "POST", [["journal"]]);
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
   const accounts = accountsData?.data || [];
   const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const departments = departmentsData?.data || [];

@@ -382,7 +382,7 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
       onSuccess: () => onDone(),
     },
   );
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const sourceAccounts = (accountsData?.data || []).filter(
     (a: any) => a.type === "asset" || a.code?.startsWith("1"),

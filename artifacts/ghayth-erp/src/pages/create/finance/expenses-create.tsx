@@ -153,7 +153,7 @@ export default function ExpensesCreate() {
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/expenses", "POST", [["expenses"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { data: accountsData, isLoading: accountsLoading } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData, isLoading: accountsLoading } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
   const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
   const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const { data: govIntegrationsData } = useApiQuery<{ data: any[] }>(["gov-integrations"], "/gov-integrations");

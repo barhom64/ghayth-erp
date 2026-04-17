@@ -14,6 +14,7 @@ import { createNotification, createAuditLog, createJournalEntry, emitEvent, getL
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -202,6 +203,10 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
       action: "property.unit.created", entity: "property_units", entityId: insertId,
       details: `وحدة جديدة ${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ''}`,
     }).catch(console.error);
+    createSubsidiaryAccountsForEntity(
+      scope.companyId, "property", insertId,
+      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`
+    ).catch(console.error);
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }

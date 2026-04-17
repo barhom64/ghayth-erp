@@ -210,6 +210,26 @@ export async function createJournalEntry(params: {
     ]
   );
 
+  // Validate all account codes exist and allow posting
+  const uniqueCodes = [...new Set(params.lines.map(l => l.accountCode).filter(Boolean))];
+  if (uniqueCodes.length > 0) {
+    const placeholders = uniqueCodes.map((_, i) => `$${i + 2}`).join(",");
+    const accountRows = await rawQuery<any>(
+      `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId" = $1 AND code IN (${placeholders}) AND "deletedAt" IS NULL`,
+      [params.companyId, ...uniqueCodes]
+    );
+    const accountMap = new Map(accountRows.map((a: any) => [a.code, a]));
+    for (const code of uniqueCodes) {
+      const acc = accountMap.get(code);
+      if (!acc) {
+        throw new Error(`الحساب "${code}" غير موجود في شجرة الحسابات`);
+      }
+      if (acc.allowPosting === false) {
+        throw new Error(`لا يمكن الترحيل على الحساب "${code}" — هذا حساب تجميعي (رئيسي). استخدم حساباً فرعياً يقبل الحركة`);
+      }
+    }
+  }
+
   const accountCodesToUpdate: string[] = [];
   for (const line of params.lines) {
     let accountId = line.accountId ?? null;

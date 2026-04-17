@@ -16,6 +16,7 @@ import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
+import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -144,6 +145,10 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
       action: "fleet.vehicle.created", entity: "fleet_vehicles", entityId: insertId,
       details: `مركبة جديدة: ${b.plateNumber}${b.make ? ` — ${b.make}` : ''}${b.model ? ` ${b.model}` : ''}`,
     }).catch(console.error);
+    createSubsidiaryAccountsForEntity(
+      scope.companyId, "vehicle", insertId,
+      `${b.plateNumber} ${b.make || ""} ${b.model || ""}`.trim()
+    ).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });

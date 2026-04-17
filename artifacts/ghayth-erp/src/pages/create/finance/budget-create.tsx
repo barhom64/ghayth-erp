@@ -18,7 +18,7 @@ export default function BudgetCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/budget", "POST", [["budget"]]);
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
   const accounts = accountsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);

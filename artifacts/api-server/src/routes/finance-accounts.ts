@@ -21,9 +21,9 @@ accountsRouter.get("/chart-of-accounts", async (req, res) => {
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters);
     const accounts = await rawQuery<any>(
-      `SELECT id, code, name, type, "parentCode", status
+      `SELECT id, code, name, type, "parentCode", "parentId", level, status, "allowPosting", "isAnalytical", "currentBalance", nature
        FROM chart_of_accounts
-       WHERE ${where}
+       WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY code ASC`,
       params
     );
@@ -38,7 +38,7 @@ accountsRouter.get("/accounts", async (req, res) => {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters);
-    const { search, type: accountType } = req.query as { search?: string; type?: string };
+    const { search, type: accountType, postingOnly } = req.query as { search?: string; type?: string; postingOnly?: string };
 
     let extraWhere = "";
     if (search && search.trim()) {
@@ -48,6 +48,9 @@ accountsRouter.get("/accounts", async (req, res) => {
     if (accountType && accountType.trim()) {
       params.push(accountType.trim());
       extraWhere += ` AND type = $${params.length}`;
+    }
+    if (postingOnly === "true") {
+      extraWhere += ` AND "allowPosting" = true`;
     }
 
     const rows = await rawQuery(
@@ -71,9 +74,39 @@ accountsRouter.post("/accounts", async (req, res) => {
         fix: "أدخل رمز الحساب واسمه",
       });
     }
+    const [dup] = await rawQuery<any>(
+      `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
+      [scope.companyId, b.code]
+    );
+    if (dup) {
+      throw new ConflictError("رمز الحساب مستخدم مسبقاً", { field: "code", fix: "اختر رمز حساب مختلف" });
+    }
+
+    let parentId: number | null = null;
+    let level = 1;
+    if (b.parentCode || b.parentId) {
+      const parentWhere = b.parentId ? `id = $2` : `code = $2`;
+      const [parent] = await rawQuery<any>(
+        `SELECT id, code, level FROM chart_of_accounts WHERE "companyId" = $1 AND ${parentWhere} AND "deletedAt" IS NULL`,
+        [scope.companyId, b.parentId || b.parentCode]
+      );
+      if (parent) {
+        parentId = parent.id;
+        level = (parent.level || 1) + 1;
+        await rawExecute(
+          `UPDATE chart_of_accounts SET "allowPosting" = false WHERE id = $1`,
+          [parent.id]
+        );
+      }
+    }
+
+    const allowPosting = b.allowPosting !== undefined ? b.allowPosting : true;
     const r = await rawExecute(
-      `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode") VALUES ($1,$2,$3,$4,$5)`,
-      [scope.companyId, b.code, b.name, b.type || "asset", b.parentCode]
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentCode", "parentId", level, "allowPosting", "isAnalytical", "isActive", nature)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [scope.companyId, b.code, b.name, b.nameEn || null, b.type || "asset",
+       b.parentCode || null, parentId, level, allowPosting,
+       b.isAnalytical || false, b.isActive !== false, b.nature || "debit"]
     );
 
     emitEvent({
@@ -110,8 +143,13 @@ accountsRouter.patch("/accounts/:id", async (req, res) => {
     const params: any[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
     addField("name", b.name);
+    addField("nameEn", b.nameEn);
     addField("type", b.type);
     addField("parentCode", b.parentCode);
+    addField("allowPosting", b.allowPosting);
+    addField("isAnalytical", b.isAnalytical);
+    addField("nature", b.nature);
+    addField("isActive", b.isActive);
     if (fields.length === 0) {
       throw new ValidationError("لا توجد بيانات للتحديث", {
         field: "body",
