@@ -9,28 +9,7 @@ import { Wallet, Calendar, DollarSign, CheckCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { KpiGrid } from "@/components/shared/kpi-card";
-
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700" },
-  active:    { label: "نشطة",             color: "bg-blue-100 text-blue-700"    },
-  completed: { label: "مسددة",            color: "bg-green-100 text-green-700"  },
-  rejected:  { label: "مرفوضة",           color: "bg-red-100 text-red-700"      },
-};
-
-const INSTALLMENT_STATUS: Record<string, { label: string; color: string }> = {
-  pending: { label: "قادم",   color: "text-amber-600 bg-amber-50" },
-  paid:    { label: "مدفوع",  color: "text-green-600 bg-green-50" },
-  overdue: { label: "متأخر",  color: "text-red-600 bg-red-50"     },
-};
-
-const LOAN_TYPE_MAP: Record<string, string> = {
-  salary_advance: "سلفة راتب",
-  personal: "سلفة شخصية",
-  emergency: "سلفة طارئة",
-  housing: "سكن",
-  vehicle: "مركبة",
-  education: "تعليمية",
-};
+import { LOAN_STATUS, INSTALLMENT_STATUS, LOAN_TYPES } from "@/lib/hr-type-maps";
 
 export default function LoanDetail() {
   const { id } = useParams<{ id: string }>();
@@ -55,7 +34,7 @@ export default function LoanDetail() {
     );
   }
 
-  const st = STATUS_MAP[loan.status] ?? { label: loan.status, color: "bg-gray-100 text-gray-600" };
+  const st = LOAN_STATUS[loan.status] ?? { label: loan.status, color: "bg-gray-100 text-gray-600" };
   const paidPct = loan.amount > 0
     ? Math.min(100, Math.round((Number(loan.paidAmount ?? 0) / Number(loan.amount)) * 100))
     : 0;
@@ -65,7 +44,7 @@ export default function LoanDetail() {
   return (
     <PageShell
       title={`سلفة ${loan?.loanNumber || ""}`}
-      subtitle={loan ? `${loan.employeeName} — ${LOAN_TYPE_MAP[loan.loanType] ?? loan.loanType}` : undefined}
+      subtitle={loan ? `${loan.employeeName} — ${LOAN_TYPES[loan.loanType] ?? loan.loanType}` : undefined}
       loading={isLoading}
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
@@ -119,7 +98,7 @@ export default function LoanDetail() {
             </div>
             <div>
               <p className="text-gray-500">النوع</p>
-              <p className="font-medium">{LOAN_TYPE_MAP[loan.loanType] ?? loan.loanType}</p>
+              <p className="font-medium">{LOAN_TYPES[loan.loanType] ?? loan.loanType}</p>
             </div>
             <div>
               <p className="text-gray-500">عدد الأقساط</p>

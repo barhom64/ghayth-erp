@@ -12,22 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-
-const SEVERITY_MAP: Record<string, { label: string; color: string }> = {
-  low:    { label: "بسيطة",   color: "bg-blue-100 text-blue-700"   },
-  medium: { label: "متوسطة",  color: "bg-amber-100 text-amber-700" },
-  high:   { label: "جسيمة",   color: "bg-red-100 text-red-700"     },
-};
-
-const VIOLATION_TYPES: Record<string, string> = {
-  late:              "تأخر",
-  early_leave:       "مغادرة مبكرة",
-  absence:           "غياب",
-  behavior:          "سلوك",
-  organization:      "تنظيم",
-  gps_out_of_range:  "خروج عن النطاق",
-  custom:            "مخصّص",
-};
+import { SEVERITY_LEVELS, INCIDENT_LABELS } from "@/lib/hr-type-maps";
 
 export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -52,13 +37,13 @@ export default function ViolationDetail() {
     );
   }
 
-  const severity = SEVERITY_MAP[item.severity] ?? { label: item.severity || "متوسطة", color: "bg-gray-100 text-gray-600" };
+  const severity = SEVERITY_LEVELS[item.severity] ?? { label: item.severity || "متوسطة", color: "bg-gray-100 text-gray-600" };
   const memos: any[] = item.memos || [];
 
   return (
     <PageShell
       title={`مخالفة — ${item?.employeeName || ""}`}
-      subtitle={item ? `${VIOLATION_TYPES[item.type] || item.type} — ${item.period}` : undefined}
+      subtitle={item ? `${INCIDENT_LABELS[item.type] || item.type} — ${item.period}` : undefined}
       loading={isLoading}
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
@@ -72,7 +57,7 @@ export default function ViolationDetail() {
       {/* KPI cards */}
       <KpiGrid items={[
         { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50", size: "sm" },
-        { label: "النوع", value: VIOLATION_TYPES[item.type] || item.type, icon: AlertTriangle, color: "text-amber-600 bg-amber-50", size: "sm" },
+        { label: "النوع", value: INCIDENT_LABELS[item.type] || item.type, icon: AlertTriangle, color: "text-amber-600 bg-amber-50", size: "sm" },
         { label: "الخصم", value: formatCurrency(Number(item.deduction || 0)), icon: DollarSign, color: "text-red-600 bg-red-50", size: "sm" },
         { label: "الفترة", value: item.period || "—", icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
       ]} />
@@ -99,7 +84,7 @@ export default function ViolationDetail() {
             </div>
             <div>
               <p className="text-gray-500">نوع المخالفة</p>
-              <p className="font-medium">{VIOLATION_TYPES[item.type] || item.type}</p>
+              <p className="font-medium">{INCIDENT_LABELS[item.type] || item.type}</p>
             </div>
             <div>
               <p className="text-gray-500">الدرجة</p>

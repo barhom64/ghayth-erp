@@ -93,6 +93,21 @@ export const TERMINATION_TYPES: Record<string, string> = {
   termination: "فصل تأديبي",
 };
 
+// ── حالات السلف ─────────────────────────────────────────────────────
+export const LOAN_STATUS: Record<string, { label: string; color: string }> = {
+  pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700" },
+  active:    { label: "نشطة",             color: "bg-blue-100 text-blue-700"   },
+  completed: { label: "مسددة",            color: "bg-green-100 text-green-700" },
+  rejected:  { label: "مرفوضة",           color: "bg-red-100 text-red-700"     },
+};
+
+// ── حالات أقساط السلف ──────────────────────────────────────────────
+export const INSTALLMENT_STATUS: Record<string, { label: string; color: string }> = {
+  pending: { label: "قادم",   color: "text-amber-600 bg-amber-50" },
+  paid:    { label: "مدفوع",  color: "text-green-600 bg-green-50" },
+  overdue: { label: "متأخر",  color: "text-red-600 bg-red-50"     },
+};
+
 // ── أنواع السلف ─────────────────────────────────────────────────────
 export const LOAN_TYPES: Record<string, string> = {
   salary_advance: "سلفة راتب",
