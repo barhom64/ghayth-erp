@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { getDeliveryStats } from "../lib/notificationEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
+import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 
@@ -29,9 +30,8 @@ router.get("/preferences", async (req: Request, res: Response): Promise<any> => 
     );
 
     res.json({ data: rows, categories });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "GET /preferences");
   }
 });
 
@@ -82,9 +82,8 @@ router.put("/preferences", async (req: Request, res: Response): Promise<any> => 
     }
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "PUT /preferences");
   }
 });
 
@@ -100,9 +99,8 @@ router.get("/routing-rules", requireMinLevel(70), async (req: Request, res: Resp
       [scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "GET /routing-rules");
   }
 });
 
@@ -131,9 +129,8 @@ router.post("/routing-rules", requireMinLevel(70), async (req: Request, res: Res
     );
 
     res.json({ data: rows[0] });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "POST /routing-rules");
   }
 });
 
@@ -157,9 +154,8 @@ router.put("/routing-rules/:id", requireMinLevel(70), async (req: Request, res: 
     );
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "PUT /routing-rules/:id");
   }
 });
 
@@ -171,9 +167,8 @@ router.delete("/routing-rules/:id", requireMinLevel(70), async (req: Request, re
       [req.params.id, scope.companyId]
     );
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "DELETE /routing-rules/:id");
   }
 });
 
@@ -189,9 +184,8 @@ router.get("/templates", requireMinLevel(70), async (req: Request, res: Response
       [scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "GET /templates");
   }
 });
 
@@ -221,9 +215,8 @@ router.post("/templates", requireMinLevel(70), async (req: Request, res: Respons
     );
 
     res.json({ data: rows[0] });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "POST /templates");
   }
 });
 
@@ -245,9 +238,8 @@ router.put("/templates/:id", requireMinLevel(70), async (req: Request, res: Resp
     );
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "PUT /templates/:id");
   }
 });
 
@@ -259,9 +251,8 @@ router.delete("/templates/:id", requireMinLevel(70), async (req: Request, res: R
       [req.params.id, scope.companyId]
     );
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "DELETE /templates/:id");
   }
 });
 
@@ -276,9 +267,8 @@ router.get("/fallback-chains", requireMinLevel(70), async (req: Request, res: Re
       [scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "GET /fallback-chains");
   }
 });
 
@@ -297,9 +287,8 @@ router.post("/fallback-chains", requireMinLevel(70), async (req: Request, res: R
     );
 
     res.json({ data: rows[0] });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "POST /fallback-chains");
   }
 });
 
@@ -322,9 +311,8 @@ router.put("/fallback-chains/:id", requireMinLevel(70), async (req: Request, res
     );
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "PUT /fallback-chains/:id");
   }
 });
 
@@ -336,9 +324,8 @@ router.delete("/fallback-chains/:id", requireMinLevel(70), async (req: Request, 
       [req.params.id, scope.companyId]
     );
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "DELETE /fallback-chains/:id");
   }
 });
 
@@ -355,9 +342,8 @@ router.get("/webhooks", requireMinLevel(70), async (req: Request, res: Response)
     );
     const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null }));
     res.json({ data: masked });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "GET /webhooks");
   }
 });
 
@@ -382,9 +368,8 @@ router.post("/webhooks", requireMinLevel(70), async (req: Request, res: Response
     );
 
     res.json({ data: rows[0] });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "POST /webhooks");
   }
 });
 
@@ -422,9 +407,8 @@ router.put("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Respo
     );
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "PUT /webhooks/:id");
   }
 });
 
@@ -436,9 +420,8 @@ router.delete("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Re
       [req.params.id, scope.companyId]
     );
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "DELETE /webhooks/:id");
   }
 });
 
@@ -448,9 +431,8 @@ router.get("/delivery-stats", requireMinLevel(70), async (req: Request, res: Res
     const days = parseInt(req.query.days as string) || 30;
     const stats = await getDeliveryStats(scope.companyId, days);
     res.json({ data: stats });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "GET /delivery-stats");
   }
 });
 
@@ -493,9 +475,8 @@ router.get("/delivery-log", requireMinLevel(70), async (req: Request, res: Respo
     );
 
     res.json({ data: rows, total: countResult[0]?.count ?? 0, page, limit });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "GET /delivery-log");
   }
 });
 

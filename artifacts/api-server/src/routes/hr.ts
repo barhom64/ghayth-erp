@@ -2243,7 +2243,7 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
     ).catch(() => [] as any[]);
 
     res.json({ ...item, memos });
-  } catch (err) { console.error("Get violation detail error:", err); res.status(500).json({ error: "خطأ في الخادم" }); }
+  } catch (err) { handleRouteError(err, res, "Get violation detail error:"); }
 });
 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
