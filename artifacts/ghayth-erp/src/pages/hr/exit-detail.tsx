@@ -14,21 +14,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { useQueryClient } from "@tanstack/react-query";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending:      { label: "بانتظار الموافقة", color: "bg-amber-100 text-amber-700"  },
-  approved:     { label: "تمت الموافقة",     color: "bg-blue-100 text-blue-700"    },
-  in_progress:  { label: "جاري التنفيذ",     color: "bg-purple-100 text-purple-700" },
-  completed:    { label: "مكتمل",            color: "bg-green-100 text-green-700"  },
-  rejected:     { label: "مرفوض",            color: "bg-red-100 text-red-700"      },
-};
-
-import { EXIT_TYPES } from "@/lib/hr-type-maps";
-
-const CLEARANCE_STATUS: Record<string, { label: string; color: string }> = {
-  pending:  { label: "معلق",  color: "text-amber-600 bg-amber-50" },
-  cleared:  { label: "تم",    color: "text-green-600 bg-green-50" },
-  rejected: { label: "مرفوض", color: "text-red-600 bg-red-50"     },
-};
+import { EXIT_TYPES, EXIT_REQUEST_STATUS, CLEARANCE_STATUS } from "@/lib/hr-type-maps";
 
 export default function ExitDetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,7 +49,7 @@ export default function ExitDetail() {
     );
   }
 
-  const st = STATUS_MAP[item.status] ?? { label: item.status, color: "bg-gray-100 text-gray-600" };
+  const st = EXIT_REQUEST_STATUS[item.status] ?? { label: item.status, color: "bg-gray-100 text-gray-600" };
   const clearance: any[] = item.clearance || [];
 
   const hireDate = item.hireDate ? new Date(item.hireDate) : null;
