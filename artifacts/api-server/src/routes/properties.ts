@@ -2404,6 +2404,25 @@ router.patch("/maintenance-requests/:id", async (req, res) => {
             before: null, after: { invoiceId: iId, ref, amount: updatedCost + vatAmount },
           });
         } catch (invErr) { console.error("PATCH completion invoice error:", invErr); }
+
+        try {
+          const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
+          const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
+          await createJournalEntry({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            createdBy: scope.activeAssignmentId ?? scope.userId,
+            ref: `PROP-MAINT-${id}`,
+            description: `مصروف صيانة عقار — ${existing.category || ""} / ${existing.tenantName || ""}`,
+            type: "property",
+            sourceType: "maintenance_request",
+            sourceId: id,
+            lines: [
+              { accountCode: maintExpCode, debit: updatedCost, credit: 0, propertyId: existing.unitId ? Number(existing.unitId) : undefined },
+              { accountCode: cashCode, debit: 0, credit: updatedCost },
+            ],
+          });
+        } catch (jeErr) { console.error("Property maintenance journal entry failed:", jeErr); }
       }
       try {
         await rawQuery<any>(
