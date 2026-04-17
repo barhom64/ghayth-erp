@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { createAuditLog, createNotification, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, getLegalResponsible, getDeptManagerAssignmentId, isSubmitterDeptManager } from "../lib/businessHelpers.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 
 const VALID_REQUEST_TRANSITIONS: Record<string, string[]> = {
@@ -131,9 +131,30 @@ router.post("/", async (req, res) => {
         a && typeof a.name === "string" && typeof a.size === "number" && a.size <= 5 * 1024 * 1024
       ).map((a: any) => ({ name: a.name, size: a.size, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
+    let deptManagerId: number | null = null;
+    let autoApproved = false;
+    if (enforcedRequesterId) {
+      deptManagerId = await getDeptManagerAssignmentId(scope.companyId, enforcedRequesterId).catch(() => null);
+      if (deptManagerId && deptManagerId === enforcedRequesterId) {
+        const isMgr = await isSubmitterDeptManager(scope.companyId, enforcedRequesterId);
+        if (isMgr) {
+          autoApproved = true;
+          deptManagerId = null;
+        }
+      }
+    }
+
+    const initialStatus = autoApproved ? "approved" : "pending";
     const r = await rawExecute(
-      `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [typeId || null, enforcedRequesterId, requesterName, title, description, "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments)]
+      `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, "currentApprover"${autoApproved ? ', "reviewedBy", "reviewedAt"' : ''})
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11${autoApproved ? ',$12,NOW()' : ''})`,
+      [
+        typeId || null, enforcedRequesterId, requesterName, title, description,
+        initialStatus, priority || "medium", data ? JSON.stringify(data) : '{}',
+        scope.companyId, JSON.stringify(validatedAttachments),
+        deptManagerId,
+        ...(autoApproved ? [scope.userId] : []),
+      ]
     );
     await logCommunication(
       scope.companyId, 'inbound',
@@ -141,7 +162,26 @@ router.post("/", async (req, res) => {
       `تم إنشاء طلب جديد بواسطة ${requesterName || 'مستخدم'} - الأولوية: ${priority || 'متوسطة'} - ${description || ''}`,
       'request', r.insertId
     );
-    res.status(201).json({ id: r.insertId });
+
+    if (deptManagerId && !autoApproved) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: deptManagerId,
+        type: "request_pending", title: "طلب جديد ينتظر موافقتك",
+        body: `طلب "${title}" من ${requesterName || 'موظف'} — الأولوية: ${priority || 'متوسطة'}`,
+        priority: "high", refType: "request", refId: r.insertId,
+      }).catch(console.error);
+    }
+
+    if (autoApproved) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: enforcedRequesterId,
+        type: "request_approved", title: "تم اعتماد طلبك تلقائياً",
+        body: `طلبك "${title}" تم اعتماده تلقائياً — أنت مرجع القسم`,
+        priority: "normal", refType: "request", refId: r.insertId,
+      }).catch(console.error);
+    }
+
+    res.status(201).json({ id: r.insertId, autoApproved });
   } catch (err) { handleRouteError(err, res, "POST /requests"); }
 });
 

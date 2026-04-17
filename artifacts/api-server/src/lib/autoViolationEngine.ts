@@ -402,6 +402,7 @@ export async function runAutoDetection(
               priority: incident.severity === "high" ? "high" : "normal",
               refType: "hr_inquiry_memo",
               refId: memoResult.memoId,
+              requiresAck: true,
             }).catch(console.error);
           }
 
