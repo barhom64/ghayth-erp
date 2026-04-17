@@ -2249,8 +2249,16 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
+    let { assignmentId, employeeId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
     const period = reqPeriod || new Date().toISOString().slice(0, 7);
+    // resolve assignmentId from employeeId if needed
+    if (!assignmentId && employeeId) {
+      const [resolved] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
+        [Number(employeeId), scope.companyId]
+      );
+      if (resolved) assignmentId = resolved.id;
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
