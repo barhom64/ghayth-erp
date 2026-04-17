@@ -149,7 +149,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
     const scope = req.scope!;
     const b = req.body as any;
 
-    if (!b.assignmentId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
+    if (!b.assignmentId && !b.employeeId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
     if (!b.overtimeDate) throw new ValidationError("تاريخ الوقت الإضافي مطلوب", { field: "overtimeDate" });
     if (!b.startTime || !b.endTime) throw new ValidationError("وقت البداية والنهاية مطلوبان");
     if (!b.hours || Number(b.hours) <= 0) throw new ValidationError("عدد الساعات مطلوب", { field: "hours" });
@@ -157,11 +157,22 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
     const hours = Number(b.hours);
     if (hours > 12) throw new ValidationError("لا يمكن تسجيل أكثر من 12 ساعة إضافية في اليوم");
 
+    // resolve assignmentId from employeeId if needed
+    let assignmentId = b.assignmentId ? Number(b.assignmentId) : null;
+    if (!assignmentId && b.employeeId) {
+      const [resolved] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' ORDER BY id DESC LIMIT 1`,
+        [Number(b.employeeId), scope.companyId]
+      );
+      if (resolved) assignmentId = resolved.id;
+    }
+    if (!assignmentId) throw new ValidationError("لم يتم العثور على تعيين نشط للموظف", { field: "assignmentId" });
+
     // جلب بيانات الموظف
     const [emp] = await rawQuery<any>(
       `SELECT ea.salary, ea."employeeId", ea."branchId"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2`,
-      [b.assignmentId, scope.companyId]
+      [assignmentId, scope.companyId]
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
 
@@ -174,7 +185,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       `SELECT id FROM hr_overtime_requests
        WHERE "assignmentId" = $1 AND "overtimeDate" = $2
          AND "companyId" = $3 AND "deletedAt" IS NULL AND status != 'rejected'`,
-      [b.assignmentId, b.overtimeDate, scope.companyId]
+      [assignmentId, b.overtimeDate, scope.companyId]
     );
     if (existing) {
       throw new ConflictError("يوجد طلب وقت إضافي لنفس الموظف في نفس التاريخ");
@@ -191,7 +202,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',$14,NOW())
        RETURNING id`,
       [
-        scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
+        scope.companyId, emp.branchId, assignmentId, emp.employeeId,
         requestNumber, b.overtimeDate, b.startTime, b.endTime,
         hours, hourlyRate, multiplier, totalAmount,
         b.reason || null, period,
