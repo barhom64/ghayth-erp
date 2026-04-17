@@ -154,6 +154,8 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
         try {
           const assetCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "debit", "1510");
           const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "credit", "1100");
+          const depExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_depreciation", "debit", "6100");
+          const accDepCode = await getAccountCodeFromMapping(scope.companyId, "fleet_acc_depreciation", "credit", "1590");
           await createJournalEntry({
             companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId,
             ref: `VEHICLE-${insertId}`,
@@ -164,7 +166,22 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
               { accountCode: cashCode, debit: 0, credit: Number(b.purchasePrice) },
             ],
           });
-        } catch (e) { console.error("Vehicle asset JE failed:", e); }
+          const vName = `${plateNumber} ${b.make || ""} ${b.model || ""}`.trim();
+          const usefulYears = Number(b.usefulLifeYears) || 5;
+          const salvage = Number(b.salvageValue) || 0;
+          await rawExecute(
+            `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
+              "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
+              "depreciationMethod","currentBookValue","accumulatedDepreciation",
+              "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status)
+             VALUES ($1,$2,$3,$4,$5,'مركبات',$6,$7,$8,$9,'straight_line',$7,0,$10,$11,$12,'active')`,
+            [scope.companyId, scope.branchId, `VEH-${insertId}`, vName,
+             `أصل ثابت — مركبة ${vName}`,
+             b.purchaseDate || new Date().toISOString().slice(0, 10),
+             Number(b.purchasePrice), salvage, usefulYears,
+             assetCode, depExpCode, accDepCode]
+          );
+        } catch (e) { console.error("Vehicle asset JE/fixed-asset failed:", e); }
       })();
     }
     res.status(201).json(row);

@@ -210,12 +210,20 @@ journalRouter.post("/expenses", async (req, res) => {
     }
 
     const ref = `EXP-${Date.now()}`;
-    const journalLines: { accountCode: string; debit: number; credit: number }[] = [{ accountCode: accountCode ?? "5000", debit: baseAmount, credit: 0 }];
+    const entityLink: Record<string, any> = {};
+    if (relatedEntityType === "employee" && relatedEntityId) entityLink.employeeId = Number(relatedEntityId);
+    if (relatedEntityType === "vehicle" && relatedEntityId) entityLink.vehicleId = Number(relatedEntityId);
+    if (relatedEntityType === "property" && relatedEntityId) entityLink.propertyId = Number(relatedEntityId);
+    if (relatedEntityType === "contract" && relatedEntityId) entityLink.contractId = Number(relatedEntityId);
+    if (projectId) entityLink.projectId = Number(projectId);
+    if (costCenter) entityLink.costCenter = costCenter;
+
+    const journalLines: any[] = [{ accountCode: accountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
     if (computedVat > 0) { journalLines.push({ accountCode: "1400", debit: computedVat, credit: 0 }); }
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
-    const journalId = await createJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, lines: journalLines });
+    const journalId = await createJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", lines: journalLines });
 
     await rawExecute(
       `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18`,

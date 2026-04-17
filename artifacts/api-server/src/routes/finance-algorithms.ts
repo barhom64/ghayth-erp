@@ -1436,4 +1436,104 @@ financeAlgorithmsRouter.get("/fx/revaluation", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TREASURY — الخزينة وإدارة السيولة
+// ─────────────────────────────────────────────────────────────────────────────
+
+financeAlgorithmsRouter.get("/treasury", async (req, res) => {
+  try {
+    const scope = req.scope!;
+
+    const cashAccounts = await rawQuery<any>(
+      `SELECT ca.id, ca.code, ca.name, ca.nature, ca."currentBalance",
+              ca."allowPosting", ca."parentCode", ca.level
+       FROM chart_of_accounts ca
+       WHERE ca."companyId" = $1
+         AND ca."deletedAt" IS NULL
+         AND ca."allowPosting" = true
+         AND (ca.code LIKE '11%' OR ca.code LIKE '12%')
+       ORDER BY ca.code`,
+      [scope.companyId]
+    );
+
+    const totalCash = cashAccounts.reduce((s: number, a: any) => s + Number(a.currentBalance ?? 0), 0);
+    const cashOnHand = cashAccounts.filter((a: any) => a.code?.startsWith("110")).reduce((s: number, a: any) => s + Number(a.currentBalance ?? 0), 0);
+    const bankBalances = cashAccounts.filter((a: any) => a.code?.startsWith("11") && !a.code?.startsWith("110")).reduce((s: number, a: any) => s + Number(a.currentBalance ?? 0), 0);
+    const receivables = cashAccounts.filter((a: any) => a.code?.startsWith("12")).reduce((s: number, a: any) => s + Number(a.currentBalance ?? 0), 0);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+    const recentMovements = await rawQuery<any>(
+      `SELECT je.id, je.ref, je.description, je.type, je."createdAt",
+              json_agg(json_build_object(
+                'accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit
+              )) AS lines,
+              SUM(CASE WHEN jl.debit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.debit ELSE 0 END) AS "cashIn",
+              SUM(CASE WHEN jl.credit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.credit ELSE 0 END) AS "cashOut"
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je."companyId" = $1
+         AND je."deletedAt" IS NULL
+         AND je."createdAt" >= $2
+         AND EXISTS (
+           SELECT 1 FROM journal_lines jl2
+           WHERE jl2."journalId" = je.id AND (jl2."accountCode" LIKE '11%' OR jl2."accountCode" LIKE '12%')
+         )
+       GROUP BY je.id
+       ORDER BY je."createdAt" DESC
+       LIMIT 50`,
+      [scope.companyId, thirtyDaysAgo]
+    );
+
+    const dailySummary = await rawQuery<any>(
+      `SELECT DATE(je."createdAt") AS day,
+              SUM(CASE WHEN jl.debit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.debit ELSE 0 END) AS "totalIn",
+              SUM(CASE WHEN jl.credit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.credit ELSE 0 END) AS "totalOut"
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+         AND je."createdAt" >= $2
+         AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%')
+       GROUP BY DATE(je."createdAt")
+       ORDER BY day DESC`,
+      [scope.companyId, thirtyDaysAgo]
+    );
+
+    const custodySummary = await rawQuery<any>(
+      `SELECT COUNT(*) FILTER (WHERE remaining > 0) AS "activeCustodies",
+              COALESCE(SUM(remaining) FILTER (WHERE remaining > 0), 0) AS "totalOutstanding"
+       FROM (
+         SELECT je.id,
+                SUM(CASE WHEN jl.debit > 0 THEN jl.debit ELSE 0 END)
+                - COALESCE((SELECT SUM(jl2.credit) FROM journal_lines jl2 JOIN journal_entries je2 ON je2.id = jl2."journalId"
+                   WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.ref LIKE 'CUSTODY-SETTLE%'
+                   AND je2.description LIKE '%' || je.ref || '%'), 0) AS remaining
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+           AND je.ref LIKE 'CUSTODY-%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+         GROUP BY je.id, je.ref
+       ) sub`,
+      [scope.companyId]
+    );
+
+    res.json({
+      accounts: cashAccounts,
+      summary: {
+        totalCash,
+        cashOnHand,
+        bankBalances,
+        receivables,
+        activeCustodies: Number(custodySummary[0]?.activeCustodies ?? 0),
+        outstandingCustodies: Number(custodySummary[0]?.totalOutstanding ?? 0),
+      },
+      recentMovements,
+      dailySummary,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Treasury overview error:");
+  }
+});
+
 export default financeAlgorithmsRouter;

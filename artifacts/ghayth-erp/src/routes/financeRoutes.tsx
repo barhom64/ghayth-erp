@@ -62,6 +62,7 @@ const RecurringJournals = lazy(() => import("@/pages/finance/recurring-journals"
 const RecurringJournalsCreate = lazy(() => import("@/pages/create/finance/recurring-journals-create"));
 const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-journal-detail"));
 const YearEndClose = lazy(() => import("@/pages/finance/year-end-close"));
+const Treasury = lazy(() => import("@/pages/finance/treasury"));
 
 export const financeRoutes = [
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
@@ -122,4 +123,5 @@ export const financeRoutes = [
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
   { path: "/finance/year-end-close", component: YearEndClose },
+  { path: "/finance/treasury", component: Treasury },
 ];

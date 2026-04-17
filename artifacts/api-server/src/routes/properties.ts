@@ -2048,6 +2048,40 @@ router.post("/buildings", async (req, res) => {
       action: "property.building.created", entity: "property_buildings", entityId: insertId,
       details: `مبنى جديد: ${b.name}${b.city ? ` — ${b.city}` : ''}`,
     }).catch(console.error);
+    if (b.purchasePrice && Number(b.purchasePrice) > 0) {
+      (async () => {
+        try {
+          const assetCode = await getAccountCodeFromMapping(scope.companyId, "property_building_asset", "debit", "1520");
+          const depExpCode = await getAccountCodeFromMapping(scope.companyId, "property_depreciation", "debit", "6100");
+          const accDepCode = await getAccountCodeFromMapping(scope.companyId, "property_acc_depreciation", "credit", "1590");
+          const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_building_asset", "credit", "1100");
+          const usefulYears = Number(b.usefulLifeYears) || 20;
+          const salvage = Number(b.salvageValue) || 0;
+          await createJournalEntry({
+            companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId,
+            ref: `BLDG-${insertId}`,
+            description: `إثبات أصل عقاري — ${b.name}`,
+            type: "property", sourceType: "property_building", sourceId: insertId,
+            lines: [
+              { accountCode: assetCode, debit: Number(b.purchasePrice), credit: 0, propertyId: insertId },
+              { accountCode: cashCode, debit: 0, credit: Number(b.purchasePrice) },
+            ],
+          });
+          await rawExecute(
+            `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
+              "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
+              "depreciationMethod","currentBookValue","accumulatedDepreciation",
+              "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status)
+             VALUES ($1,$2,$3,$4,$5,'عقارات',$6,$7,$8,$9,'straight_line',$7,0,$10,$11,$12,'active')`,
+            [scope.companyId, scope.branchId, `BLDG-${insertId}`, b.name,
+             `أصل ثابت — مبنى ${b.name}${b.city ? ` — ${b.city}` : ""}`,
+             b.purchaseDate || new Date().toISOString().slice(0, 10),
+             Number(b.purchasePrice), salvage, usefulYears,
+             assetCode, depExpCode, accDepCode]
+          );
+        } catch (e) { console.error("Building asset JE/fixed-asset failed:", e); }
+      })();
+    }
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create building error:"); }
 });
