@@ -2163,11 +2163,12 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     });
 
     try {
-      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
+      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
         getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
         getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
         getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
         getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_deductions_payable", "credit", "2210"),
       ]);
 
       await createJournalEntry({
@@ -2176,12 +2177,13 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
         createdBy: scope.activeAssignmentId,
         ref: `PAYROLL-${targetPeriod}`,
         description: `صرف رواتب ${targetPeriod} – ${lines.length} موظف`,
+        type: "payroll", sourceType: "payroll_run", sourceId: runId,
         lines: [
           { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
           { accountCode: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0 },
           { accountCode: bankCode, debit: 0, credit: totalBankPayout },
           { accountCode: gosiPayableCode, debit: 0, credit: totalGosiPayable },
-          { accountCode: "2210", debit: 0, credit: Math.round((totalGross - totalNet - totalGosiEmployee) * 100) / 100 || 0 },
+          { accountCode: deductionsPayableCode, debit: 0, credit: Math.round((totalGross - totalNet - totalGosiEmployee) * 100) / 100 || 0 },
         ].filter(l => l.debit > 0 || l.credit > 0),
       });
     } catch (journalErr) {

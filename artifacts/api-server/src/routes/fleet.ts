@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, createJournalEntry, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, createJournalEntry, emitEvent, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -149,6 +149,24 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
       scope.companyId, "vehicle", insertId,
       `${b.plateNumber} ${b.make || ""} ${b.model || ""}`.trim()
     ).catch(console.error);
+    if (b.purchasePrice && Number(b.purchasePrice) > 0) {
+      (async () => {
+        try {
+          const assetCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "debit", "1510");
+          const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "credit", "1100");
+          await createJournalEntry({
+            companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId,
+            ref: `VEHICLE-${insertId}`,
+            description: `إثبات أصل مركبة ${plateNumber} ${b.make || ""} ${b.model || ""}`.trim(),
+            type: "fleet", sourceType: "fleet_vehicle", sourceId: insertId,
+            lines: [
+              { accountCode: assetCode, debit: Number(b.purchasePrice), credit: 0, vehicleId: insertId },
+              { accountCode: cashCode, debit: 0, credit: Number(b.purchasePrice) },
+            ],
+          });
+        } catch (e) { console.error("Vehicle asset JE failed:", e); }
+      })();
+    }
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });
@@ -896,17 +914,24 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
 
     let journalEntryId: number | null = null;
     try {
+      const [fuelCode, fareCode, depCode, cashCode] = await Promise.all([
+        getAccountCodeFromMapping(scope.companyId, "fleet_fuel_expense", "debit", "5200"),
+        getAccountCodeFromMapping(scope.companyId, "fleet_driver_fare", "debit", "5210"),
+        getAccountCodeFromMapping(scope.companyId, "fleet_depreciation", "debit", "5220"),
+        getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100"),
+      ]);
       journalEntryId = await createJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.userId,
         ref: `JE-FLEET-${tripId}-${Date.now()}`,
         description: `تكلفة رحلة #${tripId} — وقود: ${actualFuelCost.toFixed(2)} + أجرة: ${driverFare.toFixed(2)} + استهلاك: ${depreciation.toFixed(2)} = ${totalCost.toFixed(2)} ريال`,
+        type: "fleet", sourceType: "fleet_trip", sourceId: tripId,
         lines: [
-          { accountCode: "5200", debit: actualFuelCost, credit: 0 },
-          { accountCode: "5210", debit: driverFare, credit: 0 },
-          { accountCode: "5220", debit: depreciation, credit: 0 },
-          { accountCode: "1000", debit: 0, credit: totalCost },
+          { accountCode: fuelCode, debit: actualFuelCost, credit: 0, vehicleId: trip.vehicleId },
+          { accountCode: fareCode, debit: driverFare, credit: 0, vehicleId: trip.vehicleId },
+          { accountCode: depCode, debit: depreciation, credit: 0, vehicleId: trip.vehicleId },
+          { accountCode: cashCode, debit: 0, credit: totalCost },
         ],
       });
     } catch (jeErr) {

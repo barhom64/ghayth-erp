@@ -16,6 +16,7 @@ import {
   initiateApprovalChain,
   reverseAccountBalances,
   checkFinancialPeriodOpen,
+  getAccountCodeFromMapping,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { assertRole } from "../lib/roleGuards.js";
@@ -506,11 +507,22 @@ journalRouter.post("/salary-advances", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PAYROLL_ROLES);
-    const { employeeName, amount, description, deductMonths = 1, sourceAccountCode } = req.body as any;
+    const { employeeName, amount, description, deductMonths = 1, sourceAccountCode, employeeId } = req.body as any;
     if (!amount || !employeeName) { throw new ValidationError("اسم الموظف والمبلغ مطلوبان"); return; }
     const sourceAcct = sourceAccountCode || "1100";
     const ref = `SALARY-ADV-${Date.now()}`;
-    const journalId = await createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, lines: [{ accountCode: "1410", debit: Number(amount), credit: 0 }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
+
+    let advanceAccountCode = await getAccountCodeFromMapping(scope.companyId, "salary_advance_receivable", "debit", "1410");
+    if (employeeId) {
+      const [subAcc] = await rawQuery<any>(
+        `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
+         WHERE sa."companyId" = $1 AND sa."entityType" = 'employee' AND sa."entityId" = $2 AND sa."accountType" = 'advance'`,
+        [scope.companyId, Number(employeeId)]
+      );
+      if (subAcc) advanceAccountCode = subAcc.code;
+    }
+
+    const journalId = await createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
     if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1`, [journalId]); }
     res.status(201).json({ id: journalId, ref, employeeName, amount, deductMonths, description, approval: approvalResult });

@@ -106,12 +106,19 @@ export default function AccountsPage() {
   // only tracks which row is currently being deleted.
   const [deleteAccount, setDeleteAccount] = useState<{ id: number; code: string; name: string } | null>(null);
 
-  const hasActiveSearch = !!(filters.search || filters.type);
+  const hasActiveSearch = !!(filters.search || filters.type || (filters as any).allowPosting);
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["name", "code", "nameEn"],
     extraFields: { type: "type" },
   });
+
+  const finalFiltered = useMemo(() => {
+    let result = filtered;
+    if ((filters as any).allowPosting === "true") result = result.filter((a: any) => a.allowPosting !== false);
+    if ((filters as any).allowPosting === "false") result = result.filter((a: any) => a.allowPosting === false);
+    return result;
+  }, [filtered, (filters as any).allowPosting]);
 
   const totalAccounts = items.length;
   const assetCount = items.filter((a: any) => a.type === "asset").length;
@@ -135,7 +142,7 @@ export default function AccountsPage() {
       return { tree: roots, highlightIds: undefined };
     }
 
-    const matchedIds = new Set<number>(filtered.map((a: any) => a.id));
+    const matchedIds = new Set<number>(finalFiltered.map((a: any) => a.id));
     const ancestorIds = new Set<number>();
     const idToAccount = new Map<number, any>();
     items.forEach((a: any) => idToAccount.set(a.id, a));
@@ -166,9 +173,9 @@ export default function AccountsPage() {
 
     const allHighlightIds = new Set<number>([...matchedIds, ...ancestorIds]);
     return { tree: roots, highlightIds: allHighlightIds };
-  }, [items, filtered, hasActiveSearch]);
+  }, [items, finalFiltered, hasActiveSearch]);
 
-  const sortedFlat = [...filtered].sort((a: any, b: any) => (a.code || "").localeCompare(b.code || ""));
+  const sortedFlat = [...finalFiltered].sort((a: any, b: any) => (a.code || "").localeCompare(b.code || ""));
 
   const flatColumns: DataTableColumn<any>[] = [
     {
@@ -310,23 +317,28 @@ export default function AccountsPage() {
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg"><Layers className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">إجمالي الحسابات</p><p className="text-xl font-bold">{formatNumber(totalAccounts)}</p></div>
+          <div><p className="text-xs text-gray-500">إجمالي الحسابات</p><p className="text-xl font-bold">{formatNumber(totalAccounts)}</p>
+          <p className="text-xs text-gray-400">{items.filter((a: any) => a.allowPosting !== false).length} يقبل حركة</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-blue-50 rounded-lg"><TrendingUp className="h-5 w-5 text-blue-500" /></div>
-          <div><p className="text-xs text-gray-500">الأصول</p><p className="text-xl font-bold text-blue-600">{formatNumber(assetCount)}</p></div>
+          <div><p className="text-xs text-gray-500">الأصول</p><p className="text-xl font-bold text-blue-600">{formatCurrency(items.filter((a: any) => a.type === "asset" && !a.parentId).reduce((s: number, a: any) => s + Number(a.currentBalance || 0), 0))}</p>
+          <p className="text-xs text-gray-400">{formatNumber(assetCount)} حساب</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-red-50 rounded-lg"><TrendingDown className="h-5 w-5 text-red-500" /></div>
-          <div><p className="text-xs text-gray-500">الخصوم</p><p className="text-xl font-bold text-red-600">{formatNumber(liabilityCount)}</p></div>
+          <div><p className="text-xs text-gray-500">الخصوم</p><p className="text-xl font-bold text-red-600">{formatCurrency(items.filter((a: any) => a.type === "liability" && !a.parentId).reduce((s: number, a: any) => s + Number(a.currentBalance || 0), 0))}</p>
+          <p className="text-xs text-gray-400">{formatNumber(liabilityCount)} حساب</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-green-50 rounded-lg"><BookOpen className="h-5 w-5 text-green-500" /></div>
-          <div><p className="text-xs text-gray-500">الإيرادات</p><p className="text-xl font-bold text-green-600">{formatNumber(revenueCount)}</p></div>
+          <div><p className="text-xs text-gray-500">الإيرادات</p><p className="text-xl font-bold text-green-600">{formatCurrency(items.filter((a: any) => a.type === "revenue" && !a.parentId).reduce((s: number, a: any) => s + Number(a.currentBalance || 0), 0))}</p>
+          <p className="text-xs text-gray-400">{formatNumber(revenueCount)} حساب</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-indigo-50 rounded-lg"><CheckCircle className="h-5 w-5 text-indigo-500" /></div>
-          <div><p className="text-xs text-gray-500">تحليلية</p><p className="text-xl font-bold text-indigo-600">{formatNumber(analyticalCount)}</p></div>
+          <div className="p-2 bg-orange-50 rounded-lg"><TrendingDown className="h-5 w-5 text-orange-500" /></div>
+          <div><p className="text-xs text-gray-500">المصروفات</p><p className="text-xl font-bold text-orange-600">{formatCurrency(items.filter((a: any) => a.type === "expense" && !a.parentId).reduce((s: number, a: any) => s + Number(a.currentBalance || 0), 0))}</p>
+          <p className="text-xs text-gray-400">{formatNumber(items.filter((a: any) => a.type === "expense").length)} حساب</p></div>
         </CardContent></Card>
       </div>
 
@@ -338,6 +350,14 @@ export default function AccountsPage() {
               key: "type",
               label: "النوع",
               options: Object.entries(typeMap).map(([k, v]) => ({ value: k, label: v })),
+            },
+            {
+              key: "allowPosting",
+              label: "نوع الحساب",
+              options: [
+                { value: "true", label: "يقبل حركة" },
+                { value: "false", label: "تجميعي" },
+              ],
             },
           ],
           showDateRange: false,
@@ -356,13 +376,13 @@ export default function AccountsPage() {
           { key: "isActive", label: "نشط" },
           { key: "currentBalance", label: "الرصيد الحالي" },
         ], "شجرة_الحسابات")}
-        resultCount={filtered?.length}
+        resultCount={finalFiltered?.length}
       />
 
-      {hasActiveSearch && filtered.length > 0 && (
+      {hasActiveSearch && finalFiltered.length > 0 && (
         <div className="flex items-center gap-2 text-sm text-gray-500 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
           <Search className="h-4 w-4 text-yellow-600" />
-          <span>تم العثور على <strong className="text-gray-700">{filtered.length}</strong> حساب مطابق — يتم عرض الحسابات الأصلية للحفاظ على التسلسل الشجري</span>
+          <span>تم العثور على <strong className="text-gray-700">{finalFiltered.length}</strong> حساب مطابق — يتم عرض الحسابات الأصلية للحفاظ على التسلسل الشجري</span>
         </div>
       )}
 
@@ -370,7 +390,7 @@ export default function AccountsPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-4 space-y-3">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : filtered.length === 0 ? (
+          ) : finalFiltered.length === 0 ? (
             <div className="p-12 text-center text-gray-400">
               <Layers className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p>لا توجد حسابات</p>

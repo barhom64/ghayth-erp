@@ -13,6 +13,7 @@ import {
   createAuditLog,
   createJournalEntry,
   initiateApprovalChain,
+  getAccountCodeFromMapping,
 } from "../lib/businessHelpers.js";
 import { assertRole } from "../lib/roleGuards.js";
 
@@ -46,7 +47,7 @@ custodiesRouter.get("/custodies", async (req, res) => {
               e.name AS "employeeName",
               ea.id AS "assignmentId"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'${dateFilter}
@@ -60,7 +61,7 @@ custodiesRouter.get("/custodies", async (req, res) => {
               COALESCE(SUM(jl2.credit), 0) AS "settledAmount"
        FROM journal_entries je2
        JOIN journal_lines jl2 ON jl2."journalId" = je2.id
-       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2."accountCode" = '1400'
+       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
        GROUP BY je2.description`,
       [scope.companyId]
     );
@@ -130,7 +131,7 @@ custodiesRouter.get("/custodies/report", async (req, res) => {
               ea.id AS "assignmentId",
               e.id AS "employeeId"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
@@ -144,7 +145,7 @@ custodiesRouter.get("/custodies/report", async (req, res) => {
               COALESCE(SUM(jl2.credit), 0) AS "settledAmount"
        FROM journal_entries je2
        JOIN journal_lines jl2 ON jl2."journalId" = je2.id
-       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2."accountCode" = '1400'
+       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
        GROUP BY je2.description`,
       [scope.companyId]
     );
@@ -220,7 +221,7 @@ custodiesRouter.get("/custodies/summary", async (req, res) => {
       `SELECT je.id, je.ref,
               COALESCE(SUM(jl.debit), 0) AS amount
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
        GROUP BY je.id, je.ref`,
       [scope.companyId]
@@ -230,7 +231,7 @@ custodiesRouter.get("/custodies/summary", async (req, res) => {
               COALESCE(SUM(jl2.credit), 0) AS "settledAmount"
        FROM journal_entries je2
        JOIN journal_lines jl2 ON jl2."journalId" = je2.id
-       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2."accountCode" = '1400'
+       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
        GROUP BY je2.description`,
       [scope.companyId]
     );
@@ -272,7 +273,7 @@ custodiesRouter.get("/custodies/:id", async (req, res) => {
               e.name AS "employeeName",
               ea.id AS "assignmentId"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
@@ -288,7 +289,7 @@ custodiesRouter.get("/custodies/:id", async (req, res) => {
               je."createdAt" AS date,
               e2.name AS "settledByName"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea2 ON ea2.id = je."createdBy"
        LEFT JOIN employees e2 ON e2.id = ea2."employeeId"
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY-SETTLE%' AND je.description = $2
@@ -391,14 +392,32 @@ custodiesRouter.post("/custodies", async (req, res) => {
     const sourceAcct = sourceAccountCode || "1100";
     const ref = `CUSTODY-${Date.now()}`;
     const custodyAssignmentId = resolvedAssignmentId || scope.activeAssignmentId;
+
+    let custodyAccountCode = await getAccountCodeFromMapping(scope.companyId, "custody_account", "debit", "1400");
+    if (resolvedAssignmentId) {
+      const [empRow] = await rawQuery<any>(
+        `SELECT e.id FROM employee_assignments ea JOIN employees e ON e.id = ea."employeeId" WHERE ea.id = $1`,
+        [resolvedAssignmentId]
+      );
+      if (empRow) {
+        const [subAcc] = await rawQuery<any>(
+          `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
+           WHERE sa."companyId" = $1 AND sa."entityType" = 'employee' AND sa."entityId" = $2 AND sa."accountType" = 'custody'`,
+          [scope.companyId, empRow.id]
+        );
+        if (subAcc) custodyAccountCode = subAcc.code;
+      }
+    }
+
     const journalId = await createJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: custodyAssignmentId,
       ref,
       description: description ?? `عهدة ${resolvedEmployeeName}`,
+      sourceType: "custody", sourceId: undefined,
       lines: [
-        { accountCode: "1400", debit: Number(amount), credit: 0 },
+        { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: resolvedAssignmentId || undefined },
         { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
       ],
     });
@@ -492,24 +511,25 @@ custodiesRouter.post("/custodies/settle", async (req, res) => {
     }
 
     const custodyEntries = await rawQuery<any>(
-      `SELECT je.id, jl.debit, jl.credit
+      `SELECT je.id, jl.debit, jl.credit, jl."accountCode"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND jl."accountCode" = '1400'`,
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND jl.debit > 0`,
       [scope.companyId, custodyRef]
     );
 
     const originalAmount = custodyEntries.reduce(
-      (sum: number, e: any) => sum + Number(e.debit || 0) - Number(e.credit || 0), 0
+      (sum: number, e: any) => sum + Number(e.debit || 0), 0
     );
+    const custodyAccountCode = custodyEntries[0]?.accountCode || "1400";
 
     const settlements = await rawQuery<any>(
       `SELECT jl.credit
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY-SETTLE-%'
-         AND je.description = $2 AND jl."accountCode" = '1400'`,
-      [scope.companyId, custodyRef]
+         AND je.description = $2 AND jl."accountCode" = $3`,
+      [scope.companyId, custodyRef, custodyAccountCode]
     );
     const settledSoFar = settlements.reduce(
       (sum: number, e: any) => sum + Number(e.credit || 0), 0
@@ -535,9 +555,10 @@ custodiesRouter.post("/custodies/settle", async (req, res) => {
       createdBy: scope.activeAssignmentId,
       ref: settleRef,
       description: custodyRef,
+      sourceType: "custody_settlement",
       lines: [
         { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
-        { accountCode: "1400", debit: 0, credit: Number(amount) },
+        { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
       ],
     });
 

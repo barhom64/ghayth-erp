@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -959,19 +959,21 @@ router.post("/contracts/:id/terminate", async (req, res) => {
     await cancelObligation(scope.companyId, "rental_contract", id, "renewal");
     await cancelObligation(scope.companyId, "rental_contract", id, "document_expiry");
 
-    // Book early termination fee as revenue if applicable
     let journalEntryId: number | null = null;
     if (earlyFee > 0) {
       try {
+        const receivableCode = await getAccountCodeFromMapping(scope.companyId, "rental_receivable", "debit", "1200");
+        const revenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
         journalEntryId = await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.activeAssignmentId ?? scope.userId,
           ref: `TERM-${id}-${Date.now()}`,
           description: `رسوم إنهاء مبكر لعقد ${contract.contractNumber} — ${b.reason}`,
+          type: "rental", sourceType: "rental_contract", sourceId: Number(id),
           lines: [
-            { accountCode: "1200", debit: earlyFee, credit: 0 },
-            { accountCode: "4100", debit: 0, credit: earlyFee },
+            { accountCode: receivableCode, debit: earlyFee, credit: 0, contractId: Number(id), propertyId: contract.unitId },
+            { accountCode: revenueCode, debit: 0, credit: earlyFee, contractId: Number(id), propertyId: contract.unitId },
           ],
         });
       } catch (jeErr) { console.error("Termination fee JE failed:", jeErr); }
@@ -1169,7 +1171,9 @@ router.post("/payments/:id/pay", async (req, res) => {
     const tenantLabel = existing.tenantName ? ` / ${existing.tenantName}` : "";
     const unitLabel = existing.unitNumber ? ` / وحدة ${existing.unitNumber}` : "";
     const buildingLabel = existing.buildingName ? ` / ${existing.buildingName}` : "";
-    const cashAccountCode = b.method === 'cash' ? '1100' : '1110';
+    const cashDefault = b.method === 'cash' ? '1100' : '1110';
+    const cashAccountCode = await getAccountCodeFromMapping(scope.companyId, "rental_cash_receipt", "debit", cashDefault);
+    const rentalRevenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
     let journalEntryId: number | null = null;
     try {
       journalEntryId = await createJournalEntry({
@@ -1181,15 +1185,15 @@ router.post("/payments/:id/pay", async (req, res) => {
         sourceType: "rent_payment",
         sourceId: Number(id),
         lines: [
-          { accountCode: cashAccountCode, debit: paidAmount, credit: 0 },
-          { accountCode: "4100", debit: 0, credit: paidAmount },
+          { accountCode: cashAccountCode, debit: paidAmount, credit: 0, contractId: existing.contractId, propertyId: existing.unitId },
+          { accountCode: rentalRevenueCode, debit: 0, credit: paidAmount, contractId: existing.contractId, propertyId: existing.unitId },
         ],
       });
     } catch (jErr) {
       console.error("Rent payment journal entry failed:", jErr);
       throw new IntegrationError(
         "فشل قيد تحصيل الإيجار — لم يتم تسجيل السداد",
-        { field: "journalEntry", fix: "راجع إعدادات الحسابات المالية (1100/1110/4100) ثم أعد المحاولة" }
+        { field: "journalEntry", fix: "راجع إعدادات التوجيه المحاسبي (rental_revenue / rental_cash_receipt) ثم أعد المحاولة" }
       );
     }
 
@@ -2649,16 +2653,18 @@ router.post("/contracts/:id/schedule/:installmentId/pay", async (req, res) => {
     );
     if (paidAmount > 0) {
       try {
-        const cashAccountCode = b.method === 'cash' ? '1100' : '1110';
+        const schCashCode = await getAccountCodeFromMapping(scope.companyId, "rental_cash_receipt", "debit", b.method === 'cash' ? '1100' : '1110');
+        const schRevenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
         await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.activeAssignmentId ?? scope.userId,
           ref: `RENT-SCH-${installmentId}`,
           description: `تحصيل قسط إيجار #${existing.installmentNumber} / ${existing.tenantName || ''} / ${existing.unitNumber || ''}`,
+          sourceType: "rent_payment", sourceId: installmentId,
           lines: [
-            { accountCode: cashAccountCode, debit: paidAmount, credit: 0 },
-            { accountCode: "4100", debit: 0, credit: paidAmount },
+            { accountCode: schCashCode, debit: paidAmount, credit: 0, propertyId: existing.unitId, contractId: existing.contractId },
+            { accountCode: schRevenueCode, debit: 0, credit: paidAmount, propertyId: existing.unitId, contractId: existing.contractId },
           ],
         });
       } catch (jErr) { console.error("Schedule payment journal entry failed:", jErr); }
