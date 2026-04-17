@@ -2,6 +2,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Truck } from "lucide-react";
+import { PageShell } from "@/components/page-shell";
 
 interface TransportEntry {
   id: number;
@@ -37,12 +38,13 @@ export default function UmrahTransport() {
   const rows = asList(data?.data || data);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Truck className="h-6 w-6" /> النقل والمواصلات</h1>
-        <p className="text-muted-foreground mt-1">إدارة رحلات نقل المعتمرين والمواصلات</p>
-      </div>
+    <PageShell
+      title="النقل والمواصلات"
+      subtitle="إدارة رحلات نقل المعتمرين والمواصلات"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "النقل والمواصلات" }]}
+      loading={isLoading}
+    >
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </div>
+    </PageShell>
   );
 }
