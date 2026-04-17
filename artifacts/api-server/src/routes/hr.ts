@@ -348,6 +348,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
         type: "late_warning", title: "تنبيه تأخر",
         body: `تم تسجيل تأخرك ${lateMinutes} دقيقة اليوم. ${penaltyLabel ? `العقوبة: ${penaltyLabel}` : ""}`,
         priority: "high", refType: "attendance", refId: attendanceId,
+        actionUrl: `/hr?tab=violations`,
       }).catch(console.error);
     }
 
@@ -360,6 +361,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
             type: "late_arrival", title: "تأخر موظف",
             body: `تأخر الموظف ${lateMinutes} دقيقة اليوم ${today}${penaltyLevel > 0 ? ` (مستوى العقوبة: ${penaltyLevel})` : ""}`,
             priority: "high", refType: "attendance", refId: attendanceId,
+            actionUrl: `/hr?tab=violations`,
           }).catch(console.error);
         }
       }).catch(console.error);
@@ -1274,6 +1276,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           type: "leave_rejected", title: "تم رفض طلب الإجازة",
           body: `تم رفض طلب الإجازة. السبب: ${reason ?? "لم يحدد"}`,
           priority: "high", refType: "leave_request", refId: Number(id),
+          actionUrl: `/hr/leaves`,
         }).catch(console.error);
       }
 
@@ -1335,6 +1338,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           type: "leave_returned", title: "تم إرجاع طلب الإجازة",
           body: `تم إرجاع طلب الإجازة للمراجعة. السبب: ${reason}`,
           priority: "medium", refType: "leave_request", refId: Number(id),
+          actionUrl: `/hr/leaves`,
         }).catch(console.error);
       }
 
@@ -1420,6 +1424,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
           type: "leave_request", title: `طلب إجازة يتطلب مراجعة ${nextStep.requiredRole}`,
           body: `أقر المرحلة ${currentStageNum} على طلب إجازة لمدة ${request.days} أيام`,
           priority: "high", refType: "leave_request", refId: Number(id),
+          actionUrl: `/hr/leaves`,
         }).catch(console.error);
 
         emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `leave.stage${currentStageNum}_approved`,
@@ -1535,6 +1540,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
         type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
         body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
         priority: "high", refType: "leave_request", refId: Number(id),
+        actionUrl: `/hr/leaves`,
       }).catch(console.error);
 
       getManagerAssignmentId(asn.companyId, asn.branchId).then((mgr) => {
@@ -1544,6 +1550,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), asyn
             type: "leave_approved", title: "موظف في إجازة معتمدة",
             body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
             priority: "normal", refType: "leave_request", refId: Number(id),
+            actionUrl: `/hr/leaves`,
           }).catch(console.error);
         }
       }).catch(console.error);
@@ -1716,6 +1723,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
         type: "leave_escalated", title: "تصعيد طلب إجازة",
         body: `تم تصعيد طلب إجازة (${id}) لعدم البت فيه خلال المهلة المحددة`,
         priority: "urgent", refType: "leave_request", refId: Number(id),
+        actionUrl: `/hr/leaves`,
       }).catch(console.error);
     }
 
