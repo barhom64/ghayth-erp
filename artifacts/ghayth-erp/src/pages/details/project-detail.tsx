@@ -14,6 +14,7 @@ import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatter
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { FinancialTab } from "@/components/shared/financial-tab";
+import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
@@ -349,12 +350,20 @@ export default function ProjectDetail() {
       )}
 
       {activeTab === "finance" && id && (
-        <Card>
-          <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BookOpen className="w-5 h-5 text-blue-600" /> الملف المالي للمشروع</CardTitle></CardHeader>
-          <CardContent>
-            <FinancialTab entityType="project" entityId={id!} />
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BookOpen className="w-5 h-5 text-blue-600" /> الملف المالي الشامل</CardTitle></CardHeader>
+            <CardContent>
+              <EntityFinancialProfile entityType="project" entityId={id!} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-base">دفتر الأستاذ المساعد</CardTitle></CardHeader>
+            <CardContent>
+              <FinancialTab entityType="project" entityId={id!} />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "documents" && id && (

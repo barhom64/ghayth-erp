@@ -8,6 +8,7 @@ import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-det
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
+import { FinancialTab } from "@/components/shared/financial-tab";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   FileText,
@@ -187,6 +188,12 @@ export default function ContractDetailPage() {
         ) : (
           <DataTable columns={inspColumns} data={inspections} pageSize={10} emptyMessage="لا توجد تفتيشات" noToolbar />
         ),
+    },
+    {
+      key: "financial",
+      label: "الملف المالي",
+      icon: DollarSign,
+      content: () => <FinancialTab entityType="property" entityId={id} />,
     },
     {
       key: "documents",

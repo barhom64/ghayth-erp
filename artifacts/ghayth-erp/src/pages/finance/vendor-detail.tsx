@@ -8,6 +8,7 @@ import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-det
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
+import { FinancialTab } from "@/components/shared/financial-tab";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   Building2,
@@ -172,6 +173,12 @@ export default function VendorDetailPage() {
         ) : (
           <DataTable columns={paymentColumns} data={payments} pageSize={10} emptyMessage="لا توجد مدفوعات" noToolbar />
         ),
+    },
+    {
+      key: "financial",
+      label: "الملف المالي",
+      icon: DollarSign,
+      content: () => <FinancialTab entityType="supplier" entityId={id} />,
     },
     {
       key: "documents",

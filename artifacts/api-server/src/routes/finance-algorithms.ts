@@ -1536,4 +1536,102 @@ financeAlgorithmsRouter.get("/treasury", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTITY FINANCIAL PROFILE — الملف المالي الشامل لأي كيان
+// Returns all GL transactions, subsidiary accounts, and cost breakdown
+// for a given entity (vehicle, employee, property, project, product, vendor)
+// ─────────────────────────────────────────────────────────────────────────────
+financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { entityType, entityId } = req.query as { entityType: string; entityId: string };
+    if (!entityType || !entityId) {
+      res.status(400).json({ error: "entityType و entityId مطلوبان" });
+      return;
+    }
+    const eid = Number(entityId);
+    const cid = scope.companyId;
+
+    const entityColumn = entityType === "vehicle" ? "vehicleId"
+      : entityType === "employee" ? "employeeId"
+      : entityType === "property" ? "propertyId"
+      : entityType === "project" ? "projectId"
+      : entityType === "contract" ? "contractId"
+      : entityType === "product" ? "productId"
+      : entityType === "vendor" ? "vendorId"
+      : null;
+
+    if (!entityColumn) {
+      res.status(400).json({ error: "نوع الكيان غير مدعوم" });
+      return;
+    }
+
+    const [subsidiaryAccounts, transactions, costBreakdown, totalSummary] = await Promise.all([
+      rawQuery<any>(
+        `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType",
+                COALESCE((SELECT SUM(jl.debit) - SUM(jl.credit) FROM journal_lines jl
+                  JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
+                  WHERE jl."accountCode" = ca.code), 0) AS balance
+         FROM subsidiary_accounts sa
+         JOIN chart_of_accounts ca ON ca.id = sa."accountId"
+         WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3`,
+        [cid, entityType, eid]
+      ),
+
+      rawQuery<any>(
+        `SELECT je.id, je.ref, je.description, je."createdAt", je.type AS "journalType",
+                je."sourceType", je."sourceId",
+                jl."accountCode", ca.name AS "accountName",
+                jl.debit, jl.credit
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
+         LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
+         WHERE jl."${entityColumn}" = $2
+         ORDER BY je."createdAt" DESC
+         LIMIT 50`,
+        [cid, eid]
+      ),
+
+      rawQuery<any>(
+        `SELECT ca.code, ca.name,
+                SUM(jl.debit) AS "totalDebit",
+                SUM(jl.credit) AS "totalCredit",
+                SUM(jl.debit) - SUM(jl.credit) AS "netAmount",
+                COUNT(*) AS "transactionCount"
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
+         LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
+         WHERE jl."${entityColumn}" = $2
+         GROUP BY ca.code, ca.name
+         ORDER BY SUM(jl.debit) DESC`,
+        [cid, eid]
+      ),
+
+      rawQuery<any>(
+        `SELECT
+           COUNT(DISTINCT je.id) AS "journalCount",
+           SUM(jl.debit) AS "totalDebit",
+           SUM(jl.credit) AS "totalCredit",
+           MIN(je."createdAt") AS "firstTransaction",
+           MAX(je."createdAt") AS "lastTransaction"
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
+         WHERE jl."${entityColumn}" = $2`,
+        [cid, eid]
+      ),
+    ]);
+
+    res.json({
+      entityType,
+      entityId: eid,
+      subsidiaryAccounts,
+      summary: totalSummary[0] || { journalCount: 0, totalDebit: 0, totalCredit: 0 },
+      costBreakdown,
+      recentTransactions: transactions,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Entity financial profile error:");
+  }
+});
+
 export default financeAlgorithmsRouter;

@@ -23,6 +23,7 @@ import { ROLES } from "@/lib/constants";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { FinancialTab } from "@/components/shared/financial-tab";
+import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -970,6 +971,12 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 الملف المالي للموظف
               </CardTitle>
             </CardHeader>
+            <CardContent>
+              <EntityFinancialProfile entityType="employee" entityId={id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-base">دفتر الأستاذ المساعد</CardTitle></CardHeader>
             <CardContent>
               <FinancialTab entityType="employee" entityId={id} />
             </CardContent>

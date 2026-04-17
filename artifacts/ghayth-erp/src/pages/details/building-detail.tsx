@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Building2, Home, Plus, ArrowRight, TrendingUp } from "lucide-react";
+import { Building2, Home, Plus, ArrowRight, TrendingUp, BookOpen } from "lucide-react";
+import { FinancialTab } from "@/components/shared/financial-tab";
+import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/contexts/app-context";
@@ -158,6 +160,25 @@ export default function BuildingDetail() {
           ))}
         </div>
       )}
+      <Card className="mt-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-blue-600" />
+            الملف المالي الشامل للمبنى
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EntityFinancialProfile entityType="property" entityId={id!} />
+        </CardContent>
+      </Card>
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">دفتر الأستاذ المساعد</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FinancialTab entityType="property" entityId={id!} />
+        </CardContent>
+      </Card>
     </PageShell>
   );
 }
