@@ -552,10 +552,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
         createdBy: scope.activeAssignmentId,
         ref: grnRef,
         description: `استلام بضاعة ${grnRef} - أمر ${po.ref}`,
+        sourceType: "goods_receipt",
         lines: [
-          { accountCode: invAccount, debit: subtotal, credit: 0 },
-          ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0 }] : []),
-          { accountCode: grniAccount, debit: 0, credit: grnTotal },
+          { accountCode: invAccount, debit: subtotal, credit: 0, vendorId: po.supplierId },
+          ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0, vendorId: po.supplierId }] : []),
+          { accountCode: grniAccount, debit: 0, credit: grnTotal, vendorId: po.supplierId },
         ],
       });
       if (journalId) {
@@ -872,7 +873,7 @@ purchaseRouter.post("/payment-run/execute", async (req, res) => {
     try {
       const lines: any[] = [];
       for (const po of pos) {
-        lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0 });
+        lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0, vendorId: po.supplierId });
       }
       lines.push({ accountCode: cashAccount, debit: 0, credit: totalPayment });
 
@@ -882,6 +883,7 @@ purchaseRouter.post("/payment-run/execute", async (req, res) => {
         createdBy: scope.activeAssignmentId,
         ref: runRef,
         description: `دفعة مجمّعة ${runRef}: ${pos.length} أمر شراء بإجمالي ${totalPayment}`,
+        sourceType: "payment_run",
         lines,
       });
       if (journalId && runId) {
@@ -1273,8 +1275,8 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", async (req, res) =>
       sourceType: "purchase_order_payment",
       sourceId: Number(id),
       lines: [
-        { accountCode: schedApCode, debit: Number(amount), credit: 0 },
-        { accountCode: schedCashCode, debit: 0, credit: Number(amount) },
+        { accountCode: schedApCode, debit: Number(amount), credit: 0, vendorId: po.supplierId },
+        { accountCode: schedCashCode, debit: 0, credit: Number(amount), vendorId: po.supplierId },
       ],
     });
 

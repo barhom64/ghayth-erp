@@ -883,10 +883,12 @@ invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
         createdBy: scope.activeAssignmentId,
         ref: `CM-${invoice.ref}-${memoId}`,
         description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
+        sourceType: "credit_memo",
+        sourceId: memoId ?? undefined,
         lines: [
-          { accountCode: salesReturnsCode, debit: net, credit: 0 },
-          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0 }] : []),
-          { accountCode: arCode, debit: 0, credit: creditAmount },
+          { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
+          { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
         ],
       });
       if (journalId && memoId) {
@@ -1018,10 +1020,12 @@ invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
         createdBy: scope.activeAssignmentId,
         ref: `DM-${invoice.ref}-${memoId}`,
         description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
+        sourceType: "debit_memo",
+        sourceId: memoId ?? undefined,
         lines: [
-          { accountCode: arCode, debit: chargeAmount, credit: 0 },
-          { accountCode: revenueCode, debit: 0, credit: net },
-          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat }] : []),
+          { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId },
+          { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId }] : []),
         ],
       });
       if (journalId && memoId) {
@@ -1331,9 +1335,11 @@ invoicesRouter.post("/customer-advances", async (req, res) => {
         createdBy: scope.activeAssignmentId,
         ref: advRef,
         description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,
+        sourceType: "customer_advance",
+        sourceId: advanceId ?? undefined,
         lines: [
-          { accountCode: cashCode, debit: amt, credit: 0 },
-          { accountCode: advLiabCode, debit: 0, credit: amt },
+          { accountCode: cashCode, debit: amt, credit: 0, clientId: Number(clientId) },
+          { accountCode: advLiabCode, debit: 0, credit: amt, clientId: Number(clientId) },
         ],
       });
       if (journalId && advanceId) {
@@ -1423,9 +1429,10 @@ invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
         createdBy: scope.activeAssignmentId,
         ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
         description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
+        sourceType: "advance_application",
         lines: [
-          { accountCode: advLiabCode, debit: applyAmt, credit: 0 },
-          { accountCode: arCode, debit: 0, credit: applyAmt },
+          { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
+          { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
         ],
       });
     } catch (je) {

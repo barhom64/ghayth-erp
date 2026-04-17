@@ -1552,16 +1552,20 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
     const eid = Number(entityId);
     const cid = scope.companyId;
 
-    const entityColumn = entityType === "vehicle" ? "vehicleId"
-      : entityType === "employee" ? "employeeId"
-      : entityType === "property" ? "propertyId"
-      : entityType === "project" ? "projectId"
-      : entityType === "contract" ? "contractId"
-      : entityType === "product" ? "productId"
-      : entityType === "vendor" ? "vendorId"
-      : null;
+    const safeColumns: Record<string, string> = {
+      vehicle: 'jl."vehicleId"',
+      employee: 'jl."employeeId"',
+      property: 'jl."propertyId"',
+      project: 'jl."projectId"',
+      contract: 'jl."contractId"',
+      product: 'jl."productId"',
+      vendor: 'jl."vendorId"',
+      client: 'jl."clientId"',
+      driver: 'jl."driverId"',
+    };
+    const safeCol = safeColumns[entityType];
 
-    if (!entityColumn) {
+    if (!safeCol) {
       res.status(400).json({ error: "نوع الكيان غير مدعوم" });
       return;
     }
@@ -1586,7 +1590,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
-         WHERE jl."${entityColumn}" = $2
+         WHERE ${safeCol} = $2
          ORDER BY je."createdAt" DESC
          LIMIT 50`,
         [cid, eid]
@@ -1601,7 +1605,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
-         WHERE jl."${entityColumn}" = $2
+         WHERE ${safeCol} = $2
          GROUP BY ca.code, ca.name
          ORDER BY SUM(jl.debit) DESC`,
         [cid, eid]
@@ -1616,7 +1620,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
            MAX(je."createdAt") AS "lastTransaction"
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-         WHERE jl."${entityColumn}" = $2`,
+         WHERE ${safeCol} = $2`,
         [cid, eid]
       ),
     ]);

@@ -158,6 +158,10 @@ export interface JournalEntryLine {
   vehicleId?: number;
   propertyId?: number;
   contractId?: number;
+  productId?: number;
+  clientId?: number;
+  vendorId?: number;
+  driverId?: number;
   activityType?: string;
   costCenter?: string;
   templateId?: number;
@@ -244,13 +248,15 @@ export async function createJournalEntry(params: {
     await rawExecute(
       `INSERT INTO journal_lines (
         "journalId","accountCode","accountId",debit,credit,description,"costCenter",
-        "departmentId","projectId","employeeId","vehicleId","propertyId","contractId","activityType","templateId"
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        "departmentId","projectId","employeeId","vehicleId","propertyId","contractId",
+        "productId","clientId","vendorId","driverId","activityType","templateId"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [
         journalId, line.accountCode, accountId, line.debit, line.credit,
         line.description ?? null, line.costCenter ?? null,
         line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
         line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
+        line.productId ?? null, line.clientId ?? null, line.vendorId ?? null, line.driverId ?? null,
         line.activityType ?? null, line.templateId ?? null,
       ]
     );

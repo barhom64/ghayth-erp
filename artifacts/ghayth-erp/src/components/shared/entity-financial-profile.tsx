@@ -6,7 +6,7 @@ import { BookOpen, TrendingUp, TrendingDown, DollarSign, Calendar, Hash } from "
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 
 interface EntityFinancialProfileProps {
-  entityType: "vehicle" | "employee" | "property" | "project" | "contract" | "product" | "vendor";
+  entityType: "vehicle" | "employee" | "property" | "project" | "contract" | "product" | "vendor" | "client" | "driver";
   entityId: string | number;
 }
 

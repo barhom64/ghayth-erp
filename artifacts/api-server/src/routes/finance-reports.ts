@@ -362,14 +362,18 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", async (req, res) =
 
     } else if (entityType === "vehicle" || entityType === "property" || entityType === "project" || entityType === "product") {
       const columnMap: Record<string, string> = { vehicle: "vehicleId", property: "propertyId", project: "projectId", product: "productId" };
-      const col = columnMap[entityType];
+      const col = columnMap[entityType]!;
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
+      const colFilter = col === "vehicleId" ? 'jl."vehicleId"'
+        : col === "propertyId" ? 'jl."propertyId"'
+        : col === "projectId" ? 'jl."projectId"'
+        : 'jl."productId"';
       const journalRows = await rawQuery<any>(
         `SELECT je.id, je.ref, je.description, je."createdAt" AS date, je.type AS "movementType",
                 COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit
          FROM journal_entries je
          JOIN journal_lines jl ON jl."journalId" = je.id
-         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND jl."${col}" = $2
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND ${colFilter} = $2
          ${dateFilter.replace(/"createdAt"/g, 'je."createdAt"')}
          GROUP BY je.id, je.ref, je.description, je."createdAt", je.type
          ORDER BY je."createdAt" ASC`,
@@ -381,7 +385,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", async (req, res) =
       for (const m of journalRows) {
         const t = m.movementType || "other";
         if (!typeGroups[t]) typeGroups[t] = { label: t, amount: 0, count: 0 };
-        typeGroups[t].amount += Number(m.debit);
+        typeGroups[t].amount += Number(m.debit) - Number(m.credit);
         typeGroups[t].count++;
       }
       sections = typeGroups;
