@@ -9,6 +9,7 @@ import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { FinancialTab } from "@/components/shared/financial-tab";
+import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   Building2,
@@ -178,7 +179,12 @@ export default function VendorDetailPage() {
       key: "financial",
       label: "الملف المالي",
       icon: DollarSign,
-      content: () => <FinancialTab entityType="supplier" entityId={id} />,
+      content: () => (
+        <div className="space-y-6">
+          <EntityFinancialProfile entityType="vendor" entityId={id} />
+          <FinancialTab entityType="supplier" entityId={id} />
+        </div>
+      ),
     },
     {
       key: "documents",
