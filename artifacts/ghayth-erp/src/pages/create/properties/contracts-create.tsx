@@ -564,6 +564,17 @@ export default function ContractsCreate() {
           <Textarea className="mt-1" rows={2} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="ملاحظات إضافية..." />
         </div>
 
+        {Number(form.monthlyRent || form.yearlyRent) > 0 && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+            <p className="font-semibold mb-1">سيتم تلقائياً عند حفظ العقد:</p>
+            <ul className="list-disc list-inside space-y-1 text-green-700">
+              <li>إنشاء قيد محاسبي لإثبات إيراد الإيجار</li>
+              <li>توليد جدول أقساط حسب عدد الأقساط المحدد</li>
+              <li>ربط القيود بالوحدة والعقد لتتبع الإيرادات العقارية</li>
+            </ul>
+          </div>
+        )}
+
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات العقد" />
 
         <div className="flex justify-end gap-3 pt-6">

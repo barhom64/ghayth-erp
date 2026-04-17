@@ -130,6 +130,12 @@ export default function ClientsCreate() {
         </div>
         <div className="md:col-span-2"><Label>ملاحظات</Label><Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية..." /></div>
       </div>
+      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+        <p className="font-semibold mb-1">سيتم تلقائياً عند الحفظ:</p>
+        <ul className="list-disc list-inside space-y-1 text-green-700">
+          <li>إنشاء حساب فرعي للعميل في شجرة الحسابات (ذمم مدينة)</li>
+        </ul>
+      </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات العميل" />
 
       <div className="mt-6 border rounded-lg p-4 bg-blue-50/50">

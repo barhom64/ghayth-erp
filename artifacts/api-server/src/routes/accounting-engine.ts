@@ -468,7 +468,7 @@ router.delete("/subsidiary-accounts/:id", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createSubsidiaryAccountsForEntity(
   companyId: number,
-  entityType: "employee" | "client" | "vendor" | "vehicle" | "property",
+  entityType: "employee" | "client" | "vendor" | "vehicle" | "property" | "driver" | "product",
   entityId: number,
   entityName: string
 ): Promise<void> {
@@ -497,6 +497,15 @@ export async function createSubsidiaryAccountsForEntity(
       accountsToCreate.push(
         { accountType: "asset", parentCode: "1520", suffix: "أصل عقار" },
         { accountType: "revenue", parentCode: "4100", suffix: "إيرادات" }
+      );
+    } else if (entityType === "driver") {
+      accountsToCreate.push(
+        { accountType: "advance", parentCode: "1121", suffix: "سلفة سائق" },
+        { accountType: "custody", parentCode: "1131", suffix: "عهدة سائق" }
+      );
+    } else if (entityType === "product") {
+      accountsToCreate.push(
+        { accountType: "inventory", parentCode: "1300", suffix: "مخزون" }
       );
     }
 

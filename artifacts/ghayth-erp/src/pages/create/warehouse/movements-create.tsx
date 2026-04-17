@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -61,16 +62,13 @@ export default function MovementsCreate() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label>المنتج</Label>
-          <Select value={form.productId} onValueChange={(v) => setForm((f) => ({ ...f, productId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر المنتج" />
-            </SelectTrigger>
-            <SelectContent>
-              {products.map((p: any) => (
-                <SelectItem key={p.id} value={String(p.id)}>{p.sku ? `${p.sku} - ` : ""}{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Autocomplete
+            className="mt-1"
+            placeholder="ابحث عن المنتج..."
+            value={form.productId}
+            onChange={(v) => setForm((f) => ({ ...f, productId: String(v) }))}
+            options={products.map((p: any) => ({ value: String(p.id), label: `${p.sku ? `${p.sku} - ` : ""}${p.name}` }))}
+          />
         </div>
         <div>
           <Label>النوع</Label>
@@ -89,6 +87,24 @@ export default function MovementsCreate() {
         <div><Label>المرجع</Label><Input className="mt-1" value={form.reference} onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))} /></div>
         <div><Label>ملاحظات</Label><Input className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></div>
       </div>
+      {Number(form.quantity) > 0 && Number(form.unitCost) > 0 && (
+        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+          <p className="font-semibold mb-1">سيتم تلقائياً عند الحفظ:</p>
+          <ul className="list-disc list-inside space-y-1 text-green-700">
+            {form.type === "in" ? (
+              <>
+                <li>قيد محاسبي: مدين المخزون / دائن بضاعة مستلمة بمبلغ {(Number(form.quantity) * Number(form.unitCost)).toLocaleString("ar-SA")} ريال</li>
+                <li>تحديث رصيد المنتج وتكلفة المتوسط المتحرك</li>
+              </>
+            ) : (
+              <>
+                <li>قيد محاسبي: مدين تكلفة البضاعة المباعة / دائن المخزون</li>
+                <li>خصم الكمية من رصيد المنتج</li>
+              </>
+            )}
+          </ul>
+        </div>
+      )}
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>
         <Button onClick={handleSubmit} disabled={createMut.isPending}>

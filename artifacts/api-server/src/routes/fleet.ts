@@ -267,6 +267,8 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1`, [insertId]);
 
+    createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch(console.error);
+
     createAuditLog({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1255,15 +1257,20 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       try {
         const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [m.vehicleId]);
         const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
+        const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_maintenance_expense", "debit", "5300");
+        const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
         await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.activeAssignmentId ?? scope.userId,
           ref: `MAINT-${id}`,
           description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}`,
+          type: "fleet",
+          sourceType: "fleet_maintenance",
+          sourceId: id,
           lines: [
-            { accountCode: "5300", debit: finalCost, credit: 0 },
-            { accountCode: "1100", debit: 0, credit: finalCost },
+            { accountCode: maintExpCode, debit: finalCost, credit: 0, vehicleId: m.vehicleId },
+            { accountCode: cashCode, debit: 0, credit: finalCost },
           ],
         });
       } catch (jErr) { console.error("Maintenance journal entry failed:", jErr); }
@@ -1555,15 +1562,20 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       try {
         const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [resolvedVehicleId]);
         const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
+        const fuelExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fuel_expense", "debit", "5200");
+        const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
         await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.activeAssignmentId ?? scope.userId,
           ref: `FUEL-${insertId}`,
           description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}`,
+          type: "fleet",
+          sourceType: "fleet_fuel_log",
+          sourceId: insertId,
           lines: [
-            { accountCode: "5200", debit: totalCost, credit: 0 },
-            { accountCode: "1100", debit: 0, credit: totalCost },
+            { accountCode: fuelExpCode, debit: totalCost, credit: 0, vehicleId: resolvedVehicleId },
+            { accountCode: cashCode, debit: 0, credit: totalCost },
           ],
         });
       } catch (jErr) { console.error("Fuel log journal entry failed:", jErr); }
@@ -1641,15 +1653,20 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
         const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
         const insuranceType = b.type || b.insuranceType || 'comprehensive';
         const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
+        const prepaidInsCode = await getAccountCodeFromMapping(scope.companyId, "fleet_prepaid_insurance", "debit", "1350");
+        const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
         await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.activeAssignmentId ?? scope.userId,
           ref: `INS-${insertId}`,
           description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}`,
+          type: "fleet",
+          sourceType: "fleet_insurance",
+          sourceId: insertId,
           lines: [
-            { accountCode: "1350", debit: premium, credit: 0 },
-            { accountCode: "1100", debit: 0, credit: premium },
+            { accountCode: prepaidInsCode, debit: premium, credit: 0, vehicleId: Number(b.vehicleId) },
+            { accountCode: cashCode, debit: 0, credit: premium },
           ],
         });
       } catch (jErr) { console.error("Insurance journal entry failed:", jErr); }
@@ -2378,23 +2395,26 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
     let journalEntryId: number | null = null;
     if (fineAmount > 0 && liability === 'company') {
       try {
+        const finesExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_expense", "debit", "5290");
+        const payableCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_payable", "credit", "2100");
         journalEntryId = await createJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.userId,
           ref: `TV-${insertId}`,
           description: `مخالفة مرورية — ${b.violationType}${b.violationNumber ? ` #${b.violationNumber}` : ''}`,
+          type: "fleet",
           sourceType: "fleet_traffic_violation",
           sourceId: insertId,
           lines: [
-            { accountCode: "5290", debit: fineAmount, credit: 0 }, // fleet other expenses / fines
-            { accountCode: "2100", debit: 0, credit: fineAmount }, // accounts payable (govt)
+            { accountCode: finesExpCode, debit: fineAmount, credit: 0, vehicleId: b.vehicleId ? Number(b.vehicleId) : undefined },
+            { accountCode: payableCode, debit: 0, credit: fineAmount },
           ],
         });
       } catch (jeErr) {
         console.error("Traffic violation journal entry failed:", jeErr);
         await rawExecute(`DELETE FROM fleet_traffic_violations WHERE id=$1`, [insertId]).catch(() => {});
-        throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات شجرة الحسابات المالية (5290 / 2100) ثم أعد المحاولة" });
+        throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات ربط الحسابات (fleet_fines_expense / fleet_fines_payable) ثم أعد المحاولة" });
       }
     }
 

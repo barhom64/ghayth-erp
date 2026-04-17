@@ -94,6 +94,15 @@ export default function PaymentRecord() {
           </div>
       </div>
 
+      {Number(form.amount) > 0 && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+          <p className="font-semibold mb-1">سيتم تلقائياً عند تأكيد الدفع:</p>
+          <ul className="list-disc list-inside space-y-1 text-green-700">
+            <li>إنشاء قيد محاسبي: مدين النقدية / دائن إيراد الإيجار بمبلغ {Number(form.amount).toLocaleString("ar-SA")} ريال</li>
+            <li>تحديث حالة القسط إلى "مدفوع" وربط القيد بالعقد والوحدة</li>
+          </ul>
+        </div>
+      )}
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/properties/contracts")}>إلغاء</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2">

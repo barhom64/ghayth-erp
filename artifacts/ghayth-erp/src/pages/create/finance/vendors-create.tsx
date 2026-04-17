@@ -73,6 +73,12 @@ export default function VendorsCreate() {
           </Select>
         </div>
       </div>
+      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+        <p className="font-semibold mb-1">سيتم تلقائياً عند الحفظ:</p>
+        <ul className="list-disc list-inside space-y-1 text-green-700">
+          <li>إنشاء حسابات فرعية للمورد في شجرة الحسابات (ذمم دائنة، مشتريات)</li>
+        </ul>
+      </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/vendors")}>إلغاء</Button>
