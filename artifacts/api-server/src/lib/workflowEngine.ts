@@ -1,5 +1,8 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getAssignmentIdByRole, createAuditLog, emitEvent } from "./businessHelpers.js";
+import {
+  createNotification, getAssignmentIdByRole, createAuditLog, emitEvent,
+  getDeptManagerAssignmentId, isSubmitterDeptManager, createCorrespondenceFromRequest,
+} from "./businessHelpers.js";
 
 async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
   await rawExecute(
@@ -318,36 +321,65 @@ export async function submitWorkflow(params: SubmitParams) {
   const expectedCompletion = new Date(Date.now() + slaHours * 3600000);
 
   let currentAssignee: number | null = null;
+  let skipFirstStep = false;
+
   if (firstStep) {
-    // First: try to resolve the submitter's direct manager via managerId on the assignment
-    if (submittedBy) {
+    const requiredRole = firstStep.requiredRole;
+
+    if (requiredRole === "dept_manager" && submittedBy) {
       try {
-        const [directMgrRow] = await rawQuery<any>(
-          `SELECT ea2.id AS "assignmentId"
-           FROM employee_assignments ea
-           JOIN employee_assignments ea2
-             ON ea2."employeeId" = ea."managerId"
-             AND ea2.status = 'active'
-             AND ea2."companyId" = $2
-           WHERE ea.id = $1 AND ea."managerId" IS NOT NULL
-           LIMIT 1`,
-          [submittedBy, companyId]
-        );
-        if (directMgrRow?.assignmentId) {
-          currentAssignee = directMgrRow.assignmentId;
-        }
+        currentAssignee = await getDeptManagerAssignmentId(companyId, submittedBy);
       } catch { /* ignore */ }
+
+      if (currentAssignee && currentAssignee === submittedBy) {
+        const nextStep = steps.length > 1 ? steps[1] : null;
+        if (nextStep) {
+          skipFirstStep = true;
+          currentAssignee = null;
+          try {
+            if (nextStep.requiredRole === "dept_manager") {
+              currentAssignee = await getDeptManagerAssignmentId(companyId, submittedBy);
+            } else {
+              currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, nextStep.requiredRole);
+            }
+          } catch { /* */ }
+        } else {
+          const isMgr = await isSubmitterDeptManager(companyId, submittedBy);
+          if (isMgr) {
+            skipFirstStep = true;
+            currentAssignee = null;
+          }
+        }
+      }
     }
-    // Fallback: resolve by required role at branch/company level
-    if (!currentAssignee) {
-      try {
-        currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, firstStep.requiredRole);
-      } catch { /* no assignee found */ }
+
+    if (!currentAssignee && !skipFirstStep) {
+      if (submittedBy) {
+        try {
+          const [directMgrRow] = await rawQuery<any>(
+            `SELECT ea2.id AS "assignmentId"
+             FROM employee_assignments ea
+             JOIN employee_assignments ea2
+               ON ea2."employeeId" = ea."managerId"
+               AND ea2.status = 'active'
+               AND ea2."companyId" = $2
+             WHERE ea.id = $1 AND ea."managerId" IS NOT NULL
+             LIMIT 1`,
+            [submittedBy, companyId]
+          );
+          if (directMgrRow?.assignmentId) {
+            currentAssignee = directMgrRow.assignmentId;
+          }
+        } catch { /* ignore */ }
+      }
+      if (!currentAssignee) {
+        try {
+          currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, requiredRole);
+        } catch { /* no assignee found */ }
+      }
     }
-    // Final fallback: any active HR/GM/owner in the company. Never leave a
-    // submitted workflow with NULL currentAssignee — that makes it invisible
-    // to every inbox and no escalation job will route it.
-    if (!currentAssignee) {
+
+    if (!currentAssignee && !skipFirstStep) {
       try {
         const [fallback] = await rawQuery<any>(
           `SELECT id FROM employee_assignments
@@ -361,23 +393,30 @@ export async function submitWorkflow(params: SubmitParams) {
       } catch { /* ignore */ }
     }
   }
-  if (firstStep && !currentAssignee) {
+
+  if (firstStep && !currentAssignee && !skipFirstStep) {
     throw new Error(
       "لا يوجد مسؤول معتمد لاستلام الطلب — الرجاء تعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات"
     );
   }
+
+  const effectiveStepOrder = skipFirstStep
+    ? (steps.length > 1 ? steps[1].stepOrder : firstStep?.stepOrder ?? 1)
+    : (firstStep?.stepOrder ?? 1);
+
+  const initialStatus = skipFirstStep && !currentAssignee ? "approved" : "pending";
 
   const { insertId } = await rawExecute(
     `INSERT INTO workflow_instances
      ("companyId", "branchId", "definitionId", "requestType", "requestTypeLabel",
       "refTable", "refId", title, "submittedBy", "submittedByName",
       status, "currentStepOrder", "currentAssignee", "expectedCompletionAt",
-      "slaStatus", data)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13,'normal',$14)`,
+      "slaStatus", data${initialStatus === "approved" ? ', "completedAt"' : ""})
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'normal',$15${initialStatus === "approved" ? ", NOW()" : ""})`,
     [
       companyId, branchId ?? null, definitionId, requestType, label,
       refTable ?? null, refId ?? null, title, submittedBy, submittedByName ?? null,
-      firstStep?.stepOrder ?? 1, currentAssignee,
+      initialStatus, effectiveStepOrder, currentAssignee,
       expectedCompletion.toISOString(),
       data ? JSON.stringify(data) : "{}",
     ]
@@ -393,7 +432,45 @@ export async function submitWorkflow(params: SubmitParams) {
     ]
   );
 
-  if (currentAssignee) {
+  if (skipFirstStep) {
+    await rawExecute(
+      `INSERT INTO workflow_step_actions
+       ("instanceId", "stepOrder", "stepName", action, "actionBy", "actionByName", "assignedRole", notes)
+       VALUES ($1,$2,$3,'approve',$4,$5,$6,$7)`,
+      [
+        insertId, firstStep!.stepOrder, firstStep!.stepName,
+        submittedBy, submittedByName ?? null,
+        firstStep!.requiredRole, "اعتماد تلقائي — مقدّم الطلب هو مرجع القسم",
+      ]
+    );
+  }
+
+  if (initialStatus === "approved") {
+    await propagateDomainStatus(refTable, refId, "approved", submittedBy);
+
+    if (submittedBy) {
+      createNotification({
+        companyId, assignmentId: submittedBy,
+        type: "workflow_approved",
+        title: "تمت الموافقة على طلبك تلقائياً",
+        body: `${label}: ${title} — اعتماد تلقائي (أنت مرجع القسم)`,
+        priority: "normal",
+        refType: refTable ?? requestType,
+        refId: refId ?? insertId,
+      }).catch(console.error);
+    }
+
+    try {
+      await createCorrespondenceFromRequest({
+        companyId,
+        requestType,
+        requestId: refId ?? insertId,
+        title: `مراسلة: ${title}`,
+        description: `مراسلة مرتبطة بطلب ${label}: ${title}`,
+        createdByAssignmentId: submittedBy,
+      });
+    } catch { /* correspondence creation is non-blocking */ }
+  } else if (currentAssignee) {
     createNotification({
       companyId, assignmentId: currentAssignee,
       type: "workflow_pending",
@@ -405,7 +482,7 @@ export async function submitWorkflow(params: SubmitParams) {
     }).catch(console.error);
   }
 
-  return { instanceId: insertId, definitionId, currentStep: firstStep?.stepOrder ?? 1, currentAssignee };
+  return { instanceId: insertId, definitionId, currentStep: effectiveStepOrder, currentAssignee, autoApproved: initialStatus === "approved" };
 }
 
 export async function approveWorkflow(params: ActionParams) {
@@ -553,7 +630,11 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         newStepOrder = nextStep.stepOrder;
         newStatus = "pending";
         try {
-          newAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, nextStep.requiredRole);
+          if (nextStep.requiredRole === "dept_manager" && instance.submittedBy) {
+            newAssignee = await getDeptManagerAssignmentId(companyId, instance.submittedBy);
+          } else {
+            newAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, nextStep.requiredRole);
+          }
         } catch { newAssignee = null; }
         // Never advance to a step with NULL assignee — fall back to any active
         // HR/GM/owner so the request stays actionable somewhere.
@@ -631,6 +712,18 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           }).catch(console.error);
           actualImpact.notifications!.push("إشعار لمقدم الطلب بالموافقة النهائية");
         }
+        try {
+          await createCorrespondenceFromRequest({
+            companyId,
+            requestType: instance.requestType,
+            requestId: instance.refId ?? instanceId,
+            title: `مراسلة: ${instance.title}`,
+            description: `مراسلة مرتبطة بطلب ${instance.requestTypeLabel}: ${instance.title}`,
+            createdByAssignmentId: actionBy,
+          });
+          actualImpact.notifications!.push("إنشاء مراسلة إدارية مرتبطة");
+        } catch { /* correspondence creation is non-blocking */ }
+
         message = "تمت الموافقة النهائية";
       }
       actualImpact.statusChange = { from: instance.status, to: newStatus };

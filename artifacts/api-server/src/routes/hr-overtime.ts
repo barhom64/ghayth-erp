@@ -280,9 +280,17 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
 
-    // منع الموظف من اعتماد طلبه الخاص
     if (item.assignmentId === scope.activeAssignmentId) {
       throw new ForbiddenError("لا يمكنك اعتماد طلبك الخاص");
+    }
+
+    const [contract] = await rawQuery<any>(
+      `SELECT "overtimeEligible" FROM employee_contracts
+       WHERE "assignmentId" = $1 AND status = 'active' ORDER BY "startDate" DESC LIMIT 1`,
+      [item.assignmentId]
+    );
+    if (contract?.overtimeEligible === false) {
+      throw new ConflictError("عقد الموظف لا يسمح بالعمل الإضافي");
     }
 
     // ── معالجة خطوة الموافقة في السلسلة ──

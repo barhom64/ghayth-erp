@@ -3,6 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { createNotification, createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -193,7 +194,58 @@ router.patch("/applications/:id", async (req, res) => {
     if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
     params.push(id);
     await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(
+      `SELECT a.*, jp.title AS "postingTitle", jp.department, jp."companyId", jp."salaryMin"
+       FROM job_applications a JOIN job_postings jp ON a."postingId" = jp.id WHERE a.id = $1`,
+      [id]
+    );
+
+    if (b.status === "hired" && row && !row.createdEmployeeId) {
+      try {
+        const { insertId: empId } = await rawExecute(
+          `INSERT INTO employees (name, email, phone, status) VALUES ($1, $2, $3, 'active')`,
+          [row.applicantName, row.email, row.phone]
+        );
+        const { insertId: asnId } = await rawExecute(
+          `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "jobTitle", role, salary, "hireDate", status, "isPrimary")
+           VALUES ($1, $2, $3, $4, 'employee', $5, CURRENT_DATE, 'active', true)`,
+          [empId, row.companyId, scope.branchId, row.postingTitle || "موظف جديد", row.salaryMin ?? 0]
+        );
+        await rawExecute(
+          `INSERT INTO employee_contracts ("employeeId", "assignmentId", "companyId", type, "startDate", "probationEndDate", status)
+           VALUES ($1, $2, $3, 'full_time', CURRENT_DATE, CURRENT_DATE + INTERVAL '90 days', 'active')`,
+          [empId, asnId, row.companyId]
+        );
+        await rawExecute(
+          `UPDATE job_applications SET "createdEmployeeId" = $1, "onboardedAt" = NOW() WHERE id = $2`,
+          [empId, id]
+        );
+        row.createdEmployeeId = empId;
+
+        createAuditLog({
+          companyId: row.companyId, branchId: scope.branchId, userId: scope.userId,
+          action: "recruitment_hired", entity: "job_application", entityId: id,
+          after: { employeeId: empId, assignmentId: asnId, applicantName: row.applicantName },
+        }).catch(console.error);
+
+        const [hrMgr] = await rawQuery<any>(
+          `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role = 'hr_manager' AND status = 'active' LIMIT 1`,
+          [row.companyId]
+        );
+        if (hrMgr) {
+          createNotification({
+            companyId: row.companyId, assignmentId: hrMgr.id,
+            type: "onboarding_new_hire",
+            title: "موظف جديد — يتطلب إكمال التعيين",
+            body: `تم تعيين ${row.applicantName} من طلب التوظيف #${id}. يرجى استكمال بياناته.`,
+            priority: "high", refType: "employee", refId: empId,
+          }).catch(console.error);
+        }
+      } catch (e) {
+        console.error("Auto-onboard from recruitment failed:", e);
+      }
+    }
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update job application"); }
 });

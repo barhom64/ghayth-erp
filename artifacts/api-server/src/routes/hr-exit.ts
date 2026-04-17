@@ -366,6 +366,22 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
 
+    const [loanBalance] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(l.amount - COALESCE(
+         (SELECT SUM(i.amount) FROM hr_loan_installments i WHERE i."loanId" = l.id AND i.status = 'paid'), 0
+       )), 0) AS outstanding
+       FROM hr_employee_loans l
+       WHERE l."assignmentId" = $1 AND l.status = 'active'`,
+      [item.assignmentId]
+    );
+    const outstandingLoans = Number(loanBalance?.outstanding ?? 0);
+    if (outstandingLoans > 0) {
+      await rawExecute(
+        `UPDATE hr_exit_requests SET "outstandingLoans" = $1 WHERE id = $2`,
+        [outstandingLoans, item.id]
+      );
+    }
+
     // ── معالجة خطوة الموافقة في السلسلة ──
     const chainResult = await processApprovalStep({
       companyId: scope.companyId,

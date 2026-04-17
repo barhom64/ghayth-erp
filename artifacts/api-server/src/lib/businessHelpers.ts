@@ -27,11 +27,12 @@ export async function createNotification(params: {
   refType?: string;
   refId?: number;
   actionUrl?: string;
+  requiresAck?: boolean;
 }) {
   try {
     await rawExecute(
-      `INSERT INTO notifications ("companyId","assignmentId",type,title,body,priority,"refType","refId","actionUrl","isRead")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,false)`,
+      `INSERT INTO notifications ("companyId","assignmentId",type,title,body,priority,"refType","refId","actionUrl","isRead","requiresAck")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,false,$10)`,
       [
         params.companyId,
         params.assignmentId,
@@ -42,6 +43,7 @@ export async function createNotification(params: {
         params.refType ?? null,
         params.refId ?? null,
         params.actionUrl ?? null,
+        params.requiresAck ?? false,
       ]
     );
   } catch (err) {
@@ -583,6 +585,114 @@ export async function getAssignmentIdByRole(companyId: number, branchId: number,
     [companyId, branchId, role]
   );
   return row?.id ?? null;
+}
+
+export async function getDeptManagerAssignmentId(
+  companyId: number,
+  submitterAssignmentId: number
+): Promise<number | null> {
+  const [submitter] = await rawQuery<any>(
+    `SELECT ea."departmentId", ea."branchId", ea."managerId"
+     FROM employee_assignments ea
+     WHERE ea.id = $1 AND ea.status = 'active'`,
+    [submitterAssignmentId]
+  );
+  if (!submitter) return null;
+
+  if (submitter.departmentId) {
+    const [dept] = await rawQuery<any>(
+      `SELECT d."managerId" FROM departments d WHERE d.id = $1 AND d.status = 'active'`,
+      [submitter.departmentId]
+    );
+    if (dept?.managerId) {
+      const [mgrAssignment] = await rawQuery<any>(
+        `SELECT ea.id FROM employee_assignments ea
+         WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+         LIMIT 1`,
+        [dept.managerId, companyId]
+      );
+      if (mgrAssignment?.id) return mgrAssignment.id;
+    }
+  }
+
+  if (submitter.managerId) {
+    const [directMgr] = await rawQuery<any>(
+      `SELECT ea.id FROM employee_assignments ea
+       WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+       LIMIT 1`,
+      [submitter.managerId, companyId]
+    );
+    if (directMgr?.id) return directMgr.id;
+  }
+
+  return getManagerAssignmentId(companyId, submitter.branchId ?? 0);
+}
+
+export async function isSubmitterDeptManager(
+  companyId: number,
+  submitterAssignmentId: number
+): Promise<boolean> {
+  const [submitter] = await rawQuery<any>(
+    `SELECT ea."employeeId", ea."departmentId", ea.role
+     FROM employee_assignments ea
+     WHERE ea.id = $1 AND ea.status = 'active'`,
+    [submitterAssignmentId]
+  );
+  if (!submitter) return false;
+
+  const managerRoles = ['branch_manager', 'hr_manager', 'finance_manager', 'general_manager', 'owner'];
+  if (managerRoles.includes(submitter.role)) return true;
+
+  if (submitter.departmentId) {
+    const [dept] = await rawQuery<any>(
+      `SELECT "managerId" FROM departments WHERE id = $1`,
+      [submitter.departmentId]
+    );
+    if (dept?.managerId && dept.managerId === submitter.employeeId) return true;
+  }
+
+  return false;
+}
+
+export async function createCorrespondenceFromRequest(params: {
+  companyId: number;
+  requestType: string;
+  requestId: number;
+  title: string;
+  description?: string;
+  employeeId?: number;
+  createdByAssignmentId: number;
+}): Promise<number | null> {
+  const typeMap: Record<string, string> = {
+    purchase: "purchase_order",
+    maintenance: "maintenance_request",
+    letter: "general",
+    salary_advance: "salary_certificate",
+    custody: "general",
+    leave: "general",
+    overtime: "general",
+    exit: "termination_letter",
+    legal_consultation: "general",
+  };
+  const letterType = typeMap[params.requestType] || "general";
+
+  const { insertId } = await rawExecute(
+    `INSERT INTO official_letters
+     ("companyId", "employeeId", type, subject, content, status,
+      "sourceRequestType", "sourceRequestId", "createdByAssignmentId")
+     VALUES ($1, $2, $3, $4, $5, 'draft', $6, $7, $8)`,
+    [
+      params.companyId,
+      params.employeeId ?? null,
+      letterType,
+      params.title,
+      params.description || params.title,
+      params.requestType,
+      params.requestId,
+      params.createdByAssignmentId,
+    ]
+  );
+  return insertId;
 }
 
 export async function getDirectorAssignmentId(companyId: number, branchId: number): Promise<number | null> {

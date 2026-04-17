@@ -2325,12 +2325,27 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
     const finalEmployeeId = employeeId || assignmentId;
     const finalScores = scores || categories ? JSON.stringify(scores || categories) : null;
     const finalComments = comments || notes || null;
-    const { insertId } = await rawExecute(
-      `INSERT INTO performance_reviews ("companyId","employeeId",period,"overallScore",scores,comments,status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, finalEmployeeId, period, overallScore ?? 0, finalScores, finalComments, status ?? "pending"]
+
+    const trainings = await rawQuery<any>(
+      `SELECT te.id, tp.name, te.score
+       FROM training_enrollments te
+       JOIN training_programs tp ON tp.id = te."programId"
+       WHERE te."employeeId" = $1 AND te.status = 'completed'
+       ORDER BY te."completedAt" DESC LIMIT 20`,
+      [finalEmployeeId]
     );
-    res.status(201).json({ id: insertId, ...req.body });
+    const trainingIds = trainings.map((t: any) => t.id);
+    const avgTrainingScore = trainings.length > 0
+      ? trainings.reduce((s: number, t: any) => s + (Number(t.score) || 0), 0) / trainings.length
+      : null;
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO performance_reviews ("companyId","employeeId",period,"overallScore",scores,comments,status,"trainingIds","trainingScore")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, finalEmployeeId, period, overallScore ?? 0, finalScores, finalComments, status ?? "pending",
+       JSON.stringify(trainingIds), avgTrainingScore]
+    );
+    res.status(201).json({ id: insertId, trainingIds, trainingScore: avgTrainingScore, ...req.body });
   } catch (err) { handleRouteError(err, res, "Create performance error:"); }
 });
 
