@@ -2079,6 +2079,13 @@ router.post("/buildings", async (req, res) => {
              Number(b.purchasePrice), salvage, usefulYears,
              assetCode, depExpCode, accDepCode]
           );
+          createNotification({
+            companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
+            type: "auto_journal", title: "قيد تلقائي — إثبات أصل عقاري",
+            body: `تم إنشاء قيد محاسبي تلقائي لإثبات أصل المبنى "${b.name}" بقيمة ${Number(b.purchasePrice).toLocaleString("ar-SA")} ريال، وتسجيله كأصل ثابت يخضع للإهلاك`,
+            priority: "normal", refType: "property_building", refId: insertId,
+            actionUrl: `/properties/buildings`,
+          }).catch(console.error);
         } catch (e) { console.error("Building asset JE/fixed-asset failed:", e); }
       })();
     }

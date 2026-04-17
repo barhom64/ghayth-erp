@@ -100,6 +100,17 @@ export default function CustodiesPage() {
       render: (c) => <span className="font-medium">{c.employeeName || "-"}</span>,
     },
     {
+      key: "custodyAccountCode",
+      header: "الحساب المحاسبي",
+      sortable: true,
+      render: (c) => c.custodyAccountCode ? (
+        <div className="text-xs">
+          <span className="font-mono text-blue-600">{c.custodyAccountCode}</span>
+          {c.custodyAccountName && <div className="text-gray-400 truncate max-w-[120px]">{c.custodyAccountName}</div>}
+        </div>
+      ) : <span className="text-gray-300">—</span>,
+    },
+    {
       key: "description",
       header: "الوصف",
       sortable: true,

@@ -479,41 +479,32 @@ export default function ExpensesCreate() {
             {form.relatedEntityType && (
               <div>
                 <Label>الجهة المرتبطة</Label>
-                <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
-                  const val = v === "_none" ? "" : v;
-                  const label = val ? getRelatedEntityLabel(form.relatedEntityType, val, {
-                    employees: employeesData?.data || [],
-                    vehicles: vehiclesData?.data || [],
-                    suppliers: suppliersData?.data || [],
-                    contracts: contractsData?.data || [],
-                    units: unitsData?.data || [],
-                    legalCases: legalCasesData?.data || [],
-                  }) : "";
-                  setForm({ ...form, relatedEntityId: val, relatedEntityName: label });
-                }}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">— اختر —</SelectItem>
-                    {form.relatedEntityType === "employee" && (employeesData?.data || []).map((emp: any) => (
-                      <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || ""}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "vehicle" && (vehiclesData?.data || []).map((v: any) => (
-                      <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "supplier" && (suppliersData?.data || []).map((s: any) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "contract" && (contractsData?.data || []).map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.tenantName} - عقد #{c.id}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "property" && (unitsData?.data || []).map((u: any) => (
-                      <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber || u.name} - {u.type || "وحدة"}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "legal_case" && (legalCasesData?.data || []).map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.title || c.caseNumber || `قضية #${c.id}`}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Autocomplete
+                  className="mt-1"
+                  placeholder="ابحث عن الجهة المرتبطة..."
+                  value={form.relatedEntityId}
+                  onChange={(val) => {
+                    const v = String(val);
+                    const label = v ? getRelatedEntityLabel(form.relatedEntityType, v, {
+                      employees: employeesData?.data || [],
+                      vehicles: vehiclesData?.data || [],
+                      suppliers: suppliersData?.data || [],
+                      contracts: contractsData?.data || [],
+                      units: unitsData?.data || [],
+                      legalCases: legalCasesData?.data || [],
+                    }) : "";
+                    setForm({ ...form, relatedEntityId: v, relatedEntityName: label });
+                  }}
+                  options={(() => {
+                    if (form.relatedEntityType === "employee") return (employeesData?.data || []).map((emp: any) => ({ value: String(emp.id), label: `${emp.name}${emp.jobTitle ? ` — ${emp.jobTitle}` : ""}` }));
+                    if (form.relatedEntityType === "vehicle") return (vehiclesData?.data || []).map((v: any) => ({ value: String(v.id), label: `${v.plateNumber} — ${v.make || ""} ${v.model || ""}` }));
+                    if (form.relatedEntityType === "supplier") return (suppliersData?.data || []).map((s: any) => ({ value: String(s.id), label: s.name }));
+                    if (form.relatedEntityType === "contract") return (contractsData?.data || []).map((c: any) => ({ value: String(c.id), label: `${c.tenantName || "—"} — عقد #${c.id}` }));
+                    if (form.relatedEntityType === "property") return (unitsData?.data || []).map((u: any) => ({ value: String(u.id), label: `${u.unitNumber || u.name || "—"} — ${u.type || "وحدة"}` }));
+                    if (form.relatedEntityType === "legal_case") return (legalCasesData?.data || []).map((c: any) => ({ value: String(c.id), label: c.title || c.caseNumber || `قضية #${c.id}` }));
+                    return [];
+                  })()}
+                />
               </div>
             )}
             <div>

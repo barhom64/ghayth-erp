@@ -181,6 +181,13 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
              Number(b.purchasePrice), salvage, usefulYears,
              assetCode, depExpCode, accDepCode]
           );
+          createNotification({
+            companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
+            type: "auto_journal", title: "قيد تلقائي — إثبات أصل مركبة",
+            body: `تم إنشاء قيد محاسبي تلقائي لإثبات أصل المركبة ${vName} بقيمة ${Number(b.purchasePrice).toLocaleString("ar-SA")} ريال، وتسجيلها كأصل ثابت يخضع للإهلاك الشهري`,
+            priority: "normal", refType: "fleet_vehicle", refId: insertId,
+            actionUrl: `/fleet`,
+          }).catch(console.error);
         } catch (e) { console.error("Vehicle asset JE/fixed-asset failed:", e); }
       })();
     }

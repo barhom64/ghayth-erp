@@ -45,7 +45,9 @@ custodiesRouter.get("/custodies", async (req, res) => {
               je.notes AS purpose,
               je."dueDate" AS "expectedReturnDate",
               e.name AS "employeeName",
-              ea.id AS "assignmentId"
+              ea.id AS "assignmentId",
+              (SELECT jl2."accountCode" FROM journal_lines jl2 WHERE jl2."journalId" = je.id AND jl2.debit > 0 LIMIT 1) AS "custodyAccountCode",
+              (SELECT ca.name FROM journal_lines jl3 JOIN chart_of_accounts ca ON ca.code = jl3."accountCode" AND ca."companyId" = $1 WHERE jl3."journalId" = je.id AND jl3.debit > 0 LIMIT 1) AS "custodyAccountName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
@@ -271,7 +273,9 @@ custodiesRouter.get("/custodies/:id", async (req, res) => {
               je.notes AS purpose,
               je."dueDate" AS "expectedReturnDate",
               e.name AS "employeeName",
-              ea.id AS "assignmentId"
+              ea.id AS "assignmentId",
+              (SELECT jl2."accountCode" FROM journal_lines jl2 WHERE jl2."journalId" = je.id AND jl2.debit > 0 LIMIT 1) AS "custodyAccountCode",
+              (SELECT ca.name FROM journal_lines jl3 JOIN chart_of_accounts ca ON ca.code = jl3."accountCode" AND ca."companyId" = $2 WHERE jl3."journalId" = je.id AND jl3.debit > 0 LIMIT 1) AS "custodyAccountName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
