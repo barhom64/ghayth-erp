@@ -468,7 +468,7 @@ router.delete("/subsidiary-accounts/:id", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createSubsidiaryAccountsForEntity(
   companyId: number,
-  entityType: "employee" | "client" | "vendor",
+  entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property",
   entityId: number,
   entityName: string
 ): Promise<void> {
