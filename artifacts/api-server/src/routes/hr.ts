@@ -563,6 +563,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
         type: "early_departure_warning", title: "تنبيه خروج مبكر",
         body: `تم تسجيل خروجك المبكر بمقدار ${earlyDepartureMinutes} دقيقة اليوم.`,
         priority: "high", refType: "attendance", refId: existing.id,
+        actionUrl: `/hr?tab=violations`,
       }).catch(console.error);
 
       // ── Notify manager ──
@@ -573,6 +574,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
             type: "early_departure", title: "خروج مبكر لموظف",
             body: `غادر الموظف مبكراً بمقدار ${earlyDepartureMinutes} دقيقة اليوم ${today}`,
             priority: "high", refType: "attendance", refId: existing.id,
+            actionUrl: `/hr?tab=violations`,
           }).catch(console.error);
         }
       }).catch(console.error);
