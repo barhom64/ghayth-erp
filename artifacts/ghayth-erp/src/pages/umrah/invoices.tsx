@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Receipt, DollarSign, FileText } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 export default function UmrahInvoices() {
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agent-invoices"], "/umrah/agent-invoices");
@@ -49,10 +50,11 @@ export default function UmrahInvoices() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">فواتير الوكلاء</h1>
-      </div>
+    <PageShell
+      title="فواتير الوكلاء"
+      subtitle="إدارة ومتابعة فواتير وكلاء العمرة"
+      breadcrumbs={[{ href: "/umrah", label: "العمرة" }]}
+    >
 
       <div className="grid gap-4 grid-cols-3">
         {kpiCards.map((c) => (
@@ -132,6 +134,6 @@ export default function UmrahInvoices() {
         noToolbar
         pageSize={pageSize}
       />
-    </div>
+    </PageShell>
   );
 }

@@ -5,6 +5,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AlertTriangle, DollarSign, Clock } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 
 export default function UmrahPenalties() {
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-penalties"], "/umrah/penalties");
@@ -41,10 +42,11 @@ export default function UmrahPenalties() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الغرامات</h1>
-      </div>
+    <PageShell
+      title="الغرامات"
+      subtitle="متابعة وإدارة غرامات المعتمرين"
+      breadcrumbs={[{ href: "/umrah", label: "العمرة" }]}
+    >
 
       <div className="grid gap-4 grid-cols-3">
         {kpiCards.map((c) => (
@@ -89,6 +91,6 @@ export default function UmrahPenalties() {
         noToolbar
         pageSize={pageSize}
       />
-    </div>
+    </PageShell>
   );
 }
