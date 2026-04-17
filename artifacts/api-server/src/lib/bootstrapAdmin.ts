@@ -1,0 +1,184 @@
+import { pool } from "./rawdb.js";
+import { hashPassword } from "./auth.js";
+import type pg from "pg";
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ghayth.com";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Admin@123456";
+
+const FLEET_EMAIL = "fleet@ghayth.com";
+const FLEET_PASSWORD = "Fleet@123456";
+
+interface BootstrapUser {
+  email: string;
+  password: string;
+  name: string;
+  phone: string;
+  nationalId: string;
+  gender: string;
+  nationality: string;
+  jobTitle: string;
+  assignmentRole: string;
+  userRole: string;
+  roleDefinition: {
+    roleKey: string;
+    label: string;
+    modules: string[];
+    level: number;
+  };
+}
+
+const ADMIN_USER: BootstrapUser = {
+  email: ADMIN_EMAIL,
+  password: ADMIN_PASSWORD,
+  name: "مدير النظام",
+  phone: "0500000001",
+  nationalId: "0000000001",
+  gender: "male",
+  nationality: "سعودي",
+  jobTitle: "مالك النظام",
+  assignmentRole: "owner",
+  userRole: "owner",
+  roleDefinition: {
+    roleKey: "owner",
+    label: "مالك النظام",
+    modules: [
+      "home", "hr", "finance", "fleet", "property", "operations",
+      "warehouse", "governance", "bi", "requests", "documents",
+      "reports", "admin", "comms", "legal", "crm", "marketing",
+      "store", "support", "settings",
+    ],
+    level: 100,
+  },
+};
+
+const FLEET_USER: BootstrapUser = {
+  email: FLEET_EMAIL,
+  password: FLEET_PASSWORD,
+  name: "موظف أسطول",
+  phone: "0500000002",
+  nationalId: "0000000002",
+  gender: "male",
+  nationality: "سعودي",
+  jobTitle: "موظف أسطول",
+  assignmentRole: "employee",
+  userRole: "employee",
+  roleDefinition: {
+    roleKey: "employee",
+    label: "موظف أسطول",
+    modules: ["home", "fleet", "requests", "documents", "comms"],
+    level: 10,
+  },
+};
+
+async function createUserIfNotExists(
+  client: pg.PoolClient,
+  user: BootstrapUser,
+  companyId: number,
+  branchId: number,
+): Promise<boolean> {
+  // Check if a user with this email already exists
+  const { rows: existing } = await client.query(
+    `SELECT id FROM users WHERE email = $1 LIMIT 1`,
+    [user.email],
+  );
+  if (existing.length > 0) {
+    console.log(`[Bootstrap] User "${user.email}" already exists — skipping`);
+    return false;
+  }
+
+  // 1. Create employee record
+  const seqRes = await client.query(
+    `SELECT nextval('employee_number_seq') AS seq`,
+  );
+  const seq = Number(seqRes.rows[0].seq);
+  const yearStr = new Date().getFullYear().toString();
+  const empNumber = `EMP-${yearStr}-${String(seq).padStart(3, "0")}`;
+
+  const empRes = await client.query(
+    `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", gender, nationality, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
+     RETURNING id`,
+    [user.name, user.phone, user.email, empNumber, user.nationalId, user.gender, user.nationality],
+  );
+  const employeeId = empRes.rows[0].id;
+  console.log(`[Bootstrap] Created employee "${user.name}" (id=${employeeId}, empNumber=${empNumber})`);
+
+  // 2. Create employee_assignment
+  const hireDate = new Date().toISOString().split("T")[0];
+  const assignRes = await client.query(
+    `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "jobTitle", role, salary, "hireDate", "isPrimary", status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, true, 'active')
+     RETURNING id`,
+    [employeeId, companyId, branchId, user.jobTitle, user.assignmentRole, 0, hireDate],
+  );
+  const assignmentId = assignRes.rows[0].id;
+  console.log(`[Bootstrap] Created employee_assignment (id=${assignmentId}) for "${user.email}"`);
+
+  // 3. Create user with hashed password
+  const passwordHash = await hashPassword(user.password);
+  const userRes = await client.query(
+    `INSERT INTO users (email, "passwordHash", "isActive", "employeeId", role)
+     VALUES ($1, $2, true, $3, $4)
+     RETURNING id`,
+    [user.email, passwordHash, employeeId, user.userRole],
+  );
+  const userId = userRes.rows[0].id;
+  console.log(`[Bootstrap] Created user (id=${userId}) for "${user.email}"`);
+
+  // 4. Create user_role
+  const rd = user.roleDefinition;
+  await client.query(
+    `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
+    [userId, rd.roleKey, rd.label, rd.level, JSON.stringify(rd.modules), companyId],
+  );
+  console.log(`[Bootstrap] Assigned role "${rd.roleKey}" (level=${rd.level}) to user "${user.email}"`);
+
+  return true;
+}
+
+export async function bootstrapAdminUser(): Promise<void> {
+  // Check if company with id=1 exists
+  const { rows: companies } = await pool.query(
+    `SELECT id FROM companies WHERE id = 1 LIMIT 1`,
+  );
+  if (companies.length === 0) {
+    console.log("[Bootstrap] Company id=1 does not exist — skipping admin bootstrap (company bootstrap creates the company first)");
+    return;
+  }
+  const companyId = companies[0].id;
+
+  // Find the first branch for this company
+  const { rows: branches } = await pool.query(
+    `SELECT id FROM branches WHERE "companyId" = $1 ORDER BY id LIMIT 1`,
+    [companyId],
+  );
+  if (branches.length === 0) {
+    console.log("[Bootstrap] No branch found for company id=1 — skipping admin bootstrap");
+    return;
+  }
+  const branchId = branches[0].id;
+
+  const client = await pool.connect();
+  await client.query("BEGIN");
+
+  try {
+    const adminCreated = await createUserIfNotExists(client, ADMIN_USER, companyId, branchId);
+    const fleetCreated = await createUserIfNotExists(client, FLEET_USER, companyId, branchId);
+
+    await client.query("COMMIT");
+
+    if (adminCreated || fleetCreated) {
+      console.log("[Bootstrap] Admin bootstrap completed successfully");
+    } else {
+      console.log("[Bootstrap] All bootstrap users already exist — nothing to do");
+    }
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("[Bootstrap] Failed to bootstrap admin users:", err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}

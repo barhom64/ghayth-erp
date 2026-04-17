@@ -205,4 +205,143 @@ router.get("/projects", async (req, res) => {
   }
 });
 
+router.get("/crm", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const [opportunities, contacts, activities] = await Promise.all([
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'won') AS won, COUNT(*) FILTER (WHERE status = 'lost') AS lost, COALESCE(SUM(value), 0) AS "totalValue", COALESCE(SUM(value) FILTER (WHERE status = 'won'), 0) AS "wonValue" FROM crm_opportunities WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total FROM crm_contacts WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'pending' OR status = 'planned') AS pending FROM crm_activities WHERE "companyId" = $1`, [cid]),
+    ]);
+
+    const pipeline = await safeQuery(
+      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."stageId" = ps.id AND o."companyId" = $1 WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
+    );
+
+    res.json({
+      opportunities: { total: Number(opportunities?.total ?? 0), open: Number(opportunities?.open ?? 0), won: Number(opportunities?.won ?? 0), lost: Number(opportunities?.lost ?? 0), totalValue: Number(opportunities?.totalValue ?? 0), wonValue: Number(opportunities?.wonValue ?? 0) },
+      contacts: { total: Number(contacts?.total ?? 0) },
+      activities: { total: Number(activities?.total ?? 0), completed: Number(activities?.completed ?? 0), pending: Number(activities?.pending ?? 0) },
+      pipeline,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "لوحة مؤشرات CRM");
+  }
+});
+
+router.get("/store", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const [orders, products, revenue] = await Promise.all([
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled FROM store_orders WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE "isActive" = true) AS active FROM store_products WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COALESCE(SUM(total), 0) AS "totalRevenue", COALESCE(SUM(total) FILTER (WHERE status = 'completed'), 0) AS "completedRevenue" FROM store_orders WHERE "companyId" = $1`, [cid]),
+    ]);
+
+    const monthlyOrders = await safeQuery(
+      `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue FROM store_orders WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
+    );
+
+    res.json({
+      orders: { total: Number(orders?.total ?? 0), pending: Number(orders?.pending ?? 0), completed: Number(orders?.completed ?? 0), cancelled: Number(orders?.cancelled ?? 0) },
+      products: { total: Number(products?.total ?? 0), active: Number(products?.active ?? 0) },
+      revenue: { total: Number(revenue?.totalRevenue ?? 0), completed: Number(revenue?.completedRevenue ?? 0) },
+      monthlyOrders,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "لوحة مؤشرات المتجر");
+  }
+});
+
+router.get("/support", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const [tickets, sla] = await Promise.all([
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'resolved' OR status = 'closed') AS resolved, COUNT(*) FILTER (WHERE priority = 'critical' OR priority = 'high') AS "highPriority", COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE("resolvedAt", NOW()) - "createdAt")) / 3600) FILTER (WHERE status IN ('resolved','closed')), 0) AS "avgResolutionHours" FROM support_tickets WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) FILTER (WHERE "slaBreached" = true) AS breached, COUNT(*) AS total FROM support_tickets WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
+    ]);
+
+    const byCategory = await safeQuery(
+      `SELECT COALESCE(category, 'غير مصنف') AS category, COUNT(*) AS count FROM support_tickets WHERE "companyId" = $1 GROUP BY category ORDER BY count DESC LIMIT 10`, [cid]
+    );
+
+    const weeklyTickets = await safeQuery(
+      `SELECT DATE("createdAt") AS date, COUNT(*) AS created, COUNT(*) FILTER (WHERE status IN ('resolved','closed')) AS resolved FROM support_tickets WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
+    );
+
+    res.json({
+      tickets: { total: Number(tickets?.total ?? 0), open: Number(tickets?.open ?? 0), inProgress: Number(tickets?.inProgress ?? 0), resolved: Number(tickets?.resolved ?? 0), highPriority: Number(tickets?.highPriority ?? 0), avgResolutionHours: Math.round(Number(tickets?.avgResolutionHours ?? 0)) },
+      sla: { breached: Number(sla?.breached ?? 0), total: Number(sla?.total ?? 0), compliance: Number(sla?.total ?? 0) > 0 ? Math.round(((Number(sla.total) - Number(sla.breached)) / Number(sla.total)) * 100) : 100 },
+      byCategory,
+      weeklyTickets,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "لوحة مؤشرات الدعم الفني");
+  }
+});
+
+router.get("/tasks", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const [taskStats] = await Promise.all([
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'todo' OR status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'done' OR status = 'completed') AS completed, COUNT(*) FILTER (WHERE status NOT IN ('done','completed','cancelled') AND "dueDate" < CURRENT_DATE) AS overdue, COUNT(*) FILTER (WHERE priority = 'high' OR priority = 'critical') AS "highPriority" FROM tasks WHERE "companyId" = $1`, [cid]),
+    ]);
+
+    const byPriority = await safeQuery(
+      `SELECT COALESCE(priority, 'normal') AS priority, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND status NOT IN ('done','completed','cancelled') GROUP BY priority`, [cid]
+    );
+
+    const weeklyCompleted = await safeQuery(
+      `SELECT DATE("updatedAt") AS date, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND status IN ('done','completed') AND "updatedAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
+    );
+
+    res.json({
+      tasks: { total: Number(taskStats?.total ?? 0), pending: Number(taskStats?.pending ?? 0), inProgress: Number(taskStats?.inProgress ?? 0), completed: Number(taskStats?.completed ?? 0), overdue: Number(taskStats?.overdue ?? 0), highPriority: Number(taskStats?.highPriority ?? 0) },
+      byPriority,
+      weeklyCompleted,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "لوحة مؤشرات المهام");
+  }
+});
+
+router.get("/warehouse", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const [products, movements, lowStock] = await Promise.all([
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COALESCE(SUM("currentQty"), 0) AS "totalQty", COALESCE(SUM("currentQty" * COALESCE("unitCost", 0)), 0) AS "totalValue" FROM warehouse_products WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE type = 'in') AS "inCount", COUNT(*) FILTER (WHERE type = 'out') AS "outCount", COALESCE(SUM(quantity) FILTER (WHERE type = 'in'), 0) AS "inQty", COALESCE(SUM(quantity) FILTER (WHERE type = 'out'), 0) AS "outQty" FROM warehouse_movements WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
+      sq1(`SELECT COUNT(*) AS count FROM warehouse_products WHERE "companyId" = $1 AND "currentQty" <= COALESCE("minQty", 0) AND "currentQty" >= 0`, [cid]),
+    ]);
+
+    const categories = await safeQuery(
+      `SELECT wc.name, COUNT(wp.id) AS "productCount", COALESCE(SUM(wp."currentQty"), 0) AS "totalQty" FROM warehouse_categories wc LEFT JOIN warehouse_products wp ON wp."categoryId" = wc.id AND wp."companyId" = $1 WHERE wc."companyId" = $1 GROUP BY wc.id, wc.name ORDER BY "productCount" DESC LIMIT 10`, [cid]
+    );
+
+    const recentMovements = await safeQuery(
+      `SELECT DATE("createdAt") AS date, COUNT(*) FILTER (WHERE type = 'in') AS "inCount", COUNT(*) FILTER (WHERE type = 'out') AS "outCount" FROM warehouse_movements WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
+    );
+
+    res.json({
+      products: { total: Number(products?.total ?? 0), active: Number(products?.active ?? 0), totalQty: Number(products?.totalQty ?? 0), totalValue: Number(products?.totalValue ?? 0) },
+      movements: { total: Number(movements?.total ?? 0), inCount: Number(movements?.inCount ?? 0), outCount: Number(movements?.outCount ?? 0), inQty: Number(movements?.inQty ?? 0), outQty: Number(movements?.outQty ?? 0) },
+      lowStock: Number(lowStock?.count ?? 0),
+      categories,
+      recentMovements,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "لوحة مؤشرات المستودعات");
+  }
+});
+
 export default router;

@@ -5,6 +5,7 @@ import { startCronScheduler } from "./lib/cronScheduler.js";
 import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
+import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { pool } from "./lib/rawdb.js";
 import http from "http";
 
@@ -44,6 +45,13 @@ async function start() {
       process.exit(1);
     }
     logger.warn("Continuing despite migration failure (development mode only)");
+  }
+
+  try {
+    await bootstrapAdminUser();
+    logger.info("Admin bootstrap complete");
+  } catch (bootstrapErr) {
+    logger.warn({ err: bootstrapErr }, "Admin bootstrap skipped or failed");
   }
 
   try {

@@ -8,6 +8,7 @@ import {
   Users, DollarSign, Truck, Scale, Building2, FolderKanban,
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Clock,
   Wrench, Shield, FileText, BarChart3, Activity,
+  Target, ShoppingCart, Headphones, ListTodo, Package, Briefcase, MessageSquare, Layers,
 } from "lucide-react";
 
 function KpiCard({ title, value, subtitle, icon: Icon, trend, color = "blue" }: {
@@ -408,6 +409,237 @@ function ProjectsDashboard() {
   );
 }
 
+function CrmDashboard() {
+  const { data, isLoading } = useApiQuery<any>(["module-dash-crm"], "/module-dashboards/crm");
+  if (isLoading) return <DashboardSkeleton />;
+  if (!data) return null;
+
+  const fmt = (v: number) => v.toLocaleString("ar-SA");
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <KpiCard title="إجمالي الفرص" value={data.opportunities?.total ?? 0} icon={Target} color="blue" />
+        <KpiCard title="فرص مفتوحة" value={data.opportunities?.open ?? 0} icon={Briefcase} color="orange" />
+        <KpiCard title="فرص مكسوبة" value={data.opportunities?.won ?? 0} icon={CheckCircle} color="green" />
+        <KpiCard title="فرص خاسرة" value={data.opportunities?.lost ?? 0} icon={TrendingDown} color="red" />
+        <KpiCard title="قيمة الفرص" value={`${fmt(data.opportunities?.totalValue ?? 0)} ر.س`} icon={DollarSign} color="purple" />
+        <KpiCard title="جهات الاتصال" value={data.contacts?.total ?? 0} icon={Users} color="cyan" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">الأنشطة</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            <MiniBar label="مكتملة" value={data.activities?.completed ?? 0} max={data.activities?.total ?? 1} color="green" />
+            <MiniBar label="معلقة" value={data.activities?.pending ?? 0} max={data.activities?.total ?? 1} color="orange" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">قمع المبيعات</CardTitle></CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {(data.pipeline || []).map((s: any) => (
+                <MiniBar key={s.name} label={s.name} value={Number(s.count)} max={Math.max(data.opportunities?.total ?? 1, 1)} color="blue" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function StoreDashboard() {
+  const { data, isLoading } = useApiQuery<any>(["module-dash-store"], "/module-dashboards/store");
+  if (isLoading) return <DashboardSkeleton />;
+  if (!data) return null;
+
+  const fmt = (v: number) => v.toLocaleString("ar-SA");
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <KpiCard title="إجمالي الطلبات" value={data.orders?.total ?? 0} icon={ShoppingCart} color="blue" />
+        <KpiCard title="طلبات معلقة" value={data.orders?.pending ?? 0} icon={Clock} color="orange" />
+        <KpiCard title="طلبات مكتملة" value={data.orders?.completed ?? 0} icon={CheckCircle} color="green" />
+        <KpiCard title="منتجات نشطة" value={data.products?.active ?? 0} icon={Package} color="purple" subtitle={`من ${data.products?.total ?? 0}`} />
+        <KpiCard title="إجمالي الإيرادات" value={`${fmt(data.revenue?.completed ?? 0)} ر.س`} icon={DollarSign} color="green" />
+      </div>
+      {data.monthlyOrders?.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">الطلبات الشهرية</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex gap-1 items-end h-24">
+              {data.monthlyOrders.map((m: any, i: number) => {
+                const maxOrd = Math.max(...data.monthlyOrders.map((x: any) => Number(x.orders)), 1);
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full bg-blue-400 rounded-t" style={{ height: `${(Number(m.orders) / maxOrd) * 80}px`, minHeight: "2px" }} />
+                    <span className="text-[9px] text-muted-foreground">{m.month?.slice(5)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function SupportDashboard() {
+  const { data, isLoading } = useApiQuery<any>(["module-dash-support"], "/module-dashboards/support");
+  if (isLoading) return <DashboardSkeleton />;
+  if (!data) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <KpiCard title="إجمالي التذاكر" value={data.tickets?.total ?? 0} icon={Headphones} color="blue" />
+        <KpiCard title="مفتوحة" value={data.tickets?.open ?? 0} icon={MessageSquare} color="orange" />
+        <KpiCard title="قيد المعالجة" value={data.tickets?.inProgress ?? 0} icon={Activity} color="purple" />
+        <KpiCard title="تم الحل" value={data.tickets?.resolved ?? 0} icon={CheckCircle} color="green" />
+        <KpiCard title="عالية الأولوية" value={data.tickets?.highPriority ?? 0} icon={AlertTriangle} color="red" />
+        <KpiCard title="متوسط الحل (ساعة)" value={data.tickets?.avgResolutionHours ?? 0} icon={Clock} color="cyan" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">التزام SLA</CardTitle></CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600">{data.sla?.compliance ?? 100}%</div>
+            <p className="text-xs text-muted-foreground mt-1">{data.sla?.breached ?? 0} تذكرة تجاوزت SLA من {data.sla?.total ?? 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">حسب التصنيف</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {(data.byCategory || []).slice(0, 5).map((c: any) => (
+              <MiniBar key={c.category} label={c.category} value={Number(c.count)} max={data.tickets?.total ?? 1} color="blue" />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      {data.weeklyTickets?.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">التذاكر - آخر 7 أيام</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex gap-1 items-end h-24">
+              {data.weeklyTickets.map((d: any, i: number) => {
+                const maxVal = Math.max(...data.weeklyTickets.map((x: any) => Math.max(Number(x.created), Number(x.resolved))), 1);
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full flex flex-col gap-0.5" style={{ height: "60px" }}>
+                      <div className="bg-blue-400 rounded-t" style={{ height: `${(Number(d.created) / maxVal) * 60}px` }} />
+                      <div className="bg-green-400 rounded-b" style={{ height: `${(Number(d.resolved) / maxVal) * 60}px` }} />
+                    </div>
+                    <span className="text-[9px] text-muted-foreground">{d.date ? new Date(d.date).toLocaleDateString("ar-SA", { weekday: "short" }) : ""}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-400 rounded-full" />جديدة</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full" />محلولة</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function TasksDashboard() {
+  const { data, isLoading } = useApiQuery<any>(["module-dash-tasks"], "/module-dashboards/tasks");
+  if (isLoading) return <DashboardSkeleton />;
+  if (!data) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <KpiCard title="إجمالي المهام" value={data.tasks?.total ?? 0} icon={ListTodo} color="blue" />
+        <KpiCard title="معلقة" value={data.tasks?.pending ?? 0} icon={Clock} color="orange" />
+        <KpiCard title="قيد التنفيذ" value={data.tasks?.inProgress ?? 0} icon={Activity} color="purple" />
+        <KpiCard title="مكتملة" value={data.tasks?.completed ?? 0} icon={CheckCircle} color="green" />
+        <KpiCard title="متأخرة" value={data.tasks?.overdue ?? 0} icon={AlertTriangle} color="red" />
+        <KpiCard title="عالية الأولوية" value={data.tasks?.highPriority ?? 0} icon={TrendingUp} color="cyan" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">حسب الأولوية</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {(data.byPriority || []).map((p: any) => (
+              <MiniBar
+                key={p.priority}
+                label={p.priority === "critical" ? "حرجة" : p.priority === "high" ? "عالية" : p.priority === "normal" ? "عادية" : p.priority === "low" ? "منخفضة" : p.priority}
+                value={Number(p.count)}
+                max={data.tasks?.total ?? 1}
+                color={p.priority === "critical" ? "red" : p.priority === "high" ? "orange" : p.priority === "low" ? "green" : "blue"}
+              />
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">الإنجاز</CardTitle></CardHeader>
+          <CardContent>
+            <MiniBar label="مكتملة" value={data.tasks?.completed ?? 0} max={data.tasks?.total ?? 1} color="green" />
+            <div className="mt-2">
+              <MiniBar label="قيد التنفيذ" value={data.tasks?.inProgress ?? 0} max={data.tasks?.total ?? 1} color="blue" />
+            </div>
+            <div className="mt-2">
+              <MiniBar label="متأخرة" value={data.tasks?.overdue ?? 0} max={data.tasks?.total ?? 1} color="red" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function WarehouseDashboard() {
+  const { data, isLoading } = useApiQuery<any>(["module-dash-warehouse"], "/module-dashboards/warehouse");
+  if (isLoading) return <DashboardSkeleton />;
+  if (!data) return null;
+
+  const fmt = (v: number) => v.toLocaleString("ar-SA");
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <KpiCard title="إجمالي المنتجات" value={data.products?.total ?? 0} icon={Package} color="blue" subtitle={`نشط: ${data.products?.active ?? 0}`} />
+        <KpiCard title="إجمالي الكمية" value={fmt(data.products?.totalQty ?? 0)} icon={Layers} color="green" />
+        <KpiCard title="قيمة المخزون" value={`${fmt(data.products?.totalValue ?? 0)} ر.س`} icon={DollarSign} color="purple" />
+        <KpiCard title="مخزون منخفض" value={data.lowStock ?? 0} icon={AlertTriangle} color="red" />
+        <KpiCard title="حركات الشهر" value={data.movements?.total ?? 0} icon={Activity} color="orange" subtitle={`وارد: ${data.movements?.inCount ?? 0} | صادر: ${data.movements?.outCount ?? 0}`} />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">الفئات</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {(data.categories || []).slice(0, 6).map((c: any) => (
+              <MiniBar key={c.name} label={c.name} value={Number(c.productCount)} max={data.products?.total ?? 1} color="blue" />
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">حركات المخزون (الشهر)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">وارد</span>
+                <span className="font-medium text-green-600">{fmt(data.movements?.inQty ?? 0)} وحدة</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">صادر</span>
+                <span className="font-medium text-red-600">{fmt(data.movements?.outQty ?? 0)} وحدة</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 function DashboardSkeleton() {
   return (
     <div className="space-y-4">
@@ -427,6 +659,11 @@ const tabConfig = [
   { key: "legal", label: "القانونية", icon: Scale, component: LegalDashboard },
   { key: "properties", label: "الأملاك", icon: Building2, component: PropertiesDashboard },
   { key: "projects", label: "المشاريع", icon: FolderKanban, component: ProjectsDashboard },
+  { key: "crm", label: "إدارة العملاء", icon: Target, component: CrmDashboard },
+  { key: "store", label: "المتجر", icon: ShoppingCart, component: StoreDashboard },
+  { key: "support", label: "الدعم الفني", icon: Headphones, component: SupportDashboard },
+  { key: "tasks", label: "المهام", icon: ListTodo, component: TasksDashboard },
+  { key: "warehouse", label: "المستودعات", icon: Package, component: WarehouseDashboard },
 ];
 
 export default function ModuleDashboardsPage() {

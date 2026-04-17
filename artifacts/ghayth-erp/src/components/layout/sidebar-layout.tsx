@@ -219,6 +219,7 @@ const allNavSections: NavSection[] = [
     title: "العمليات",
     items: [
       { label: "المشاريع والمهام", path: "/projects", icon: Activity, module: "operations", children: [
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=projects", icon: LayoutDashboard },
         { label: "قائمة المشاريع", path: "/projects", icon: Target },
         { label: "المهام", path: "/tasks", icon: ListTodo },
       ]},
@@ -234,12 +235,14 @@ const allNavSections: NavSection[] = [
         { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle },
       ]},
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard },
         { label: "منتجات المخزون", path: "/warehouse", icon: Package },
         { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
         { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard },
         { label: "منتجات المتجر", path: "/store", icon: Package },
         { label: "الطلبات", path: "/store/orders", icon: ShoppingCart },
       ]},
@@ -277,12 +280,16 @@ const allNavSections: NavSection[] = [
     title: "العلاقات",
     items: [
       { label: "العملاء والمبيعات", path: "/clients", icon: Target, module: "crm", children: [
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=crm", icon: LayoutDashboard },
         { label: "العملاء", path: "/clients", icon: Building2 },
         { label: "الفرص التجارية", path: "/crm", icon: Target },
         { label: "قمع المبيعات", path: "/crm/pipeline", icon: TrendingUp },
         { label: "أنشطة علاقات العملاء", path: "/crm/activities", icon: Activity },
       ]},
-      { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support" },
+      { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support", children: [
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=support", icon: LayoutDashboard },
+        { label: "التذاكر", path: "/support", icon: Headphones },
+      ]},
       { label: "التسويق", path: "/marketing", icon: Megaphone, module: "marketing" },
     ],
   },
@@ -407,6 +414,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const { settings: globalSettings } = useSettings();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPaletteFilter, setCommandPaletteFilter] = useState<"shortcuts" | null>(null);
@@ -453,6 +461,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       ctrl: true,
       description: "عرض قائمة الاختصارات",
       action: () => { setCommandPaletteFilter("shortcuts"); setCommandPaletteOpen(true); },
+    },
+    {
+      key: "b",
+      ctrl: true,
+      description: "طي/توسيع القائمة الجانبية",
+      action: () => setIsSidebarCollapsed(prev => !prev),
     },
   ]);
 
@@ -591,6 +605,25 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     const isActive = isItemActive(item);
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = expandedItems.includes(item.path);
+
+    if (isSidebarCollapsed && isChild) return null;
+
+    if (isSidebarCollapsed) {
+      const targetPath = hasChildren && item.children!.length > 0 ? item.children![0].path : item.path;
+      return (
+        <Link key={item.path} href={targetPath}>
+          <span
+            className={cn(
+              "flex items-center justify-center py-2.5 rounded-lg transition-colors cursor-pointer",
+              isActive ? "bg-primary/10 text-primary" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+            )}
+            title={item.label}
+          >
+            <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-gray-400")} />
+          </span>
+        </Link>
+      );
+    }
 
     if (hasChildren) {
       return (
@@ -873,34 +906,58 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     <div className="h-screen bg-gray-50 flex overflow-hidden" dir="rtl">
       <aside
         className={cn(
-          "bg-white border-e border-gray-200 fixed inset-y-0 start-0 z-50 w-64 flex-shrink-0 transition-transform duration-300 ease-in-out lg:transition-none",
+          "bg-white border-e border-gray-200 fixed inset-y-0 start-0 z-50 flex-shrink-0 transition-all duration-300 ease-in-out",
+          isSidebarCollapsed ? "w-16" : "w-64",
           isSidebarOpen ? "translate-x-0" : "translate-x-full",
           "lg:!translate-x-0"
         )}
       >
         <div className="h-full flex flex-col">
-          <div className="h-14 flex items-center justify-between px-5 border-b border-gray-100">
-            <div className="flex items-center gap-2 font-bold text-lg text-primary">
-              <CloudRain className="h-5 w-5" />
-              <span>{globalSettings.companyName || "منصة غيث"}</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden h-8 w-8"
-              onClick={() => setIsSidebarOpen(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+          <div className={cn("h-14 flex items-center border-b border-gray-100", isSidebarCollapsed ? "justify-center px-2" : "justify-between px-5")}>
+            {isSidebarCollapsed ? (
+              <button
+                onClick={() => setIsSidebarCollapsed(false)}
+                className="flex items-center justify-center h-9 w-9 rounded-lg text-primary hover:bg-gray-50 transition-colors"
+                title="توسيع القائمة"
+              >
+                <CloudRain className="h-5 w-5" />
+              </button>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 font-bold text-lg text-primary">
+                  <CloudRain className="h-5 w-5" />
+                  <span>{globalSettings.companyName || "منصة غيث"}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden lg:flex h-8 w-8 text-gray-400 hover:text-gray-600"
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    title="طي القائمة"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="lg:hidden h-8 w-8"
+                    onClick={() => setIsSidebarOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
 
-          <nav className="flex-1 overflow-y-auto py-2 px-3">
+          <nav className={cn("flex-1 overflow-y-auto py-2", isSidebarCollapsed ? "px-1" : "px-3")}>
             {filteredSections.map((section, sectionIdx) => (
               <div key={section.title}>
                 {sectionIdx > 0 && (
-                  <div className="my-2 mx-2 border-t border-gray-100" />
+                  <div className={cn("my-2 border-t border-gray-100", isSidebarCollapsed ? "mx-1" : "mx-2")} />
                 )}
-                {section.title !== "الرئيسية" && (
+                {section.title !== "الرئيسية" && !isSidebarCollapsed && (
                   <div className="px-3 pt-2 pb-1">
                     <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                       {section.title}
@@ -914,29 +971,44 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          <div className="p-3 border-t border-gray-100">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                style={{ backgroundColor: currentRoleColor }}
-              >
-                {(user?.name || "مستخدم").substring(0, 2)}
+          <div className={cn("border-t border-gray-100", isSidebarCollapsed ? "p-2" : "p-3")}>
+            {isSidebarCollapsed ? (
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                  style={{ backgroundColor: currentRoleColor }}
+                  title={user?.name || "مستخدم"}
+                >
+                  {(user?.name || "مستخدم").substring(0, 2)}
+                </div>
+                <Button variant="ghost" size="icon" onClick={logout} title="تسجيل الخروج" className="h-7 w-7">
+                  <LogOut className="h-3.5 w-3.5 text-gray-400" />
+                </Button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{user?.name || "مستخدم"}</p>
-                <p className="text-xs truncate" style={{ color: currentRoleColor }}>
-                  {jobTitle || selectedRoleLabel}
-                </p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                  style={{ backgroundColor: currentRoleColor }}
+                >
+                  {(user?.name || "مستخدم").substring(0, 2)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{user?.name || "مستخدم"}</p>
+                  <p className="text-xs truncate" style={{ color: currentRoleColor }}>
+                    {jobTitle || selectedRoleLabel}
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={logout} title="تسجيل الخروج" className="h-8 w-8">
+                  <LogOut className="h-4 w-4 text-gray-400" />
+                </Button>
               </div>
-              <Button variant="ghost" size="icon" onClick={logout} title="تسجيل الخروج" className="h-8 w-8">
-                <LogOut className="h-4 w-4 text-gray-400" />
-              </Button>
-            </div>
+            )}
           </div>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 lg:ms-64 h-screen overflow-hidden">
+      <div className={cn("flex-1 flex flex-col min-w-0 h-screen overflow-hidden transition-all duration-300", isSidebarCollapsed ? "lg:ms-16" : "lg:ms-64")}>
         <header className="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-40">
           <div className="flex items-center gap-3">
             <Button
@@ -947,6 +1019,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             >
               <Menu className="h-5 w-5" />
             </Button>
+            {location !== "/dashboard" && location !== "/" && (
+              <Link href="/dashboard">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-blue-600" title="الرجوع للرئيسية">
+                  <Home className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
             <h1 className="text-base font-semibold text-gray-800 flex items-center gap-2">
               <PageIcon className="h-[18px] w-[18px] text-blue-600" />
               <span className="hidden sm:inline">{pageTitle}</span>
