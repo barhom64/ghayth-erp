@@ -133,7 +133,7 @@ export default function ExitCreate() {
               value={form.assignmentId}
               onValueChange={(v) => setForm({ ...form, assignmentId: v })}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errCls("assignmentId")}>
                 <SelectValue placeholder="اختر الموظف..." />
               </SelectTrigger>
               <SelectContent>
@@ -147,6 +147,7 @@ export default function ExitCreate() {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint field="assignmentId" />
           </div>
 
           <div className="space-y-2">
@@ -158,7 +159,7 @@ export default function ExitCreate() {
               value={form.exitType}
               onValueChange={(v) => setForm({ ...form, exitType: v })}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errCls("exitType")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -167,6 +168,7 @@ export default function ExitCreate() {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint field="exitType" />
           </div>
         </div>
 
@@ -174,12 +176,15 @@ export default function ExitCreate() {
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-gray-500" />
-              آخر يوم عمل
+              آخر يوم عمل <span className="text-red-500">*</span>
             </Label>
-            <DatePicker
-              value={form.lastWorkingDay}
-              onChange={(v) => setForm({ ...form, lastWorkingDay: v })}
-            />
+            <div className={errCls("lastWorkingDay")}>
+              <DatePicker
+                value={form.lastWorkingDay}
+                onChange={(v) => setForm({ ...form, lastWorkingDay: v })}
+              />
+            </div>
+            <FieldHint field="lastWorkingDay" />
           </div>
 
           <div className="space-y-2">
