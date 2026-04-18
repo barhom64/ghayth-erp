@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Building2, Home, Wrench, TrendingUp, DollarSign } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   rented: { label: "مؤجرة", color: "text-green-600", bg: "bg-green-100" },
@@ -15,9 +16,10 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
 const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#9ca3af"];
 
 export default function OccupancyReportPage() {
-  const { data, isLoading } = useApiQuery<any>(["occupancy-report"], "/properties/occupancy-report");
+  const { data, isLoading, isError } = useApiQuery<any>(["occupancy-report"], "/properties/occupancy-report");
 
-  if (isLoading) return <div className="p-6 text-center text-gray-400">جاري التحميل...</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const units = asList(data?.units || []);
   const pieData = [

@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function ContractDetailPage() {
   const [, params] = useRoute("/properties/contracts/:id");
@@ -66,6 +67,9 @@ export default function ContractDetailPage() {
     !!id
   );
   const inspections: any[] = inspResp?.data || [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const monthlyRent = Number(contract?.monthlyRent) || 0;
   const totalPaid = schedule

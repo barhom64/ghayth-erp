@@ -46,6 +46,98 @@ const createUnitSchema = z.object({
   insuranceExpiry: z.string().optional().nullable(),
 });
 
+const updateUnitSchema = z.object({
+  unitNumber: z.string().optional(),
+  buildingId: z.number().optional().nullable(),
+  buildingName: z.string().optional().nullable(),
+  name: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
+  area: z.number().optional().nullable(),
+  bedrooms: z.number().optional().nullable(),
+  bathrooms: z.number().optional().nullable(),
+  floor: z.number().optional().nullable(),
+  monthlyRent: z.number().optional().nullable(),
+  status: z.string().optional(),
+  address: z.string().optional().nullable(),
+  direction: z.string().optional().nullable(),
+  finishing: z.string().optional().nullable(),
+  amenities: z.union([z.array(z.string()), z.string()]).optional().nullable(),
+  branchId: z.number().optional().nullable(),
+  electricityMeter: z.string().optional().nullable(),
+  waterMeter: z.string().optional().nullable(),
+  usageType: z.string().optional().nullable(),
+  ownerId: z.number().optional().nullable(),
+  parkingSpaces: z.number().optional().nullable(),
+  acType: z.string().optional().nullable(),
+  hasKitchen: z.boolean().optional().nullable(),
+  yearlyRent: z.number().optional().nullable(),
+  insurancePolicy: z.string().optional().nullable(),
+  insuranceExpiry: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const updateBuildingSchema = z.object({
+  name: z.string().optional(),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
+  floors: z.number().optional().nullable(),
+  description: z.string().optional().nullable(),
+  deedNumber: z.string().optional().nullable(),
+  deedDate: z.string().optional().nullable(),
+  buildingPermitNumber: z.string().optional().nullable(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
+  totalUnits: z.number().optional().nullable(),
+  totalArea: z.number().optional().nullable(),
+  yearBuilt: z.number().optional().nullable(),
+  ownerId: z.number().optional().nullable(),
+  managerId: z.number().optional().nullable(),
+  nationalAddress: z.union([z.string(), z.record(z.any())]).optional().nullable(),
+});
+
+const updateContractSchema = z.object({
+  tenantId: z.union([z.number(), z.string()]).optional().nullable(),
+  tenantName: z.string().optional().nullable(),
+  tenantPhone: z.string().optional().nullable(),
+  tenantEmail: z.string().optional().nullable(),
+  tenantIdNumber: z.string().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  monthlyRent: z.number().optional().nullable(),
+  depositAmount: z.number().optional().nullable(),
+  paymentDay: z.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.string().optional(),
+  contractNumber: z.string().optional().nullable(),
+  ejarNumber: z.string().optional().nullable(),
+  contractType: z.string().optional().nullable(),
+  paymentFrequency: z.string().optional().nullable(),
+  yearlyRent: z.number().optional().nullable(),
+  totalContractValue: z.number().optional().nullable(),
+  latePenaltyType: z.string().optional().nullable(),
+  latePenaltyValue: z.number().optional().nullable(),
+  gracePeriodDays: z.number().optional().nullable(),
+  terminationNoticeDays: z.number().optional().nullable(),
+  earlyTerminationFee: z.number().optional().nullable(),
+  autoRenewal: z.boolean().optional().nullable(),
+  renewalNoticeDays: z.number().optional().nullable(),
+  renewalPeriodMonths: z.number().optional().nullable(),
+  electricityResponsibility: z.string().optional().nullable(),
+  waterResponsibility: z.string().optional().nullable(),
+  gasResponsibility: z.string().optional().nullable(),
+  maintenanceResponsibility: z.string().optional().nullable(),
+  brokerageFee: z.number().optional().nullable(),
+  brokeragePayor: z.string().optional().nullable(),
+  depositHolder: z.string().optional().nullable(),
+  insuranceRequired: z.boolean().optional().nullable(),
+  ownerId: z.number().optional().nullable(),
+  numberOfInstallments: z.number().optional().nullable(),
+  specialConditions: z.string().optional().nullable(),
+  ejarStatus: z.string().optional().nullable(),
+  registrationDate: z.string().optional().nullable(),
+});
+
 const router = Router();
 router.use(authMiddleware);
 
@@ -294,7 +386,9 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الوحدة غير موجودة");
-    const b = req.body;
+    const parsed = updateUnitSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
     // State machine + business impact guard
     if (b.status !== undefined && b.status !== existing.status) {
@@ -674,7 +768,9 @@ router.patch("/contracts/:id", async (req, res) => {
     );
     if (!existing) throw new NotFoundError("العقد غير موجود");
 
-    const b = req.body;
+    const parsed = updateContractSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
     // State machine: terminated/renewed/expired must go through dedicated
     // lifecycle endpoints (/renew, /terminate) so obligations + JE + unit
@@ -2151,7 +2247,9 @@ router.patch("/buildings/:id", async (req, res) => {
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المبنى غير موجود");
-    const b = req.body;
+    const parsed = updateBuildingSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     if (b.ownerId && b.ownerId !== existing.ownerId) {
       const [owner] = await rawQuery<any>(
         `SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,

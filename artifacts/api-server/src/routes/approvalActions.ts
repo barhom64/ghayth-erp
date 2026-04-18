@@ -52,7 +52,7 @@ router.get("/:entityType/:entityId", async (req, res) => {
        ORDER BY aa."createdAt" DESC`,
       [entityType, Number(entityId), scope.companyId]
     );
-    res.json({ data: rows });
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) {
     handleRouteError(err, res, "approvalActions");
   }

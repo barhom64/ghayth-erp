@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const TYPES: Record<string, string> = {
   move_in: "دخول مستأجر",
@@ -29,7 +30,7 @@ export default function InspectionsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({ unitId: "", type: "routine", scheduledDate: "", inspectorName: "", conditionRating: "", notes: "" });
 
-  const { data, refetch } = useApiQuery<any>(
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["inspections", statusFilter],
     `/properties/inspections${statusFilter !== "all" ? `?status=${statusFilter}` : ""}`
   );
@@ -63,6 +64,9 @@ export default function InspectionsPage() {
       toast({ title: "تم إكمال الفحص" });
     } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

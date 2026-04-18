@@ -6,6 +6,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 import { LayoutDashboard, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function DashboardsTab() {
   const { data: dashResp, isLoading, isError, refetch } = useApiQuery<any>(["bi-dashboards"], "/bi/dashboards");
@@ -16,6 +17,9 @@ export function DashboardsTab() {
   const filtered = applyFilters(items, filters, {
     searchFields: ["title", "description"],
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   return (
     <div className="space-y-4">
@@ -38,13 +42,7 @@ export function DashboardsTab() {
         </div>
         {canWrite && <Link href="/bi/dashboards/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة لوحة</Button></Link>}
       </div>
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => <Card key={i}><CardContent className="p-6"><div className="h-16 bg-gray-100 rounded animate-pulse" /></CardContent></Card>)}
-        </div>
-      ) : isError ? (
-        <Card><CardContent className="p-8 text-center text-rose-600">حدث خطأ أثناء تحميل لوحات المعلومات <Button variant="outline" size="sm" onClick={() => refetch()} className="ms-2">إعادة المحاولة</Button></CardContent></Card>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <Card><CardContent className="p-8 text-center">
           <LayoutDashboard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
           <p className="text-muted-foreground">لا توجد لوحات معلومات</p>

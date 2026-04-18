@@ -73,7 +73,8 @@ router.get("/entities", requirePermission("audit:read"), async (req, res) => {
       `SELECT DISTINCT entity FROM audit_logs WHERE "companyId" = $1 ORDER BY entity`,
       [scope.companyId]
     );
-    res.json({ data: rows.map((r: any) => r.entity) });
+    const entities = rows.map((r: any) => r.entity);
+    res.json({ data: entities, total: entities.length, page: 1, pageSize: entities.length });
   } catch (err) {
     res.status(500).json({ error: "خطأ في الخادم" });
   }

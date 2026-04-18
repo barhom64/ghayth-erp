@@ -7,9 +7,10 @@ import { BellOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function AlertFatigueTab() {
-  const { data: dcData } = useApiQuery<any>(["alert-daily-count"], "/bi/alert-fatigue/daily-count");
+  const { data: dcData, isLoading, isError } = useApiQuery<any>(["alert-daily-count"], "/bi/alert-fatigue/daily-count");
   const { data: settingsData } = useApiQuery<any>(["alert-fatigue-settings"], "/bi/alert-fatigue/settings");
   const { toast } = useToast();
   const [muteType, setMuteType] = useState("");
@@ -32,6 +33,9 @@ export function AlertFatigueTab() {
 
   const dc = dcData || {};
   const settings = (settingsData?.data || []) as any[];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">

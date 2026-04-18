@@ -10,6 +10,7 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { Link } from "wouter";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function AuditsTab() {
   const { data: auditsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-audits"], "/governance/audits");
@@ -59,6 +60,9 @@ export function AuditsTab() {
       ),
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

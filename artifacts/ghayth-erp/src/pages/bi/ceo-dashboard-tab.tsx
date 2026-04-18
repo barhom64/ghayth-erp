@@ -8,16 +8,18 @@ import {
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/formatters";
 import { TrendBadge } from "./shared";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function CEODashboardTab() {
-  const { data, isLoading } = useApiQuery<any>(["ceo-dashboard"], "/bi/ceo-dashboard");
+  const { data, isLoading, isError } = useApiQuery<any>(["ceo-dashboard"], "/bi/ceo-dashboard");
   const d = data || {};
   const fin = d.financial || {};
   const hr = d.hr || {};
   const ops = d.operations || {};
   const risks = d.risks || {};
 
-  if (isLoading) return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{[...Array(8)].map((_, i) => <Card key={i}><CardContent className="p-6"><div className="h-16 bg-gray-100 rounded animate-pulse" /></CardContent></Card>)}</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">

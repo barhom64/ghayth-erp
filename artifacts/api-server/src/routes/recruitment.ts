@@ -31,6 +31,26 @@ const createApplicationSchema = z.object({
   rating: z.number().optional().nullable(),
 });
 
+const updatePostingSchema = z.object({
+  title: z.string().optional(),
+  department: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  requirements: z.string().optional().nullable(),
+  salaryMin: z.number().optional().nullable(),
+  salaryMax: z.number().optional().nullable(),
+  status: z.enum(["open", "closed", "draft", "paused"]).optional(),
+  closingDate: z.string().optional().nullable(),
+});
+
+const updateApplicationSchema = z.object({
+  status: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  rating: z.number().optional().nullable(),
+  interviewDate: z.string().optional().nullable(),
+});
+
 const router = Router();
 router.use(authMiddleware);
 
@@ -83,7 +103,9 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const b = req.body;
+    const parsed = updatePostingSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -244,7 +266,9 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
-    const b = req.body;
+    const parsed = updateApplicationSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }

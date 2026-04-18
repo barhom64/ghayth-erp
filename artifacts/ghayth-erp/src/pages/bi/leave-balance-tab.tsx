@@ -3,10 +3,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function LeaveBalanceTab() {
-  const { data, isLoading } = useApiQuery<any>(["bi-dept-leave"], "/bi/reports/department-leave-balance");
+  const { data, isLoading, isError } = useApiQuery<any>(["bi-dept-leave"], "/bi/reports/department-leave-balance");
   const rows = (data?.data || []) as any[];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

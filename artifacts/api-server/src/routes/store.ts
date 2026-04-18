@@ -3,7 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import {
   createJournalEntry,
   getAccountCodeFromMapping,
@@ -40,6 +40,26 @@ const createStoreOrderSchema = z.object({
   })).optional().default([]),
   notes: z.string().optional().nullable(),
   branchId: z.number().optional().nullable(),
+});
+
+const updateStoreProductSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional().nullable(),
+  sku: z.string().optional().nullable(),
+  price: z.number().optional(),
+  costPrice: z.number().optional(),
+  quantity: z.number().int().optional(),
+  category: z.string().optional().nullable(),
+  status: z.enum(["active", "inactive", "draft"]).optional(),
+  imageUrl: z.string().optional().nullable(),
+});
+
+const updateStoreOrderSchema = z.object({
+  status: z.enum(["pending", "processing", "completed", "cancelled"]).optional(),
+  customerName: z.string().optional().nullable(),
+  customerPhone: z.string().optional().nullable(),
+  totalAmount: z.number().optional(),
+  notes: z.string().optional().nullable(),
 });
 
 const router = Router();
@@ -96,7 +116,9 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
-    const b = req.body;
+    const parsed = updateStoreProductSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -206,7 +228,9 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
-    const b = req.body;
+    const parsed = updateStoreOrderSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }

@@ -2,6 +2,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Wrench } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface CapaItem {
   id: number;
@@ -36,6 +37,9 @@ const columns: DataTableColumn<CapaItem>[] = [
 export default function GovernanceCapa() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["governance-capa"], "/governance/capa");
   const rows = asList(data?.data || data);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">

@@ -8,6 +8,7 @@ import { formatNumber } from "@/lib/formatters";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function BranchPerformanceTab() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-branch-perf"], "/bi/reports/branch-performance");
@@ -34,6 +35,9 @@ export function BranchPerformanceTab() {
     { key: "openTickets", header: "تذاكر مفتوحة", sortable: true, render: (r) => <Badge variant={r.openTickets > 10 ? "destructive" : "outline"}>{r.openTickets}</Badge> },
     { key: "clientSatisfaction", header: "رضا العملاء", sortable: true, render: (r) => r.clientSatisfaction > 0 ? `${r.clientSatisfaction}/5` : "-" },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

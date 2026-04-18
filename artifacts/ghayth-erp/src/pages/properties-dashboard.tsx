@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   Building2, Home, Users2, FileText, Banknote, Wrench,
   TrendingUp, AlertTriangle, Clock, Plus, Calendar, Trophy, TrendingDown
@@ -13,20 +13,13 @@ import { cn } from "@/lib/utils";
 
 export default function PropertiesDashboard() {
   const { scopeQueryString } = useAppContext();
-  const { data: stats, isLoading } = useApiQuery(
+  const { data: stats, isLoading, isError } = useApiQuery(
     ["properties-stats", scopeQueryString],
     `/properties/stats?${scopeQueryString || ""}`
   );
 
-  if (isLoading) return (
-    <div className="space-y-6">
-      <Skeleton className="h-10 w-64" />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[1,2,3,4].map(i => <Skeleton key={i} className="h-28" />)}
-      </div>
-      <Skeleton className="h-64" />
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const s = stats as any || {};
   const occupancyRate = s.occupancyRate || 0;

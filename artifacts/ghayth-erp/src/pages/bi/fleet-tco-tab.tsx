@@ -2,6 +2,7 @@ import { useApiQuery } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Car } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function FleetTCOTab() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-fleet-tco"], "/bi/reports/fleet-tco");
@@ -19,6 +20,9 @@ export function FleetTCOTab() {
     { key: "tco", header: "التكلفة الإجمالية", sortable: true, className: "font-bold text-blue-600", render: (r) => formatNumber(r.tco) },
     { key: "costPerKm", header: "تكلفة/كم", sortable: true, className: "text-sm", render: (r) => r.costPerKm > 0 ? `${r.costPerKm} ر/كم` : "-" },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

@@ -7,6 +7,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 import { TrendingUp, Plus } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function KPIsTab() {
   const { data: kpisResp, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-kpis"], "/bi/kpis");
@@ -24,6 +25,9 @@ export function KPIsTab() {
     { key: "target", header: "الهدف", sortable: true, render: (k) => formatNumber(k.target || 0) },
     { key: "currentValue", header: "القيمة الحالية", sortable: true, render: (k) => <span className="font-bold">{formatNumber(k.currentValue || 0)}</span> },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">
