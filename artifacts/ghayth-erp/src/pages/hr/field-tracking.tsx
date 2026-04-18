@@ -1,6 +1,7 @@
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { MapPin, Navigation, Clock, AlertTriangle } from "lucide-react";
 import { useEffect, useRef } from "react";
 import L from "leaflet";
@@ -106,7 +107,7 @@ export default function FieldTrackingPage() {
           { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
           { key: "date", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.date}</span> },
           { key: "checkIn", header: "وقت التسجيل", sortable: true, render: (v) => <span className="font-mono">{v.checkIn ? new Date(v.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</span> },
-          { key: "status", header: "الحالة", sortable: true, render: (v) => <Badge className={v.status === "present" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>{v.status === "present" ? "حاضر" : v.status}</Badge> },
+          { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
         ] as DataTableColumn<any>[]}
         data={items}
         noToolbar

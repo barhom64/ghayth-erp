@@ -11,7 +11,28 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { useQueryClient } from "@tanstack/react-query";
+
+const EXIT_LIFECYCLE = [
+  { key: "pending",     label: "بانتظار الموافقة" },
+  { key: "in_progress", label: "جاري التنفيذ" },
+  { key: "completed",   label: "مكتمل" },
+];
+
+function buildExitSteps(status: string | undefined): StageStep[] {
+  const s = status ?? "pending";
+  if (s === "rejected") {
+    return [{ label: "مرفوض", status: "rejected" }];
+  }
+  const idx = EXIT_LIFECYCLE.findIndex((x) => x.key === s);
+  return EXIT_LIFECYCLE.map((step, i): StageStep => {
+    if (idx === -1) return { label: step.label, status: "pending" };
+    if (i < idx)    return { label: step.label, status: "completed" };
+    if (i === idx)  return { label: step.label, status: "current" };
+    return { label: step.label, status: "pending" };
+  });
+}
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ActionHistory } from "@/components/approval-actions";
 
@@ -92,6 +113,14 @@ export default function ExitDetail() {
         { label: "سنوات الخدمة", value: yearsOfService, icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
         { label: "المكافأة المقدّرة", value: formatCurrency(Number(item.estimatedGratuity || 0)), icon: DollarSign, color: "text-green-600 bg-green-50", size: "sm" },
       ]} />
+
+      {/* شريط مراحل نهاية الخدمة */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">مراحل الطلب</p>
+          <ProcessStages steps={buildExitSteps(item.status)} />
+        </CardContent>
+      </Card>
 
       {/* تنبيه الفصل */}
       {item.exitType === "termination" && (

@@ -12,6 +12,28 @@ import {
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+
+const TRAINING_LIFECYCLE = [
+  { key: "planned",   label: "مخطط" },
+  { key: "upcoming",  label: "قادم" },
+  { key: "active",    label: "نشط" },
+  { key: "completed", label: "مكتمل" },
+];
+
+function buildTrainingSteps(status: string | undefined): StageStep[] {
+  const s = status ?? "planned";
+  if (s === "cancelled") {
+    return [{ label: "ملغي", status: "rejected" }];
+  }
+  const idx = TRAINING_LIFECYCLE.findIndex((x) => x.key === s);
+  return TRAINING_LIFECYCLE.map((step, i): StageStep => {
+    if (idx === -1) return { label: step.label, status: "pending" };
+    if (i < idx)    return { label: step.label, status: "completed" };
+    if (i === idx)  return { label: step.label, status: "current" };
+    return { label: step.label, status: "pending" };
+  });
+}
 
 export default function TrainingDetailPage() {
   const [, params] = useRoute("/hr/training/:id");
@@ -146,6 +168,14 @@ export default function TrainingDetailPage() {
     >
       {/* KPI cards */}
       <KpiGrid items={kpis} />
+
+      {/* شريط مراحل البرنامج التدريبي */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">مراحل البرنامج</p>
+          <ProcessStages steps={buildTrainingSteps(program.status)} />
+        </CardContent>
+      </Card>
 
       {/* Program details */}
       <Card className="border-0 shadow-sm">

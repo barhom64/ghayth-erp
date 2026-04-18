@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -181,9 +182,7 @@ export default function ScheduledReportsPage() {
                       <p className="text-sm font-medium">{h.reportTitle}</p>
                       <p className="text-xs text-gray-500">{h.sentAt ? formatDateAr(h.sentAt) : "-"}</p>
                     </div>
-                    <Badge className={h.status === "sent" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
-                      {h.status === "sent" ? "تم الإرسال" : "فشل"}
-                    </Badge>
+                    <PageStatusBadge status={h.status} />
                     {h.error && <p className="text-xs text-red-500 max-w-xs">{h.error}</p>}
                   </div>
                 ))}

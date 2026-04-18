@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Plus, Clock, Users, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -112,9 +113,7 @@ export default function ShiftsPage() {
                       </div>
                       <div className="flex gap-1 items-center">
                         {s.isDefault && <Badge className="bg-blue-100 text-blue-700 text-xs">افتراضية</Badge>}
-                        <Badge className={s.status === "active" || s.isActive !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
-                          {s.status === "active" || s.isActive !== false ? "نشطة" : "غير نشطة"}
-                        </Badge>
+                        <PageStatusBadge status={s.status || (s.isActive !== false ? "active" : "inactive")} />
                         <RowActions
                           onEdit={() => startEdit(s.id, { name: s.name, startTime: s.startTime || "", endTime: s.endTime || "", breakMinutes: s.breakMinutes || s.breakDuration || 0 })}
                           onDelete={() => startDelete(s.id)}

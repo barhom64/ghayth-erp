@@ -15,6 +15,29 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { SEVERITY_LEVELS, INCIDENT_LABELS } from "@/lib/hr-type-maps";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+
+const VIOLATION_LIFECYCLE = [
+  { key: "draft",               label: "مسودة" },
+  { key: "pending_employee",    label: "بانتظار الموظف" },
+  { key: "pending_manager",     label: "بانتظار المدير" },
+  { key: "pending_hr_decision", label: "بانتظار HR" },
+  { key: "approved",            label: "مُنفَّذ" },
+];
+
+function buildViolationSteps(status: string | undefined): StageStep[] {
+  const s = status ?? "draft";
+  if (s === "rejected") {
+    return [{ label: "مرفوضة", status: "rejected" }];
+  }
+  const idx = VIOLATION_LIFECYCLE.findIndex((x) => x.key === s);
+  return VIOLATION_LIFECYCLE.map((step, i): StageStep => {
+    if (idx === -1) return { label: step.label, status: "pending" };
+    if (i < idx)    return { label: step.label, status: "completed" };
+    if (i === idx)  return { label: step.label, status: "current" };
+    return { label: step.label, status: "pending" };
+  });
+}
 
 export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,6 +86,14 @@ export default function ViolationDetail() {
         { label: "الخصم", value: formatCurrency(Number(item.deduction || 0)), icon: DollarSign, color: "text-red-600 bg-red-50", size: "sm" },
         { label: "الفترة", value: item.period || "—", icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
       ]} />
+
+      {/* شريط مراحل المخالفة */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">مراحل المخالفة</p>
+          <ProcessStages steps={buildViolationSteps(item.status)} />
+        </CardContent>
+      </Card>
 
       {/* تفاصيل المخالفة */}
       <Card className="border-0 shadow-sm">

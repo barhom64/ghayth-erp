@@ -10,7 +10,28 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { LOAN_STATUS, INSTALLMENT_STATUS, LOAN_TYPES } from "@/lib/hr-type-maps";
+
+const LOAN_LIFECYCLE = [
+  { key: "pending",   label: "بانتظار الموافقة" },
+  { key: "active",    label: "نشطة" },
+  { key: "completed", label: "مكتملة" },
+];
+
+function buildLoanSteps(status: string | undefined): StageStep[] {
+  const s = status ?? "pending";
+  if (s === "rejected") {
+    return [{ label: "مرفوضة", status: "rejected" }];
+  }
+  const idx = LOAN_LIFECYCLE.findIndex((x) => x.key === s);
+  return LOAN_LIFECYCLE.map((step, i): StageStep => {
+    if (idx === -1) return { label: step.label, status: "pending" };
+    if (i < idx)    return { label: step.label, status: "completed" };
+    if (i === idx)  return { label: step.label, status: "current" };
+    return { label: step.label, status: "pending" };
+  });
+}
 
 export default function LoanDetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,6 +84,14 @@ export default function LoanDetail() {
         { label: "المتبقي", value: formatCurrency(Number(loan.remainingAmount ?? loan.amount)), icon: Wallet, color: "text-red-600 bg-red-50", size: "sm" },
         { label: "القسط الشهري", value: formatCurrency(Number(loan.installmentAmount ?? 0)), icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
       ]} />
+
+      {/* شريط مراحل السلفة */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">دورة حياة السلفة</p>
+          <ProcessStages steps={buildLoanSteps(loan.status)} />
+        </CardContent>
+      </Card>
 
       {/* شريط التقدم */}
       {loan.status === "active" && (

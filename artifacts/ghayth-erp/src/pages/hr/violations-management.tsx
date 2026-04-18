@@ -3,6 +3,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, Scale, DollarSign, Shield, TrendingUp } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -55,9 +56,7 @@ export default function ViolationsManagementPage() {
       header: "الحالة",
       sortable: true,
       render: (v) => (
-        <Badge className={v.status === "active" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
-          {v.status === "active" ? "نشط" : v.status}
-        </Badge>
+        <PageStatusBadge status={v.status} />
       ),
     },
     {

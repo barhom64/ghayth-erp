@@ -2,6 +2,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
@@ -59,7 +60,7 @@ export default function TrainingAdvancedPage() {
             columns={[
               { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName || "-"}</span> },
               { key: "programTitle", header: "البرنامج", sortable: true, render: (v) => <span>{v.programTitle || "-"}</span> },
-              { key: "status", header: "الحالة", sortable: true, render: (v) => <Badge className={v.status === "completed" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>{v.status === "completed" ? "مكتمل" : v.status === "enrolled" ? "مسجل" : v.status}</Badge> },
+              { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
               { key: "score", header: "الدرجة", sortable: true, render: (v) => <span>{v.score ?? "-"}</span> },
             ] as DataTableColumn<any>[]}
             data={enrollments}
