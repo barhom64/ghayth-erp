@@ -3,12 +3,13 @@ import { PageShell } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Bell, BellDot, Check, Clock, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDateAr } from "@/lib/formatters";
 
 export default function Notifications() {
-  const { data: notifResp, isLoading } = useApiQuery<any>(["notifications"], "/notifications");
+  const { data: notifResp, isLoading, isError } = useApiQuery<any>(["notifications"], "/notifications");
   const notifications = asList(notifResp);
 
   const markReadMut = useApiMutation<any, { id: number }>(
@@ -18,6 +19,9 @@ export default function Notifications() {
     { successMessage: false }
   );
   const markingId = markReadMut.isPending ? markReadMut.variables?.id ?? null : null;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleMarkAsRead = (id: number) => {
     markReadMut.mutate({ id });
