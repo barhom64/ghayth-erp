@@ -899,7 +899,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // dedupeKey (which includes the date) ensures no duplicates.
     if ([iqamaExpiry, passportExpiry, workPermitExpiry, visaExpiry].some((v) => v !== undefined)) {
       const [empRow] = await rawQuery<any>(
-        `SELECT name, "iqamaExpiry", "passportExpiry", "workPermitExpiry", "visaExpiry" FROM employees WHERE id=$1`,
+        `SELECT name, "iqamaExpiry", "passportExpiry", "workPermitExpiry", "visaExpiry" FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
         [Number(id)]
       );
       if (empRow) {
