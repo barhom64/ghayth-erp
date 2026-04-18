@@ -4,8 +4,9 @@ import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, AutoField } from "@/components/create-page-layout";
+import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { AlertCircle, Paperclip } from "lucide-react";
@@ -202,11 +203,12 @@ export default function VouchersCreate() {
           <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
+      <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <AutoField label="رقم السند" value={autoNumberRef.current} />
         <div>
           <Label>التاريخ <span className="text-red-500">*</span></Label>
-          <Input type="date" className="mt-1" value={form.date} onChange={(e) => setField("date", e.target.value)} />
+          <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setField("date", v)} /></div>
         </div>
       </div>
 

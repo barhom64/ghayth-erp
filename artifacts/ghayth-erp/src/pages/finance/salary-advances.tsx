@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Banknote, DollarSign, Plus, X } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { Banknote, DollarSign, Plus, X, Clock, CheckCircle } from "lucide-react";
+import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
@@ -144,32 +145,12 @@ export default function SalaryAdvancesPage() {
         </Button>
       }
     >
-      <div className="grid gap-3 grid-cols-2">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
-              <Banknote className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">عدد السلف</p>
-              <p className="text-xl font-bold">{summary.total || 0}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 border border-amber-100">
-              <DollarSign className="h-5 w-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">إجمالي المبالغ</p>
-              <p className="text-xl font-bold text-amber-700">
-                {formatCurrency(Number(summary.totalAmount || 0))}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <KpiGrid items={[
+        { label: "عدد السلف", value: formatNumber(summary.total || 0), icon: Banknote, color: "text-blue-600 bg-blue-50" },
+        { label: "قيد الانتظار", value: formatNumber(items.filter((s: any) => s.status === "pending").length), icon: Clock, color: "text-amber-600 bg-amber-50" },
+        { label: "معتمدة", value: formatNumber(items.filter((s: any) => s.status === "approved").length), icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي المبالغ", value: formatCurrency(Number(summary.totalAmount || 0)), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
+      ]} />
 
       {showForm && <CreateAdvanceForm onDone={() => setShowForm(false)} />}
 

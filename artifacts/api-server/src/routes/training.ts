@@ -79,6 +79,34 @@ router.patch("/programs/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
+router.patch("/programs/:id/approve", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!program) throw new NotFoundError("البرنامج التدريبي غير موجود");
+    await rawExecute(`UPDATE training_programs SET status='approved' WHERE id=$1`, [id]);
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'approved',$2,$3,$4)`, [id, req.body?.notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "training_program.approved", entity: "training_programs", entityId: id, before: { status: program.status }, after: { status: "approved" } }).catch(console.error);
+    res.json({ message: "تم اعتماد البرنامج التدريبي", status: "approved" });
+  } catch (err) { handleRouteError(err, res, "Training approve error:"); }
+});
+
+router.patch("/programs/:id/reject", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { notes } = req.body as any;
+    if (!notes || !String(notes).trim()) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
+    const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!program) throw new NotFoundError("البرنامج التدريبي غير موجود");
+    await rawExecute(`UPDATE training_programs SET status='rejected' WHERE id=$1`, [id]);
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'rejected',$2,$3,$4)`, [id, notes, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "training_program.rejected", entity: "training_programs", entityId: id, before: { status: program.status }, after: { status: "rejected" } }).catch(console.error);
+    res.json({ message: "تم رفض البرنامج التدريبي", status: "rejected" });
+  } catch (err) { handleRouteError(err, res, "Training reject error:"); }
+});
+
 router.delete("/programs/:id", async (req, res) => {
   try {
     const scope = req.scope!;

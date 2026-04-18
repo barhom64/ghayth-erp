@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -214,65 +215,12 @@ export default function CustodiesPage() {
         </div>
       }
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
-              <KeyRound className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">عدد العهد</p>
-              <p className="text-xl font-bold">{summary.total || 0}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 border border-emerald-100">
-              <DollarSign className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">إجمالي المبالغ</p>
-              <p className="text-xl font-bold">{formatCurrency(Number(summary.totalAmount || 0))}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 border border-amber-100">
-              <AlertCircle className="h-5 w-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">المتبقي</p>
-              <p className="text-xl font-bold text-amber-700">
-                {formatCurrency(Number(summary.totalRemaining || 0))}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100">
-              <CheckCircle className="h-5 w-5 text-violet-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">النشطة</p>
-              <p className="text-xl font-bold">{summary.activeCount || 0}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-red-50 border border-red-100">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">متأخرة</p>
-              <p className="text-xl font-bold text-red-600">{summary.overdueCount || 0}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <KpiGrid items={[
+        { label: "عدد العهد", value: summary.total || 0, icon: KeyRound, color: "text-blue-600 bg-blue-50" },
+        { label: "المتبقي (قائمة)", value: formatCurrency(Number(summary.totalRemaining || 0)), icon: AlertCircle, color: "text-amber-600 bg-amber-50" },
+        { label: "المسوّاة", value: items.filter((c: any) => c.status === "settled").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي المبالغ", value: formatCurrency(Number(summary.totalAmount || 0)), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
+      ]} />
 
       {showForm && <CreateCustodyForm onDone={() => setShowForm(false)} />}
       {settleTarget && (

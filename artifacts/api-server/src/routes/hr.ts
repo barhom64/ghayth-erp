@@ -3086,6 +3086,38 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Patch violation error:"); }
 });
 
+async function violationApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+      throw new ForbiddenError("غير مصرح: اعتماد المخالفات مقصور على HR أو المدير أو المالك");
+    }
+    const id = Number(req.params.id);
+    const { notes } = req.body as any;
+    const [violation] = await rawQuery<any>(
+      `SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!violation) throw new NotFoundError("المخالفة غير موجودة");
+    if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
+      throw new ValidationError(newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع", { field: "notes" });
+    }
+    await rawExecute(`UPDATE employee_violations SET status=$1 WHERE id=$2`, [newStatus, id]);
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('violation',$1,$2,$3,$4,$5)`,
+        [id, newStatus, notes || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error(e); }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: `violation.${newStatus}`, entity: "employee_violations", entityId: id, before: { status: violation.status }, after: { status: newStatus } }).catch(console.error);
+    const labels: Record<string, string> = { approved: "تم اعتماد المخالفة", rejected: "تم رفض المخالفة", returned: "تم إرجاع المخالفة" };
+    res.json({ message: labels[newStatus], status: newStatus });
+  } catch (err) { handleRouteError(err, res, "Violation approval error:"); }
+}
+router.patch("/violations/:id/approve", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "approved"));
+router.patch("/violations/:id/reject", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "rejected"));
+router.patch("/violations/:id/return", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "returned"));
+
 router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Wallet, Calendar, DollarSign, CheckCircle, Clock } from "lucide-react";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -153,6 +154,23 @@ export default function LoanDetail() {
           </CardContent>
         </Card>
       )}
+
+      {/* إجراءات الاعتماد */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2"><CardTitle className="text-base">إجراءات الاعتماد</CardTitle></CardHeader>
+        <CardContent>
+          <ApprovalActions
+            entityType="loan"
+            entityId={Number(id)}
+            approveEndpoint={`/hr/loans/${id}/approve`}
+            rejectEndpoint={`/hr/loans/${id}/reject`}
+            approveMethod="PATCH"
+            rejectMethod="PATCH"
+            invalidateKeys={[["hr-loan-detail", id || ""], ["hr-loans"]]}
+          />
+        </CardContent>
+      </Card>
+      <ActionHistory entityType="loan" entityId={Number(id)} />
     </PageShell>
   );
 }

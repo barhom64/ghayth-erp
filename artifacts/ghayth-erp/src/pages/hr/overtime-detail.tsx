@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Timer, Calendar, DollarSign, Clock, User } from "lucide-react";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
@@ -154,6 +155,22 @@ export default function OvertimeDetail() {
           </div>
         </CardContent>
       </Card>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2"><CardTitle className="text-base">إجراءات الاعتماد</CardTitle></CardHeader>
+        <CardContent>
+          <ApprovalActions
+            entityType="overtime"
+            entityId={Number(id)}
+            approveEndpoint={`/hr/overtime/${id}/approve`}
+            rejectEndpoint={`/hr/overtime/${id}/reject`}
+            approveMethod="PATCH"
+            rejectMethod="PATCH"
+            invalidateKeys={[["hr-overtime-detail", id || ""], ["hr-overtime"]]}
+          />
+        </CardContent>
+      </Card>
+      <ActionHistory entityType="overtime" entityId={Number(id)} />
     </PageShell>
   );
 }

@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { Banknote, CheckCircle } from "lucide-react";
+import { Banknote, CheckCircle, DollarSign, AlertTriangle, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 export default function PropertiesPayments() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
@@ -19,6 +21,7 @@ export default function PropertiesPayments() {
   );
   const payments = asList(paymentsResp);
   const [filters, setFilters] = useFilters();
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const filtered = applyFilters(payments, filters, {
     searchFields: ["tenantName", "unitNumber"] as any,
     statusField: "status" as any,
@@ -26,6 +29,16 @@ export default function PropertiesPayments() {
   });
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "tenantName", header: "المستأجر", sortable: true, className: "font-medium" },
     { key: "unitNumber", header: "الوحدة", sortable: true, render: (p) => p.unitNumber || "—" },
     { key: "dueDate", header: "تاريخ الاستحقاق", sortable: true, render: (p) => formatDateAr(p.dueDate) },
@@ -68,6 +81,13 @@ export default function PropertiesPayments() {
         )}
       </div>
 
+      <KpiGrid items={[
+        { label: "إجمالي المدفوعات", value: payments.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+        { label: "مدفوع", value: payments.filter((p: any) => p.status === "paid").length, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
+        { label: "متأخر", value: payments.filter((p: any) => p.status === "overdue").length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي المبلغ", value: formatCurrency(payments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0)), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
+      ]} />
+
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالمستأجر أو الوحدة...",
@@ -89,6 +109,26 @@ export default function PropertiesPayments() {
           { key: "status", label: "الحالة" },
         ], "المدفوعات")}
         resultCount={filtered?.length}
+      />
+
+      <BulkActionsBar
+        entityType="rent_payment"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["rent-payments"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "tenantName", label: "المستأجر" },
+          { key: "unitNumber", label: "الوحدة" },
+          { key: "dueDate", label: "تاريخ الاستحقاق" },
+          { key: "amount", label: "المبلغ" },
+          { key: "paidAmount", label: "المدفوع" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="المدفوعات"
       />
 
       <Card>

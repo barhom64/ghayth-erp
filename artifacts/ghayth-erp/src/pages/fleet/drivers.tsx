@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Eye, Users, UserCheck, UserX, Car } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { PageShell } from "@/components/page-shell";
@@ -15,6 +15,7 @@ export default function DriversPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
   const items: any[] = data?.data || [];
   const [previewDriver, setPreviewDriver] = useState<any>(null);
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const driverFields: PreviewField[] = [
     { label: "الاسم", key: "name" },
@@ -39,6 +40,16 @@ export default function DriversPage() {
   ];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "name", header: "الاسم", sortable: true, searchable: true, className: "font-medium" },
     { key: "phone", header: "الهاتف", sortable: true, searchable: true, className: "text-gray-500", render: (d) => d.phone || "-" },
     { key: "licenseType", header: "الرخصة", sortable: true, searchable: true, sortKey: "licenseNumber", render: (d) => d.licenseNumber || "-" },
@@ -79,26 +90,32 @@ export default function DriversPage() {
         </Link>
       }
     >
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        {[
-          { label: "إجمالي السائقين", value: items.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-          { label: "نشطين", value: items.filter((d: any) => d.status === "active").length, icon: UserCheck, color: "text-green-600 bg-green-50" },
-          { label: "غير نشطين", value: items.filter((d: any) => d.status !== "active").length, icon: UserX, color: "text-red-600 bg-red-50" },
-          { label: "المركبات المسندة", value: items.filter((d: any) => d.vehicleId).length, icon: Car, color: "text-purple-600 bg-purple-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي السائقين", value: items.length, icon: Users, color: "text-blue-600 bg-blue-50" },
+        { label: "نشطين", value: items.filter((d: any) => d.status === "active").length, icon: UserCheck, color: "text-green-600 bg-green-50" },
+        { label: "غير نشطين", value: items.filter((d: any) => d.status !== "active").length, icon: UserX, color: "text-red-600 bg-red-50" },
+        { label: "المركبات المسندة", value: items.filter((d: any) => d.vehicleId).length, icon: Car, color: "text-purple-600 bg-purple-50" },
+      ]} />
+
+      <BulkActionsBar
+        entityType="driver"
+        items={items}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(items.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["drivers"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "name", label: "الاسم" },
+          { key: "phone", label: "الهاتف" },
+          { key: "licenseNumber", label: "رقم الرخصة" },
+          { key: "licenseType", label: "نوع الرخصة" },
+          { key: "licenseExpiry", label: "انتهاء الرخصة" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="السائقين"
+      />
 
       <DataTable
         columns={columns}

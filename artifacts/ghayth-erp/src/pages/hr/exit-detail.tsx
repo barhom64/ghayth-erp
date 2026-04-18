@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useQueryClient } from "@tanstack/react-query";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ActionHistory } from "@/components/approval-actions";
 
 import { EXIT_TYPES, EXIT_REQUEST_STATUS, CLEARANCE_STATUS } from "@/lib/hr-type-maps";
 
@@ -227,6 +228,8 @@ export default function ExitDetail() {
           </CardContent>
         </Card>
       )}
+
+      <ActionHistory entityType="exit_request" entityId={Number(id)} />
     </PageShell>
   );
 }

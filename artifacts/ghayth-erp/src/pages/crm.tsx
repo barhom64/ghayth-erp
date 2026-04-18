@@ -6,16 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
-import { Target, BarChart3, Plus, Eye } from "lucide-react";
+import { Target, BarChart3, Plus, Eye, DollarSign, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 // P4.3 — CRM domain sweep. Shared header + status chips from P1 primitives.
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { currencyColumn } from "@/components/data-table-presets";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
@@ -64,6 +66,7 @@ function OpportunitiesTab() {
   const [page, setPage] = useState(1);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [filters, setFilters] = useFilters();
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const pageSize = 20;
   const { data: oppsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["crm-opportunities", String(page), scopeQueryString],
@@ -101,6 +104,16 @@ function OpportunitiesTab() {
   ];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "title", header: "الفرصة", sortable: true, render: (o) => <span className="font-medium">{o.title}</span> },
     { key: "contactName", header: "جهة الاتصال", sortable: true, render: (o) => o.contactName || o.clientName || "-" },
     { key: "stage", header: "المرحلة", sortable: true, render: (o) => <PageStatusBadge status={o.stage}>{STAGE_LABELS[o.stage] || o.stage}</PageStatusBadge> },
@@ -126,12 +139,12 @@ function OpportunitiesTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي الفرص</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.totalOpportunities || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-blue-600">فرص مفتوحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-blue-600">{stats?.openOpportunities || 0}</div></CardContent></Card>
-        <Card className="bg-emerald-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">قيمة المكسوب</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(stats?.wonValue || 0)}</div></CardContent></Card>
-        <Card className="bg-primary text-primary-foreground"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">قيمة خط الأنابيب</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(stats?.pipelineValue || 0)}</div></CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي الفرص", value: stats?.totalOpportunities || 0, icon: Target, color: "text-blue-600 bg-blue-50" },
+        { label: "مفتوحة", value: stats?.openOpportunities || 0, icon: TrendingUp, color: "text-indigo-600 bg-indigo-50" },
+        { label: "مكسوبة", value: stats?.wonOpportunities || 0, icon: Eye, color: "text-emerald-600 bg-emerald-50" },
+        { label: "قيمة الصفقات", value: formatCurrency(stats?.pipelineValue || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <div className="flex items-center gap-4">
         <div className="flex-1">
@@ -162,6 +175,26 @@ function OpportunitiesTab() {
           <Button className="gap-2"><Plus className="h-4 w-4" /> فرصة جديدة</Button>
         </Link>
       </div>
+
+      <BulkActionsBar
+        entityType="opportunity"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["crm-opportunities"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "title", label: "الفرصة" },
+          { key: "contactName", label: "جهة الاتصال" },
+          { key: "stage", label: "المرحلة" },
+          { key: "value", label: "القيمة" },
+          { key: "probability", label: "الاحتمالية" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="فرص_المبيعات"
+      />
 
       <Card>
         <CardHeader><CardTitle>الفرص التجارية</CardTitle></CardHeader>

@@ -4,10 +4,11 @@ import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 
 export default function BuildingsCreate() {
   const [, setLocation] = useLocation();
@@ -54,6 +55,7 @@ export default function BuildingsCreate() {
       backPath="/properties/buildings"
     >
       <div className="space-y-6">
+        <CreationDateField />
         <h3 className="flex items-center gap-2 text-lg font-semibold">
           <Building2 className="h-5 w-5 text-blue-500" /> بيانات المبنى
         </h3>
@@ -93,7 +95,7 @@ export default function BuildingsCreate() {
               </div>
               <div>
                 <Label>تاريخ الصك</Label>
-                <Input className="mt-1" type="date" value={form.deedDate} onChange={e => setForm({ ...form, deedDate: e.target.value })} />
+                <div className="mt-1"><DatePicker value={form.deedDate} onChange={v => setForm({ ...form, deedDate: v })} /></div>
               </div>
               <div>
                 <Label>رقم رخصة البناء</Label>

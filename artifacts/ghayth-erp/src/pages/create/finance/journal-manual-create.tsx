@@ -3,10 +3,11 @@ import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 
 type JournalLine = { accountCode: string; description: string; debit: number; credit: number };
 
@@ -76,6 +77,7 @@ export default function JournalManualCreatePage() {
     >
       <div dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
+            <CreationDateField />
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1">البيان *</label>
@@ -83,7 +85,7 @@ export default function JournalManualCreatePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">التاريخ</label>
-                <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+                <DatePicker value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
               </div>
               <CostCenterSelect
                 value={form.costCenter}

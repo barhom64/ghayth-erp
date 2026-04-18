@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Building2, Plus, TrendingDown, Calculator, CheckCircle } from "lucide-react";
+import { Building2, Plus, TrendingDown, Calculator, CheckCircle, DollarSign, PackageCheck } from "lucide-react";
 import { Link } from "wouter";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 
 export default function FixedAssetsPage() {
@@ -95,20 +96,12 @@ export default function FixedAssetsPage() {
         </>
       }
     >
-      <div className="grid gap-3 grid-cols-3">
-        <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">التكلفة الإجمالية</p>
-          <p className="text-xl font-bold text-blue-600">{formatCurrency(totalCost)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">مجمع الإهلاك</p>
-          <p className="text-xl font-bold text-red-600">{formatCurrency(totalAccDep)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">القيمة الدفترية الحالية</p>
-          <p className="text-xl font-bold text-green-600">{formatCurrency(totalBookValue)}</p>
-        </CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي الأصول", value: formatNumber(assets.length), icon: Building2, color: "text-blue-600 bg-blue-50" },
+        { label: "نشطة", value: formatNumber(assets.filter((a: any) => a.status === "active").length), icon: PackageCheck, color: "text-green-600 bg-green-50" },
+        { label: "مجمع الإهلاك", value: formatCurrency(totalAccDep), icon: TrendingDown, color: "text-red-600 bg-red-50" },
+        { label: "القيمة الدفترية", value: formatCurrency(totalBookValue), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
+      ]} />
 
       <DataTable
         columns={[

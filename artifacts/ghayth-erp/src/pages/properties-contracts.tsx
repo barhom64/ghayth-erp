@@ -13,10 +13,12 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import {
   FileText, Plus, ChevronDown, ChevronUp, CalendarDays, Banknote,
   CheckCircle2, Clock, AlertTriangle, RefreshCw, Zap, Droplets, Wifi,
-  Shield, Receipt, CreditCard
+  Shield, Receipt, CreditCard, DollarSign
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 const FREQ_LABELS: Record<string, string> = {
   monthly: "شهري", quarterly: "ربع سنوي", semi_annual: "نصف سنوي", annual: "سنوي",
@@ -237,6 +239,7 @@ export default function PropertiesContracts() {
   const contracts = asList(contractsResp);
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const searchStr = useSearch();
 
   useEffect(() => {
@@ -262,6 +265,16 @@ export default function PropertiesContracts() {
   const filtered = tagFilteredIds ? preFiltered.filter((c: any) => tagFilteredIds.has(c.id)) : preFiltered;
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "ejarNumber", header: "رقم إيجار", sortable: true, className: "font-mono text-xs text-blue-700", render: (c) => c.ejarNumber || "—" },
     { key: "unitNumber", header: "الوحدة", sortable: true, render: (c) => `${c.unitNumber}${c.buildingName ? ` - ${c.buildingName}` : ""}` },
     { key: "tenantName", header: "المستأجر", sortable: true, className: "font-medium" },
@@ -296,6 +309,13 @@ export default function PropertiesContracts() {
         </Link>
       </div>
 
+      <KpiGrid items={[
+        { label: "إجمالي العقود", value: contracts.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+        { label: "نشط", value: contracts.filter((c: any) => c.status === "active").length, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },
+        { label: "منتهي", value: contracts.filter((c: any) => c.status === "expired").length, icon: Clock, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي القيمة", value: formatCurrency(contracts.reduce((s: number, c: any) => s + Number(c.monthlyRent || 0), 0)), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
+      ]} />
+
       <div className="flex items-center gap-4">
         <div className="flex-1">
           <AdvancedFilters
@@ -326,6 +346,25 @@ export default function PropertiesContracts() {
           <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
         </div>
       </div>
+
+      <BulkActionsBar
+        entityType="property_contract"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["rental-contracts"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "ejarNumber", label: "رقم إيجار" },
+          { key: "unitNumber", label: "الوحدة" },
+          { key: "tenantName", label: "المستأجر" },
+          { key: "monthlyRent", label: "الإيجار الشهري" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="عقود_الإيجار"
+      />
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-blue-500" /> قائمة العقود</CardTitle></CardHeader>

@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { SEVERITY_LEVELS, INCIDENT_LABELS } from "@/lib/hr-type-maps";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { PageStatusBadge } from "@/components/page-status-badge";
 
 export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -113,6 +115,29 @@ export default function ViolationDetail() {
           </div>
         </CardContent>
       </Card>
+
+      {/* إجراءات الاعتماد */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">إجراءات الاعتماد</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ApprovalActions
+            entityType="violation"
+            entityId={Number(id)}
+            approveEndpoint={`/hr/violations/${id}/approve`}
+            rejectEndpoint={`/hr/violations/${id}/reject`}
+            returnEndpoint={`/hr/violations/${id}/return`}
+            approveMethod="PATCH"
+            rejectMethod="PATCH"
+            returnMethod="PATCH"
+            invalidateKeys={[["hr-violation-detail", id || ""], ["violations"]]}
+          />
+        </CardContent>
+      </Card>
+
+      {/* سجل الإجراءات */}
+      <ActionHistory entityType="violation" entityId={Number(id)} />
 
       {/* محاضر التحقيق المرتبطة */}
       {memos.length > 0 && (

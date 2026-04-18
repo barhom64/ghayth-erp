@@ -4,11 +4,12 @@ import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Crown, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 
 export default function OwnersCreate() {
   const [, setLocation] = useLocation();
@@ -39,6 +40,7 @@ export default function OwnersCreate() {
       backPath="/properties/owners"
     >
       <div className="space-y-6">
+        <CreationDateField />
         <h3 className="flex items-center gap-2 text-lg font-semibold">
           <Crown className="h-5 w-5 text-amber-500" /> بيانات المالك
         </h3>
@@ -100,11 +102,11 @@ export default function OwnersCreate() {
               </div>
               <div>
                 <Label>تاريخ الوكالة</Label>
-                <Input className="mt-1" type="date" value={form.authorizationDate} onChange={e => setForm({ ...form, authorizationDate: e.target.value })} />
+                <div className="mt-1"><DatePicker value={form.authorizationDate} onChange={v => setForm({ ...form, authorizationDate: v })} /></div>
               </div>
               <div>
                 <Label>تاريخ انتهاء الوكالة</Label>
-                <Input className="mt-1" type="date" value={form.authorizationExpiry} onChange={e => setForm({ ...form, authorizationExpiry: e.target.value })} />
+                <div className="mt-1"><DatePicker value={form.authorizationExpiry} onChange={v => setForm({ ...form, authorizationExpiry: v })} /></div>
               </div>
             </div>
           </div>

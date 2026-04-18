@@ -10,6 +10,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { PageShell } from "@/components/page-shell";
 
 export default function ShiftsPage() {
@@ -17,11 +18,22 @@ export default function ShiftsPage() {
   const { data: assignmentsData } = useApiQuery<any>(["shift-assignments"], "/hr/shift-assignments");
   const items = data?.data || [];
   const assignments = assignmentsData?.data || [];
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const [filters, setFilters] = useFilters();
 
   const filteredAssignments = applyFilters(assignments, filters, { searchFields: ["employeeName", "shiftName"] });
 
   const assignmentColumns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "employeeName", header: "الموظف", sortable: true, render: (a) => <span className="font-medium">{a.employeeName || "-"}</span> },
     { key: "shiftName", header: "الوردية", sortable: true, render: (a) => a.shiftName || "-" },
     { key: "startDate", header: "من", sortable: true, className: "text-gray-500", render: (a) => a.startDate || "-" },
@@ -61,6 +73,25 @@ export default function ShiftsPage() {
       }
     >
       <KpiGrid items={kpis} />
+
+      <BulkActionsBar
+        entityType="shift"
+        items={items}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(items.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["shifts"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "name", label: "اسم الوردية" },
+          { key: "startTime", label: "وقت البدء" },
+          { key: "endTime", label: "وقت الانتهاء" },
+          { key: "breakMinutes", label: "الاستراحة (دقيقة)" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="الورديات"
+      />
 
       <Tabs defaultValue="shifts" dir="rtl">
         <TabsList>

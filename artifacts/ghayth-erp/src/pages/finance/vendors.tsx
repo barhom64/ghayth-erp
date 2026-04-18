@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Plus, Users, Phone, Mail, Star, Building2 } from "lucide-react";
+import { Plus, Users, Phone, Mail, Star, Building2, Calendar } from "lucide-react";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 /**
  * Vendors list — migrated in R.2 iter 2 to the unified template stack.
@@ -42,6 +43,7 @@ export default function VendorsPage() {
   const [filters, setFilters] = useFilters();
   const [page, setPage] = useState(1);
   const pageSize = 20;
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["name", "contactPerson", "category"],
@@ -50,6 +52,16 @@ export default function VendorsPage() {
   const categories = [...new Set((items || []).map((v: any) => v.category).filter(Boolean))];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "name",
       header: "الاسم",
@@ -111,41 +123,12 @@ export default function VendorsPage() {
         </Button>
       }
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
-              <Users className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{items.length}</p>
-              <p className="text-xs text-muted-foreground">إجمالي الموردين</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 border border-emerald-100">
-              <Building2 className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{categories.length}</p>
-              <p className="text-xs text-muted-foreground">التصنيفات</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100">
-              <Star className="w-5 h-5 text-violet-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-violet-600">{items.length}</p>
-              <p className="text-xs text-muted-foreground">نشطون</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي الموردين", value: items.length, icon: Users, color: "text-blue-600 bg-blue-50" },
+        { label: "نشطون", value: items.length, icon: Star, color: "text-green-600 bg-green-50" },
+        { label: "التصنيفات", value: categories.length, icon: Building2, color: "text-emerald-600 bg-emerald-50" },
+        { label: "أُضيف هذا الشهر", value: items.filter((v: any) => { const d = new Date(v.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length, icon: Calendar, color: "text-orange-600 bg-orange-50" },
+      ]} />
 
       <AdvancedFilters
         config={{
@@ -163,6 +146,26 @@ export default function VendorsPage() {
           { key: "category", label: "التصنيف" },
         ], "الموردين")}
         resultCount={filtered?.length}
+      />
+
+      <BulkActionsBar
+        entityType="vendor"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["vendors"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "name", label: "الاسم" },
+          { key: "contactPerson", label: "جهة الاتصال" },
+          { key: "phone", label: "الهاتف" },
+          { key: "email", label: "البريد" },
+          { key: "taxNumber", label: "الرقم الضريبي" },
+          { key: "category", label: "التصنيف" },
+        ]}
+        csvFileName="الموردين"
       />
 
       <DataTable

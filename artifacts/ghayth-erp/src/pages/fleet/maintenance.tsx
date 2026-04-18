@@ -2,15 +2,28 @@ import { Link } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Wrench, CheckCircle, Clock, DollarSign } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 
 export default function FleetMaintenancePage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-maintenance"], "/fleet/maintenance");
   const items: any[] = data?.data || [];
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "vehiclePlate", header: "المركبة", sortable: true, searchable: true, render: (m) => <span className="font-medium">{m.vehiclePlate}</span> },
     { key: "type", header: "النوع", sortable: true, searchable: true, render: (m) => m.type || "-" },
     { key: "cost", header: "التكلفة", sortable: true, render: (m) => <span className="font-semibold">{formatCurrency(Number(m.cost))}</span> },
@@ -29,6 +42,33 @@ export default function FleetMaintenancePage() {
         </Link>
       }
     >
+      <KpiGrid items={[
+        { label: "إجمالي السجلات", value: items.length, icon: Wrench, color: "text-blue-600 bg-blue-50" },
+        { label: "مكتملة", value: items.filter((m: any) => m.status === "completed").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "قيد الانتظار", value: items.filter((m: any) => m.status !== "completed").length, icon: Clock, color: "text-amber-600 bg-amber-50" },
+        { label: "إجمالي التكلفة", value: formatCurrency(items.reduce((s: number, m: any) => s + (Number(m.cost) || 0), 0)), icon: DollarSign, color: "text-red-600 bg-red-50" },
+      ]} />
+
+      <BulkActionsBar
+        entityType="maintenance"
+        items={items}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(items.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["fleet-maintenance"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "vehiclePlate", label: "المركبة" },
+          { key: "type", label: "نوع الصيانة" },
+          { key: "cost", label: "التكلفة" },
+          { key: "workshop", label: "الورشة" },
+          { key: "date", label: "التاريخ" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="صيانة_المركبات"
+      />
+
       <DataTable
         columns={columns}
         data={items}

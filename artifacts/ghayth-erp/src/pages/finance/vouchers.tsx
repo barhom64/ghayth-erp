@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, ArrowDownCircle, ArrowUpCircle, Wallet, ChevronDown, ChevronUp, ExternalLink, Paperclip } from "lucide-react";
+import { Plus, FileText, ArrowDownCircle, ArrowUpCircle, Wallet, ChevronDown, ChevronUp, ExternalLink, Paperclip, Calendar } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "نقدي",
@@ -44,6 +45,7 @@ export default function VouchersPage() {
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref", "operationType"],
@@ -52,6 +54,16 @@ export default function VouchersPage() {
   });
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "ref",
       header: "المرجع",
@@ -144,24 +156,12 @@ export default function VouchersPage() {
         </Link>
       }
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><FileText className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">إجمالي السندات</p><p className="text-xl font-bold">{formatNumber(items.length)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg"><ArrowDownCircle className="h-5 w-5 text-green-600" /></div>
-          <div><p className="text-xs text-gray-500">سندات القبض</p><p className="text-xl font-bold text-green-600">{formatCurrency(totalReceipts)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-red-100 rounded-lg"><ArrowUpCircle className="h-5 w-5 text-red-600" /></div>
-          <div><p className="text-xs text-gray-500">سندات الصرف</p><p className="text-xl font-bold text-red-600">{formatCurrency(totalPayments)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-purple-100 rounded-lg"><Wallet className="h-5 w-5 text-purple-600" /></div>
-          <div><p className="text-xs text-gray-500">الصافي</p><p className="text-xl font-bold">{formatCurrency(totalReceipts - totalPayments)}</p></div>
-        </CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي السندات", value: formatNumber(items.length), icon: FileText, color: "text-blue-600 bg-blue-50" },
+        { label: "هذا الشهر", value: formatNumber(items.filter((v: any) => { const d = new Date(v.date); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },
+        { label: "سندات القبض", value: formatCurrency(totalReceipts), icon: ArrowDownCircle, color: "text-green-600 bg-green-50" },
+        { label: "سندات الصرف", value: formatCurrency(totalPayments), icon: ArrowUpCircle, color: "text-red-600 bg-red-50" },
+      ]} />
 
       <AdvancedFilters
         config={{
@@ -195,6 +195,25 @@ export default function VouchersPage() {
           { key: "status", label: "الحالة" },
         ], "السندات")}
         resultCount={filtered?.length}
+      />
+
+      <BulkActionsBar
+        entityType="voucher"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["vouchers"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "ref", label: "المرجع" },
+          { key: "type", label: "النوع" },
+          { key: "amount", label: "المبلغ" },
+          { key: "description", label: "الوصف" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="السندات"
       />
 
       <DataTable

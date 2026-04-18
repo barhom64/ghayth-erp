@@ -1,6 +1,6 @@
 import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 
 export default function TrainingDetailPage() {
   const [, params] = useRoute("/hr/training/:id");
@@ -220,6 +221,22 @@ export default function TrainingDetailPage() {
           />
         </CardContent>
       </Card>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2"><CardTitle className="text-base">إجراءات الاعتماد</CardTitle></CardHeader>
+        <CardContent>
+          <ApprovalActions
+            entityType="training_program"
+            entityId={Number(id)}
+            approveEndpoint={`/hr/training/programs/${id}/approve`}
+            rejectEndpoint={`/hr/training/programs/${id}/reject`}
+            approveMethod="PATCH"
+            rejectMethod="PATCH"
+            invalidateKeys={[["training-program", id || ""], ["hr-training"]]}
+          />
+        </CardContent>
+      </Card>
+      <ActionHistory entityType="training_program" entityId={Number(id)} />
     </PageShell>
   );
 }

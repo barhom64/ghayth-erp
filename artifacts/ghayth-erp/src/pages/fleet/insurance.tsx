@@ -1,10 +1,11 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useApiQuery, asList } from "@/lib/api";
-import { Shield, Plus } from "lucide-react";
+import { Shield, Plus, FileText, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 
 export default function InsurancePage() {
@@ -37,6 +38,21 @@ export default function InsurancePage() {
         </Link>
       }
     >
+      <KpiGrid items={(() => {
+        const now = new Date();
+        const soon = new Date();
+        soon.setDate(soon.getDate() + 30);
+        const active = items.filter((i: any) => i.endDate && new Date(i.endDate) >= now).length;
+        const expired = items.filter((i: any) => i.endDate && new Date(i.endDate) < now).length;
+        const expiringSoon = items.filter((i: any) => { const end = i.endDate ? new Date(i.endDate) : null; return end && end >= now && end <= soon; }).length;
+        return [
+          { label: "إجمالي الوثائق", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+          { label: "سارية", value: active, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+          { label: "منتهية", value: expired, icon: XCircle, color: "text-red-600 bg-red-50" },
+          { label: "تنتهي قريباً", value: expiringSoon, icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
+        ];
+      })()} />
+
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالمركبة أو شركة التأمين أو رقم الوثيقة...",
