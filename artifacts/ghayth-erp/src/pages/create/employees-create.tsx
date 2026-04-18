@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, ApiError, buildErrorToast } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +36,7 @@ export default function EmployeesCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/employees", "POST", [["employees"]], { silent: true });
-  const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
+  const { data: departmentsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
   const { data: jobTitlesData } = useApiQuery<{ data: any[] }>(["job-titles-list"], "/employees/job-titles");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list-for-manager"], "/employees?limit=200");
@@ -72,6 +73,9 @@ export default function EmployeesCreate() {
   const [creationResult, setCreationResult] = useState<Record<string, any> | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;

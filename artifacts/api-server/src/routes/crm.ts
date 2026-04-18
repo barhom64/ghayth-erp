@@ -5,6 +5,7 @@ import {
   ConflictError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -17,6 +18,52 @@ const router = Router();
 router.use(authMiddleware);
 
 const STAGE_ORDER = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
+
+// ── Zod validation schemas ──────────────────────────────────────────
+const createOpportunitySchema = z.object({
+  title: z.string({ required_error: "عنوان الفرصة مطلوب" }).min(1, "عنوان الفرصة مطلوب"),
+  clientId: z.number({ invalid_type_error: "معرّف العميل يجب أن يكون رقماً" }).optional().nullable(),
+  contactName: z.string({ invalid_type_error: "اسم جهة الاتصال يجب أن يكون نصاً" }).optional().nullable(),
+  contactPhone: z.string({ invalid_type_error: "رقم الهاتف يجب أن يكون نصاً" }).optional().nullable(),
+  contactEmail: z.string({ invalid_type_error: "البريد الإلكتروني يجب أن يكون نصاً" }).optional().nullable(),
+  source: z.string({ invalid_type_error: "المصدر يجب أن يكون نصاً" }).optional().nullable(),
+  stage: z.string({ invalid_type_error: "المرحلة يجب أن تكون نصاً" }).optional(),
+  value: z.number({ invalid_type_error: "قيمة الفرصة يجب أن تكون رقماً" }).min(0, "قيمة الفرصة يجب أن تكون رقماً موجباً").optional().nullable(),
+  probability: z.number({ invalid_type_error: "الاحتمالية يجب أن تكون رقماً" }).min(0, "الاحتمالية يجب أن تكون بين 0 و 100").max(100, "الاحتمالية يجب أن تكون بين 0 و 100").optional().nullable(),
+  expectedCloseDate: z.string({ invalid_type_error: "تاريخ الإغلاق المتوقع يجب أن يكون نصاً" }).optional().nullable(),
+  assignedTo: z.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
+  notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
+});
+
+const updateOpportunitySchema = z.object({
+  title: z.string({ invalid_type_error: "عنوان الفرصة يجب أن يكون نصاً" }).optional(),
+  clientId: z.number({ invalid_type_error: "معرّف العميل يجب أن يكون رقماً" }).optional().nullable(),
+  contactName: z.string({ invalid_type_error: "اسم جهة الاتصال يجب أن يكون نصاً" }).optional().nullable(),
+  contactPhone: z.string({ invalid_type_error: "رقم الهاتف يجب أن يكون نصاً" }).optional().nullable(),
+  contactEmail: z.string({ invalid_type_error: "البريد الإلكتروني يجب أن يكون نصاً" }).optional().nullable(),
+  source: z.string({ invalid_type_error: "المصدر يجب أن يكون نصاً" }).optional().nullable(),
+  stage: z.string({ invalid_type_error: "المرحلة يجب أن تكون نصاً" }).optional(),
+  status: z.string({ invalid_type_error: "الحالة يجب أن تكون نصاً" }).optional(),
+  value: z.number({ invalid_type_error: "قيمة الفرصة يجب أن تكون رقماً" }).min(0, "قيمة الفرصة يجب أن تكون رقماً موجباً").optional().nullable(),
+  probability: z.number({ invalid_type_error: "الاحتمالية يجب أن تكون رقماً" }).min(0, "الاحتمالية يجب أن تكون بين 0 و 100").max(100, "الاحتمالية يجب أن تكون بين 0 و 100").optional().nullable(),
+  expectedCloseDate: z.string({ invalid_type_error: "تاريخ الإغلاق المتوقع يجب أن يكون نصاً" }).optional().nullable(),
+  assignedTo: z.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
+  notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
+  lostReason: z.string({ invalid_type_error: "سبب الخسارة يجب أن يكون نصاً" }).optional().nullable(),
+});
+
+const convertOpportunitySchema = z.object({
+  value: z.number({ invalid_type_error: "قيمة الصفقة يجب أن تكون رقماً" }).optional(),
+  notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
+});
+
+const createActivitySchema = z.object({
+  type: z.string({ required_error: "نوع النشاط مطلوب" }).min(1, "نوع النشاط مطلوب"),
+  description: z.string({ required_error: "وصف النشاط مطلوب" }).min(1, "وصف النشاط مطلوب"),
+  scheduledAt: z.string({ required_error: "تاريخ النشاط المجدول مطلوب" }).min(1, "تاريخ النشاط المجدول مطلوب"),
+});
+
+const followupCheckSchema = z.object({}).passthrough();
 
 // Compute the due date for the CRM follow-up obligation.
 // Preference order:
@@ -68,6 +115,8 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
   // errors instead of deep 23503 FK errors, and keeps the existing
   // obligations engine wiring + event emission untouched.
   try {
+    const parsed = createOpportunitySchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
 
@@ -250,6 +299,8 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
 
 router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, res) => {
   try {
+    const parsed = updateOpportunitySchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const oppId = Number(req.params.id);
     const b = req.body;
@@ -704,6 +755,8 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
 // atomic transition via the lifecycle engine.
 router.post("/opportunities/:id/convert", requirePermission("crm:update"), async (req, res) => {
   try {
+    const parsed = convertOpportunitySchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(
@@ -860,6 +913,8 @@ router.get("/opportunities/:id/activities", requirePermission("crm:read"), async
 
 router.post("/opportunities/:id/activities", requirePermission("crm:create"), async (req, res) => {
   try {
+    const parsed = createActivitySchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
     const oppId = Number(req.params.id);
@@ -891,6 +946,8 @@ router.get("/pipeline", requirePermission("crm:read"), async (req, res) => {
 
 router.post("/followup-check", requirePermission("crm:create"), async (req, res) => {
   try {
+    const parsed = followupCheckSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const overdueActivities = await rawQuery<any>(
       `SELECT ca.*, co.title AS "oppTitle", co.stage, co."assignedTo", e.name AS "assigneeName"

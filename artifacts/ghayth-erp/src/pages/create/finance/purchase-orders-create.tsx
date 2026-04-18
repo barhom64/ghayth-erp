@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +25,7 @@ export default function PurchaseOrdersCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/purchase-requests", "POST", [["purchase-orders"], ["purchase-requests"]]);
-  const { data: suppliersData } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
+  const { data: suppliersData, isLoading, isError } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
   const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
   const { data: productsData } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
   const suppliers = suppliersData?.data || [];
@@ -55,6 +56,9 @@ export default function PurchaseOrdersCreate() {
       }
     }
   }, [copySource, copied, setForm]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const addItem = () => setItems([...items, { productId: "", quantity: "1", unitPrice: "" }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));

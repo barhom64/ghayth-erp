@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -264,6 +265,9 @@ export default function ActivityLogPage() {
   );
 
   const { data: summaryData } = useApiQuery<any>(["activity-summary"], "/activity-log/summary");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const items = data?.data || [];
   const total = data?.total || 0;

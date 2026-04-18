@@ -8,6 +8,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FolderKanban, Plus, Activity, CheckCircle, DollarSign, Eye } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -106,12 +107,8 @@ export default function Projects() {
     },
   ];
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

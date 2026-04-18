@@ -1,9 +1,16 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+
+// ── Zod validation schemas ──────────────────────────────────────────
+const dailyCloseExecuteSchema = z.object({
+  force: z.boolean({ invalid_type_error: "حقل التجاوز القسري يجب أن يكون قيمة منطقية" }).optional(),
+  notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -521,6 +528,8 @@ router.get("/daily-close/checklist", async (req, res) => {
 
 router.post("/daily-close/execute", requirePermission("finance:write"), async (req, res) => {
   try {
+    const parsed = dailyCloseExecuteSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];
     if (!allowedRoles.includes(scope.role)) {

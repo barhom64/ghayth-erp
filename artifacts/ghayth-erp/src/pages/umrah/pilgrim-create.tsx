@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { apiFetch, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,9 +19,15 @@ export default function PilgrimCreate() {
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
-  const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
-  const { data: packages } = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
+  const { data: seasons, isLoading: l1, isError: e1 } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
+  const { data: agents, isLoading: l2, isError: e2 } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
+  const { data: packages, isLoading: l3, isError: e3 } = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
+
+  const isLoading = l1 || l2 || l3;
+  const isError = e1 || e2 || e3;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const update = (key: string, val: any) => setForm((prev: any) => ({ ...prev, [key]: val }));
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,7 +46,7 @@ export default function InvoicesCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/invoices", "POST", [["invoices"]]);
-  const { data: clientsData, isLoading: clientsLoading } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: clientsData, isLoading: clientsLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
   const clients = clientsData?.data || [];
   const branches = branchesData?.data || [];
@@ -106,6 +107,9 @@ export default function InvoicesCreate() {
     }
   }, [copySource, copied]);
   const autoNumberRef = useRef(`INV-${Date.now().toString(36).toUpperCase()}`);
+
+  if (clientsLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const addLine = () => setLines([...lines, { description: "", quantity: "1", unitPrice: "" }]);
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));

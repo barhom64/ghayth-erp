@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiPatch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +25,7 @@ export default function AccountsEdit() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", code: "", type: "" });
 
-  const { data, isLoading } = useApiQuery<any>(["accounts"], "/finance/accounts");
+  const { data, isLoading, isError } = useApiQuery<any>(["accounts"], "/finance/accounts");
   const items = data?.data || [];
   const account = items.find((a: any) => String(a.id) === params?.id);
 
@@ -46,7 +47,8 @@ export default function AccountsEdit() {
     finally { setSaving(false); }
   };
 
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!account) return <div className="text-center py-16 text-gray-500">الحساب غير موجود</div>;
 
   return (

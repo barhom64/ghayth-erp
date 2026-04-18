@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,7 +67,8 @@ function MiniBar({ label, value, max, color = "blue" }: { label: string; value: 
 
 function HrDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-hr"], "/module-dashboards/hr");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -133,7 +135,8 @@ function HrDashboard() {
 
 function FinanceDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-finance"], "/module-dashboards/finance");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   const fmt = (v: number) => v.toLocaleString("ar-SA");
@@ -191,7 +194,8 @@ function FinanceDashboard() {
 
 function FleetDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-fleet"], "/module-dashboards/fleet");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -239,7 +243,8 @@ function FleetDashboard() {
 
 function LegalDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-legal"], "/module-dashboards/legal");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -284,7 +289,8 @@ function LegalDashboard() {
 
 function PropertiesDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-properties"], "/module-dashboards/properties");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -335,7 +341,8 @@ function PropertiesDashboard() {
 
 function ProjectsDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-projects"], "/module-dashboards/projects");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -411,7 +418,8 @@ function ProjectsDashboard() {
 
 function CrmDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-crm"], "/module-dashboards/crm");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   const fmt = (v: number) => v.toLocaleString("ar-SA");
@@ -451,7 +459,8 @@ function CrmDashboard() {
 
 function StoreDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-store"], "/module-dashboards/store");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   const fmt = (v: number) => v.toLocaleString("ar-SA");
@@ -489,7 +498,8 @@ function StoreDashboard() {
 
 function SupportDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-support"], "/module-dashboards/support");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -550,7 +560,8 @@ function SupportDashboard() {
 
 function TasksDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-tasks"], "/module-dashboards/tasks");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -597,7 +608,8 @@ function TasksDashboard() {
 
 function WarehouseDashboard() {
   const { data, isLoading } = useApiQuery<any>(["module-dash-warehouse"], "/module-dashboards/warehouse");
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   const fmt = (v: number) => v.toLocaleString("ar-SA");

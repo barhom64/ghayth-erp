@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -15,6 +16,37 @@ import { createAuditLog } from "../lib/businessHelpers.js";
 // dashboard and the `/funnel` BI report. Aligning every route with
 // the same pattern used by fleet/hr/crm/properties.
 
+// ── Zod validation schemas ──────────────────────────────────────────
+const createCampaignSchema = z.object({
+  name: z.string({ required_error: "اسم الحملة مطلوب" }).min(1, "اسم الحملة مطلوب"),
+  description: z.string({ invalid_type_error: "الوصف يجب أن يكون نصاً" }).optional().nullable(),
+  type: z.string({ invalid_type_error: "نوع الحملة يجب أن يكون نصاً" }).optional().nullable(),
+  channel: z.string({ invalid_type_error: "القناة يجب أن تكون نصاً" }).optional().nullable(),
+  status: z.string({ invalid_type_error: "الحالة يجب أن تكون نصاً" }).optional().nullable(),
+  budget: z.number({ invalid_type_error: "الميزانية يجب أن تكون رقماً" }).min(0, "الميزانية يجب أن تكون قيمة غير سالبة").optional().nullable(),
+  spent: z.number({ invalid_type_error: "المبلغ المصروف يجب أن يكون رقماً" }).min(0, "المبلغ المصروف يجب أن يكون قيمة غير سالبة").optional().nullable(),
+  startDate: z.string({ invalid_type_error: "تاريخ البداية يجب أن يكون نصاً" }).optional().nullable(),
+  endDate: z.string({ invalid_type_error: "تاريخ النهاية يجب أن يكون نصاً" }).optional().nullable(),
+  targetAudience: z.string({ invalid_type_error: "الجمهور المستهدف يجب أن يكون نصاً" }).optional().nullable(),
+});
+
+const updateCampaignSchema = z.object({
+  name: z.string({ invalid_type_error: "اسم الحملة يجب أن يكون نصاً" }).optional(),
+  description: z.string({ invalid_type_error: "الوصف يجب أن يكون نصاً" }).optional().nullable(),
+  type: z.string({ invalid_type_error: "نوع الحملة يجب أن يكون نصاً" }).optional().nullable(),
+  channel: z.string({ invalid_type_error: "القناة يجب أن تكون نصاً" }).optional().nullable(),
+  status: z.string({ invalid_type_error: "الحالة يجب أن تكون نصاً" }).optional().nullable(),
+  budget: z.number({ invalid_type_error: "الميزانية يجب أن تكون رقماً" }).optional().nullable(),
+  spent: z.number({ invalid_type_error: "المبلغ المصروف يجب أن يكون رقماً" }).optional().nullable(),
+  startDate: z.string({ invalid_type_error: "تاريخ البداية يجب أن يكون نصاً" }).optional().nullable(),
+  endDate: z.string({ invalid_type_error: "تاريخ النهاية يجب أن يكون نصاً" }).optional().nullable(),
+  targetAudience: z.string({ invalid_type_error: "الجمهور المستهدف يجب أن يكون نصاً" }).optional().nullable(),
+});
+
+const updateRevenueSchema = z.object({
+  revenue: z.number({ required_error: "قيمة الإيرادات مطلوبة", invalid_type_error: "الإيرادات يجب أن تكون رقماً" }).optional().nullable(),
+});
+
 const router = Router();
 router.use(authMiddleware);
 
@@ -28,6 +60,8 @@ router.get("/campaigns", requirePermission("marketing:read"), async (req, res) =
 
 router.post("/campaigns", requirePermission("marketing:create"), async (req, res) => {
   try {
+    const parsed = createCampaignSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const { name, description, type, channel, status, budget, spent, startDate, endDate, targetAudience } = req.body;
     if (!name || !String(name).trim()) {
@@ -75,6 +109,8 @@ router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, re
 
 router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req, res) => {
   try {
+    const parsed = updateCampaignSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -191,6 +227,8 @@ router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
 
 router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), async (req, res) => {
   try {
+    const parsed = updateRevenueSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { revenue } = req.body;

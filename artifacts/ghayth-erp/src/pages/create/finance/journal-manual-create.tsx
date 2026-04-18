@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -27,7 +28,7 @@ export default function JournalManualCreatePage() {
     lines: [emptyLine(), emptyLine()],
   });
 
-  const { data: coaData } = useApiQuery<any>(
+  const { data: coaData, isLoading, isError } = useApiQuery<any>(
     ["chart-of-accounts"],
     `/finance/chart-of-accounts${scopeSuffix}`
   );
@@ -41,6 +42,9 @@ export default function JournalManualCreatePage() {
       onSuccess: () => navigate("/finance/journal-manual"),
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const coa = coaData?.data ?? coaData ?? [];
 

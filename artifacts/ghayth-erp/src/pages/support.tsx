@@ -11,6 +11,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { textColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -53,6 +54,9 @@ function Support() {
     queryKeys: [["support-tickets", String(page)], ["support-stats"]],
     onSuccess: () => refetch(),
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const editFields = [
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "قيد المعالجة" }, { value: "resolved", label: "محلول" }, { value: "closed", label: "مغلق" }] },
@@ -106,13 +110,6 @@ function Support() {
       ),
     },
   ];
-
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
 
   return (
     <PageShell
@@ -234,12 +231,6 @@ function KBManagement() {
     onSuccess: () => refetch(),
   });
 
-  const editFields = [
-    { key: "title", label: "العنوان" },
-    { key: "category", label: "التصنيف" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "published", label: "منشور" }, { value: "draft", label: "مسودة" }, { value: "archived", label: "مؤرشف" }] },
-  ];
-
   const kbColumns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, searchable: true, render: (item) => <span className="font-medium">{item.title}</span> },
     { key: "category", header: "التصنيف", sortable: true, searchable: true, render: (item) => <span className="text-muted-foreground">{item.category || "-"}</span> },
@@ -263,6 +254,12 @@ function KBManagement() {
     },
   ];
 
+  const editFields = [
+    { key: "title", label: "العنوان" },
+    { key: "category", label: "التصنيف" },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "published", label: "منشور" }, { value: "draft", label: "مسودة" }, { value: "archived", label: "مؤرشف" }] },
+  ];
+
   const createMut = useApiMutation<any, typeof newForm>(
     "/support/kb",
     "POST",
@@ -280,12 +277,8 @@ function KBManagement() {
     createMut.mutate(newForm);
   };
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">
@@ -367,12 +360,8 @@ function CSATStats() {
     },
   ];
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

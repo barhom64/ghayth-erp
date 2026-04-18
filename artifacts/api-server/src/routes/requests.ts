@@ -1,9 +1,64 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
+
+/* ── Zod Schemas ───────────────────────────────────────────────── */
+
+const createRequestSchema = z.object({
+  typeId: z.number({ invalid_type_error: "نوع الطلب يجب أن يكون رقماً" }).optional(),
+  requesterName: z.string().optional(),
+  title: z.string({ required_error: "عنوان الطلب مطلوب" }).min(1, "عنوان الطلب مطلوب"),
+  description: z.string({ required_error: "وصف الطلب مطلوب" }).min(1, "وصف الطلب مطلوب"),
+  priority: z.enum(["low", "medium", "high", "critical"], { invalid_type_error: "أولوية غير صالحة" }).optional(),
+  data: z.any().optional(),
+  attachments: z.array(z.any()).optional(),
+});
+
+const createRequestTypeSchema = z.object({
+  name: z.string({ required_error: "اسم نوع الطلب مطلوب" }).min(1, "اسم نوع الطلب مطلوب"),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  requiredFields: z.any().optional(),
+  approvalFlow: z.any().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const createWorkflowSchema = z.object({
+  name: z.string({ required_error: "اسم سير العمل مطلوب" }).min(1, "اسم سير العمل مطلوب"),
+  description: z.string().optional(),
+  steps: z.any().optional(),
+});
+
+const updateRequestSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  status: z.string().optional(),
+  priority: z.string().optional(),
+  currentApprover: z.any().optional(),
+  attachments: z.any().optional(),
+  notes: z.string().optional(),
+  returnReason: z.string().optional(),
+});
+
+const approveRequestSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const rejectRequestSchema = z.object({
+  notes: z.string({ required_error: "يجب ذكر سبب الرفض" }).min(1, "يجب ذكر سبب الرفض"),
+});
+
+const returnRequestSchema = z.object({
+  notes: z.string({ required_error: "يجب ذكر سبب الإرجاع" }).min(1, "يجب ذكر سبب الإرجاع"),
+});
+
+const convertRequestSchema = z.object({
+  targetType: z.enum(["maintenance", "purchase", "case"], { required_error: "نوع التحويل مطلوب", invalid_type_error: "نوع التحويل غير صالح. المتاح: maintenance, purchase, case" }),
+});
 
 const VALID_REQUEST_TRANSITIONS: Record<string, string[]> = {
   pending: ["in_review", "approved", "rejected", "returned"],
@@ -123,6 +178,8 @@ router.get("/", requirePermission("requests:read"), async (req, res) => {
 
 router.post("/", requirePermission("requests:write"), async (req, res) => {
   try {
+    const parsed = createRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const { typeId, requesterName, title, description, priority, data, attachments } = req.body;
 
@@ -264,6 +321,8 @@ router.get("/types", requirePermission("requests:read"), async (req, res) => {
 
 router.post("/types", requirePermission("requests:write"), async (req, res) => {
   try {
+    const parsed = createRequestTypeSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const { name, description, category, requiredFields, approvalFlow, isActive } = req.body;
     const r = await rawExecute(
@@ -285,6 +344,8 @@ router.get("/workflows", requirePermission("requests:read"), async (req, res) =>
 
 router.post("/workflows", requirePermission("requests:write"), async (req, res) => {
   try {
+    const parsed = createWorkflowSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const { name, description, steps } = req.body;
     const r = await rawExecute(
@@ -324,6 +385,8 @@ router.get("/:id", requirePermission("requests:read"), async (req, res) => {
 
 router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
   try {
+    const parsed = updateRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body;
@@ -405,6 +468,8 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
 
 router.post("/:id/approve", requirePermission("requests:write"), async (req, res) => {
   try {
+    const parsed = approveRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { notes } = req.body;
@@ -463,6 +528,8 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
 
 router.post("/:id/reject", requirePermission("requests:write"), async (req, res) => {
   try {
+    const parsed = rejectRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { notes } = req.body;
@@ -521,6 +588,8 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
 
 router.post("/:id/return", requirePermission("requests:write"), async (req, res) => {
   try {
+    const parsed = returnRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { notes } = req.body;
@@ -640,6 +709,8 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
 
 router.post("/:id/convert", requirePermission("requests:write"), async (req, res) => {
   try {
+    const parsed = convertRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { targetType } = req.body;

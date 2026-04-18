@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +29,7 @@ export default function RecurringJournalsCreatePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
 
   const [name, setName] = useState("");
@@ -52,6 +53,9 @@ export default function RecurringJournalsCreatePage() {
       onSuccess: () => setLocation("/finance/recurring-journals"),
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   function updateLine(idx: number, field: keyof TemplateLine, value: string) {
     setLines((prev) => {

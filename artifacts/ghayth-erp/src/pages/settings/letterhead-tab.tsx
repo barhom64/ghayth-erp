@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,7 @@ import { LetterheadHeader } from "@/components/print-layout";
 import type { BranchLetterhead } from "@/components/print-layout";
 
 export function LetterheadSettings() {
-  const { data, refetch } = useApiQuery<any>(["settings-branches"], "/settings/branches");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["settings-branches"], "/settings/branches");
   const branches = data?.data || [];
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -78,6 +79,9 @@ export function LetterheadSettings() {
     footerText: form.footerText,
     city: form.city,
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

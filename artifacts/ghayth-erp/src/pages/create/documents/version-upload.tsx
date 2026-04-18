@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +27,7 @@ export default function VersionUploadPage() {
   const { toast } = useToast();
   const docId = params?.docId;
 
-  const { data: versionsResp, refetch } = useApiQuery<any>(
+  const { data: versionsResp, isLoading, isError, refetch } = useApiQuery<any>(
     ["doc-versions", docId],
     docId ? `/documents/${docId}/versions` : null,
     { enabled: !!docId }
@@ -37,6 +38,9 @@ export default function VersionUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleUploadVersion = useCallback(async () => {
     if (!file || !docId) return;

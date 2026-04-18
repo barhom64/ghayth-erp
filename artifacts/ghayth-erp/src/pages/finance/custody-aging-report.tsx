@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,22 +11,13 @@ import { formatCurrency, formatNumber , formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 
 export default function CustodyAgingReportPage() {
-  const { data, isLoading } = useApiQuery<any>(["custody-aging-report"], "/finance/custodies/report");
+  const { data, isLoading, isError } = useApiQuery<any>(["custody-aging-report"], "/finance/custodies/report");
   const employees = data?.data || [];
   const summary = data?.summary || {};
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
-        </div>
-        <Skeleton className="h-96" />
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

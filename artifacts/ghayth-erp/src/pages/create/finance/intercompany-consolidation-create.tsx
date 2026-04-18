@@ -2,15 +2,19 @@ import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { formatCurrency } from "@/lib/formatters";
 import { CreatePageLayout } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function IntercompanyConsolidationCreatePage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
 
-  const { data: consolidationData, isLoading: loadingConsolidation } = useApiQuery<any>(
+  const { data: consolidationData, isLoading: loadingConsolidation, isError } = useApiQuery<any>(
     ["intercompany-consolidation"],
     `/finance/intercompany/consolidation${scopeSuffix}`
   );
+
+  if (loadingConsolidation) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const consolidation = consolidationData;
 
@@ -23,9 +27,7 @@ export default function IntercompanyConsolidationCreatePage() {
       <div dir="rtl">
         <h3 className="text-lg font-semibold mb-3">نتائج التوحيد</h3>
         <div>
-          {loadingConsolidation ? (
-            <div className="text-center py-8 text-gray-500">جاري تحميل البيانات...</div>
-          ) : consolidation ? (
+          {consolidation ? (
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="rounded-xl border bg-blue-50 p-4 text-center">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -152,12 +153,8 @@ export default function InvoicesPage() {
     },
   ];
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,7 +33,7 @@ export default function OpeningBalancesCreatePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
 
   const [periodStart, setPeriodStart] = useState<string>(firstDayOfFiscalYear());
@@ -62,6 +63,9 @@ export default function OpeningBalancesCreatePage() {
       onSuccess: () => setLocation("/finance/opening-balances"),
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   function updateLine(idx: number, field: keyof OBLine, value: string) {
     setLines((prev) => {

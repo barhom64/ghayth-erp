@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +29,7 @@ export function GovIntegrationsTab() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [testingId, setTestingId] = useState<number | null>(null);
-  const { data, isLoading, refetch } = useApiQuery<any>(["gov-integrations"], "/gov-integrations");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["gov-integrations"], "/gov-integrations");
 
   const integrations: any[] = data?.data || [];
 
@@ -95,6 +96,9 @@ export function GovIntegrationsTab() {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

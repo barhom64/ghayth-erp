@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -17,6 +18,9 @@ export function ReportsTab() {
   const filtered = applyFilters(allItems, filters, {
     searchFields: ["title", "type", "description"],
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const columns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, render: (r) => <span className="font-medium">{r.title}</span> },

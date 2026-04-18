@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +20,12 @@ export default function LettersCreate() {
     subject: "", channel: "email", fromNumber: "", toNumber: "", body: "",
   });
   const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/communications/send", "POST", [["comm-letters"]]);
-  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
 
