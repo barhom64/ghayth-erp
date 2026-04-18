@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileText, Copy, Search, Layout, Plus, Eye, Edit, Trash2, X, Save, Printer, ChevronLeft, Variable } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
@@ -80,7 +81,7 @@ export default function DocumentsTemplates() {
   const [newVarKey, setNewVarKey] = useState("");
   const [newVarLabel, setNewVarLabel] = useState("");
 
-  const { data: templatesResp, refetch } = useApiQuery<any>(["doc-templates"], "/documents/templates");
+  const { data: templatesResp, refetch, isLoading, isError } = useApiQuery<any>(["doc-templates"], "/documents/templates");
   const templates = asList<any>(templatesResp);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -221,6 +222,9 @@ export default function DocumentsTemplates() {
       htmlContent: prev.htmlContent + `{{${key}}}`,
     }));
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   if (viewMode === "editor") {
     return (

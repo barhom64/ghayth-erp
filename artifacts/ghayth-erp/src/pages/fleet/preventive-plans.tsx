@@ -10,6 +10,7 @@ import { Wrench, Plus, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -37,7 +38,7 @@ export default function PreventivePlansPage() {
     nextServiceDate: "", estimatedCost: "", notes: "",
   });
 
-  const { data, refetch } = useApiQuery<any>(
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(
     ["preventive-plans", vehicleFilter],
     `/fleet/preventive-plans${vehicleFilter && vehicleFilter !== "__all__" ? `?vehicleId=${vehicleFilter}` : ""}`
   );
@@ -66,6 +67,9 @@ export default function PreventivePlansPage() {
 
   const overdueCount = plans.filter((p: any) => (getDueDays(p.nextServiceDate) ?? 0) < 0).length;
   const dueSoonCount = plans.filter((p: any) => { const d = getDueDays(p.nextServiceDate); return d !== null && d >= 0 && d <= 7; }).length;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

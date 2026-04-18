@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Upload } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const EXPECTED_FIELDS = ["fullName", "passportNumber", "nationality", "arrivalDate", "departureDate"];
 const FIELD_LABELS: Record<string, string> = {
@@ -18,7 +19,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default function UmrahImport() {
-  const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
+  const { data: seasons, isLoading, isError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const { data: logs, refetch: refetchLogs } = useApiQuery<any>(["umrah-import-logs"], "/umrah/import-logs");
   const [seasonId, setSeasonId] = useState("");
   const [parsedRows, setParsedRows] = useState<any[]>([]);
@@ -122,6 +123,9 @@ export default function UmrahImport() {
       setImporting(false);
     }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">

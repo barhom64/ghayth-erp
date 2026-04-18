@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -13,6 +14,52 @@ import {
 const router = Router();
 router.use(authMiddleware);
 
+const createSeasonSchema = z.object({
+  title: z.string().min(1, "اسم الموسم مطلوب"),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const createAgentSchema = z.object({
+  name: z.string().min(1, "اسم الوكيل مطلوب"),
+  contactPerson: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  country: z.string().optional(),
+  profitMargin: z.number().optional(),
+  contractRef: z.string().optional(),
+  currency: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const createPackageSchema = z.object({
+  name: z.string().min(1, "اسم الباقة مطلوب"),
+  seasonId: z.number({ required_error: "الموسم مطلوب" }),
+  costPrice: z.number().optional(),
+  sellPrice: z.number().optional(),
+  includesTransport: z.boolean().optional(),
+  includesHotel: z.boolean().optional(),
+  includesMeals: z.boolean().optional(),
+  includesZiyarat: z.boolean().optional(),
+  duration: z.number().optional(),
+  description: z.string().optional(),
+});
+
+const createPilgrimSchema = z.object({
+  fullName: z.string().min(1, "الاسم الكامل مطلوب"),
+  passportNumber: z.string().min(1, "رقم جواز السفر مطلوب"),
+  seasonId: z.number().optional(),
+  agentId: z.number().optional(),
+  packageId: z.number().optional(),
+}).passthrough();
+
+const createTransportSchema = z.object({
+  type: z.string().optional(),
+  provider: z.string().optional(),
+  pilgrimsCount: z.number().optional(),
+}).passthrough();
+
 router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -24,7 +71,9 @@ router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
 router.post("/seasons", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createSeasonSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const rows = await rawQuery(
       `INSERT INTO umrah_seasons ("companyId",title,"startDate","endDate",notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [scope.companyId, b.title, b.startDate, b.endDate, b.notes]
@@ -82,7 +131,9 @@ router.get("/agents", requirePermission("umrah:read"), async (req, res) => {
 router.post("/agents", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createAgentSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const rows = await rawQuery(
       `INSERT INTO umrah_agents ("companyId",name,"contactPerson",phone,email,country,"profitMargin","contractRef",currency,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [scope.companyId, b.name, b.contactPerson, b.phone, b.email, b.country, b.profitMargin || 0, b.contractRef, b.currency || "SAR", b.notes]
@@ -121,7 +172,9 @@ router.get("/packages", requirePermission("umrah:read"), async (req, res) => {
 router.post("/packages", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createPackageSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const rows = await rawQuery(
       `INSERT INTO umrah_packages ("companyId",name,"seasonId","costPrice","sellPrice","includesTransport","includesHotel","includesMeals","includesZiyarat",duration,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [scope.companyId, b.name, b.seasonId, b.costPrice, b.sellPrice, b.includesTransport || false, b.includesHotel || false, b.includesMeals || false, b.includesZiyarat || false, b.duration || 7, b.description]
@@ -160,7 +213,9 @@ router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
 router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createPilgrimSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
     if (!b.fullName || !String(b.fullName).trim()) {
       throw new ValidationError("اسم المعتمر مطلوب", {
@@ -622,7 +677,9 @@ router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
 router.post("/transport", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createTransportSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const rows = await rawQuery(
       `INSERT INTO umrah_transport ("companyId","seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId",capacity,"pilgrimCount",cost,notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,

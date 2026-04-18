@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,7 @@ import { formatDateAr } from "@/lib/formatters";
 
 export function ZatcaSettingsTab() {
   const { toast } = useToast();
-  const { data, refetch } = useApiQuery<{ data: Record<string, string> }>(["settings-zatca"], "/finance/zatca/settings");
+  const { data, refetch, isLoading, isError } = useApiQuery<{ data: Record<string, string> }>(["settings-zatca"], "/finance/zatca/settings");
   const settings = data?.data ?? {};
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -56,6 +57,9 @@ export function ZatcaSettingsTab() {
       });
     }
   }, [settings]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSave = async () => {
     setSaving(true);

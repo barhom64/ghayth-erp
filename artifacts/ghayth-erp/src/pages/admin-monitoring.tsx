@@ -1,5 +1,6 @@
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -30,7 +31,10 @@ function formatUptime(seconds: number): string {
 }
 
 export default function AdminMonitoring() {
-  const { data: health, isLoading, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
+  const { data: health, isLoading, isError, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const services = health?.services || {};
   const memUsage = health?.memoryUsage || {};

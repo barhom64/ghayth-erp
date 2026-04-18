@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +14,8 @@ import { ROLE_OPTIONS } from "./shared";
 
 export function UsersTab() {
   const { toast } = useToast();
-  const { data, refetch, isLoading: isLoading1 } = useApiQuery<any>(["admin-users"], "/admin/users");
-  const { data: employeesData, isLoading: isLoading2 } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
+  const { data, refetch, isLoading: isLoading1, isError: isError1 } = useApiQuery<any>(["admin-users"], "/admin/users");
+  const { data: employeesData, isLoading: isLoading2, isError: isError2 } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ email: "", role: "employee", password: "", employeeId: "" });
   const [createdUser, setCreatedUser] = useState<any>(null);
@@ -79,11 +80,8 @@ export function UsersTab() {
     }
   };
 
-  if (isLoading1 || isLoading2) return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-    </div>
-  );
+  if (isLoading1 || isLoading2) return <LoadingSpinner />;
+  if (isError1 || isError2) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

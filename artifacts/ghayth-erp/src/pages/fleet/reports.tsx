@@ -5,9 +5,10 @@ import { cn } from "@/lib/utils";
 import { useApiQuery } from "@/lib/api";
 import { ExportButton, MultiExportButton } from "@/components/shared/export-buttons";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function FleetReports() {
-  const { data: stats } = useApiQuery<any>(["fleet-stats"], "/fleet/stats");
+  const { data: stats, isLoading, isError } = useApiQuery<any>(["fleet-stats"], "/fleet/stats");
   const s = stats || {};
 
   const statCards = [
@@ -16,6 +17,9 @@ export default function FleetReports() {
     { label: "طلبات الصيانة", value: s.totalMaintenance ?? 0, icon: Wrench, color: "text-orange-600 bg-orange-50" },
     { label: "المركبات النشطة", value: s.activeVehicles ?? 0, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

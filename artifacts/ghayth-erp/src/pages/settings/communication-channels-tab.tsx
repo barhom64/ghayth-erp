@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export function CommunicationChannelsTab() {
   const { toast } = useToast();
-  const { data, refetch } = useApiQuery<{ data: Record<string, string> }>(["settings-channels"], "/settings/channels");
+  const { data, refetch, isLoading, isError } = useApiQuery<{ data: Record<string, string> }>(["settings-channels"], "/settings/channels");
   const settings = data?.data ?? {};
   const [saving, setSaving] = useState(false);
 
@@ -42,6 +43,9 @@ export function CommunicationChannelsTab() {
       setPushEnabled(settings.push_enabled ?? "true");
     }
   }, [data]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSave = async (entries: Record<string, string>, secretFields?: { key: string; configured: boolean }[]) => {
     setSaving(true);

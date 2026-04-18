@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { BarChart3, Car, TrendingUp, DollarSign, Fuel, Wrench, Shield, AlertTriangle } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 
@@ -14,7 +15,7 @@ const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", c
 export default function TCOPage() {
   const [vehicleId, setVehicleId] = useState("");
 
-  const { data: vehicles } = useApiQuery<any>(["fleet-vehicles"], "/fleet/vehicles?limit=200");
+  const { data: vehicles, isLoading: isVehiclesLoading, isError: isVehiclesError } = useApiQuery<any>(["fleet-vehicles"], "/fleet/vehicles?limit=200");
   const vehicleList = asList(vehicles?.data || vehicles);
 
   const { data: tco, isLoading } = useApiQuery<any>(
@@ -31,6 +32,9 @@ export default function TCOPage() {
     { name: "الاستهلاك", value: tco.totalDepreciation, icon: <TrendingUp /> },
     { name: "المخالفات", value: tco.trafficFines, icon: <AlertTriangle /> },
   ].filter((d) => d.value > 0) : [];
+
+  if (isVehiclesLoading) return <LoadingSpinner />;
+  if (isVehiclesError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

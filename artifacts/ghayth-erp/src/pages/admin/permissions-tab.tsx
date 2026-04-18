@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Shield, UserCog, CheckCircle, X } from "lucide-react";
@@ -39,7 +40,7 @@ export function PermissionsTab() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
 
-  const { data: usersData, isLoading } = useApiQuery<any>(["admin-users"], "/admin/users");
+  const { data: usersData, isLoading, isError } = useApiQuery<any>(["admin-users"], "/admin/users");
   const users = usersData?.data || [];
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userPerms, setUserPerms] = useState<any[]>([]);
@@ -121,11 +122,8 @@ export function PermissionsTab() {
     }
   };
 
-  if (isLoading) return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">

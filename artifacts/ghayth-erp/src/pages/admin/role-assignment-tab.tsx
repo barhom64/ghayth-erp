@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,8 +10,8 @@ import { roleKeyColors } from "@/contexts/app-context";
 import { MODULE_LABELS, PredefinedRole, UserRoleRow } from "./shared";
 
 export function RoleAssignmentTab() {
-  const { data: usersData, isLoading: isLoading1 } = useApiQuery<any>(["admin-users"], "/admin/users");
-  const { data: predefinedData, isLoading: isLoading2 } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
+  const { data: usersData, isLoading: isLoading1, isError: isError1 } = useApiQuery<any>(["admin-users"], "/admin/users");
+  const { data: predefinedData, isLoading: isLoading2, isError: isError2 } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userRoles, setUserRoles] = useState<UserRoleRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,11 +52,8 @@ export function RoleAssignmentTab() {
 
   const assignedKeys = (userRoles || []).map(r => r.roleKey);
 
-  if (isLoading1 || isLoading2) return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-    </div>
-  );
+  if (isLoading1 || isLoading2) return <LoadingSpinner />;
+  if (isError1 || isError2) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

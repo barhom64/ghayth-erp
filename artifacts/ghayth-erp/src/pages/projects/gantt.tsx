@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { BarChart2, Flag, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-gray-300",
@@ -46,7 +47,7 @@ function GanttBar({ row, projectStart, totalDays }: { row: any; projectStart: Da
 export default function GanttPage() {
   const [projectId, setProjectId] = useState("");
 
-  const { data: projects } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
+  const { data: projects, isLoading: isProjectsLoading, isError: isProjectsError } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
   const projectList = asList(projects?.data || projects);
 
   const { data: gantt, isLoading } = useApiQuery<any>(
@@ -65,6 +66,9 @@ export default function GanttPage() {
   let projectEnd = project?.endDate ? new Date(project.endDate) : new Date();
   if (projectEnd <= projectStart) projectEnd = new Date(projectStart.getTime() + 30 * 24 * 3600 * 1000);
   const totalDays = Math.max(30, (projectEnd.getTime() - projectStart.getTime()) / (24 * 3600 * 1000));
+
+  if (isProjectsLoading) return <LoadingSpinner />;
+  if (isProjectsError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

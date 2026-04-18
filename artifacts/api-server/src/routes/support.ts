@@ -5,6 +5,7 @@ import {
   ConflictError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { slaDeadlineForPriority, haversineKm } from "../lib/algorithms.js";
@@ -14,6 +15,35 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { loadBalanceAssign } from "../lib/algorithms.js";
 const router = Router();
 router.use(authMiddleware);
+
+const createTicketSchema = z.object({
+  title: z.string().optional(),
+  subject: z.string().min(1, "موضوع التذكرة مطلوب"),
+  description: z.string().min(1, "وصف المشكلة مطلوب"),
+  clientId: z.number().optional(),
+  category: z.string().optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  slaDeadline: z.string().optional(),
+  assigneeId: z.number().optional(),
+});
+
+const createReplySchema = z.object({
+  authorName: z.string().optional(),
+  message: z.string().min(1, "نص الرد مطلوب"),
+  isInternal: z.boolean().optional(),
+});
+
+const createCSATSchema = z.object({
+  score: z.number().min(1).max(5, "التقييم يجب أن يكون بين 1 و 5"),
+  comment: z.string().optional(),
+});
+
+const createKbSchema = z.object({
+  title: z.string().min(1, "عنوان المقال مطلوب"),
+  content: z.string().min(1, "محتوى المقال مطلوب"),
+  category: z.string().optional(),
+  tags: z.any().optional(),
+});
 
 const PRIORITY_KEYWORDS: Record<string, string[]> = {
   critical: ['عاجل', 'طارئ', 'كارثة', 'توقف', 'انهيار', 'حريق', 'خطير', 'فوري', 'down', 'outage', 'emergency', 'critical'],
@@ -57,7 +87,9 @@ router.post("/tickets", async (req, res) => {
   // but nobody was emitting the event from the create handler).
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createTicketSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
     const title = (b.title ?? b.subject ?? "").toString().trim();
     if (!title) {
@@ -221,7 +253,9 @@ router.get("/tickets/:id", async (req, res) => {
 router.post("/tickets/:id/replies", async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createReplySchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const ticketId = Number(req.params.id);
 
     const [ticket] = await rawQuery<any>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
@@ -569,13 +603,10 @@ router.post("/tickets/:id/csat", async (req, res) => {
   try {
     const scope = req.scope!;
     const ticketId = Number(req.params.id);
-    const { score, comment } = req.body;
-    if (!score || score < 1 || score > 5) {
-      throw new ValidationError("التقييم يجب أن يكون بين 1 و 5", {
-        field: "score",
-        fix: "اختر تقييماً من نجمة واحدة حتى خمس نجوم.",
-      });
-    }
+    const parsed = createCSATSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
+    const { score, comment } = b;
     const [ticket] = await rawQuery<any>(`SELECT id, "assigneeId", status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
     if (!['resolved', 'closed'].includes(ticket.status)) {
@@ -643,13 +674,10 @@ router.get("/kb/:id", async (req, res) => {
 router.post("/kb", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, content, category, tags } = req.body;
-    if (!title) {
-      throw new ValidationError("عنوان المقالة مطلوب", {
-        field: "title",
-        fix: "أدخل عنواناً للمقالة قبل الحفظ.",
-      });
-    }
+    const parsed = createKbSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
+    const { title, content, category, tags } = b;
     const { insertId } = await rawExecute(
       `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,
       [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]

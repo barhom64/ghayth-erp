@@ -9,6 +9,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Mail, Send, Inbox, FileText, Search, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
   inbound: { label: "وارد", color: "bg-blue-100 text-blue-700" },
@@ -18,7 +19,7 @@ const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
 export default function CommunicationsLetters() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const { data: logResp } = useApiQuery<any>(["comm-log-letters"], "/communications/log?channel=email");
+  const { data: logResp, isLoading, isError } = useApiQuery<any>(["comm-log-letters"], "/communications/log?channel=email");
   const letters = asList<any>(logResp);
 
   const incoming = letters.filter((l: any) => l.direction === "inbound").length;
@@ -36,6 +37,9 @@ export default function CommunicationsLetters() {
     if (search && !l.subject?.includes(search) && !l.toNumber?.includes(search)) return false;
     return true;
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">
