@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/dashboards", async (req, res) => {
+router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
@@ -14,7 +16,7 @@ router.get("/dashboards", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/dashboards", async (req, res) => {
+router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, description, layout, isDefault } = req.body;
@@ -22,11 +24,12 @@ router.post("/dashboards", async (req, res) => {
       `INSERT INTO bi_dashboards (title, description, layout, "isDefault", "createdBy", "companyId") VALUES ($1,$2,$3,$4,$5,$6)`,
       [title, description, layout ? JSON.stringify(layout) : '{}', isDefault || false, scope.userId, scope.companyId]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_dashboards", entityId: r.insertId, after: { title } }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/kpis", async (req, res) => {
+router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name`, [scope.companyId]);
@@ -34,7 +37,7 @@ router.get("/kpis", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/kpis", async (req, res) => {
+router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, description, module, formula, target, currentValue, unit, frequency } = req.body;
@@ -42,11 +45,12 @@ router.post("/kpis", async (req, res) => {
       `INSERT INTO bi_kpis (name, description, module, formula, target, "currentValue", unit, frequency, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [name, description, module, formula, target, currentValue, unit, frequency || "monthly", scope.companyId]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: r.insertId, after: { name, module } }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/reports", async (req, res) => {
+router.get("/reports", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
@@ -54,7 +58,7 @@ router.get("/reports", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/reports", async (req, res) => {
+router.post("/reports", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, description, type, query, filters, scheduledAt } = req.body;
@@ -62,11 +66,12 @@ router.post("/reports", async (req, res) => {
       `INSERT INTO bi_reports (title, description, type, query, filters, "scheduledAt", "createdBy", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [title, description, type, query, filters ? JSON.stringify(filters) : '{}', scheduledAt || null, scope.userId, scope.companyId]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_reports", entityId: r.insertId, after: { title, type } }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/overview", async (req, res) => {
+router.get("/overview", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -93,7 +98,7 @@ router.get("/overview", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/operations/sla-delays", async (req, res) => {
+router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -126,7 +131,7 @@ router.get("/operations/sla-delays", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "SLA delays"); }
 });
 
-router.get("/operations/rejection-rate", async (req, res) => {
+router.get("/operations/rejection-rate", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -152,7 +157,7 @@ router.get("/operations/rejection-rate", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Rejection rate"); }
 });
 
-router.get("/operations/bottleneck", async (req, res) => {
+router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -210,7 +215,7 @@ router.get("/operations/bottleneck", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Bottleneck analysis"); }
 });
 
-router.get("/operations/employee-productivity", async (req, res) => {
+router.get("/operations/employee-productivity", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -259,7 +264,7 @@ router.get("/operations/employee-productivity", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Employee productivity"); }
 });
 
-router.get("/operations/approval-timeliness", async (req, res) => {
+router.get("/operations/approval-timeliness", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -292,7 +297,7 @@ router.get("/operations/approval-timeliness", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Approval timeliness"); }
 });
 
-router.get("/operations/avg-completion-time", async (req, res) => {
+router.get("/operations/avg-completion-time", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -323,7 +328,7 @@ router.get("/operations/avg-completion-time", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Avg completion time"); }
 });
 
-router.get("/operations/trend", async (req, res) => {
+router.get("/operations/trend", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -355,7 +360,7 @@ router.get("/operations/trend", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Operations trend"); }
 });
 
-router.get("/admin-reports/daily", async (req, res) => {
+router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -434,7 +439,7 @@ router.get("/admin-reports/daily", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Daily report"); }
 });
 
-router.get("/admin-reports/weekly", async (req, res) => {
+router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -527,7 +532,7 @@ router.get("/admin-reports/weekly", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Weekly report"); }
 });
 
-router.get("/admin-reports/monthly", async (req, res) => {
+router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -658,7 +663,7 @@ router.get("/admin-reports/monthly", async (req, res) => {
 });
 
 
-router.get("/ceo-dashboard", async (req, res) => {
+router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -784,7 +789,7 @@ router.get("/ceo-dashboard", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CEO dashboard"); }
 });
 
-router.get("/reports/branch-performance", async (req, res) => {
+router.get("/reports/branch-performance", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -868,7 +873,7 @@ router.get("/reports/branch-performance", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Branch performance report"); }
 });
 
-router.get("/reports/vendor-performance", async (req, res) => {
+router.get("/reports/vendor-performance", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -918,7 +923,7 @@ router.get("/reports/vendor-performance", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Vendor performance report"); }
 });
 
-router.get("/reports/fleet-tco", async (req, res) => {
+router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -986,7 +991,7 @@ router.get("/reports/fleet-tco", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet TCO report"); }
 });
 
-router.get("/reports/department-leave-balance", async (req, res) => {
+router.get("/reports/department-leave-balance", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

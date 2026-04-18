@@ -2,6 +2,8 @@ import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
 
 function isPrivateIP(ip: string): boolean {
@@ -61,10 +63,9 @@ function maskConfig(config: any): any {
 
 const GOV_SAFE_COLUMNS = `id, "companyId", type, name, status, enabled, "lastCheckedAt", "lastCheckStatus", "lastCheckMessage", "createdAt", "updatedAt"`;
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovRead(scope, res)) return;
     const rows = await rawQuery<any>(
       `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE "companyId" = $1 ORDER BY type ASC`,
       [scope.companyId]
@@ -87,12 +88,16 @@ router.get("/", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov integrations list error:"); }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovAdmin(scope, res)) return;
     const id = Number(req.params.id);
     const { config, enabled, status } = req.body;
+
+    if (config !== undefined && (typeof config !== "object" || config === null || Array.isArray(config))) {
+      res.status(400).json({ error: "config must be a JSON object" });
+      return;
+    }
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
@@ -126,15 +131,21 @@ router.put("/:id", async (req, res) => {
       params
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_gov_integration",
+      entity: "gov_integrations", entityId: id,
+      before: { enabled: existing.enabled, status: existing.status },
+      after: { enabled, status, configUpdated: config !== undefined },
+    }).catch(console.error);
+
     const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1`, [id]);
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "Gov integration update error:"); }
 });
 
-router.post("/:id/test", async (req, res) => {
+router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovAdmin(scope, res)) return;
     const id = Number(req.params.id);
 
     const [integration] = await rawQuery<any>(
@@ -224,6 +235,12 @@ router.post("/:id/test", async (req, res) => {
       [id, checkStatus, checkMessage]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "test_gov_integration",
+      entity: "gov_integrations", entityId: id,
+      after: { checkStatus, checkMessage },
+    }).catch(console.error);
+
     res.json({
       success: checkStatus === "connected",
       status: checkStatus,
@@ -233,10 +250,9 @@ router.post("/:id/test", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov integration test error:"); }
 });
 
-router.get("/expiring/iqama", async (req, res) => {
+router.get("/expiring/iqama", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovRead(scope, res)) return;
     const days = Number(req.query.days) || 30;
     const rows = await rawQuery<any>(
       `SELECT e.id, e.name, e."empNumber", e."iqamaNumber", e."iqamaExpiry",
@@ -262,10 +278,9 @@ router.get("/expiring/iqama", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Expiring iqama error:"); }
 });
 
-router.get("/expiring/registration", async (req, res) => {
+router.get("/expiring/registration", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovRead(scope, res)) return;
     const days = Number(req.query.days) || 30;
     const rows = await rawQuery<any>(
       `SELECT fv.id, fv."plateNumber", fv.make, fv.model, fv.year,
@@ -286,10 +301,9 @@ router.get("/expiring/registration", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Expiring registration error:"); }
 });
 
-router.get("/links", async (req, res) => {
+router.get("/links", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovRead(scope, res)) return;
     const { entityType, entityId } = req.query as any;
     const conditions = [`gl."companyId" = $1`];
     const params: any[] = [scope.companyId];
@@ -309,10 +323,9 @@ router.get("/links", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov links list error:"); }
 });
 
-router.post("/links", async (req, res) => {
+router.post("/links", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovAdmin(scope, res)) return;
     const { integrationId, entityType, entityId, externalRef, enabled, notes } = req.body;
 
     if (!integrationId || !entityType || !entityId) {
@@ -334,6 +347,12 @@ router.post("/links", async (req, res) => {
     );
 
     if (insertId) {
+      createAuditLog({
+        companyId: scope.companyId, userId: scope.userId, action: "create_gov_link",
+        entity: "gov_integration_links", entityId: insertId,
+        after: { integrationId, entityType, entityId: Number(entityId), externalRef, enabled },
+      }).catch(console.error);
+
       const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1`, [insertId]);
       res.status(201).json(row);
     } else {
@@ -346,10 +365,9 @@ router.post("/links", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov link create error:"); }
 });
 
-router.patch("/links/:id", async (req, res) => {
+router.patch("/links/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovAdmin(scope, res)) return;
     const id = Number(req.params.id);
     const { enabled, externalRef, syncStatus, notes } = req.body;
 
@@ -369,20 +387,36 @@ router.patch("/links/:id", async (req, res) => {
     params.push(id);
     await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length}`, params);
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_gov_link",
+      entity: "gov_integration_links", entityId: id,
+      after: { enabled, externalRef, syncStatus, notes },
+    }).catch(console.error);
+
     const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1`, [id]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Gov link update error:"); }
 });
 
-router.delete("/links/:id", async (req, res) => {
+router.delete("/links/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireGovAdmin(scope, res)) return;
     const id = Number(req.params.id);
+    const [before] = await rawQuery<any>(
+      `SELECT * FROM gov_integration_links WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM gov_integration_links WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_gov_link",
+      entity: "gov_integration_links", entityId: id,
+      before,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Gov link delete error:"); }
 });

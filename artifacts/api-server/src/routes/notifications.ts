@@ -2,11 +2,13 @@ import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("notifications:read"), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -25,7 +27,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.patch("/:id/read", async (req, res) => {
+router.patch("/:id/read", requirePermission("notifications:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -41,13 +43,19 @@ router.patch("/:id/read", async (req, res) => {
       return;
     }
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "mark_notification_read",
+      entity: "notifications", entityId: Number(id),
+      after: { isRead: true },
+    }).catch(console.error);
+
     res.json({ message: "تم تعليم الإشعار كمقروء" });
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
 });
 
-router.get("/unread-count", async (req, res) => {
+router.get("/unread-count", requirePermission("notifications:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<{ count: string }>(
@@ -61,7 +69,7 @@ router.get("/unread-count", async (req, res) => {
   }
 });
 
-router.get("/preferences", async (req, res) => {
+router.get("/preferences", requirePermission("notifications:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -74,7 +82,7 @@ router.get("/preferences", async (req, res) => {
   }
 });
 
-router.post("/preferences", async (req, res) => {
+router.post("/preferences", requirePermission("notifications:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { channel, category, enabled } = req.body;
@@ -86,13 +94,20 @@ router.post("/preferences", async (req, res) => {
       [scope.userId, scope.companyId, channel || 'in_app', category || 'general', enabled !== false]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM notification_preferences WHERE id = $1`, [insertId]);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "upsert_notification_preference",
+      entity: "notification_preferences", entityId: insertId,
+      after: { channel, category, enabled },
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Save notification preference error:");
   }
 });
 
-router.patch("/mark-all-read", async (req, res) => {
+router.patch("/mark-all-read", requirePermission("notifications:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { affectedRows } = await rawExecute(
@@ -100,6 +115,13 @@ router.patch("/mark-all-read", async (req, res) => {
        WHERE "assignmentId" = $1 AND "isRead" = false`,
       [scope.activeAssignmentId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "mark_all_notifications_read",
+      entity: "notifications", entityId: 0,
+      after: { updated: affectedRows },
+    }).catch(console.error);
+
     res.json({ message: "تم تعليم جميع الإشعارات كمقروءة", updated: affectedRows });
   } catch (err) {
     handleRouteError(err, res, "خطأ في تعليم الإشعارات كمقروءة");

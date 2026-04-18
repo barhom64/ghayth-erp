@@ -2,6 +2,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
@@ -72,6 +74,13 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
     );
 
     const token = signApplicantToken(result.insertId);
+
+    createAuditLog({
+      companyId: 0, userId: result.insertId, action: "careers_register",
+      entity: "applicant_accounts", entityId: result.insertId,
+      after: { name: name.trim(), email: email.trim().toLowerCase() },
+    }).catch(console.error);
+
     res.json({ token, accountId: result.insertId });
   } catch (err) {
     handleRouteError(err, res, "تسجيل حساب متقدم");
@@ -108,6 +117,13 @@ router.post("/auth/login", portalLimiter, async (req: Request, res: Response) =>
     }
 
     const token = signApplicantToken(account.id);
+
+    createAuditLog({
+      companyId: 0, userId: account.id, action: "careers_login",
+      entity: "applicant_accounts", entityId: account.id,
+      after: { email: email.trim().toLowerCase() },
+    }).catch(console.error);
+
     res.json({ token, accountId: account.id });
   } catch (err) {
     handleRouteError(err, res, "دخول متقدم");
@@ -186,6 +202,13 @@ router.patch("/me", careersAuth, async (req: Request, res: Response) => {
        WHERE id = $1`,
       [(req as any).applicantId, name, phone, nationalId, gender, dateOfBirth, city, education, experienceYears, skills]
     );
+
+    createAuditLog({
+      companyId: 0, userId: (req as any).applicantId, action: "careers_update_profile",
+      entity: "applicant_accounts", entityId: (req as any).applicantId,
+      after: { name, phone, city, education, experienceYears },
+    }).catch(console.error);
+
     res.json({ message: "تم تحديث البيانات" });
   } catch (err) {
     handleRouteError(err, res, "تحديث بيانات المتقدم");
@@ -203,6 +226,13 @@ router.patch("/me/resume", careersAuth, async (req: Request, res: Response) => {
       `UPDATE applicant_accounts SET "resumeUrl" = $2, "updatedAt" = NOW() WHERE id = $1`,
       [(req as any).applicantId, resumeUrl.trim()]
     );
+
+    createAuditLog({
+      companyId: 0, userId: (req as any).applicantId, action: "careers_update_resume",
+      entity: "applicant_accounts", entityId: (req as any).applicantId,
+      after: { resumeUrl: resumeUrl.trim() },
+    }).catch(console.error);
+
     res.json({ message: "تم حفظ رابط السيرة الذاتية بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "تحديث رابط السيرة الذاتية");
@@ -265,6 +295,12 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'new') RETURNING id`,
       [postingId, applicant.name, applicant.email, applicant.phone, applicant.resumeUrl, coverLetter || null, applicantId]
     );
+
+    createAuditLog({
+      companyId: 0, userId: applicantId, action: "careers_apply",
+      entity: "job_applications", entityId: result.insertId,
+      after: { postingId, applicantId, coverLetter: coverLetter ? "provided" : null },
+    }).catch(console.error);
 
     res.json({ applicationId: result.insertId, message: "تم تقديم طلبك بنجاح" });
   } catch (err) {

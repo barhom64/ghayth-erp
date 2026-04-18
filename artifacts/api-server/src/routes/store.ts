@@ -1,17 +1,19 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import {
   createJournalEntry,
   getAccountCodeFromMapping,
   emitEvent,
+  createAuditLog,
 } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/products", async (req, res) => {
+router.get("/products", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM store_products WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
@@ -19,7 +21,7 @@ router.get("/products", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List store products"); }
 });
 
-router.post("/products", async (req, res) => {
+router.post("/products", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, description, sku, price, costPrice, quantity, category, status, imageUrl } = req.body;
@@ -27,11 +29,12 @@ router.post("/products", async (req, res) => {
       `INSERT INTO store_products (name, description, sku, price, "costPrice", quantity, category, status, "imageUrl", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [name, description, sku, price || 0, costPrice || 0, quantity || 0, category, status || "active", imageUrl, scope.companyId]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_products", entityId: r.insertId, after: { name, sku, price, category, status: status || "active" } }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "Create store product"); }
 });
 
-router.get("/products/:id", async (req, res) => {
+router.get("/products/:id", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
@@ -40,7 +43,7 @@ router.get("/products/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get store product"); }
 });
 
-router.patch("/products/:id", async (req, res) => {
+router.patch("/products/:id", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -62,22 +65,24 @@ router.patch("/products/:id", async (req, res) => {
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1`, [id]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_products", entityId: id, after: b }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update store product"); }
 });
 
-router.delete("/products/:id", async (req, res) => {
+router.delete("/products/:id", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
     await rawExecute(`DELETE FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_products", entityId: id, before: existing }).catch(console.error);
     res.json({ message: "تم حذف المنتج بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete store product"); }
 });
 
-router.get("/orders", async (req, res) => {
+router.get("/orders", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM store_orders WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
@@ -85,7 +90,7 @@ router.get("/orders", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List store orders"); }
 });
 
-router.post("/orders", async (req, res) => {
+router.post("/orders", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = req.body;
@@ -104,11 +109,12 @@ router.post("/orders", async (req, res) => {
         );
       }
     }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_orders", entityId: orderId, after: { orderNumber: orderNumber || `ORD-${Date.now()}`, customerName, status: status || "pending", totalAmount } }).catch(console.error);
     res.status(201).json({ id: orderId });
   } catch (err) { handleRouteError(err, res, "Create store order"); }
 });
 
-router.get("/orders/:id", async (req, res) => {
+router.get("/orders/:id", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
@@ -131,7 +137,7 @@ router.get("/orders/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get store order"); }
 });
 
-router.patch("/orders/:id", async (req, res) => {
+router.patch("/orders/:id", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -158,22 +164,24 @@ router.patch("/orders/:id", async (req, res) => {
       }
     }
 
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_orders", entityId: id, after: b }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update store order"); }
 });
 
-router.delete("/orders/:id", async (req, res) => {
+router.delete("/orders/:id", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
     await rawExecute(`DELETE FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_orders", entityId: id, before: existing }).catch(console.error);
     res.json({ message: "تم حذف الطلب بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete store order"); }
 });
 
-router.get("/stats", async (req, res) => {
+router.get("/stats", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

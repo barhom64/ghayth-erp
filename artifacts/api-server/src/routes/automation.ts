@@ -2,35 +2,41 @@ import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { triggerJobByName } from "../lib/cronScheduler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/cron-jobs", async (req, res): Promise<void> => {
+router.get("/cron-jobs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const rows = await rawQuery<any>(`SELECT * FROM cron_jobs ORDER BY name`);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
 });
 
-router.post("/cron-jobs/:id/toggle", async (req, res): Promise<void> => {
+router.post("/cron-jobs/:id/toggle", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { id } = req.params;
     await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1`, [Number(id)]);
     const [row] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [Number(id)]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cron_jobs", entityId: Number(id), after: { isActive: row?.isActive } }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Toggle cron error:"); }
 });
 
-router.post("/cron-jobs/:id/trigger", async (req, res): Promise<void> => {
+router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { id } = req.params;
     const [job] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [Number(id)]);
     if (!job) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
 
     const result = await triggerJobByName(job.name);
 
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "cron_jobs", entityId: Number(id), after: { jobName: job.name, success: result.success } }).catch(console.error);
     if (result.success) {
       res.json({ success: true, message: "تم تشغيل المهمة بنجاح", result: result.result });
     } else {
@@ -39,7 +45,7 @@ router.post("/cron-jobs/:id/trigger", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Trigger cron error:"); }
 });
 
-router.get("/cron-logs", async (req, res): Promise<void> => {
+router.get("/cron-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const { jobId } = req.query as any;
     const conditions: string[] = [];
@@ -51,7 +57,7 @@ router.get("/cron-logs", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Cron logs error:"); }
 });
 
-router.get("/notification-stats", async (req, res): Promise<void> => {
+router.get("/notification-stats", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -64,7 +70,7 @@ router.get("/notification-stats", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Notification stats error:"); }
 });
 
-router.get("/event-logs", async (req, res): Promise<void> => {
+router.get("/event-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { action } = req.query as any;
@@ -76,7 +82,7 @@ router.get("/event-logs", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Event logs error:"); }
 });
 
-router.get("/proactive-rules", async (req, res): Promise<void> => {
+router.get("/proactive-rules", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -87,13 +93,9 @@ router.get("/proactive-rules", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Proactive rules error:"); }
 });
 
-router.post("/proactive-rules/:id/toggle", async (req, res): Promise<void> => {
+router.post("/proactive-rules/:id/toggle", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    if (scope.role !== "owner" && scope.role !== "admin") {
-      res.status(403).json({ error: "غير مصرح: يتطلب صلاحية المالك أو مدير النظام" });
-      return;
-    }
     const { id } = req.params;
     await rawExecute(
       `UPDATE proactive_rules SET "isActive" = NOT "isActive" WHERE id=$1 AND "companyId"=$2`,
@@ -107,11 +109,12 @@ router.post("/proactive-rules/:id/toggle", async (req, res): Promise<void> => {
       res.status(404).json({ error: "القاعدة غير موجودة" });
       return;
     }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "proactive_rules", entityId: Number(id), after: { isActive: row?.isActive } }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Toggle proactive rule error:"); }
 });
 
-router.get("/automation-logs", async (req, res): Promise<void> => {
+router.get("/automation-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { type, page: pg, limit: lim } = req.query as any;
@@ -133,7 +136,7 @@ router.get("/automation-logs", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Automation logs error:"); }
 });
 
-router.get("/automation-stats", async (req, res): Promise<void> => {
+router.get("/automation-stats", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

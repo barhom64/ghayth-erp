@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
@@ -29,7 +30,7 @@ function getClientIP(req: Request): string {
   return req.socket?.remoteAddress || req.ip || "unknown";
 }
 
-router.post("/request-otp", async (req, res: Response) => {
+router.post("/request-otp", requirePermission("documents:write"), async (req, res: Response) => {
   try {
     const scope = (req as any).scope!;
     const { entityType, entityId, action } = req.body;
@@ -50,6 +51,12 @@ router.post("/request-otp", async (req, res: Response) => {
 
     console.log(`[DIGITAL_SIGNATURE] OTP requested by user ${scope.userId} for ${entityType}#${entityId} action=${action} IP=${ip}`);
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "request_otp",
+      entity: entityType, entityId: Number(entityId),
+      after: { action, ip, deviceFingerprint },
+    }).catch(console.error);
+
     res.json({
       message: "تم إرسال رمز التحقق (OTP) — صالح لمدة 10 دقائق",
       otp,
@@ -62,7 +69,7 @@ router.post("/request-otp", async (req, res: Response) => {
   }
 });
 
-router.post("/verify", async (req, res: Response) => {
+router.post("/verify", requirePermission("documents:write"), async (req, res: Response) => {
   try {
     const scope = (req as any).scope!;
     const { otp, entityType, entityId, action } = req.body;
@@ -119,7 +126,7 @@ router.post("/verify", async (req, res: Response) => {
   }
 });
 
-router.get("/logs", async (req, res: Response) => {
+router.get("/logs", requirePermission("documents:write"), async (req, res: Response) => {
   try {
     const scope = (req as any).scope!;
     const { entityType, entityId } = req.query as any;

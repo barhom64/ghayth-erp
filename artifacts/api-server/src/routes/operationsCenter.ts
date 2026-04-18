@@ -3,6 +3,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -518,7 +519,7 @@ router.get("/daily-close/checklist", async (req, res) => {
   }
 });
 
-router.post("/daily-close/execute", async (req, res) => {
+router.post("/daily-close/execute", requirePermission("finance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];

@@ -3,6 +3,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -140,7 +142,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
   }
 });
 
-router.post("/data-request", authMiddleware, async (req, res) => {
+router.post("/data-request", authMiddleware, requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { requestType, notes, requesterName, requesterEmail } = req.body as any;
@@ -167,6 +169,12 @@ router.post("/data-request", authMiddleware, async (req, res) => {
         dueDate.toISOString().split("T")[0]
       ]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_data_request",
+      entity: "data_access_requests", entityId: insertId,
+      after: { requestType, requesterName: requesterName ?? scope.userName, dueDate: dueDate.toISOString().split("T")[0] },
+    }).catch(console.error);
 
     res.status(201).json({
       id: insertId,
