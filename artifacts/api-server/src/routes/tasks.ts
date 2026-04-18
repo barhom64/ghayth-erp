@@ -226,8 +226,51 @@ router.post("/", async (req, res) => {
       if (bodyAssignedTo === "auto") {
         const smartResult = await loadBalanceAssign(scope.companyId, type || "task");
         if (smartResult) finalAssignedTo = smartResult.assignmentId;
-      } else if (bodyAssignedTo) {
-        finalAssignedTo = bodyAssignedTo;
+      } else if (bodyAssignedTo !== undefined && bodyAssignedTo !== null && String(bodyAssignedTo).trim() !== "") {
+        // Accept either a numeric assignmentId or an employee/user display name
+        const trimmed = String(bodyAssignedTo).trim();
+        const asNumber = Number(trimmed);
+        const isInteger = /^-?\d+$/.test(trimmed) && Number.isInteger(asNumber) && asNumber > 0;
+        if (isInteger) {
+          // Verify the assignment belongs to the caller's company
+          const [scopedAssignment] = await rawQuery<{ id: number }>(
+            `SELECT id FROM employee_assignments
+             WHERE id = $1 AND "companyId" = $2 AND status = 'active'
+             LIMIT 1`,
+            [asNumber, scope.companyId]
+          );
+          if (!scopedAssignment) {
+            throw new ValidationError(`المسؤول رقم ${asNumber} غير موجود في هذه الشركة`, {
+              field: "assignedTo",
+              fix: "اختر موظفاً من القائمة أو اترك الحقل فارغاً",
+            });
+          }
+          finalAssignedTo = scopedAssignment.id;
+        } else {
+          // Resolve by employee name → active assignment in this company
+          const resolved = await rawQuery<{ id: number }>(
+            `SELECT a.id FROM employee_assignments a
+             JOIN employees e ON e.id = a."employeeId"
+             WHERE a."companyId" = $1
+               AND (e.name = $2 OR e.email = $2)
+               AND a.status = 'active'
+             ORDER BY a."isPrimary" DESC, a."createdAt" DESC LIMIT 2`,
+            [scope.companyId, trimmed]
+          );
+          if (resolved.length === 0) {
+            throw new ValidationError(`الموظف "${trimmed}" غير موجود`, {
+              field: "assignedTo",
+              fix: "اختر موظفاً من القائمة أو اترك الحقل فارغاً",
+            });
+          }
+          if (resolved.length > 1) {
+            throw new ValidationError(`أكثر من موظف يحمل اسم "${trimmed}"`, {
+              field: "assignedTo",
+              fix: "اختر الموظف من القائمة باستخدام رقمه بدلاً من الاسم",
+            });
+          }
+          finalAssignedTo = resolved[0].id;
+        }
       }
   
     const rows = await rawQuery<any>(
