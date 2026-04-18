@@ -884,8 +884,18 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
 router.get("/categories", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    const { page = "1", limit: lim = "50" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    const rows = await rawQuery<any>(
+      `SELECT * FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
+      [scope.companyId, Number(lim), offset]
+    );
+    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
@@ -917,8 +927,18 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
 router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    const { page = "1", limit: lim = "50" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    const rows = await rawQuery<any>(
+      `SELECT * FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
+      [scope.companyId, Number(lim), offset]
+    );
+    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 
