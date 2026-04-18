@@ -18,7 +18,10 @@ const docTypeLabels: Record<string, string> = {
 };
 
 export default function MyDocuments() {
-  const { data, isLoading } = useApiQuery<any>(["my-documents"], "/my-space/documents");
+  const { data, isLoading, isError } = useApiQuery<any>(["my-documents"], "/my-space/documents");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const documents: any[] = data?.data ?? [];
 

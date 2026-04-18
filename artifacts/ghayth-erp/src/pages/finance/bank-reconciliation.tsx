@@ -12,6 +12,7 @@ import { Upload, CheckCircle, XCircle, RefreshCw, Landmark, Link2 } from "lucide
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function BankReconciliationPage() {
   const [activeBatch, setActiveBatch] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function BankReconciliationPage() {
     return code.startsWith("11") && code.length >= 4;
   });
 
-  const { data: batchesList, refetch: refetchBatches } = useApiQuery<any>(["bank-batches"], "/finance/bank-reconciliation");
+  const { data: batchesList, isLoading: batchesLoading, isError: batchesError, refetch: refetchBatches } = useApiQuery<any>(["bank-batches"], "/finance/bank-reconciliation");
   const batches = batchesList?.data || [];
 
   const { data: batchDetail, refetch: refetchDetail } = useApiQuery<any>(
@@ -40,6 +41,9 @@ export default function BankReconciliationPage() {
 
   const importMutation = useApiMutation("/finance/bank-reconciliation/import", "POST");
   const autoMatchMutation = useApiMutation("/finance/bank-reconciliation/auto-match", "POST");
+
+  if (batchesLoading) return <LoadingSpinner />;
+  if (batchesError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   function parseCSVLine(line: string): string[] {
     const result: string[] = [];

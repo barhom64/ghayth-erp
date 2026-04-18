@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,10 @@ export default function PropertiesMaintenance() {
   const [maintSearch, setMaintSearch] = useState("");
   const { permissions, roleLevel } = useAppContext();
   const canApprove = permissions.canManageProperty || roleLevel >= 70;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const searchFiltered = requests.filter((r: any) =>
     !maintSearch || r.unitNumber?.includes(maintSearch) || r.buildingName?.includes(maintSearch) || r.description?.includes(maintSearch)
   );

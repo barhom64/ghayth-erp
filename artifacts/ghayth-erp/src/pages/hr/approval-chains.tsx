@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, CheckCircle, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,8 +15,11 @@ const STATUS_OPTIONS = Object.entries(APPROVAL_CHAIN_STATUS).map(([value, { labe
 
 export default function ApprovalChainsPage() {
   const [filters, setFilters] = useFilters();
-  const { data } = useApiQuery<any>(["approval-chains"], "/hr/approval-chains");
+  const { data, isLoading, isError } = useApiQuery<any>(["approval-chains"], "/hr/approval-chains");
   const items = data?.data || [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["employeeName", "leaveTypeName"],

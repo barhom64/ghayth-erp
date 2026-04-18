@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,9 @@ export default function PropertiesOwners() {
     if (!confirm("هل أنت متأكد من حذف هذا المالك؟")) return;
     deleteMut.mutate({ id });
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const columns: DataTableColumn<any>[] = [
     {

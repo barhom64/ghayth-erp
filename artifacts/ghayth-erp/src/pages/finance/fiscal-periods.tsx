@@ -6,6 +6,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**
  * Fiscal periods list — migrated in R.2 iter 2 to the unified template
@@ -38,6 +39,9 @@ export default function FiscalPeriodsPage() {
   );
   const items: FiscalPeriodV1Row[] = data?.data || [];
   const [filters, setFilters] = useFilters();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(items as unknown as Record<string, unknown>[], filters, {
     searchFields: ["name", "period"],

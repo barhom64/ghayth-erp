@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +77,7 @@ function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => vo
 }
 
 export default function LeaveManagementPage() {
-  const { data: requestsData, refetch: refetchPending } = useApiQuery<any>(["leaves-pending"], "/hr/leave-requests?status=pending");
+  const { data: requestsData, refetch: refetchPending, isLoading, isError } = useApiQuery<any>(["leaves-pending"], "/hr/leave-requests?status=pending");
   const { data: balanceData } = useApiQuery<any>(["leave-balance"], "/hr/leave-balance");
   const { data: typesData } = useApiQuery<any>(["leave-types"], "/hr/leave-types");
   const { data: statsData } = useApiQuery<any>(["leave-stats"], "/hr/leave-stats");
@@ -85,6 +86,9 @@ export default function LeaveManagementPage() {
   const types = typesData?.data || [];
   const stats = statsData || {};
   const qc = useQueryClient();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleDone = () => {
     refetchPending();

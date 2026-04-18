@@ -53,6 +53,9 @@ export default function Clients() {
     onSuccess: () => refetch(),
   });
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const editFields = [
     { key: "name", label: "اسم العميل" },
     { key: "phone", label: "رقم الجوال" },

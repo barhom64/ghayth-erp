@@ -11,6 +11,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**
  * Recurring journals list — migrated in R.4 iter 4 to the unified
@@ -92,6 +93,9 @@ export default function RecurringJournalsPage() {
     [["recurring-journals"]],
     { successMessage: "تم تنفيذ القيد الدوري" },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const columns: DataTableColumn<RecurringJournal>[] = [
     {

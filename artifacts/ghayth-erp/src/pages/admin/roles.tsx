@@ -84,6 +84,9 @@ export default function AdminRolesPage() {
   const [newRole, setNewRole] = useState({ roleKey: "", label: "", level: "10", modules: [] as string[] });
   const [creatingRole, setCreatingRole] = useState(false);
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const toggleNewRoleModule = (mod: string) => {
     setNewRole(prev => ({
       ...prev,

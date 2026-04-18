@@ -56,6 +56,9 @@ export default function AdminLogsPage() {
   const logs = logsData?.data || [];
   const total = logsData?.total || 0;
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const filteredLogs = userSearch
     ? logs.filter((l: any) =>
         l.userName?.includes(userSearch) || l.entity?.includes(userSearch) || l.action?.includes(userSearch) || String(l.entityId)?.includes(userSearch)

@@ -255,7 +255,11 @@ function OrdersTab() {
 }
 
 export default function StorePage() {
-  const { data: stats } = useApiQuery<any>(["store-stats"], "/store/stats");
+  const { data: stats, isLoading, isError } = useApiQuery<any>(["store-stats"], "/store/stats");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const s = stats || {};
   const statCards = [
     { label: "منتجات نشطة", value: s.activeProducts || 0, icon: Package, color: "text-blue-600 bg-blue-50" },

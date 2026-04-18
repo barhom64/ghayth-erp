@@ -13,6 +13,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@/components/approval-actions";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**
  * Salary advances list — migrated in R.4 iter 4 to the unified
@@ -50,6 +51,9 @@ export default function SalaryAdvancesPage() {
   const [filters, setFilters] = useFilters();
   const [showForm, setShowForm] = useState(false);
   const canApprove = roleLevel >= 70;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(items as Record<string, any>[], filters, {
     searchFields: ["description", "ref", "employeeName"],

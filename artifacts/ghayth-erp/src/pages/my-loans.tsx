@@ -34,7 +34,10 @@ function formatAmount(v: any): string {
 }
 
 export default function MyLoans() {
-  const { data, isLoading } = useApiQuery<any>(["my-loans"], "/hr/loans/my");
+  const { data, isLoading, isError } = useApiQuery<any>(["my-loans"], "/hr/loans/my");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const loans: any[] = data?.data ?? [];
 

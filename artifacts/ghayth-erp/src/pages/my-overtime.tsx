@@ -33,10 +33,13 @@ export default function MyOvertime() {
   const today = new Date();
   const [month, setMonth] = useState(today.toISOString().slice(0, 7));
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["my-overtime", month],
     `/hr/overtime/my?month=${month}`
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const records: any[] = data?.data ?? [];
 
