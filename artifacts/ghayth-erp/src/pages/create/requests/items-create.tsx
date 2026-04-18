@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 
@@ -16,8 +17,11 @@ export default function RequestsItemCreate() {
     title: "", typeId: "", priority: "medium", requester: "", description: "",
   });
   const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/requests", "POST", [["requests"]]);
-  const { data: typesRes } = useApiQuery<{ data: any[] }>(["request-types"], "/requests/types");
+  const { data: typesRes, isLoading, isError } = useApiQuery<{ data: any[] }>(["request-types"], "/requests/types");
   const types = typesRes?.data || [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = () => {
     if (!form.title) {

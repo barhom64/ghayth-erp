@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -24,9 +25,9 @@ export default function ContractsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/contracts", "POST", [["rental-contracts"]]);
-  const { data: unitsData } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
-  const { data: tenantsResp } = useApiQuery<any>(["tenants-registry"], "/properties/tenants");
-  const { data: ownersResp } = useApiQuery<any>(["property-owners"], "/properties/owners");
+  const { data: unitsData, isLoading: loadingU, isError: errorU } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
+  const { data: tenantsResp, isLoading: loadingT, isError: errorT } = useApiQuery<any>(["tenants-registry"], "/properties/tenants");
+  const { data: ownersResp, isLoading: loadingO, isError: errorO } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const units = unitsData?.data || [];
   const tenants = asList(tenantsResp);
   const owners = asList(ownersResp);
@@ -81,6 +82,9 @@ export default function ContractsCreate() {
     ejarStatus: "draft",
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  if (loadingU || loadingT || loadingO) return <LoadingSpinner />;
+  if (errorU || errorT || errorO) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const set = (field: string, value: any) => {
     setIsDirty(true);

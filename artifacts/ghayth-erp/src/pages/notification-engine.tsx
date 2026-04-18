@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,8 +38,8 @@ function ChannelBadge({ channel }: { channel: string }) {
 }
 
 function RoutingRulesTab() {
-  const { data: rulesData } = useApiQuery(["notif-routing-rules"], "/notification-engine/routing-rules");
-  const { data: chainsData } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
+  const { data: rulesData, isLoading: loadingR, isError: errorR } = useApiQuery(["notif-routing-rules"], "/notification-engine/routing-rules");
+  const { data: chainsData, isLoading: loadingC, isError: errorC } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
   const rules = asList(rulesData);
   const chains = asList(chainsData);
   const [editId, setEditId] = useState<number | null>(null);
@@ -68,6 +69,9 @@ function RoutingRulesTab() {
     if (!editId) return;
     saveRuleMut.mutate({ id: editId, channels: editChannels, priority: editPriority, fallbackChainId: editChainId });
   };
+
+  if (loadingR || loadingC) return <LoadingSpinner />;
+  if (errorR || errorC) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

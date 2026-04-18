@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useAppContext } from "@/contexts/app-context";
@@ -33,13 +34,16 @@ export default function PayrollCreate() {
     scope: "all",
   });
 
-  const { data: empData } = useApiQuery<any>(["employees-list"], `/employees${scopeSuffix}`);
+  const { data: empData, isLoading: loadingEmp, isError: errorEmp } = useApiQuery<any>(["employees-list"], `/employees${scopeSuffix}`);
   const employees = empData?.data || [];
   const activeEmployees = employees.filter((e: any) => e.status === "active" || !e.status);
   const totalSalaries = activeEmployees.reduce((sum: number, e: any) => sum + Number(e.salary || 0), 0);
 
-  const { data: branchData } = useApiQuery<any>(["branches"], "/settings/branches");
+  const { data: branchData, isLoading: loadingBranch, isError: errorBranch } = useApiQuery<any>(["branches"], "/settings/branches");
   const branches = branchData?.data || [];
+
+  if (loadingEmp || loadingBranch) return <LoadingSpinner />;
+  if (errorEmp || errorBranch) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = () => {
     if (!form.month) {

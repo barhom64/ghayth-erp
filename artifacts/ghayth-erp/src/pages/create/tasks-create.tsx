@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +32,7 @@ export default function TasksCreate() {
   const { user } = useAuth();
   const { toast } = useToast();
   const createMut = useApiMutation("/tasks", "POST", [["tasks"]]);
-  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const clients = clientsData?.data || [];
   const searchStr = useSearch();
   const searchParams = new URLSearchParams(searchStr);
@@ -70,6 +71,9 @@ export default function TasksCreate() {
     label: item.name || item.unitNumber || item.title || item.plateNumber || item.ref || item.description || `#${item.id}`,
     subtitle: item.category || item.email || item.phone || undefined,
   }));
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
     if (!form.title) {

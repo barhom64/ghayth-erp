@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -16,7 +17,7 @@ export default function PropertyMaintenanceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/maintenance-requests", "POST", [["maintenance-requests"]]);
-  const { data: unitsData } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
+  const { data: unitsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
   const units = unitsData?.data || [];
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -28,6 +29,9 @@ export default function PropertyMaintenanceCreate() {
     unitId: "", category: "", description: "", priority: "medium", cost: "",
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
     setFieldErrors({});

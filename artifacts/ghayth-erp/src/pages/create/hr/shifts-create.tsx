@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Clock, Sun, Moon, Coffee, AlertCircle } from "lucide-react";
@@ -37,7 +38,7 @@ export default function ShiftsCreate() {
   const createMut = useApiMutation("/hr/shifts", "POST", [["shifts"]], {
     successMessage: "تم إضافة الوردية بنجاح",
   });
-  const { data: branchData } = useApiQuery<any>(["branches"], "/settings/branches");
+  const { data: branchData, isLoading, isError } = useApiQuery<any>(["branches"], "/settings/branches");
   const branches = branchData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
@@ -50,6 +51,9 @@ export default function ShiftsCreate() {
     branchId: "",
   });
   const [selectedDays, setSelectedDays] = useState<string[]>(["0", "1", "2", "3", "4"]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const toggleDay = (day: string) => {
     setSelectedDays((prev) =>

@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { asList } from "@/lib/api";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -39,7 +40,7 @@ export default function LeavesCreate() {
 
   const balanceQ = useApiQuery<any>(["leave-balance"], "/hr/leave-balance");
   const balances = balanceQ.data?.data || balanceQ.data?.balances || [];
-  const { data: empData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const { data: empData, isLoading: loadingEmp, isError: errorEmp } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = empData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
@@ -52,6 +53,9 @@ export default function LeavesCreate() {
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  if (leaveTypesQ.isLoading || loadingEmp) return <LoadingSpinner />;
+  if (leaveTypesQ.isError || errorEmp) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;

@@ -266,9 +266,6 @@ export default function ActivityLogPage() {
 
   const { data: summaryData } = useApiQuery<any>(["activity-summary"], "/activity-log/summary");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const items = data?.data || [];
   const total = data?.total || 0;
   const summary = summaryData || {};

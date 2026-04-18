@@ -8,15 +8,19 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 
 export default function BuildingsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { data: ownersResp } = useApiQuery<any>(["property-owners"], "/properties/owners");
+  const { data: ownersResp, isLoading, isError } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const owners = asList(ownersResp);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;

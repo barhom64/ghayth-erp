@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Autocomplete } from "@/components/ui/autocomplete";
@@ -23,7 +24,7 @@ export default function ExcuseCreate() {
   const createMut = useApiMutation("/hr/excuse-requests", "POST", [["excuse-requests"]], {
     successMessage: "تم تقديم طلب الاستئذان بنجاح",
   });
-  const { data: empData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const { data: empData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = empData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
@@ -35,6 +36,9 @@ export default function ExcuseCreate() {
     reason: "",
     assignmentId: "",
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = () => {
     if (!form.excuseDate) {

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -30,10 +31,13 @@ export default function ApplicantsCreate() {
   const createMut = useApiMutation("/recruitment/applications", "POST", [["applicants"]], {
     successMessage: "تم إضافة المتقدم بنجاح",
   });
-  const { data: jobsData } = useApiQuery<{ data: any[] }>(["jobs"], "/recruitment/postings");
+  const { data: jobsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["jobs"], "/recruitment/postings");
   const jobs = jobsData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const set = (key: string, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));

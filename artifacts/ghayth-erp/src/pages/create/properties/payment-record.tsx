@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Save, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function PaymentRecord() {
@@ -18,7 +19,7 @@ export default function PaymentRecord() {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
 
-  const { data: contractResp } = useApiQuery<any>(
+  const { data: contractResp, isLoading, isError } = useApiQuery<any>(
     ["property-contract-detail", params?.contractId],
     `/properties/contracts/${params?.contractId}`
   );
@@ -33,6 +34,9 @@ export default function PaymentRecord() {
       setForm(f => ({ ...f, amount: String(installment.amount || "") }));
     }
   }, [installment]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSave = async () => {
     if (!form.amount) { toast({ variant: "destructive", title: "المبلغ مطلوب" }); return; }

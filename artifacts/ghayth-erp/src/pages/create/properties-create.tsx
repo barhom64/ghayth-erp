@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -19,10 +20,10 @@ export default function PropertiesCreate() {
   useUnsavedChanges(isDirty);
   const addUnit = useApiMutation("/properties/units", "POST", [["property-units"], ["properties-stats"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { data: buildingsResp } = useApiQuery<any>(["property-buildings"], "/properties/buildings");
+  const { data: buildingsResp, isLoading: loadingB, isError: errorB } = useApiQuery<any>(["property-buildings"], "/properties/buildings");
   const buildings = asList(buildingsResp);
 
-  const { data: ownersResp } = useApiQuery<any>(["property-owners"], "/properties/owners");
+  const { data: ownersResp, isLoading: loadingO, isError: errorO } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const owners = asList(ownersResp);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -54,6 +55,9 @@ export default function PropertiesCreate() {
     hasKitchen: false,
     ownerId: "",
   });
+
+  if (loadingB || loadingO) return <LoadingSpinner />;
+  if (errorB || errorO) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const AMENITIES_LIST = [
     "مصعد", "موقف سيارة", "حراسة أمنية", "مسبح", "صالة رياضية",

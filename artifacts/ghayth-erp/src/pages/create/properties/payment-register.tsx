@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Save, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function PaymentRegisterPage() {
@@ -19,7 +20,7 @@ export default function PaymentRegisterPage() {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
 
-  const { data: paymentsResp } = useApiQuery<any>(["rent-payments"], "/properties/payments");
+  const { data: paymentsResp, isLoading, isError } = useApiQuery<any>(["rent-payments"], "/properties/payments");
   const payments = asList(paymentsResp);
   const payment = payments.find((p: any) => String(p.id) === params?.paymentId);
 
@@ -31,6 +32,9 @@ export default function PaymentRegisterPage() {
     paymentMethod: "bank_transfer",
     notes: "",
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   if (payment && !form.paidAmount && remaining > 0) {
     setForm(f => ({ ...f, paidAmount: String(remaining) }));

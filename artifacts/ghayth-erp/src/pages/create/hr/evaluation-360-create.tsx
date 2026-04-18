@@ -11,6 +11,7 @@ import { Save, Star, Plus, X, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
@@ -25,7 +26,7 @@ export default function Evaluation360Create() {
     successMessage: "تم بدء دورة التقييم بنجاح",
   });
 
-  const { data: empResp } = useApiQuery<any>(["employees-list", scopeQueryString], `/employees?${scopeQueryString || ""}&limit=500`);
+  const { data: empResp, isLoading, isError } = useApiQuery<any>(["employees-list", scopeQueryString], `/employees?${scopeQueryString || ""}&limit=500`);
   const employees = asList(empResp);
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
@@ -33,8 +34,12 @@ export default function Evaluation360Create() {
     period: "",
     notes: "",
   });
+
   const [participants, setParticipants] = useState<{ evaluatorId: string; evaluatorRole: "manager" | "peer"; name: string }[]>([]);
   const [addingParticipant, setAddingParticipant] = useState({ evaluatorId: "", evaluatorRole: "peer" as "manager" | "peer" });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const addParticipant = () => {
     if (!addingParticipant.evaluatorId) return;

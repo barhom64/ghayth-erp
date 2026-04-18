@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -23,8 +24,8 @@ export default function OrdersCreate() {
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const createMut = useApiMutation<unknown, Record<string, any>>("/store/orders", "POST", [["store-orders"], ["store-stats"]]);
-  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
-  const { data: productsData } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
+  const { data: clientsData, isLoading: loadingC, isError: errorC } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: productsData, isLoading: loadingP, isError: errorP } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
   const clients = clientsData?.data || [];
   const products = productsData?.data || [];
 
@@ -32,6 +33,9 @@ export default function OrdersCreate() {
     customerName: "", customerPhone: "", status: "pending", notes: "",
   });
   const [items, setItems] = useState<OrderItem[]>([]);
+
+  if (loadingC || loadingP) return <LoadingSpinner />;
+  if (errorC || errorP) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleClientSelect = (clientId: string) => {
     const client = clients.find((c: any) => String(c.id) === clientId);
