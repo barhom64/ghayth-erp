@@ -40,6 +40,13 @@ export default function TripsPage() {
     { key: "status", header: "الحالة", sortable: true, render: (t) => <PageStatusBadge status={t.status} /> },
   ];
 
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <PageShell
       title="الرحلات"

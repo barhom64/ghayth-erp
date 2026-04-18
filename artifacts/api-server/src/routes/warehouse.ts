@@ -6,6 +6,7 @@ import {
   IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -27,6 +28,16 @@ router.use(authMiddleware);
 // WAREHOUSE STATE MACHINES — Phase C.8 Warehouse audit
 // ─────────────────────────────────────────────────────────────────────────────
 const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment"] as const;
+
+const createMovementSchema = z.object({
+  productId: z.number({ required_error: "المنتج مطلوب", invalid_type_error: "معرف المنتج يجب أن يكون رقماً" }).int().positive("معرف المنتج يجب أن يكون رقماً موجباً"),
+  type: z.enum(MOVEMENT_TYPES, { errorMap: () => ({ message: `نوع الحركة غير صالح — اختر من: ${MOVEMENT_TYPES.join(", ")}` }) }),
+  quantity: z.number({ required_error: "الكمية مطلوبة", invalid_type_error: "الكمية يجب أن تكون رقماً" }).positive("الكمية يجب أن تكون أكبر من صفر"),
+  unitCost: z.number().min(0, "تكلفة الوحدة يجب أن تكون 0 أو أكثر").optional().nullable(),
+  reference: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
 const PRODUCT_STATUSES = ["active", "inactive", "discontinued"] as const;
 const PRODUCT_TRANSITIONS: Record<string, readonly string[]> = {
   active:       ["inactive", "discontinued"],
@@ -550,27 +561,13 @@ router.get("/movements", requirePermission("warehouse:read"), async (req, res) =
 router.post("/movements", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-
-    if (!b.productId) {
-      throw new ValidationError("المنتج مطلوب", { field: "productId", fix: "اختر المنتج المراد تحريكه" });
+    const parsed = createMovementSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
     }
-    if (!b.type || !MOVEMENT_TYPES.includes(b.type)) {
-      throw new ValidationError(
-        "نوع الحركة غير صالح",
-        { field: "type", fix: `اختر من: ${MOVEMENT_TYPES.join(", ")}` }
-      );
-    }
-    const qtyNum = Number(b.quantity);
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "quantity", fix: "أدخل كمية موجبة" });
-    }
-    if (b.unitCost !== undefined && b.unitCost !== null) {
-      const uc = Number(b.unitCost);
-      if (!Number.isFinite(uc) || uc < 0) {
-        throw new ValidationError("تكلفة الوحدة غير صالحة", { field: "unitCost", fix: "أدخل قيمة غير سالبة" });
-      }
-    }
+    const b = parsed.data;
+    const qtyNum = b.quantity;
 
     let unitCost = b.unitCost || 0;
     let insertId = 0;

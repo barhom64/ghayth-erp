@@ -137,6 +137,13 @@ function OpportunitiesTab() {
     },
   ];
 
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <KpiGrid items={[
@@ -232,8 +239,15 @@ function OpportunitiesTab() {
 }
 
 function PipelineTab() {
-  const { data: pipelineResp, isLoading } = useApiQuery<any>(["crm-pipeline"], "/crm/pipeline");
+  const { data: pipelineResp, isLoading, isError } = useApiQuery<any>(["crm-pipeline"], "/crm/pipeline");
   const pipeline = asList(pipelineResp);
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">خط أنابيب المبيعات</h2>
