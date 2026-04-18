@@ -7,12 +7,13 @@ import {
   createJournalEntry,
   getAccountCodeFromMapping,
   emitEvent,
+  createAuditLog,
 } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/seasons", requirePermission("operations:read"), async (req, res) => {
+router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_seasons WHERE "companyId"=$1 ORDER BY "startDate" DESC`, [scope.companyId]);
@@ -20,7 +21,7 @@ router.get("/seasons", requirePermission("operations:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
 
-router.post("/seasons", requirePermission("operations:create"), async (req, res) => {
+router.post("/seasons", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -28,11 +29,12 @@ router.post("/seasons", requirePermission("operations:create"), async (req, res)
       `INSERT INTO umrah_seasons ("companyId",title,"startDate","endDate",notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [scope.companyId, b.title, b.startDate, b.endDate, b.notes]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0]?.id, after: { title: b.title } }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
 
-router.patch("/seasons/:id", requirePermission("operations:update"), async (req, res): Promise<void> => {
+router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -64,11 +66,12 @@ router.patch("/seasons/:id", requirePermission("operations:update"), async (req,
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_seasons SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_seasons", entityId: Number(id), after: { status: b.status } }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update season error"); }
 });
 
-router.get("/agents", requirePermission("operations:read"), async (req, res) => {
+router.get("/agents", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 ORDER BY name`, [scope.companyId]);
@@ -76,7 +79,7 @@ router.get("/agents", requirePermission("operations:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "List agents error"); }
 });
 
-router.post("/agents", requirePermission("operations:create"), async (req, res) => {
+router.post("/agents", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -84,11 +87,12 @@ router.post("/agents", requirePermission("operations:create"), async (req, res) 
       `INSERT INTO umrah_agents ("companyId",name,"contactPerson",phone,email,country,"profitMargin","contractRef",currency,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [scope.companyId, b.name, b.contactPerson, b.phone, b.email, b.country, b.profitMargin || 0, b.contractRef, b.currency || "SAR", b.notes]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agents", entityId: rows[0]?.id, after: { name: b.name } }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
 
-router.patch("/agents/:id", requirePermission("operations:update"), async (req, res) => {
+router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -101,11 +105,12 @@ router.patch("/agents/:id", requirePermission("operations:update"), async (req, 
     params.push(req.params.id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_agents", entityId: Number(req.params.id) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update agent error"); }
 });
 
-router.get("/packages", requirePermission("operations:read"), async (req, res) => {
+router.get("/packages", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 ORDER BY p.name`, [scope.companyId]);
@@ -113,7 +118,7 @@ router.get("/packages", requirePermission("operations:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "List packages error"); }
 });
 
-router.post("/packages", requirePermission("operations:create"), async (req, res) => {
+router.post("/packages", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -121,11 +126,12 @@ router.post("/packages", requirePermission("operations:create"), async (req, res
       `INSERT INTO umrah_packages ("companyId",name,"seasonId","costPrice","sellPrice","includesTransport","includesHotel","includesMeals","includesZiyarat",duration,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [scope.companyId, b.name, b.seasonId, b.costPrice, b.sellPrice, b.includesTransport || false, b.includesHotel || false, b.includesMeals || false, b.includesZiyarat || false, b.duration || 7, b.description]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_packages", entityId: rows[0]?.id, after: { name: b.name } }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create package error"); }
 });
 
-router.get("/pilgrims", requirePermission("operations:read"), async (req, res) => {
+router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId, status, agentId, search, page = "1", limit = "20" } = req.query as any;
@@ -151,7 +157,7 @@ router.get("/pilgrims", requirePermission("operations:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "List pilgrims error"); }
 });
 
-router.post("/pilgrims", requirePermission("operations:create"), async (req, res) => {
+router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -232,11 +238,12 @@ router.post("/pilgrims", requirePermission("operations:create"), async (req, res
         b.notes ?? null,
       ]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim(), passportNumber: String(b.passportNumber).trim() } }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }
 });
 
-router.patch("/pilgrims/:id", requirePermission("operations:update"), async (req, res) => {
+router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -249,11 +256,12 @@ router.patch("/pilgrims/:id", requirePermission("operations:update"), async (req
     params.push(req.params.id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: Number(req.params.id) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update pilgrim error"); }
 });
 
-router.get("/pilgrims/:id", requirePermission("operations:read"), async (req, res): Promise<void> => {
+router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery(
@@ -270,7 +278,7 @@ router.get("/pilgrims/:id", requirePermission("operations:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
 });
 
-router.post("/import", requirePermission("operations:create"), async (req, res): Promise<void> => {
+router.post("/import", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows, fileType, fileName } = req.body;
@@ -357,11 +365,12 @@ router.post("/import", requirePermission("operations:create"), async (req, res):
       [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), importRows.length, logId]
     );
 
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_logs", entityId: logId, after: { total: importRows.length, new: newCount, updated: updateCount } }).catch(console.error);
     res.json({ importLogId: logId, total: importRows.length, new: newCount, updated: updateCount, duplicates: dupCount, errors: errCount, errorDetails: errors });
   } catch (err) { handleRouteError(err, res, "Import error"); }
 });
 
-router.get("/dashboard", requirePermission("operations:read"), async (req, res) => {
+router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
@@ -410,7 +419,7 @@ router.get("/dashboard", requirePermission("operations:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Dashboard error"); }
 });
 
-router.post("/run-daily-status", requirePermission("operations:create"), async (req, res) => {
+router.post("/run-daily-status", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const today = new Date().toISOString().split("T")[0];
@@ -429,11 +438,12 @@ router.post("/run-daily-status", requirePermission("operations:create"), async (
        WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2`,
       [scope.companyId, today]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: 0, after: { date: today, arrivedUpdated: arrived, overstayedUpdated: overstayed, departedUpdated: departed } }).catch(console.error);
     res.json({ date: today, arrivedUpdated: arrived, overstayedUpdated: overstayed, departedUpdated: departed });
   } catch (err) { handleRouteError(err, res, "Daily status error"); }
 });
 
-router.post("/run-penalty-engine", requirePermission("operations:create"), async (req, res) => {
+router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { overstayDays = 3, dailyRate = 500 } = req.body;
@@ -464,11 +474,12 @@ router.post("/run-penalty-engine", requirePermission("operations:create"), async
         created++;
       }
     }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created } }).catch(console.error);
     res.json({ checked: overstayed.length, penaltiesCreated: created });
   } catch (err) { handleRouteError(err, res, "Penalty engine error"); }
 });
 
-router.get("/penalties", requirePermission("operations:read"), async (req, res) => {
+router.get("/penalties", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId, status } = req.query as any;
@@ -487,7 +498,7 @@ router.get("/penalties", requirePermission("operations:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
 });
 
-router.post("/agent-invoices/generate", requirePermission("operations:create"), async (req, res): Promise<void> => {
+router.post("/agent-invoices/generate", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { agentId, seasonId } = req.body;
@@ -576,11 +587,12 @@ router.post("/agent-invoices/generate", requirePermission("operations:create"), 
       console.error("[umrah] GL posting failed for agent invoice", rows[0].id, glErr);
     }
 
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agent_invoices", entityId: rows[0]?.id, after: { agentId, seasonId, total } }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Generate invoice error"); }
 });
 
-router.get("/agent-invoices", requirePermission("operations:read"), async (req, res) => {
+router.get("/agent-invoices", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { agentId, seasonId } = req.query as any;
@@ -599,7 +611,7 @@ router.get("/agent-invoices", requirePermission("operations:read"), async (req, 
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
 });
 
-router.get("/transport", requirePermission("operations:read"), async (req, res) => {
+router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_transport WHERE "companyId"=$1 ORDER BY "tripDate" DESC`, [scope.companyId]);
@@ -607,7 +619,7 @@ router.get("/transport", requirePermission("operations:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "List transport error"); }
 });
 
-router.post("/transport", requirePermission("operations:create"), async (req, res) => {
+router.post("/transport", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -640,11 +652,12 @@ router.post("/transport", requirePermission("operations:create"), async (req, re
       }
     }
 
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
 });
 
-router.get("/import-logs", requirePermission("operations:read"), async (req, res) => {
+router.get("/import-logs", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_import_logs WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 50`, [scope.companyId]);
@@ -652,7 +665,7 @@ router.get("/import-logs", requirePermission("operations:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "List import logs error"); }
 });
 
-router.get("/unassigned", requirePermission("operations:read"), async (req, res) => {
+router.get("/unassigned", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
@@ -664,7 +677,7 @@ router.get("/unassigned", requirePermission("operations:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "List unassigned error"); }
 });
 
-router.post("/assign-bulk", requirePermission("operations:create"), async (req, res): Promise<void> => {
+router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { pilgrimIds, agentId } = req.body;
@@ -676,6 +689,7 @@ router.post("/assign-bulk", requirePermission("operations:create"), async (req, 
       `UPDATE umrah_pilgrims SET "agentId"=$1, "updatedAt"=NOW() WHERE "companyId"=$2 AND id IN (${placeholders})`,
       [agentId, scope.companyId, ...pilgrimIds]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: 0, after: { assigned: pilgrimIds.length, agentId } }).catch(console.error);
     res.json({ assigned: pilgrimIds.length, agentId });
   } catch (err) { handleRouteError(err, res, "Bulk assign error"); }
 });

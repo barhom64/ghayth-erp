@@ -2,7 +2,9 @@ import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHa
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { sendNotification } from "../lib/notificationService.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 import { aiEngine } from "../lib/aiEngine.js";
 import { sendPushToCompany, getVapidPublicKey } from "../lib/pushService.js";
 import { encryptPushEndpoint, hashPushEndpoint, decryptPushEndpoint } from "../lib/pushCrypto.js";
@@ -328,7 +330,7 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
 
 router.use(authMiddleware);
 
-router.get("/log", async (req, res): Promise<void> => {
+router.get("/log", requirePermission("communications:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { channel, direction } = req.query as any;
@@ -341,7 +343,7 @@ router.get("/log", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Communications log error:"); }
 });
 
-router.post("/send", async (req, res): Promise<void> => {
+router.post("/send", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -377,11 +379,12 @@ router.post("/send", async (req, res): Promise<void> => {
       [scope.companyId, String(b.channel).toLowerCase(), b.fromNumber ?? null, b.toNumber ?? b.toEmail, b.subject ?? null, String(b.body).trim(), b.relatedType ?? null, b.relatedId ?? null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id=$1`, [insertId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: String(b.channel).toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Send communication error:"); }
 });
 
-router.get("/whatsapp", async (req, res): Promise<void> => {
+router.get("/whatsapp", requirePermission("communications:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -393,7 +396,7 @@ router.get("/whatsapp", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "WhatsApp queue error:"); }
 });
 
-router.get("/sms", async (req, res): Promise<void> => {
+router.get("/sms", requirePermission("communications:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -405,7 +408,7 @@ router.get("/sms", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "SMS queue error:"); }
 });
 
-router.get("/pbx", async (req, res): Promise<void> => {
+router.get("/pbx", requirePermission("communications:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM pbx_calls WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 200`, [scope.companyId]);
@@ -413,7 +416,7 @@ router.get("/pbx", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "PBX calls error:"); }
 });
 
-router.patch("/log/:id", async (req, res): Promise<void> => {
+router.patch("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { body, content, subject, direction, status } = req.body as any;
@@ -432,11 +435,12 @@ router.patch("/log/:id", async (req, res): Promise<void> => {
       params
     );
     if (!row) { res.status(404).json({ error: "السجل غير موجود" }); return; }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "communications_log", entityId: Number(req.params.id) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/log/:id/convert", async (req, res): Promise<void> => {
+router.post("/log/:id/convert", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const logId = Number(req.params.id);
@@ -499,6 +503,7 @@ router.post("/log/:id/convert", async (req, res): Promise<void> => {
     }
 
     const typeLabels: Record<string, string> = { task: "مهمة متابعة", ticket: "تذكرة دعم", request: "طلب داخلي" };
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: targetType, entityId: createdId!, after: { sourceLogId: logId, targetType } }).catch(console.error);
     res.json({
       success: true,
       message: `تم تحويل الاتصال إلى ${typeLabels[targetType]}`,
@@ -509,19 +514,22 @@ router.post("/log/:id/convert", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Communication convert error:"); }
 });
 
-router.delete("/log/:id", async (req, res): Promise<void> => {
+router.delete("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [before] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `DELETE FROM communications_log WHERE id = $1 AND "companyId" = $2 RETURNING id`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) { res.status(404).json({ error: "السجل غير موجود" }); return; }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "communications_log", entityId: id, before }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/stats", async (req, res): Promise<void> => {
+router.get("/stats", requirePermission("communications:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -540,7 +548,7 @@ router.get("/stats", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Communications stats error:"); }
 });
 
-router.get("/queue-stats", async (req, res): Promise<void> => {
+router.get("/queue-stats", requirePermission("communications:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -613,7 +621,7 @@ router.get("/push/vapid-key", async (_req, res): Promise<void> => {
   res.json({ publicKey: key });
 });
 
-router.post("/push/subscribe", async (req, res): Promise<void> => {
+router.post("/push/subscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { endpoint, keys } = req.body as {
@@ -643,11 +651,12 @@ router.post("/push/subscribe", async (req, res): Promise<void> => {
       [scope.companyId, scope.activeAssignmentId ?? null, encryptedEndpoint, endpointHash, keys.p256dh, keys.auth, userAgent, isEncrypted]
     );
 
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Push subscribe error:"); }
 });
 
-router.delete("/push/unsubscribe", async (req, res): Promise<void> => {
+router.delete("/push/unsubscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { endpoint } = req.body as { endpoint: string };
@@ -664,11 +673,12 @@ router.delete("/push/unsubscribe", async (req, res): Promise<void> => {
       [scope.companyId, endpointHash, endpoint]
     );
 
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Push unsubscribe error:"); }
 });
 
-router.post("/push/test", async (req, res): Promise<void> => {
+router.post("/push/test", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const result = await sendPushToCompany(

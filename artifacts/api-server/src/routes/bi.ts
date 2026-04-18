@@ -157,7 +157,7 @@ router.get("/operations/rejection-rate", requirePermission("bi:read"), async (re
   } catch (err) { handleRouteError(err, res, "Rejection rate"); }
 });
 
-router.get("/operations/bottleneck", async (req, res) => {
+router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -215,7 +215,7 @@ router.get("/operations/bottleneck", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Bottleneck analysis"); }
 });
 
-router.get("/operations/employee-productivity", async (req, res) => {
+router.get("/operations/employee-productivity", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -264,7 +264,7 @@ router.get("/operations/employee-productivity", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Employee productivity"); }
 });
 
-router.get("/operations/approval-timeliness", async (req, res) => {
+router.get("/operations/approval-timeliness", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -297,7 +297,7 @@ router.get("/operations/approval-timeliness", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Approval timeliness"); }
 });
 
-router.get("/operations/avg-completion-time", async (req, res) => {
+router.get("/operations/avg-completion-time", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -328,7 +328,7 @@ router.get("/operations/avg-completion-time", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Avg completion time"); }
 });
 
-router.get("/operations/trend", async (req, res) => {
+router.get("/operations/trend", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -360,7 +360,7 @@ router.get("/operations/trend", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Operations trend"); }
 });
 
-router.get("/admin-reports/daily", async (req, res) => {
+router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -439,7 +439,7 @@ router.get("/admin-reports/daily", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Daily report"); }
 });
 
-router.get("/admin-reports/weekly", async (req, res) => {
+router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -532,7 +532,7 @@ router.get("/admin-reports/weekly", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Weekly report"); }
 });
 
-router.get("/admin-reports/monthly", async (req, res) => {
+router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -663,7 +663,7 @@ router.get("/admin-reports/monthly", async (req, res) => {
 });
 
 
-router.get("/ceo-dashboard", async (req, res) => {
+router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -789,7 +789,7 @@ router.get("/ceo-dashboard", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CEO dashboard"); }
 });
 
-router.get("/reports/branch-performance", async (req, res) => {
+router.get("/reports/branch-performance", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -873,7 +873,7 @@ router.get("/reports/branch-performance", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Branch performance report"); }
 });
 
-router.get("/reports/vendor-performance", async (req, res) => {
+router.get("/reports/vendor-performance", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -923,7 +923,7 @@ router.get("/reports/vendor-performance", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Vendor performance report"); }
 });
 
-router.get("/reports/fleet-tco", async (req, res) => {
+router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -991,7 +991,7 @@ router.get("/reports/fleet-tco", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet TCO report"); }
 });
 
-router.get("/reports/department-leave-balance", async (req, res) => {
+router.get("/reports/department-leave-balance", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
