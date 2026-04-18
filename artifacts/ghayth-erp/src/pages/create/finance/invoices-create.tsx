@@ -12,6 +12,7 @@ import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocompl
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAppContext } from "@/contexts/app-context";
+import { ClientContextCard } from "@/components/shared/client-context-card";
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -190,6 +191,11 @@ export default function InvoicesCreate() {
             loading={clientsLoading}
             className="mt-1"
           />
+          {form.clientId && (
+            <div className="mt-3">
+              <ClientContextCard clientId={form.clientId} section="invoice" />
+            </div>
+          )}
         </div>
         <div>
           <Label>الفرع <span className="text-red-500">*</span></Label>

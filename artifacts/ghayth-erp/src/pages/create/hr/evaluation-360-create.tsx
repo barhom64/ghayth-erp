@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
 const DRAFT_KEY = "hr_evaluation_360_create";
 
@@ -112,6 +113,11 @@ export default function Evaluation360Create() {
               <Input className="mt-1" placeholder="مثال: الربع الأول ٢٠٢٦" value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} />
             </div>
           </div>
+          {form.employeeId && (
+            <div className="mt-3">
+              <EmployeeContextCard employeeId={form.employeeId} section="violations" />
+            </div>
+          )}
           <div>
             <Label>ملاحظات</Label>
             <Textarea className="mt-1" placeholder="ملاحظات اختيارية..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3} />
