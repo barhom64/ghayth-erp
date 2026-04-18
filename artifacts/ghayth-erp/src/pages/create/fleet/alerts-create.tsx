@@ -44,8 +44,8 @@ export default function FleetAlertsCreate() {
       clearDraft();
       toast({ title: "تم إنشاء التنبيه بنجاح" });
       setLocation("/fleet/alerts");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التنبيه" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التنبيه", description: err?.message });
     }
   };
 

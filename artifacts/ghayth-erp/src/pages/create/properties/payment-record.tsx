@@ -50,7 +50,7 @@ export default function PaymentRecord() {
       qc.invalidateQueries({ queryKey: ["property-contract"] });
       qc.invalidateQueries({ queryKey: ["property-contracts"] });
       setLocation(`/properties/contracts`);
-    } catch { toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة" }); }
+    } catch (err: any) { toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة", description: err?.message }); }
     finally { setSaving(false); }
   };
 

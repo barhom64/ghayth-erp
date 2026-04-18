@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
-import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 // P4.8 — Finance invoices: shared header + status chips from P1.
 import { PageShell } from "@/components/page-shell";
@@ -164,24 +164,12 @@ export default function InvoicesPage() {
         </Link>
       }
     >
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50"><DollarSign className="w-6 h-6 text-blue-600" /></div>
-          <div><p className="text-2xl font-bold">{formatCurrency(stats?.totalRevenue || 0)}</p><p className="text-xs text-gray-500">إجمالي الإيرادات</p></div>
-        </CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-green-50"><CheckCircle className="w-6 h-6 text-green-600" /></div>
-          <div><p className="text-2xl font-bold">{formatCurrency(stats?.paidThisMonth || 0)}</p><p className="text-xs text-gray-500">المدفوع هذا الشهر</p></div>
-        </CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-amber-50"><Receipt className="w-6 h-6 text-amber-600" /></div>
-          <div><p className="text-2xl font-bold text-amber-600">{formatCurrency(stats?.pendingAmount || 0)}</p><p className="text-xs text-gray-500">المعلقة</p></div>
-        </CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-red-50"><AlertTriangle className="w-6 h-6 text-red-600" /></div>
-          <div><p className="text-2xl font-bold text-red-600">{formatCurrency(stats?.overdueAmount || 0)}</p><p className="text-xs text-gray-500">المتأخرة</p></div>
-        </CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي الإيرادات", value: formatCurrency(stats?.totalRevenue || 0), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
+        { label: "المدفوع هذا الشهر", value: formatCurrency(stats?.paidThisMonth || 0), icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "المعلقة", value: formatCurrency(stats?.pendingAmount || 0), icon: Receipt, color: "text-amber-600 bg-amber-50" },
+        { label: "المتأخرة", value: formatCurrency(stats?.overdueAmount || 0), icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+      ]} />
 
       <AdvancedFilters
         config={{

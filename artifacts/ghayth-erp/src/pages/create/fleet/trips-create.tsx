@@ -67,8 +67,8 @@ export default function TripsCreate() {
       clearDraft();
       toast({ title: "تم إنشاء الرحلة بنجاح" });
       setLocation("/fleet/trips");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الرحلة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الرحلة", description: err?.message });
     }
   };
 

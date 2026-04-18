@@ -43,8 +43,8 @@ export default function MovementsCreate() {
       clearDraft();
       toast({ title: "تمت إضافة الحركة بنجاح" });
       setLocation("/warehouse");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الحركة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الحركة", description: err?.message });
     }
   };
 

@@ -28,7 +28,7 @@ export default function OwnersCreate() {
       await apiFetch("/properties/owners", { method: "POST", body: JSON.stringify(payload) });
       toast({ title: "تمت إضافة المالك بنجاح" });
       setLocation("/properties/owners");
-    } catch { toast({ variant: "destructive", title: "حدث خطأ أثناء الحفظ" }); }
+    } catch (err: any) { toast({ variant: "destructive", title: "حدث خطأ أثناء الحفظ", description: err?.message }); }
     finally { setSaving(false); }
   };
 

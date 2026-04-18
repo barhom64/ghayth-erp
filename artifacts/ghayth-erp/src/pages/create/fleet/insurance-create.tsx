@@ -49,8 +49,8 @@ export default function InsuranceCreate() {
       clearDraft();
       toast({ title: "تم إضافة التأمين بنجاح" });
       setLocation("/fleet/insurance");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التأمين" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التأمين", description: err?.message });
     }
   };
 

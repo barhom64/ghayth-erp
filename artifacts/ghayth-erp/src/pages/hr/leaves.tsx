@@ -4,7 +4,8 @@ import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Plus, Calendar, Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Timer, Copy } from "lucide-react";
+import { Plus, Calendar, Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Timer, Copy, Download } from "lucide-react";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { ProcessStages, EntityTimeline } from "@/components/shared/entity-timeline";
@@ -90,6 +91,7 @@ export default function LeavesPage() {
   const { data: stats } = useApiQuery<any>(["leave-stats", scopeQueryString], `/hr/leave-stats${scopeSuffix}`);
   const items = asList(data);
   const qc = useQueryClient();
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["employeeName"],
@@ -110,6 +112,16 @@ export default function LeavesPage() {
   // approval-actions, more-menu) stay inline because they need
   // page-local state (`expandedId`, `handleApprovalDone`).
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (l) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(l.id)} onChange={() => toggleSelect(l.id)} />
+        </span>
+      ),
+    },
     {
       key: "employeeName",
       header: "الموظف",
@@ -198,9 +210,11 @@ export default function LeavesPage() {
       subtitle="متابعة وإدارة طلبات إجازات الموظفين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/leaves/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />طلب إجازة</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/hr/leaves/create">
+            <Button size="sm"><Plus className="h-4 w-4 me-1" />طلب إجازة</Button>
+          </Link>
+        </div>
       }
       filters={
         <AdvancedFilters
@@ -222,6 +236,26 @@ export default function LeavesPage() {
       }
     >
       <KpiGrid items={kpis} />
+
+      <BulkActionsBar
+        entityType="leave_request"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["leaves"], ["leave-stats"]]}
+        actions={["approve", "reject", "export"]}
+        csvColumns={[
+          { key: "employeeName", label: "الموظف" },
+          { key: "leaveTypeName", label: "النوع" },
+          { key: "startDate", label: "من" },
+          { key: "endDate", label: "إلى" },
+          { key: "days", label: "الأيام" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="طلبات_الإجازات"
+      />
 
       <DataTable
         columns={columns}

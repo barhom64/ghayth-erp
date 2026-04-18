@@ -6,13 +6,14 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Plus, Building2, Eye } from "lucide-react";
+import { Plus, Building2, Eye, CheckCircle, Star, TrendingUp } from "lucide-react";
 import { CLASSIFICATIONS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
+import { KpiGrid } from "@/components/shared/kpi-card";
 
 export default function Clients() {
   const { roleLevel, scopeQueryString } = useAppContext();
@@ -144,6 +145,18 @@ export default function Clients() {
         )
       }
     >
+      <KpiGrid items={[
+        { label: "إجمالي العملاء", value: total || 0, icon: Building2, color: "text-blue-600 bg-blue-50" },
+        { label: "نشط", value: (clients || []).filter((c: any) => c.status === "active").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "VIP", value: (clients || []).filter((c: any) => c.classification === "vip").length, icon: Star, color: "text-purple-600 bg-purple-50" },
+        { label: "جديد هذا الشهر", value: (clients || []).filter((c: any) => {
+          if (!c.createdAt) return false;
+          const d = new Date(c.createdAt);
+          const now = new Date();
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).length, icon: TrendingUp, color: "text-cyan-600 bg-cyan-50" },
+      ]} />
+
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث عن عميل...",

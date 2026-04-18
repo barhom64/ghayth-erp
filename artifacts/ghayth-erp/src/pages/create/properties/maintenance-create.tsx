@@ -42,8 +42,8 @@ export default function PropertyMaintenanceCreate() {
       clearDraft();
       toast({ title: "تم إنشاء طلب الصيانة بنجاح" });
       setLocation("/properties");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.message });
     }
   };
 

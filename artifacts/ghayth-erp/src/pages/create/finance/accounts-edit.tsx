@@ -42,7 +42,7 @@ export default function AccountsEdit() {
       toast({ title: "تم تحديث الحساب" });
       qc.invalidateQueries({ queryKey: ["accounts"] });
       setLocation("/finance/accounts");
-    } catch { toast({ variant: "destructive", title: "حدث خطأ أثناء التحديث" }); }
+    } catch (err: any) { toast({ variant: "destructive", title: "حدث خطأ أثناء التحديث", description: err?.message }); }
     finally { setSaving(false); }
   };
 

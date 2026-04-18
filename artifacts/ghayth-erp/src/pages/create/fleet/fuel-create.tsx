@@ -50,8 +50,8 @@ export default function FuelCreate() {
       clearDraft();
       toast({ title: "تم تسجيل التعبئة بنجاح" });
       setLocation("/fleet/fuel");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل التعبئة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل التعبئة", description: err?.message });
     }
   };
 

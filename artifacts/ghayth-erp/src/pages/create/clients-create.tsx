@@ -58,8 +58,8 @@ export default function ClientsCreate() {
       }
       clearDraft();
       setLocation("/clients");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة العميل" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة العميل", description: err?.message });
     }
   };
 

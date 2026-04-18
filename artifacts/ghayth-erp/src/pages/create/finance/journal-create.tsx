@@ -85,8 +85,8 @@ export default function JournalCreate() {
       clearDraft();
       toast({ title: "تم إضافة القيد بنجاح" });
       setLocation("/finance/journal");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القيد" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القيد", description: err?.message });
     }
   };
 

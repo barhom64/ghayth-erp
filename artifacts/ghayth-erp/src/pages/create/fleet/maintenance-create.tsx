@@ -52,8 +52,8 @@ export default function MaintenanceCreate() {
       clearDraft();
       toast({ title: "تم إضافة سجل الصيانة بنجاح" });
       setLocation("/fleet/maintenance");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الصيانة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الصيانة", description: err?.message });
     }
   };
 

@@ -99,8 +99,8 @@ export default function PurchaseOrdersCreate() {
       clearDraft();
       toast({ title: "تم إنشاء طلب الشراء بنجاح" });
       setLocation("/finance/purchase-orders");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء طلب الشراء" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء طلب الشراء", description: err?.message });
     }
   };
 

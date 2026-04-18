@@ -36,8 +36,8 @@ export default function MarketingCreate() {
       clearDraft();
       toast({ title: "تم إنشاء الحملة بنجاح" });
       setLocation("/marketing");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الحملة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الحملة", description: err?.message });
     }
   };
 

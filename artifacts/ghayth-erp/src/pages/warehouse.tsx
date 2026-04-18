@@ -8,7 +8,8 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
-import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle } from "lucide-react";
+import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle, DollarSign, Activity } from "lucide-react";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
@@ -21,6 +22,22 @@ export default function Warehouse() {
       title="إدارة المستودعات"
       subtitle="متابعة المخزون والمنتجات والحركات"
       breadcrumbs={[{ label: "المستودعات" }]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Link href="/warehouse/movements/create">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <ArrowLeftRight className="h-4 w-4" />
+              حركة جديدة
+            </Button>
+          </Link>
+          <Link href="/warehouse/create">
+            <Button size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              منتج جديد
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-4">
@@ -96,12 +113,12 @@ function ProductsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي المنتجات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.totalProducts || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-rose-600"><AlertTriangle className="h-4 w-4 inline me-1" />مخزون منخفض</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-rose-600">{stats?.lowStock || 0}</div></CardContent></Card>
-        <Card className="bg-primary text-primary-foreground"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">قيمة المخزون</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(stats?.totalValue || 0)}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">حركات اليوم</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.todayMovements || 0}</div></CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي المنتجات", value: stats?.totalProducts || 0, icon: Package, color: "text-blue-600 bg-blue-50" },
+        { label: "مخزون منخفض", value: stats?.lowStock || 0, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+        { label: "قيمة المخزون", value: formatCurrency(stats?.totalValue || 0), icon: DollarSign, color: "text-green-600 bg-green-50" },
+        { label: "حركات اليوم", value: stats?.todayMovements || 0, icon: Activity, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <div className="flex items-center gap-4">
         <div className="flex-1">

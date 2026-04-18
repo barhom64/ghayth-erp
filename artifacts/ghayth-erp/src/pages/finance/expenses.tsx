@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 // P4.8 — Finance expenses: shared header + status chips from P1.
 import { PageShell } from "@/components/page-shell";
@@ -178,28 +178,16 @@ export default function ExpensesPage() {
         </Link>
       }
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-red-100 rounded-lg"><TrendingDown className="h-5 w-5 text-red-600" /></div>
-          <div><p className="text-xs text-gray-500">إجمالي المصروفات</p><p className="text-xl font-bold text-red-600">{formatCurrency(totalExpenses)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><Wallet className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">عدد المصروفات</p><p className="text-xl font-bold">{formatNumber(items.length)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-purple-100 rounded-lg"><PieChart className="h-5 w-5 text-purple-600" /></div>
-          <div><p className="text-xs text-gray-500">المتوسط</p><p className="text-xl font-bold">{items.length > 0 ? formatCurrency(Math.round(totalExpenses / items.length)) : formatCurrency(0)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg"><Calendar className="h-5 w-5 text-orange-600" /></div>
-          <div><p className="text-xs text-gray-500">هذا الشهر</p><p className="text-xl font-bold">{formatNumber(items.filter((e: any) => {
-            const d = new Date(e.createdAt);
-            const now = new Date();
-            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-          }).length)}</p></div>
-        </CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي المصروفات", value: formatCurrency(totalExpenses), icon: TrendingDown, color: "text-red-600 bg-red-50" },
+        { label: "عدد المصروفات", value: formatNumber(items.length), icon: Wallet, color: "text-blue-600 bg-blue-50" },
+        { label: "المتوسط", value: items.length > 0 ? formatCurrency(Math.round(totalExpenses / items.length)) : formatCurrency(0), icon: PieChart, color: "text-purple-600 bg-purple-50" },
+        { label: "هذا الشهر", value: formatNumber(items.filter((e: any) => {
+          const d = new Date(e.createdAt);
+          const now = new Date();
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },
+      ]} />
 
       <AdvancedFilters
         config={{

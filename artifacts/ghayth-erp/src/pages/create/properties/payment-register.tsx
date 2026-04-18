@@ -54,8 +54,8 @@ export default function PaymentRegisterPage() {
       toast({ title: "تم تسجيل الدفعة بنجاح" });
       qc.invalidateQueries({ queryKey: ["rent-payments"] });
       setLocation("/properties/payments");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة", description: err?.message });
     } finally {
       setSaving(false);
     }

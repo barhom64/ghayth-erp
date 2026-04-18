@@ -205,8 +205,8 @@ export default function ContractsCreate() {
       setIsDirty(false);
       toast({ title: "تم إنشاء العقد بنجاح" });
       setLocation("/properties/contracts");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء العقد" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء العقد", description: err?.message });
     }
   };
 

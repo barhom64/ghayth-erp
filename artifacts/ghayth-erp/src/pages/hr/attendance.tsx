@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { PENALTY_LEVELS } from "@/lib/hr-type-maps";
 
@@ -108,6 +109,7 @@ export default function AttendancePage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["attendance", month, scopeQueryString], `/hr/attendance?month=${month}${scopeSuffix}`);
   const { data: stats } = useApiQuery<any>(["attendance-stats", month, scopeQueryString], `/hr/attendance-stats?month=${month}${scopeSuffix}`);
   const items = asList(data);
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtersForApply = filters.status === "late"
     ? ({ ...filters, status: "" } as typeof filters)
@@ -131,6 +133,16 @@ export default function AttendancePage() {
   ];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (a) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(a.id)} onChange={() => toggleSelect(a.id)} />
+        </span>
+      ),
+    },
     {
       key: "employeeName",
       header: "الموظف",
@@ -214,13 +226,27 @@ export default function AttendancePage() {
         { href: "/hr", label: "الموارد البشرية" },
       ]}
       actions={
-        <ExportButton
-          endpoint="/export/excel/attendance"
-          filename="attendance.xlsx"
-          type="excel"
-          label="تصدير Excel"
-          params={{ startDate: `${month}-01`, endDate: monthEndDate(month) }}
-        />
+        <div className="flex items-center gap-2">
+          <Link href="/hr/excuse-requests">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Clock className="h-4 w-4" />
+              الاستئذانات
+            </Button>
+          </Link>
+          <Link href="/hr/attendance/create">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              تسجيل حضور
+            </Button>
+          </Link>
+          <ExportButton
+            endpoint="/export/excel/attendance"
+            filename="attendance.xlsx"
+            type="excel"
+            label="تصدير Excel"
+            params={{ startDate: `${month}-01`, endDate: monthEndDate(month) }}
+          />
+        </div>
       }
     >
       <KpiGrid items={kpis} />
@@ -254,6 +280,25 @@ export default function AttendancePage() {
           <TabsTrigger value="summary">الملخص</TabsTrigger>
         </TabsList>
         <TabsContent value="list">
+          <BulkActionsBar
+            entityType="attendance"
+            items={filtered}
+            selectedIds={selectedIds}
+            onToggle={toggleSelect}
+            onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+            onClear={clearSelection}
+            invalidateKeys={[["attendance"], ["attendance-stats"]]}
+            actions={["export"]}
+            csvColumns={[
+              { key: "employeeName", label: "الموظف" },
+              { key: "date", label: "التاريخ" },
+              { key: "checkIn", label: "وقت الدخول" },
+              { key: "checkOut", label: "وقت الخروج" },
+              { key: "status", label: "الحالة" },
+              { key: "lateMinutes", label: "دقائق التأخير" },
+            ]}
+            csvFileName="سجل_الحضور"
+          />
           <DataTable
             columns={columns}
             data={filtered}

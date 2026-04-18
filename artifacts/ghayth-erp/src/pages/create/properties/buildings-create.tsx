@@ -43,7 +43,7 @@ export default function BuildingsCreate() {
       await apiFetch("/properties/buildings", { method: "POST", body: JSON.stringify(buildPayload()) });
       toast({ title: "تمت إضافة المبنى بنجاح" });
       setLocation("/properties/buildings");
-    } catch { toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المبنى" }); }
+    } catch (err: any) { toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المبنى", description: err?.message }); }
     finally { setSaving(false); }
   };
 

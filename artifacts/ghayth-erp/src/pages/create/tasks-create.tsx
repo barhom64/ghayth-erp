@@ -83,8 +83,8 @@ export default function TasksCreate() {
       clearDraft();
       toast({ title: "تم إنشاء المهمة بنجاح" });
       setLocation("/tasks");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء المهمة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء المهمة", description: err?.message });
     }
   };
 

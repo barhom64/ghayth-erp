@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { VIOLATION_STATUS } from "@/lib/hr-type-maps";
 
 const STATUS_OPTIONS = Object.entries(VIOLATION_STATUS).map(([value, { label }]) => ({ value, label }));
@@ -36,6 +37,7 @@ export default function ViolationsPage() {
     "/hr/discipline/memos",
   );
   const items = data?.data || [];
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["employeeName", "memoNumber"],
@@ -62,6 +64,16 @@ export default function ViolationsPage() {
   ];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "memoNumber",
       header: "رقم المحضر",
@@ -238,6 +250,26 @@ export default function ViolationsPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+      />
+
+      <BulkActionsBar
+        entityType="discipline_memo"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["discipline-memos"]]}
+        actions={["approve", "reject", "export"]}
+        csvColumns={[
+          { key: "memoNumber", label: "رقم المحضر" },
+          { key: "employeeName", label: "الموظف" },
+          { key: "incidentType", label: "نوع الواقعة" },
+          { key: "incidentDate", label: "التاريخ" },
+          { key: "appliedPenaltyLabel", label: "الجزاء" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="المخالفات_والجزاءات"
       />
 
       {/* Table */}

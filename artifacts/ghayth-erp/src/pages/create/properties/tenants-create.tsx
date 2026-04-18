@@ -67,8 +67,8 @@ export default function TenantsCreate() {
       });
       toast({ title: "تم إضافة المستأجر بنجاح" });
       setLocation("/properties/tenants");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المستأجر" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المستأجر", description: err?.message });
     }
   };
 

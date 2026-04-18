@@ -47,8 +47,8 @@ export default function DriversCreate() {
       clearDraft();
       toast({ title: "تم إضافة السائق بنجاح" });
       setLocation("/fleet/drivers");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السائق" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السائق", description: err?.message });
     }
   };
 

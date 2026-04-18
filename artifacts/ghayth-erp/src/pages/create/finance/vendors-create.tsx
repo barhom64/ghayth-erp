@@ -30,8 +30,8 @@ export default function VendorsCreate() {
       clearDraft();
       toast({ title: "تم إضافة المورد بنجاح" });
       setLocation("/finance/vendors");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المورد" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المورد", description: err?.message });
     }
   };
 

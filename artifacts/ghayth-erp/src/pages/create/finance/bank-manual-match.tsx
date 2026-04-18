@@ -51,9 +51,9 @@ export default function BankManualMatchPage() {
       setMatchMsg("تمت المطابقة بنجاح");
       toast({ title: "تمت المطابقة بنجاح" });
       setTimeout(() => setLocation("/finance/bank-reconciliation"), 1500);
-    } catch {
+    } catch (err: any) {
       setMatchMsg("حدث خطأ أثناء المطابقة");
-      toast({ variant: "destructive", title: "حدث خطأ أثناء المطابقة" });
+      toast({ variant: "destructive", title: "حدث خطأ أثناء المطابقة", description: err?.message });
     }
   }
 

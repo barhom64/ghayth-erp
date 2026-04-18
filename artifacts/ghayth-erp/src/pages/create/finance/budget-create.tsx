@@ -47,8 +47,8 @@ export default function BudgetCreate() {
       clearDraft();
       toast({ title: "تم إضافة بند الميزانية بنجاح" });
       setLocation("/finance/budget");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة بند الميزانية" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة بند الميزانية", description: err?.message });
     }
   };
 

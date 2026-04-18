@@ -159,8 +159,8 @@ export default function InvoicesCreate() {
       toast({ title: "تم إنشاء الفاتورة بنجاح" });
       clearDraft();
       setLocation("/finance/invoices");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الفاتورة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الفاتورة", description: err?.message });
     }
   };
 

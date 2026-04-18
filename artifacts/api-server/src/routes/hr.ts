@@ -516,8 +516,26 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       [scope.companyId, scope.activeAssignmentId, period, overtimeMinutes]
     );
 
-    // ── Early departure violation ──
+    // ── Check for approved excuse before creating early departure violation ──
+    let excusedEarlyLeave = false;
     if (earlyDepartureMinutes > 0) {
+      const [approvedExcuse] = await rawQuery<any>(
+        `SELECT id, "estimatedMinutes" FROM hr_excuse_requests
+         WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
+         LIMIT 1`,
+        [scope.activeAssignmentId, today]
+      ).catch(() => [null]);
+      if (approvedExcuse) {
+        excusedEarlyLeave = true;
+        await rawExecute(
+          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1`,
+          [approvedExcuse.id]
+        );
+      }
+    }
+
+    // ── Early departure violation (skipped if excused) ──
+    if (earlyDepartureMinutes > 0 && !excusedEarlyLeave) {
       const dailySalary = Number(assignment?.salary ?? 0) / 30;
       const minuteRate = dailySalary / 480;
       const earlyDeductionAmount = Math.round(minuteRate * earlyDepartureMinutes * 100) / 100;
@@ -5960,6 +5978,115 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
 
     res.json({ data: all, total: all.length, criticalCount: all.filter((d: any) => Number(d.daysLeft) <= 14).length });
   } catch (err) { handleRouteError(err, res, "Expiring documents error:"); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Excuse Requests (استئذان خروج مبكر / تأخر)
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status, month } = req.query as any;
+    const targetMonth = month || new Date().toISOString().slice(0, 7);
+    let where = `e."companyId" = $1 AND TO_CHAR(e."excuseDate", 'YYYY-MM') = $2`;
+    const params: any[] = [scope.companyId, targetMonth];
+    if (status) {
+      params.push(status);
+      where += ` AND e.status = $${params.length}`;
+    }
+    const rows = await rawQuery<any>(
+      `SELECT e.*, emp.name AS "employeeName", emp."empNumber"
+       FROM hr_excuse_requests e
+       JOIN employee_assignments ea ON ea.id = e."assignmentId"
+       JOIN employees emp ON emp.id = ea."employeeId"
+       WHERE ${where}
+       ORDER BY e."excuseDate" DESC, e."createdAt" DESC`,
+      params
+    );
+    const pending = rows.filter((r: any) => r.status === "pending").length;
+    res.json({ data: rows, total: rows.length, pending });
+  } catch (err) { handleRouteError(err, res, "List excuse requests error:"); }
+});
+
+router.post("/excuse-requests", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = req.body as any;
+    if (!excuseDate) throw new ValidationError("تاريخ الاستئذان مطلوب", { field: "excuseDate" });
+    if (!excuseType) throw new ValidationError("نوع الاستئذان مطلوب", { field: "excuseType" });
+
+    const effectiveAssignmentId = assignmentId || scope.activeAssignmentId;
+    const [assignment] = await rawQuery<any>(
+      `SELECT ea.id, ea."employeeId", ea."companyId", ea."branchId"
+       FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2 AND ea.status = 'active'`,
+      [effectiveAssignmentId, scope.companyId]
+    );
+    if (!assignment) throw new ValidationError("التعيين غير موجود أو غير نشط", { field: "assignmentId" });
+
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM hr_excuse_requests
+       WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status != 'rejected'`,
+      [effectiveAssignmentId, excuseDate]
+    );
+    if (existing) throw new ConflictError("يوجد طلب استئذان مسجل لنفس اليوم");
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO hr_excuse_requests ("companyId","branchId","assignmentId","employeeId","excuseDate","excuseType","startTime","endTime","estimatedMinutes",reason,status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending') RETURNING id`,
+      [scope.companyId, assignment.branchId, effectiveAssignmentId, assignment.employeeId,
+       excuseDate, excuseType || "early_leave", startTime || null, endTime || null,
+       estimatedMinutes || 0, reason || null]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId,
+      action: "create", entity: "hr_excuse_requests", entityId: insertId,
+      after: { excuseDate, excuseType, estimatedMinutes },
+    }).catch(console.error);
+
+    res.status(201).json({ id: insertId, message: "تم تقديم طلب الاستئذان بنجاح" });
+  } catch (err) { handleRouteError(err, res, "Create excuse request error:"); }
+});
+
+router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { id } = req.params;
+    const { approved, rejectionReason } = req.body as any;
+    const [excuse] = await rawQuery<any>(
+      `SELECT * FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
+    if (!excuse) throw new NotFoundError("طلب الاستئذان غير موجود");
+    if (excuse.status !== "pending") throw new ConflictError("الطلب ليس في حالة انتظار");
+
+    const newStatus = approved ? "approved" : "rejected";
+    if (!approved && !rejectionReason) {
+      throw new ValidationError("يجب ذكر سبب الرفض", { field: "rejectionReason" });
+    }
+
+    await rawExecute(
+      `UPDATE hr_excuse_requests SET status = $1, "approvedBy" = $2, "approvedAt" = NOW(),
+       "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
+      [newStatus, scope.activeAssignmentId, rejectionReason || null, Number(id)]
+    );
+
+    createNotification({
+      companyId: scope.companyId, assignmentId: excuse.assignmentId,
+      type: `excuse_${newStatus}`, title: approved ? "تمت الموافقة على الاستئذان" : "تم رفض طلب الاستئذان",
+      body: approved ? `تمت الموافقة على استئذانك بتاريخ ${excuse.excuseDate}` : `تم رفض استئذانك: ${rejectionReason}`,
+      priority: "normal", refType: "hr_excuse_request", refId: Number(id),
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: newStatus, entity: "hr_excuse_requests", entityId: Number(id),
+      before: { status: "pending" }, after: { status: newStatus },
+    }).catch(console.error);
+
+    res.json({ message: approved ? "تمت الموافقة على الاستئذان" : "تم رفض الاستئذان", status: newStatus });
+  } catch (err) { handleRouteError(err, res, "Approve excuse request error:"); }
 });
 
 export default router;
