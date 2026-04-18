@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,8 +114,8 @@ export default function ProjectDetail() {
       setEditing(false);
       qc.invalidateQueries({ queryKey: ["project-detail", id] });
       qc.invalidateQueries({ queryKey: ["projects"] });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 
@@ -124,8 +124,8 @@ export default function ProjectDetail() {
       await apiFetch(`/projects/${id}`, { method: "DELETE" });
       toast({ title: "تم حذف المشروع" });
       navigate("/projects");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 
@@ -134,8 +134,8 @@ export default function ProjectDetail() {
       await apiFetch(`/projects/${id}/phases/${phaseId}/complete`, { method: "PATCH" });
       toast({ title: "تم إكمال المرحلة" });
       qc.invalidateQueries({ queryKey: ["project-detail", id] });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 
@@ -147,8 +147,8 @@ export default function ProjectDetail() {
       });
       toast({ title: "تم تحديث المهمة" });
       qc.invalidateQueries({ queryKey: ["project-detail", id] });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 

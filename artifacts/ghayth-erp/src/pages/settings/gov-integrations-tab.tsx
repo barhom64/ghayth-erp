@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,8 +61,8 @@ export function GovIntegrationsTab() {
       toast({ title: "تم الحفظ بنجاح" });
       setEditingId(null);
       refetch();
-    } catch {
-      toast({ variant: "destructive", title: "فشل الحفظ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الحفظ", description: getErrorMessage(err) });
     }
   };
 
@@ -76,8 +76,8 @@ export function GovIntegrationsTab() {
         variant: json.success ? "default" : "destructive",
       });
       refetch();
-    } catch {
-      toast({ variant: "destructive", title: "فشل الاتصال" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الاتصال", description: getErrorMessage(err) });
     } finally {
       setTestingId(null);
     }
@@ -91,8 +91,8 @@ export function GovIntegrationsTab() {
       });
       refetch();
       toast({ title: item.enabled ? "تم تعطيل النظام" : "تم تفعيل النظام" });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 

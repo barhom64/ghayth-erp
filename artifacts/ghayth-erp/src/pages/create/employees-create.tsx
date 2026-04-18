@@ -83,7 +83,6 @@ export default function EmployeesCreate() {
     if (!form.nationalId) localErrors.nationalId = "يرجى إدخال رقم الهوية";
     if (!form.nationality) localErrors.nationality = "يرجى اختيار الجنسية";
     if (!form.phone) localErrors.phone = "يرجى إدخال رقم الجوال";
-    if (!form.managerId) localErrors.managerId = "يرجى اختيار المدير المباشر";
     if (!form.department) localErrors.department = "يرجى اختيار القسم";
     if (!form.jobTitle) localErrors.jobTitle = "يرجى اختيار المسمى الوظيفي";
     if (!form.contractType) localErrors.contractType = "يرجى اختيار نوع العقد";
