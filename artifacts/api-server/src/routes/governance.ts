@@ -284,7 +284,7 @@ router.delete("/risks/:id", requirePermission("governance:write"), async (req, r
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    const result = await rawExecute(`DELETE FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const result = await rawExecute(`UPDATE governance_risks SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_risks", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف المخاطرة بنجاح" });
@@ -348,7 +348,7 @@ router.delete("/audits/:id", requirePermission("governance:write"), async (req, 
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    const result = await rawExecute(`DELETE FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const result = await rawExecute(`UPDATE governance_audits SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "المراجعة غير موجودة" }); return; }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_audits", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف المراجعة بنجاح" });
@@ -413,7 +413,7 @@ router.delete("/compliance/:id", requirePermission("governance:write"), async (r
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    const result = await rawExecute(`DELETE FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const result = await rawExecute(`UPDATE governance_compliance SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "بند الامتثال غير موجود" }); return; }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_compliance", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف بند الامتثال بنجاح" });
@@ -520,7 +520,7 @@ router.delete("/compliance-actions/:actionId", requirePermission("governance:wri
     const scope = req.scope!;
     const id = Number(req.params.actionId);
     const [before] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`DELETE FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE policy_compliance_actions SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "policy_compliance_actions", entityId: id, before }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "governance"); }
