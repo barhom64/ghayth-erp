@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 
 export default function PropertyMaintenanceCreate() {
   const [, setLocation] = useLocation();
@@ -69,6 +70,11 @@ export default function PropertyMaintenanceCreate() {
               ))}
             </SelectContent>
           </Select>
+          {form.unitId && (
+            <div className="mt-3">
+              <PropertyUnitContextCard unitId={form.unitId} section="maintenance" />
+            </div>
+          )}
         </div>
         <div>
           <Label>الفئة</Label>

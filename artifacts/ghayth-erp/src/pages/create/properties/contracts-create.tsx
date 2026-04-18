@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Users2, FileText, Calendar, Banknote, Shield, ScrollText, Zap } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { getCurrencySymbol } from "@/lib/formatters";
+import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
@@ -266,6 +267,11 @@ export default function ContractsCreate() {
                   ))}
                 </select>
               </div>
+              {form.unitId && (
+                <div className="md:col-span-3">
+                  <PropertyUnitContextCard unitId={form.unitId} section="contract" />
+                </div>
+              )}
               <div>
                 <Label>حالة العقد</Label>
                 <Select value={form.status} onValueChange={v => set("status", v)}>
