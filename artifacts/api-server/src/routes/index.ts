@@ -120,6 +120,33 @@ router.get("/settings/display", async (req, res) => {
   }
 });
 
+// Route discovery endpoint. Walks the router stack and returns every
+// registered { method, path } so integrators (and the frontend) can
+// confirm the real URL before firing a request. Public by design —
+// returns no data, only paths — so it lives before authMiddleware.
+router.get("/_routes", (_req, res) => {
+  const found: { method: string; path: string }[] = [];
+  const walk = (stack: any[], prefix: string): void => {
+    for (const layer of stack ?? []) {
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods ?? {})
+          .filter((m) => m !== "_all")
+          .map((m) => m.toUpperCase());
+        for (const method of methods) {
+          found.push({ method, path: prefix + layer.route.path });
+        }
+      } else if (layer.name === "router" && layer.handle?.stack) {
+        const match = layer.regexp?.source?.match(/^\^\\\/([^\\]+)/);
+        const mountPoint = match ? `/${match[1]}` : "";
+        walk(layer.handle.stack, prefix + mountPoint);
+      }
+    }
+  };
+  walk(router.stack, "/api");
+  found.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
+  res.json({ count: found.length, routes: found });
+});
+
 router.use(authMiddleware);
 
 router.use("/dashboard", dashboardRouter);
