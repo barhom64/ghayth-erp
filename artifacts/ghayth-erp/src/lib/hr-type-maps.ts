@@ -64,6 +64,13 @@ export const DOCUMENT_TYPES: Record<string, string> = {
   iqama: "إقامة",
   passport: "جواز سفر",
   contract: "عقد عمل",
+  driving_license: "رخصة قيادة",
+  vehicle_registration: "رخصة سير",
+  vehicle_insurance: "تأمين مركبة",
+  vehicle_inspection: "فحص دوري",
+  commercial_registration: "سجل تجاري",
+  chamber_of_commerce: "غرفة تجارية",
+  municipality_license: "رخصة بلدية",
 };
 
 export const DOCUMENT_COLORS: Record<string, string> = {
@@ -71,6 +78,13 @@ export const DOCUMENT_COLORS: Record<string, string> = {
   iqama: "border-purple-300 text-purple-700 bg-purple-50",
   passport: "border-green-300 text-green-700 bg-green-50",
   contract: "border-orange-300 text-orange-700 bg-orange-50",
+  driving_license: "border-cyan-300 text-cyan-700 bg-cyan-50",
+  vehicle_registration: "border-teal-300 text-teal-700 bg-teal-50",
+  vehicle_insurance: "border-indigo-300 text-indigo-700 bg-indigo-50",
+  vehicle_inspection: "border-slate-300 text-slate-700 bg-slate-50",
+  commercial_registration: "border-rose-300 text-rose-700 bg-rose-50",
+  chamber_of_commerce: "border-amber-300 text-amber-700 bg-amber-50",
+  municipality_license: "border-lime-300 text-lime-700 bg-lime-50",
 };
 
 // ── أسباب نهاية الخدمة / الدوران ────────────────────────────────────

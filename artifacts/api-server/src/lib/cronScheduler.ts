@@ -184,7 +184,52 @@ async function documentExpiryAlerts(): Promise<string> {
       [company.id]
     );
 
-    const allDocsCombined = [...allDocs, ...contractDocs.filter((d: any) => Number(d.daysLeft) >= 0)];
+    // Fleet: driver license, vehicle registration, vehicle insurance expiry
+    const fleetDocs = await rawQuery<any>(
+      `SELECT fd.id, NULL AS "employeeId", fd.name AS "employeeName",
+              'driving_license' AS "documentType", fd."licenseExpiry" AS "expiryDate",
+              (fd."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
+       FROM fleet_drivers fd
+       WHERE fd."companyId"=$1 AND fd.status='active'
+         AND fd."licenseExpiry" IS NOT NULL
+         AND fd."licenseExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'
+       UNION ALL
+       SELECT fv.id, NULL, CONCAT(fv.make,' ',fv.model,' ',fv."plateNumber"),
+              'vehicle_registration', fv."registrationExpiry",
+              (fv."registrationExpiry"::date - CURRENT_DATE)
+       FROM fleet_vehicles fv
+       WHERE fv."companyId"=$1 AND fv."deletedAt" IS NULL
+         AND fv."registrationExpiry" IS NOT NULL
+         AND fv."registrationExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'
+       UNION ALL
+       SELECT fv.id, NULL, CONCAT(fv.make,' ',fv.model,' ',fv."plateNumber"),
+              'vehicle_insurance', fv."insuranceExpiry",
+              (fv."insuranceExpiry"::date - CURRENT_DATE)
+       FROM fleet_vehicles fv
+       WHERE fv."companyId"=$1 AND fv."deletedAt" IS NULL
+         AND fv."insuranceExpiry" IS NOT NULL
+         AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
+      [company.id]
+    ).catch(() => [] as any[]);
+
+    // Company documents (commercial registration, municipality license, etc.)
+    const companyDocAlerts = await rawQuery<any>(
+      `SELECT cd.id, NULL AS "employeeId", cd."documentType" AS "employeeName",
+              cd."documentType", cd."expiryDate",
+              (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
+       FROM company_documents cd
+       WHERE cd."companyId"=$1 AND cd.status='active'
+         AND cd."expiryDate" IS NOT NULL
+         AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
+      [company.id]
+    ).catch(() => [] as any[]);
+
+    const allDocsCombined = [
+      ...allDocs,
+      ...contractDocs.filter((d: any) => Number(d.daysLeft) >= 0),
+      ...fleetDocs.filter((d: any) => Number(d.daysLeft) >= 0),
+      ...companyDocAlerts.filter((d: any) => Number(d.daysLeft) >= 0),
+    ];
 
     const [hrAsgn] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,

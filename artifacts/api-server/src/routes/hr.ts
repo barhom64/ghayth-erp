@@ -59,7 +59,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const now = new Date();
     const today = now.toISOString().split("T")[0];
     const period = today.slice(0, 7);
-    const { lat, lon, notes } = req.body as any;
+    const { lat, lon, notes, workType } = req.body as any;
 
     // Guard: the caller must have an active assignment. Without this, the
     // INSERT INTO attendance below would hit a 23502 NOT NULL on
@@ -69,6 +69,21 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
       throw new ConflictError("لا يوجد تعيين نشط لهذا الحساب", {
         field: "assignmentId",
         fix: "تواصل مع مدير الموارد البشرية لتفعيل تعيينك الوظيفي.",
+      });
+    }
+
+    // ── Step 1b: Verify active contract exists ──
+    const [activeContract] = await rawQuery<any>(
+      `SELECT id, "endDate", status FROM employee_contracts
+       WHERE "assignmentId" = $1 AND status = 'active'
+         AND "startDate" <= $2 AND ("endDate" IS NULL OR "endDate" >= $2)
+       LIMIT 1`,
+      [scope.activeAssignmentId, today]
+    );
+    if (!activeContract) {
+      throw new ConflictError("لا يوجد عقد نشط لتعيينك الحالي — لا يمكن تسجيل الحضور", {
+        field: "contract",
+        fix: "تواصل مع الموارد البشرية للتأكد من وجود عقد ساري المفعول.",
       });
     }
 
@@ -165,7 +180,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
 
     // ── Step 6: GPS validation (Haversine) ──
     // Remote and flexible shifts skip GPS enforcement
-    const isRemoteShift = shift?.remoteAllowed === true || shift?.shiftType === 'remote';
+    const isRemoteShift = shift?.remoteAllowed === true || shift?.shiftType === 'remote' || workType === 'remote';
     let distanceMeters: number | null = null;
     let isOutOfRange = false;
     const [policy] = await rawQuery<any>(
@@ -243,11 +258,12 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     }
 
     const { insertId: attendanceId } = await rawExecute(
-      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
         today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
-        lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null]
+        lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
+        isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
     );
 
     // ── Step 11: Auto violation if late > threshold ──
@@ -5973,11 +5989,176 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
       [scope.companyId, days]
     );
 
-    const all = [...workPermits, ...iqamas, ...passports, ...contracts]
-      .sort((a: any, b: any) => Number(a.daysLeft) - Number(b.daysLeft));
+    // Driver licenses
+    const driverLicenses = await rawQuery<any>(
+      `SELECT fd.id AS "entityId", fd.name AS "entityName", fd."licenseExpiry" AS "expiryDate",
+              'driving_license' AS "docType", 'رخصة القيادة' AS "docLabel",
+              (fd."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft",
+              'driver' AS "entityType"
+       FROM fleet_drivers fd
+       WHERE fd."companyId"=$1 AND fd.status='active'
+         AND fd."licenseExpiry" IS NOT NULL
+         AND fd."licenseExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    // Vehicle registration expiry
+    const vehicleRegistrations = await rawQuery<any>(
+      `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
+              fv."registrationExpiry" AS "expiryDate",
+              'vehicle_registration' AS "docType", 'رخصة السير' AS "docLabel",
+              (fv."registrationExpiry"::date - CURRENT_DATE) AS "daysLeft",
+              'vehicle' AS "entityType"
+       FROM fleet_vehicles fv
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+         AND fv."registrationExpiry" IS NOT NULL
+         AND fv."registrationExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    // Vehicle insurance expiry
+    const vehicleInsurance = await rawQuery<any>(
+      `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
+              fv."insuranceExpiry" AS "expiryDate",
+              'vehicle_insurance' AS "docType", 'تأمين المركبة' AS "docLabel",
+              (fv."insuranceExpiry"::date - CURRENT_DATE) AS "daysLeft",
+              'vehicle' AS "entityType"
+       FROM fleet_vehicles fv
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+         AND fv."insuranceExpiry" IS NOT NULL
+         AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    // Vehicle inspection expiry
+    const vehicleInspections = await rawQuery<any>(
+      `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
+              fv."nextInspectionDate" AS "expiryDate",
+              'vehicle_inspection' AS "docType", 'الفحص الدوري' AS "docLabel",
+              (fv."nextInspectionDate"::date - CURRENT_DATE) AS "daysLeft",
+              'vehicle' AS "entityType"
+       FROM fleet_vehicles fv
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+         AND fv."nextInspectionDate" IS NOT NULL
+         AND fv."nextInspectionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    // Employee documents (iqama, work permit, driving license, etc.) from employee_documents table
+    const employeeDocs = await rawQuery<any>(
+      `SELECT ed."employeeId" AS "entityId", e.name AS "entityName", ed."expiryDate",
+              ed."documentType" AS "docType", ed."documentType" AS "docLabel",
+              (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
+              'employee' AS "entityType"
+       FROM employee_documents ed
+       JOIN employees e ON e.id=ed."employeeId"
+       WHERE ed."companyId"=$1 AND ed.status='active'
+         AND ed."expiryDate" IS NOT NULL
+         AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    ).catch(() => [] as any[]);
+
+    // Company documents (commercial registration, chamber of commerce, etc.)
+    const companyDocs = await rawQuery<any>(
+      `SELECT cd.id AS "entityId", cd."documentType" AS "entityName", cd."expiryDate",
+              cd."documentType" AS "docType", cd."documentType" AS "docLabel",
+              (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
+              'company' AS "entityType"
+       FROM company_documents cd
+       WHERE cd."companyId"=$1 AND cd.status='active'
+         AND cd."expiryDate" IS NOT NULL
+         AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    ).catch(() => [] as any[]);
+
+    const all = [
+      ...workPermits.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...iqamas.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...passports.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...contracts.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...driverLicenses,
+      ...vehicleRegistrations,
+      ...vehicleInsurance,
+      ...vehicleInspections,
+      ...employeeDocs,
+      ...companyDocs,
+    ].sort((a: any, b: any) => Number(a.daysLeft) - Number(b.daysLeft));
 
     res.json({ data: all, total: all.length, criticalCount: all.filter((d: any) => Number(d.daysLeft) <= 14).length });
   } catch (err) { handleRouteError(err, res, "Expiring documents error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPANY DOCUMENTS — وثائق المنشأة (سجل تجاري، رخصة بلدية، غرفة تجارية)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/company-documents", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST`,
+      [scope.companyId]
+    ).catch(() => [] as any[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Company documents error:"); }
+});
+
+router.post("/company-documents", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body as any;
+    if (!b.documentType) throw new ValidationError("نوع الوثيقة مطلوب", { field: "documentType" });
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO company_documents ("companyId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scope.companyId, b.documentType, b.documentNumber || null, b.issueDate || null,
+       b.expiryDate || null, b.issuingAuthority || null, b.reminderDays || 30, b.notes || null]
+    );
+    res.status(201).json({ id: insertId, message: "تم إضافة وثيقة المنشأة" });
+  } catch (err) { handleRouteError(err, res, "Company documents error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPLOYEE DOCUMENTS — وثائق الموظف الإضافية (رخصة قيادة، شهادات، إلخ)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/employee-documents", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employeeId = req.query.employeeId;
+    const where = employeeId
+      ? `WHERE ed."companyId"=$1 AND ed."employeeId"=$2 AND ed.status != 'deleted'`
+      : `WHERE ed."companyId"=$1 AND ed.status != 'deleted'`;
+    const params = employeeId ? [scope.companyId, Number(employeeId)] : [scope.companyId];
+    const rows = await rawQuery<any>(
+      `SELECT ed.*, e.name AS "employeeName"
+       FROM employee_documents ed
+       JOIN employees e ON e.id=ed."employeeId"
+       ${where}
+       ORDER BY ed."expiryDate" ASC NULLS LAST`,
+      params
+    ).catch(() => [] as any[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
+});
+
+router.post("/employee-documents", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body as any;
+    if (!b.employeeId) throw new ValidationError("الموظف مطلوب", { field: "employeeId" });
+    if (!b.documentType) throw new ValidationError("نوع الوثيقة مطلوب", { field: "documentType" });
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO employee_documents ("companyId","employeeId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, Number(b.employeeId), b.documentType, b.documentNumber || null,
+       b.issueDate || null, b.expiryDate || null, b.issuingAuthority || null,
+       b.reminderDays || 30, b.notes || null]
+    );
+    res.status(201).json({ id: insertId, message: "تم إضافة وثيقة الموظف" });
+  } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
