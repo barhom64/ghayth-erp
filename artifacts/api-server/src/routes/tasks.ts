@@ -21,7 +21,7 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
       branchColumn: 't."branchId"',
       enforceBranchScope: true,
     });
-    let where = baseWhere;
+    let where = baseWhere + ` AND t."deletedAt" IS NULL`;
     let paramIdx = nextParamIndex;
 
     if (status) {
@@ -167,7 +167,7 @@ router.get("/:id", requirePermission("tasks:read"), async (req, res) => {
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN clients c ON c.id = t."clientId"
-       WHERE t.id = $1${scopeCondition}`,
+       WHERE t.id = $1${scopeCondition} AND t."deletedAt" IS NULL`,
       params
     );
     if (rows.length === 0) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
@@ -395,7 +395,7 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
     }
 
     const rows = await rawQuery<any>(
-      `DELETE FROM tasks WHERE ${whereClause} RETURNING id`,
+      `UPDATE tasks SET "deletedAt" = NOW() WHERE ${whereClause} AND "deletedAt" IS NULL RETURNING id`,
       params
     );
     if (rows.length === 0) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }

@@ -12,7 +12,7 @@ router.use(authMiddleware);
 router.get("/postings", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM job_postings WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM job_postings WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -49,7 +49,7 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
 router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -160,7 +160,7 @@ router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) =
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!before) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
-    await rawExecute(`DELETE FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف الإعلان الوظيفي بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -170,7 +170,7 @@ router.get("/applications", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { postingId } = req.query;
-    let where = `(jp."companyId"=$1 OR jp."companyId" IS NULL)`;
+    let where = `(jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL AND jp."deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
     if (postingId) { params.push(postingId); where += ` AND a."postingId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE ${where} ORDER BY a."createdAt" DESC`, params);
@@ -195,7 +195,7 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
       });
     }
     const [posting] = await rawQuery<{ id: number }>(
-      `SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [Number(postingId), scope.companyId]
     );
     if (!posting) throw new NotFoundError("الإعلان الوظيفي غير موجود");
@@ -215,7 +215,7 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
 router.get("/applications/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -249,7 +249,7 @@ router.delete("/applications/:id", requirePermission("hr:write"), async (req, re
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
     if (!before) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
-    await rawExecute(`DELETE FROM job_applications WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف طلب التوظيف بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -259,10 +259,10 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [postings] = await rawQuery(`SELECT COUNT(*) as count FROM job_postings WHERE status='open' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
-    const [applications] = await rawQuery(`SELECT COUNT(*) as count FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE jp."companyId"=$1 OR jp."companyId" IS NULL`, [cid]);
-    const [newApps] = await rawQuery(`SELECT COUNT(*) as count FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.status='new' AND (jp."companyId"=$1 OR jp."companyId" IS NULL)`, [cid]);
-    const [interviews] = await rawQuery(`SELECT COUNT(*) as count FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.status='interview' AND (jp."companyId"=$1 OR jp."companyId" IS NULL)`, [cid]);
+    const [postings] = await rawQuery(`SELECT COUNT(*) as count FROM job_postings WHERE status='open' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [applications] = await rawQuery(`SELECT COUNT(*) as count FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE (jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL AND jp."deletedAt" IS NULL`, [cid]);
+    const [newApps] = await rawQuery(`SELECT COUNT(*) as count FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.status='new' AND (jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [cid]);
+    const [interviews] = await rawQuery(`SELECT COUNT(*) as count FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.status='interview' AND (jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [cid]);
     res.json({
       openPostings: Number(postings.count),
       totalApplications: Number(applications.count),
