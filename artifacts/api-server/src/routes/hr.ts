@@ -4904,16 +4904,66 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
   try {
     const scope = req.scope!;
     const { delegateId, scope: delegationScope, reason, startDate, endDate } = req.body;
-    const [emp] = await rawQuery<any>(
+
+    if (!delegateId) {
+      throw new ValidationError("يرجى اختيار المفوَّض إليه", {
+        field: "delegateId",
+        fix: "اختر الموظف الذي ستُفوَّض إليه الصلاحيات",
+      });
+    }
+    if (!reason || !String(reason).trim()) {
+      throw new ValidationError("سبب التفويض مطلوب", {
+        field: "reason",
+        fix: "اكتب سبب التفويض (إجازة، سفر، …)",
+      });
+    }
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
+        field: "endDate",
+        fix: "اختر تاريخ نهاية بعد تاريخ البداية",
+      });
+    }
+
+    const [emp] = await rawQuery<{ id: number }>(
       `SELECT id FROM employees WHERE "userId" = $1 LIMIT 1`,
       [scope.userId]
     );
     if (!emp) throw new ValidationError("لم يتم العثور على الموظف المرتبط بحسابك");
+
+    // FK pre-check: delegateId must be a real employee scoped to this company.
+    const [delegate] = await rawQuery<{ id: number }>(
+      `SELECT e.id FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id
+        WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+      [Number(delegateId), scope.companyId]
+    );
+    if (!delegate) {
+      throw new ValidationError(`الموظف رقم ${delegateId} غير موجود في هذه الشركة`, {
+        field: "delegateId",
+        fix: "اختر موظفاً مسجّلاً في الشركة",
+      });
+    }
+    if (Number(delegateId) === emp.id) {
+      throw new ValidationError("لا يمكن تفويض نفسك", {
+        field: "delegateId",
+        fix: "اختر موظفاً مختلفاً",
+      });
+    }
+
+    // The old handler wrapped rawExecute in .catch(() => ({ insertId: null }))
+    // which silently swallowed FK / constraint errors and still returned
+    // { success: true, id: null } — a lie to the caller. Drop the catch so
+    // real DB errors surface through handleRouteError (with requestId).
     const r = await rawExecute(
       `INSERT INTO delegations ("delegatorId","delegateId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
-      [emp.id, delegateId, scope.companyId, delegationScope || "عام", reason, startDate || new Date(), endDate || null]
-    ).catch(() => ({ insertId: null }));
-    res.status(201).json({ success: true, id: r.insertId });
+      [emp.id, Number(delegateId), scope.companyId, delegationScope || "عام", String(reason).trim(), startDate || new Date(), endDate || null]
+    );
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "delegations", entityId: r.insertId,
+      after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
+    }).catch(console.error);
+    res.status(201).json({ success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
 });
 
