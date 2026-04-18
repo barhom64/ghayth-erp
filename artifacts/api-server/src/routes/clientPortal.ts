@@ -3,10 +3,49 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
 const router = Router();
+
+const portalLoginSchema = z.object({
+  email: z.string().email("البريد الإلكتروني غير صالح"),
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
+});
+
+const portalTicketReplySchema = z.object({
+  message: z.string().min(1, "نص الرد مطلوب"),
+});
+
+const portalCreateTicketSchema = z.object({
+  title: z.string().min(1, "عنوان الطلب مطلوب"),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  priority: z.string().optional(),
+  invoiceId: z.number().optional().nullable(),
+  contractId: z.number().optional().nullable(),
+});
+
+const portalChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
+  newPassword: z.string().min(6, "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل"),
+});
+
+const portalInvoicePaySchema = z.object({
+  amount: z.coerce.number({ invalid_type_error: "المبلغ مطلوب وأكبر من صفر" }).positive("المبلغ مطلوب وأكبر من صفر"),
+  method: z.string().optional(),
+  transactionRef: z.string().optional().nullable(),
+});
+
+const portalCsatSchema = z.object({
+  score: z.coerce.number({ invalid_type_error: "التقييم يجب أن يكون بين 1 و 5" }).int().min(1, "التقييم يجب أن يكون بين 1 و 5").max(5, "التقييم يجب أن يكون بين 1 و 5"),
+  comment: z.string().optional().nullable(),
+});
+
+const portalKbFeedbackSchema = z.object({
+  helpful: z.union([z.boolean(), z.string()]).optional(),
+});
 
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET) throw new Error("JWT_SECRET is required for client portal");
@@ -131,11 +170,10 @@ async function portalScopedExecute(
 
 router.post("/auth/login", loginLimiter, async (req, res) => {
   try {
-    const { email: rawEmail, password } = req.body as { email: string; password: string };
-    if (!rawEmail || !password) {
-      res.status(400).json({ error: "البريد الإلكتروني وكلمة المرور مطلوبان" });
-      return;
-    }
+    const parsed_portalLoginSchema = portalLoginSchema.safeParse(req.body);
+    if (!parsed_portalLoginSchema.success) throw new ValidationError(parsed_portalLoginSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_portalLoginSchema.data;
+    const { email: rawEmail, password } = body;
     const email = rawEmail.trim().toLowerCase();
     const [account] = await rawQuery<any>(
       `SELECT cpa.id, cpa."clientId", cpa."companyId", cpa."passwordHash", cpa."isActive", cpa."mustChangePassword",
@@ -407,10 +445,12 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
   try {
     const scope = req.portalScope;
     const { id } = req.params;
-    const { message } = req.body as any;
-    if (!message?.trim()) {
-      res.status(400).json({ error: "نص الرد مطلوب" });
-      return;
+    const parsed_portalTicketReplySchema = portalTicketReplySchema.safeParse(req.body);
+    if (!parsed_portalTicketReplySchema.success) throw new ValidationError(parsed_portalTicketReplySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_portalTicketReplySchema.data;
+    const message = body.message.trim();
+    if (!message) {
+      throw new ValidationError("نص الرد مطلوب");
     }
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id, status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
@@ -427,7 +467,7 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
     await rawExecute(
       `INSERT INTO ticket_replies ("ticketId", message, "senderType", "senderName")
        VALUES ($1, $2, 'client', 'العميل')`,
-      [Number(id), message.trim()]
+      [Number(id), message]
     );
     await rawExecute(
       `UPDATE support_tickets SET status = 'in_progress', "updatedAt" = NOW() WHERE id = $1 AND status = 'open'`,
@@ -443,11 +483,11 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { clientId, companyId } = scope;
-    const { title, description, category, priority = "medium", invoiceId, contractId } = req.body as any;
-    if (!title) {
-      res.status(400).json({ error: "عنوان الطلب مطلوب" });
-      return;
-    }
+    const parsed_portalCreateTicketSchema = portalCreateTicketSchema.safeParse(req.body);
+    if (!parsed_portalCreateTicketSchema.success) throw new ValidationError(parsed_portalCreateTicketSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_portalCreateTicketSchema.data;
+    const { title, description, category, invoiceId, contractId } = body;
+    const priority = body.priority ?? "medium";
     const ref = `TKT-${Date.now().toString(36).toUpperCase()}`;
     const { insertId } = await portalScopedExecute(scope,
       `INSERT INTO support_tickets (ref, title, description, category, priority, status, "clientId", "companyId", "invoiceId", "contractId")
@@ -467,15 +507,10 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
 protectedRouter.patch("/profile/password", withPortalScope(async (req, res) => {
   try {
     const { accountId, clientId, companyId } = req.portalScope;
-    const { currentPassword, newPassword } = req.body as any;
-    if (!currentPassword || !newPassword) {
-      res.status(400).json({ error: "كلمة المرور الحالية والجديدة مطلوبتان" });
-      return;
-    }
-    if (newPassword.length < 6) {
-      res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل" });
-      return;
-    }
+    const parsed_portalChangePasswordSchema = portalChangePasswordSchema.safeParse(req.body);
+    if (!parsed_portalChangePasswordSchema.success) throw new ValidationError(parsed_portalChangePasswordSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_portalChangePasswordSchema.data;
+    const { currentPassword, newPassword } = body;
     const [account] = await portalScopedQuery<any>(req.portalScope,
       `SELECT "passwordHash" FROM client_portal_accounts WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [clientId, companyId, accountId]
@@ -504,11 +539,11 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { id } = req.params;
-    const { amount, method = "online", transactionRef } = req.body as any;
-    if (!amount || Number(amount) <= 0) {
-      res.status(400).json({ error: "المبلغ مطلوب وأكبر من صفر" });
-      return;
-    }
+    const parsed_portalInvoicePaySchema = portalInvoicePaySchema.safeParse(req.body);
+    if (!parsed_portalInvoicePaySchema.success) throw new ValidationError(parsed_portalInvoicePaySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_portalInvoicePaySchema.data;
+    const { amount, transactionRef } = body;
+    const method = body.method ?? "online";
     const [invoice] = await portalScopedQuery<any>(scope,
       `SELECT id, ref, total, "paidAmount", status FROM invoices WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, Number(id)]
@@ -547,8 +582,10 @@ protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { id } = req.params;
-    const { score, comment } = req.body as any;
-    if (!score || score < 1 || score > 5) { res.status(400).json({ error: "التقييم يجب أن يكون بين 1 و 5" }); return; }
+    const parsed_portalCsatSchema = portalCsatSchema.safeParse(req.body);
+    if (!parsed_portalCsatSchema.success) throw new ValidationError(parsed_portalCsatSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_portalCsatSchema.data;
+    const { score, comment } = body;
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id, "assigneeId", status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [scope.clientId, scope.companyId, Number(id)]
@@ -602,7 +639,10 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
 protectedRouter.post("/kb/:id/feedback", withPortalScope(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { helpful } = req.body as any;
+    const parsed_portalKbFeedbackSchema = portalKbFeedbackSchema.safeParse(req.body);
+    if (!parsed_portalKbFeedbackSchema.success) throw new ValidationError(parsed_portalKbFeedbackSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_portalKbFeedbackSchema.data;
+    const { helpful } = body;
     if (helpful === true || helpful === 'true') {
       await rawExecute(`UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1`, [id]);
     } else {

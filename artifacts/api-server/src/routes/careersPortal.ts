@@ -1,15 +1,49 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
+import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
 const router = Router();
 const SECRET: string = process.env.JWT_SECRET ?? (() => { throw new Error("JWT_SECRET is required for careers portal"); })();
+
+const careersRegisterSchema = z.object({
+  name: z.string().min(1, "الاسم مطلوب"),
+  email: z.string().email("البريد الإلكتروني غير صالح"),
+  phone: z.string().optional().nullable(),
+  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
+});
+
+const careersLoginSchema = z.object({
+  email: z.string().email("البريد الإلكتروني غير صالح"),
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
+});
+
+const careersProfileUpdateSchema = z.object({
+  name: z.string().min(1).optional().nullable(),
+  phone: z.string().optional().nullable(),
+  nationalId: z.string().optional().nullable(),
+  gender: z.string().optional().nullable(),
+  dateOfBirth: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  education: z.string().optional().nullable(),
+  experienceYears: z.number().optional().nullable(),
+  skills: z.any().optional().nullable(),
+});
+
+const careersResumeUpdateSchema = z.object({
+  resumeUrl: z.string().min(1, "رابط السيرة الذاتية مطلوب"),
+});
+
+const careersApplySchema = z.object({
+  postingId: z.number({ invalid_type_error: "يجب تحديد الوظيفة" }).int().positive("يجب تحديد الوظيفة"),
+  coverLetter: z.string().optional().nullable(),
+});
 
 const portalLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -44,18 +78,10 @@ function careersAuth(req: Request, res: Response, next: NextFunction): void {
 
 router.post("/auth/register", portalLimiter, async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, password } = req.body as {
-      name: string; email: string; phone?: string; password: string;
-    };
-
-    if (!name || !email || !password) {
-      res.status(400).json({ error: "الاسم والبريد الإلكتروني وكلمة المرور مطلوبة" });
-      return;
-    }
-    if (password.length < 6) {
-      res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
-      return;
-    }
+    const parsed_careersRegisterSchema = careersRegisterSchema.safeParse(req.body);
+    if (!parsed_careersRegisterSchema.success) throw new ValidationError(parsed_careersRegisterSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_careersRegisterSchema.data;
+    const { name, email, phone, password } = body;
 
     const existing = await rawQuery(
       `SELECT id FROM applicant_accounts WHERE email = $1`,
@@ -89,11 +115,10 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
 
 router.post("/auth/login", portalLimiter, async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body as { email: string; password: string };
-    if (!email || !password) {
-      res.status(400).json({ error: "البريد وكلمة المرور مطلوبان" });
-      return;
-    }
+    const parsed_careersLoginSchema = careersLoginSchema.safeParse(req.body);
+    if (!parsed_careersLoginSchema.success) throw new ValidationError(parsed_careersLoginSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_careersLoginSchema.data;
+    const { email, password } = body;
 
     const rows = await rawQuery<{ id: number; passwordHash: string; isActive: boolean }>(
       `SELECT id, "passwordHash", "isActive" FROM applicant_accounts WHERE email = $1`,
@@ -186,7 +211,10 @@ router.get("/me", careersAuth, async (req: Request, res: Response) => {
 
 router.patch("/me", careersAuth, async (req: Request, res: Response) => {
   try {
-    const { name, phone, nationalId, gender, dateOfBirth, city, education, experienceYears, skills } = req.body;
+    const parsed_careersProfileUpdateSchema = careersProfileUpdateSchema.safeParse(req.body);
+    if (!parsed_careersProfileUpdateSchema.success) throw new ValidationError(parsed_careersProfileUpdateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_careersProfileUpdateSchema.data;
+    const { name, phone, nationalId, gender, dateOfBirth, city, education, experienceYears, skills } = body;
     await rawExecute(
       `UPDATE applicant_accounts SET
         name = COALESCE($2, name),
@@ -217,20 +245,22 @@ router.patch("/me", careersAuth, async (req: Request, res: Response) => {
 
 router.patch("/me/resume", careersAuth, async (req: Request, res: Response) => {
   try {
-    const { resumeUrl } = req.body as { resumeUrl: string };
-    if (!resumeUrl || typeof resumeUrl !== "string" || !resumeUrl.trim()) {
-      res.status(400).json({ error: "رابط السيرة الذاتية مطلوب" });
-      return;
+    const parsed_careersResumeUpdateSchema = careersResumeUpdateSchema.safeParse(req.body);
+    if (!parsed_careersResumeUpdateSchema.success) throw new ValidationError(parsed_careersResumeUpdateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_careersResumeUpdateSchema.data;
+    const resumeUrl = body.resumeUrl.trim();
+    if (!resumeUrl) {
+      throw new ValidationError("رابط السيرة الذاتية مطلوب");
     }
     await rawExecute(
       `UPDATE applicant_accounts SET "resumeUrl" = $2, "updatedAt" = NOW() WHERE id = $1`,
-      [(req as any).applicantId, resumeUrl.trim()]
+      [(req as any).applicantId, resumeUrl]
     );
 
     createAuditLog({
       companyId: 0, userId: (req as any).applicantId, action: "careers_update_resume",
       entity: "applicant_accounts", entityId: (req as any).applicantId,
-      after: { resumeUrl: resumeUrl.trim() },
+      after: { resumeUrl },
     }).catch(console.error);
 
     res.json({ message: "تم حفظ رابط السيرة الذاتية بنجاح" });
@@ -258,13 +288,11 @@ router.get("/my-applications", careersAuth, async (req: Request, res: Response) 
 
 router.post("/apply", careersAuth, async (req: Request, res: Response) => {
   try {
-    const { postingId, coverLetter } = req.body as { postingId: number; coverLetter?: string };
+    const parsed_careersApplySchema = careersApplySchema.safeParse(req.body);
+    if (!parsed_careersApplySchema.success) throw new ValidationError(parsed_careersApplySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_careersApplySchema.data;
+    const { postingId, coverLetter } = body;
     const applicantId = (req as any).applicantId;
-
-    if (!postingId) {
-      res.status(400).json({ error: "يجب تحديد الوظيفة" });
-      return;
-    }
 
     const posting = await rawQuery(
       `SELECT id, status FROM job_postings WHERE id = $1 AND status = 'open'`,

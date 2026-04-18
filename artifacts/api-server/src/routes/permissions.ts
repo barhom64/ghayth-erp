@@ -1,5 +1,6 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
@@ -8,6 +9,22 @@ import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
+
+const rolePermissionSchema = z.object({
+  role: z.string().min(1, "الدور مطلوب"),
+  permission: z.string().min(1, "الصلاحية مطلوبة"),
+});
+
+const userPermissionCreateSchema = z.object({
+  userId: z.number().int().positive("معرف المستخدم مطلوب"),
+  permission: z.string().min(1, "الصلاحية مطلوبة"),
+  type: z.enum(["grant", "revoke"]).optional(),
+});
+
+const userPermissionDeleteSchema = z.object({
+  userId: z.number().int().positive("معرف المستخدم مطلوب"),
+  permission: z.string().min(1, "الصلاحية مطلوبة"),
+});
 
 const PREDEFINED_ROLE_DEFAULTS: Record<string, { modules: string[]; level: number }> = {
   owner:            { modules: ["home","hr","finance","fleet","property","operations","warehouse","governance","bi","requests","documents","reports","admin","comms","legal","crm","marketing","store","support","settings"], level: 100 },
@@ -122,11 +139,9 @@ router.get("/role-permissions", requirePermission("permissions:read"), async (re
 router.post("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { role, permission } = req.body as { role: string; permission: string };
-    if (!role || !permission) {
-      res.status(400).json({ error: "role و permission مطلوبان" });
-      return;
-    }
+    const parsed = rolePermissionSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { role, permission } = parsed.data;
 
     await rawExecute(
       `INSERT INTO role_permissions (role, permission, "companyId")
@@ -148,7 +163,9 @@ router.post("/role-permissions", requirePermission("admin:write"), requirePermis
 router.delete("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { role, permission } = req.body as { role: string; permission: string };
+    const parsed = rolePermissionSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { role, permission } = parsed.data;
     const [before] = await rawQuery<any>(
       `SELECT * FROM role_permissions WHERE role = $1 AND permission = $2 AND "companyId" = $3`,
       [role, permission, scope.companyId]
@@ -187,15 +204,9 @@ router.get("/user-permissions", requirePermission("permissions:read"), async (re
 router.post("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { userId, permission, type = "grant" } = req.body as {
-      userId: number;
-      permission: string;
-      type?: "grant" | "revoke";
-    };
-    if (!userId || !permission) {
-      res.status(400).json({ error: "userId و permission مطلوبان" });
-      return;
-    }
+    const parsed = userPermissionCreateSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { userId, permission, type = "grant" } = parsed.data;
 
     await rawExecute(
       `INSERT INTO permissions ("userId", permission, type, "companyId", "grantedBy")
@@ -216,7 +227,9 @@ router.post("/user-permissions", requirePermission("admin:write"), requirePermis
 router.delete("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { userId, permission } = req.body as { userId: number; permission: string };
+    const parsed = userPermissionDeleteSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { userId, permission } = parsed.data;
     const [before] = await rawQuery<any>(
       `SELECT * FROM permissions WHERE "userId" = $1 AND permission = $2 AND "companyId" = $3`,
       [userId, permission, scope.companyId]

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -160,8 +161,7 @@ router.get("/", async (req, res) => {
       ],
     });
   } catch (err) {
-    console.error("Search error:", err);
-    res.status(500).json({ error: "خطأ في البحث" });
+    handleRouteError(err, res, "Search error:");
   }
 });
 

@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { getDeliveryStats } from "../lib/notificationEngine.js";
@@ -117,9 +117,8 @@ router.get("/preferences", async (req: Request, res: Response): Promise<any> => 
     );
 
     res.json({ data: rows, categories });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -167,9 +166,8 @@ router.put("/preferences", requirePermission("admin:write"), async (req: Request
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -185,9 +183,8 @@ router.get("/routing-rules", requirePermission("admin:write"), async (req: Reque
       [scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -223,9 +220,8 @@ router.post("/routing-rules", requirePermission("admin:write"), async (req: Requ
     }).catch(console.error);
 
     res.json({ data: rows[0] });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -257,9 +253,8 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -282,9 +277,8 @@ router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -300,9 +294,8 @@ router.get("/templates", requirePermission("admin:write"), async (req: Request, 
       [scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -338,9 +331,8 @@ router.post("/templates", requirePermission("admin:write"), async (req: Request,
     }).catch(console.error);
 
     res.json({ data: rows[0] });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -371,9 +363,8 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -396,9 +387,8 @@ router.delete("/templates/:id", requirePermission("admin:write"), async (req: Re
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -413,9 +403,8 @@ router.get("/fallback-chains", requirePermission("admin:write"), async (req: Req
       [scope.companyId]
     );
     res.json({ data: rows });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -441,9 +430,8 @@ router.post("/fallback-chains", requirePermission("admin:write"), async (req: Re
     }).catch(console.error);
 
     res.json({ data: rows[0] });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -474,9 +462,8 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -499,9 +486,8 @@ router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (r
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -518,9 +504,8 @@ router.get("/webhooks", requirePermission("admin:write"), async (req: Request, r
     );
     const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null }));
     res.json({ data: masked });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -553,9 +538,8 @@ router.post("/webhooks", requirePermission("admin:write"), async (req: Request, 
     }).catch(console.error);
 
     res.json({ data: rows[0] });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -602,9 +586,8 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -627,9 +610,8 @@ router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Req
     }).catch(console.error);
 
     res.json({ success: true });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -639,9 +621,8 @@ router.get("/delivery-stats", requirePermission("admin:write"), async (req: Requ
     const days = parseInt(req.query.days as string) || 30;
     const stats = await getDeliveryStats(scope.companyId, days);
     res.json({ data: stats });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
@@ -684,9 +665,8 @@ router.get("/delivery-log", requirePermission("admin:write"), async (req: Reques
     );
 
     res.json({ data: rows, total: countResult[0]?.count ?? 0, page, limit });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
   }
 });
 
