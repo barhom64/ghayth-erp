@@ -28,14 +28,21 @@ export default function ProjectsCreate() {
   const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم المشروع" });
-      return;
-    }
-    if (form.startDate && form.endDate && form.endDate < form.startDate) {
-      toast({ variant: "destructive", title: "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "يرجى إدخال اسم المشروع";
+    if (form.budget && Number(form.budget) < 0) localErrors.budget = "الميزانية يجب أن تكون صفر أو أكثر";
+    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -70,7 +77,7 @@ export default function ProjectsCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اسم المشروع <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم المشروع" /></div>
+          <div><Label>اسم المشروع <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم المشروع" /><FieldHint field="name" /></div>
           <div>
             <Label>العميل</Label>
             <Autocomplete
@@ -110,9 +117,9 @@ export default function ProjectsCreate() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label>{`الميزانية (${getCurrencySymbol()})`}</Label><Input className="mt-1" type="number" step="0.01" value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} placeholder="٠" /></div>
+          <div><Label>{`الميزانية (${getCurrencySymbol()})`}</Label><Input className={`mt-1 ${errCls("budget")}`} type="number" step="0.01" value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} placeholder="٠" /><FieldHint field="budget" /></div>
           <div><Label>تاريخ البدء</Label><div className="mt-1"><DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></div></div>
-          <div><Label>تاريخ الانتهاء</Label><div className="mt-1"><DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></div></div>
+          <div><Label>تاريخ الانتهاء</Label><div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></div><FieldHint field="endDate" /></div>
         </div>
         <div><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف المشروع وأهدافه..." /></div>
         <FileDropZone files={attachments} onFilesChange={setAttachments} />

@@ -25,10 +25,20 @@ export default function LegalCasesCreate() {
     court: "", opposingParty: "", lawyerName: "", filingDate: "",
     status: "open", description: "", notes: "",
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    if (!form.title) {
-      toast({ variant: "destructive", title: "يرجى إدخال عنوان القضية" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.title) localErrors.title = "يرجى إدخال عنوان القضية";
+    if (form.caseNumber && !/^[A-Za-z0-9\-\/]+$/.test(form.caseNumber)) localErrors.caseNumber = "رقم القضية يجب أن يحتوي على أحرف وأرقام وشرطات فقط";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -57,8 +67,8 @@ export default function LegalCasesCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان القضية <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div>
-          <div><Label>رقم القضية</Label><Input className="mt-1" dir="ltr" value={form.caseNumber} onChange={(e) => setForm((f) => ({ ...f, caseNumber: e.target.value }))} /></div>
+          <div><Label>عنوان القضية <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("title")}`} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /><FieldHint field="title" /></div>
+          <div><Label>رقم القضية</Label><Input className={`mt-1 ${errCls("caseNumber")}`} dir="ltr" value={form.caseNumber} onChange={(e) => setForm((f) => ({ ...f, caseNumber: e.target.value }))} /><FieldHint field="caseNumber" /></div>
           <div>
             <Label>نوع القضية</Label>
             <Select value={form.caseType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, caseType: v === "_none" ? "" : v }))}>

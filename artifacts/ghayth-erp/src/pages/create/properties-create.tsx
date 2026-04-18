@@ -25,6 +25,11 @@ export default function PropertiesCreate() {
   const { data: ownersResp } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const owners = asList(ownersResp);
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const [form, setForm] = useState({
     unitNumber: "",
     buildingId: "",
@@ -80,8 +85,16 @@ export default function PropertiesCreate() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.unitNumber) {
-      toast({ variant: "destructive", title: "يرجى إدخال رقم الوحدة" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.unitNumber) localErrors.unitNumber = "يرجى إدخال رقم الوحدة";
+    if (form.area && Number(form.area) <= 0) localErrors.area = "المساحة يجب أن تكون أكبر من صفر";
+    if (form.monthlyRent && Number(form.monthlyRent) < 0) localErrors.monthlyRent = "الإيجار الشهري يجب أن يكون صفر أو أكثر";
+    if (form.floor && Number(form.floor) < 0) localErrors.floor = "الطابق يجب أن يكون صفر أو أكثر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     addUnit.mutate({
@@ -121,11 +134,13 @@ export default function PropertiesCreate() {
           <div>
             <Label>رقم الوحدة <span className="text-red-500">*</span></Label>
             <Input
+              className={errCls("unitNumber")}
               value={form.unitNumber}
               onChange={e => set("unitNumber", e.target.value)}
               placeholder="مثل: A-101"
               required
             />
+            <FieldHint field="unitNumber" />
           </div>
           <div>
             <Label>المبنى / المجمع</Label>
@@ -177,8 +192,8 @@ export default function PropertiesCreate() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div><Label>المساحة (م²)</Label><Input type="number" value={form.area} onChange={e => set("area", e.target.value)} placeholder="٠" /></div>
-          <div><Label>الطابق</Label><Input type="number" value={form.floor} onChange={e => set("floor", e.target.value)} placeholder="٠" /></div>
+          <div><Label>المساحة (م²)</Label><Input className={errCls("area")} type="number" value={form.area} onChange={e => set("area", e.target.value)} placeholder="٠" /><FieldHint field="area" /></div>
+          <div><Label>الطابق</Label><Input className={errCls("floor")} type="number" value={form.floor} onChange={e => set("floor", e.target.value)} placeholder="٠" /><FieldHint field="floor" /></div>
           <div><Label>غرف نوم</Label><Input type="number" value={form.bedrooms} onChange={e => set("bedrooms", e.target.value)} placeholder="٠" /></div>
           <div><Label>حمامات</Label><Input type="number" value={form.bathrooms} onChange={e => set("bathrooms", e.target.value)} placeholder="٠" /></div>
         </div>
@@ -186,7 +201,8 @@ export default function PropertiesCreate() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>{`الإيجار الشهري (${getCurrencySymbol()})`}</Label>
-            <Input type="number" step="0.01" value={form.monthlyRent} onChange={e => set("monthlyRent", e.target.value)} placeholder="٠" />
+            <Input className={errCls("monthlyRent")} type="number" step="0.01" value={form.monthlyRent} onChange={e => set("monthlyRent", e.target.value)} placeholder="٠" />
+            <FieldHint field="monthlyRent" />
           </div>
           <div>
             <Label>الاتجاه</Label>
