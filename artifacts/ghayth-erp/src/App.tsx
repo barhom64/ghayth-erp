@@ -80,18 +80,6 @@ function AccessDenied() {
   );
 }
 
-function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
-  if (!isAuthenticated) return <Redirect to="/login" />;
-  return (
-    <SidebarLayout>
-      <Suspense fallback={<PageLoader />}>
-        {children}
-      </Suspense>
-    </SidebarLayout>
-  );
-}
-
 function ModuleRoute({ Component, module, subKey, minRoleLevel }: { Component: React.LazyExoticComponent<any>; module?: ModuleType; subKey?: string; minRoleLevel?: number }) {
   const { canAccessModule, canAccessSubPage, roleLevel } = useAppContext();
 
@@ -100,40 +88,39 @@ function ModuleRoute({ Component, module, subKey, minRoleLevel }: { Component: R
     (subKey && module && !canAccessSubPage(module, subKey)) ||
     (minRoleLevel !== undefined && roleLevel < minRoleLevel);
 
-  if (blocked) {
-    return (
-      <ProtectedLayout>
-        <AccessDenied />
-      </ProtectedLayout>
-    );
-  }
+  if (blocked) return <AccessDenied />;
+  return <Component />;
+}
 
+function ProtectedRoutes() {
   return (
-    <ProtectedLayout>
-      <Component />
-    </ProtectedLayout>
+    <SidebarLayout>
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/" component={Dashboard} />
+          <Route path="/dashboard" component={Dashboard} />
+
+          {allModuleRoutes.map((r) => (
+            <Route key={r.path} path={r.path}>
+              <ModuleRoute Component={r.component} module={r.module} subKey={r.subKey} minRoleLevel={r.minRoleLevel} />
+            </Route>
+          ))}
+
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
+    </SidebarLayout>
   );
 }
 
 function Router() {
+  const { isAuthenticated } = useAuth();
   return (
     <Switch>
       <Route path="/login" component={Login} />
-
-      <Route path="/">
-        <ProtectedLayout><Dashboard /></ProtectedLayout>
+      <Route>
+        {isAuthenticated ? <ProtectedRoutes /> : <Redirect to="/login" />}
       </Route>
-      <Route path="/dashboard">
-        <ProtectedLayout><Dashboard /></ProtectedLayout>
-      </Route>
-
-      {allModuleRoutes.map((r) => (
-        <Route key={r.path} path={r.path}>
-          <ModuleRoute Component={r.component} module={r.module} subKey={r.subKey} minRoleLevel={r.minRoleLevel} />
-        </Route>
-      ))}
-
-      <Route component={NotFound} />
     </Switch>
   );
 }
