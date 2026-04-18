@@ -2,6 +2,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 // P02-S3-CRIT — `marketing:*` permissions are seeded for the
 // `general_manager` and `crm_manager` roles in companyBootstrap.ts:195
@@ -28,12 +30,38 @@ router.post("/campaigns", requirePermission("marketing:create"), async (req, res
   try {
     const scope = req.scope!;
     const { name, description, type, channel, status, budget, spent, startDate, endDate, targetAudience } = req.body;
+    if (!name || !String(name).trim()) {
+      throw new ValidationError("اسم الحملة مطلوب", {
+        field: "name",
+        fix: "أدخل اسماً للحملة التسويقية",
+      });
+    }
+    if (budget !== undefined && budget !== null && budget !== "") {
+      const bn = Number(budget);
+      if (!Number.isFinite(bn) || bn < 0) {
+        throw new ValidationError("الميزانية غير صالحة", {
+          field: "budget",
+          fix: "أدخل قيمة غير سالبة",
+        });
+      }
+    }
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
+        field: "endDate",
+        fix: "اختر تاريخ انتهاء بعد تاريخ البداية",
+      });
+    }
     const r = await rawExecute(
       `INSERT INTO marketing_campaigns (name, description, type, channel, status, budget, spent, "startDate", "endDate", "targetAudience", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [name, description, type, channel, status || "draft", budget || 0, spent || 0, startDate, endDate, targetAudience, scope.companyId]
+      [String(name).trim(), description ?? null, type ?? null, channel ?? null, status || "draft", Number(budget ?? 0), Number(spent ?? 0), startDate ?? null, endDate ?? null, targetAudience ?? null, scope.companyId]
     );
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "marketing_campaigns", entityId: r.insertId,
+      after: { name, channel, status: status || "draft", budget: Number(budget ?? 0) },
+    }).catch(console.error);
+    res.status(201).json({ id: r.insertId, name, status: status || "draft", budget: Number(budget ?? 0) });
+  } catch (err) { handleRouteError(err, res, "Create campaign error:"); }
 });
 
 router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, res) => {
