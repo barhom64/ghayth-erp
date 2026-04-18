@@ -3,6 +3,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -74,9 +75,7 @@ export default function IntercompanyPage() {
       header: "الحالة",
       sortable: true,
       render: (row) => (
-        <Badge variant="outline" className={row.status === "posted" ? "bg-green-100 text-green-700" : row.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>
-          {row.status === "posted" ? "مُرحَّل" : row.status === "cancelled" ? "ملغي" : "مسودة"}
-        </Badge>
+        <PageStatusBadge status={row.status} domain="journal" />
       ),
     },
     {

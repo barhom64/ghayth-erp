@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -137,9 +138,7 @@ export default function InventoryCountPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge className={count.status === "approved" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
-                    {count.status === "approved" ? "مُعتمد" : "مسودة"}
-                  </Badge>
+                  <PageStatusBadge status={count.status} />
                   {count.status !== "approved" && (
                     <Button size="sm" variant="outline" onClick={() => handleApprove(count.id)}>
                       <CheckCircle className="w-3.5 h-3.5 me-1" /> اعتماد
