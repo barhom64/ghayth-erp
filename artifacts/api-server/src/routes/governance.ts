@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -212,12 +214,30 @@ router.post("/risks", async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, description, severity, likelihood, impact, status, mitigationPlan, assignedTo } = req.body;
+    if (!title || !String(title).trim()) {
+      throw new ValidationError("عنوان المخاطرة مطلوب", {
+        field: "title",
+        fix: "أدخل عنواناً مختصراً للمخاطرة",
+      });
+    }
+    const validSeverities = ["low", "medium", "high", "critical"];
+    if (severity && !validSeverities.includes(severity)) {
+      throw new ValidationError(`خطورة غير صالحة: ${severity}`, {
+        field: "severity",
+        fix: `اختر من: ${validSeverities.join(", ")}`,
+      });
+    }
     const r = await rawExecute(
       `INSERT INTO governance_risks (title, description, severity, likelihood, impact, status, "mitigationPlan", "assignedTo", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [title, description, severity, likelihood, impact, status || "open", mitigationPlan, assignedTo, scope.companyId]
+      [String(title).trim(), description ?? null, severity ?? "medium", likelihood ?? null, impact ?? null, status || "open", mitigationPlan ?? null, assignedTo ?? null, scope.companyId]
     );
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "governance_risks", entityId: r.insertId,
+      after: { title, severity: severity ?? "medium", status: status || "open" },
+    }).catch(console.error);
+    res.status(201).json({ id: r.insertId, title, severity: severity ?? "medium", status: status || "open" });
+  } catch (err) { handleRouteError(err, res, "Create risk error:"); }
 });
 
 router.get("/risks/:id", async (req, res) => {
