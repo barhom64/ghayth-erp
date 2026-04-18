@@ -185,12 +185,9 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         fix: "أدخل رقم جوال الموظف",
       });
     }
-    if (!managerId) {
-      throw new ValidationError("المدير المباشر مطلوب", {
-        field: "managerId",
-        fix: "حدد المدير المباشر للموظف",
-      });
-    }
+    // managerId is optional — the first employee (owner/CEO) has no manager,
+    // and HR may onboard staff before the reporting line is finalized. When
+    // provided, we still FK-check it below before the insert.
     if (!department && !departmentId) {
       throw new ValidationError("القسم مطلوب", {
         field: "department",

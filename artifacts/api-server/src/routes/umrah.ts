@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import {
   createJournalEntry,
   getAccountCodeFromMapping,
@@ -155,10 +155,82 @@ router.post("/pilgrims", requirePermission("operations:create"), async (req, res
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    if (!b.fullName || !String(b.fullName).trim()) {
+      throw new ValidationError("اسم المعتمر مطلوب", {
+        field: "fullName",
+        fix: "أدخل الاسم الكامل للمعتمر كما في جواز السفر",
+      });
+    }
+    if (!b.passportNumber || !String(b.passportNumber).trim()) {
+      throw new ValidationError("رقم جواز السفر مطلوب", {
+        field: "passportNumber",
+        fix: "أدخل رقم جواز السفر",
+      });
+    }
+    if (!b.seasonId) {
+      throw new ValidationError("الموسم مطلوب", {
+        field: "seasonId",
+        fix: "اختر موسم العمرة من القائمة",
+      });
+    }
+
+    // FK pre-check: season must be in caller's company. Prevents opaque
+    // 23503 on FK violation.
+    const [season] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      [Number(b.seasonId), scope.companyId]
+    );
+    if (!season) {
+      throw new ValidationError(`الموسم رقم ${b.seasonId} غير موجود`, {
+        field: "seasonId",
+        fix: "اختر موسماً مسجلاً",
+      });
+    }
+    if (b.agentId) {
+      const [agent] = await rawQuery<{ id: number }>(
+        `SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+        [Number(b.agentId), scope.companyId]
+      );
+      if (!agent) {
+        throw new ValidationError(`الوكيل رقم ${b.agentId} غير موجود`, {
+          field: "agentId",
+          fix: "اختر وكيلاً مسجلاً أو اتركه فارغاً",
+        });
+      }
+    }
+    if (b.packageId) {
+      const [pkg] = await rawQuery<{ id: number }>(
+        `SELECT id FROM umrah_packages WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+        [Number(b.packageId), scope.companyId]
+      );
+      if (!pkg) {
+        throw new ValidationError(`الباقة رقم ${b.packageId} غير موجودة`, {
+          field: "packageId",
+          fix: "اختر باقة مسجلة أو اتركها فارغة",
+        });
+      }
+    }
+
     const rows = await rawQuery(
       `INSERT INTO umrah_pilgrims ("companyId","seasonId","agentId","packageId","fullName","passportNumber","visaNumber",nationality,gender,"dateOfBirth",phone,"arrivalDate","departureDate",notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-      [scope.companyId, b.seasonId, b.agentId, b.packageId, b.fullName, b.passportNumber, b.visaNumber, b.nationality, b.gender, b.dateOfBirth, b.phone, b.arrivalDate, b.departureDate, b.notes]
+      [
+        scope.companyId,
+        Number(b.seasonId),
+        b.agentId ? Number(b.agentId) : null,
+        b.packageId ? Number(b.packageId) : null,
+        String(b.fullName).trim(),
+        String(b.passportNumber).trim(),
+        b.visaNumber ?? null,
+        b.nationality ?? null,
+        b.gender ?? null,
+        b.dateOfBirth ?? null,
+        b.phone ?? null,
+        b.arrivalDate ?? null,
+        b.departureDate ?? null,
+        b.notes ?? null,
+      ]
     );
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }

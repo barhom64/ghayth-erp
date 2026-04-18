@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -17,12 +19,29 @@ router.post("/programs", async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, description, category, startDate, endDate, location, trainer, capacity, status } = req.body;
+    if (!title || !String(title).trim()) {
+      throw new ValidationError("عنوان البرنامج التدريبي مطلوب", {
+        field: "title",
+        fix: "أدخل عنواناً واضحاً للبرنامج",
+      });
+    }
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      throw new ValidationError("تاريخ الانتهاء قبل تاريخ البداية", {
+        field: "endDate",
+        fix: "اختر تاريخ انتهاء بعد تاريخ البداية",
+      });
+    }
     const r = await rawExecute(
       `INSERT INTO training_programs (title, description, category, "startDate", "endDate", location, trainer, capacity, status, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [title, description, category, startDate, endDate, location, trainer, capacity || 0, status || "upcoming", scope.companyId]
+      [String(title).trim(), description ?? null, category ?? null, startDate ?? null, endDate ?? null, location ?? null, trainer ?? null, Number(capacity ?? 0), status ?? "upcoming", scope.companyId]
     );
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "training_programs", entityId: r.insertId,
+      after: { title, category: category ?? null, startDate: startDate ?? null, endDate: endDate ?? null, capacity: Number(capacity ?? 0) },
+    }).catch(console.error);
+    res.status(201).json({ id: r.insertId, title, status: status ?? "upcoming" });
+  } catch (err) { handleRouteError(err, res, "Create training program error:"); }
 });
 
 router.get("/programs/:id", async (req, res) => {
@@ -87,15 +106,44 @@ router.post("/enrollments", async (req, res) => {
   try {
     const scope = req.scope!;
     const { programId, employeeId, employeeName, status } = req.body;
+    if (!programId) {
+      throw new ValidationError("البرنامج التدريبي مطلوب", {
+        field: "programId",
+        fix: "اختر برنامجاً تدريبياً من القائمة",
+      });
+    }
+    if (!employeeId && !employeeName) {
+      throw new ValidationError("يرجى تحديد الموظف", {
+        field: "employeeId",
+        fix: "اختر موظفاً من القائمة أو أدخل اسمه",
+      });
+    }
     const [prog] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2`, [programId, scope.companyId]);
-    if (!prog) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
+    if (!prog) throw new NotFoundError("البرنامج التدريبي غير موجود");
+    if (employeeId) {
+      const [emp] = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE id=$1 LIMIT 1`,
+        [Number(employeeId)]
+      );
+      if (!emp) {
+        throw new ValidationError(`الموظف رقم ${employeeId} غير موجود`, {
+          field: "employeeId",
+          fix: "اختر موظفاً مسجلاً",
+        });
+      }
+    }
     const r = await rawExecute(
       `INSERT INTO training_enrollments ("programId", "employeeId", "employeeName", status) VALUES ($1,$2,$3,$4)`,
-      [programId, employeeId, employeeName, status || "enrolled"]
+      [Number(programId), employeeId ? Number(employeeId) : null, employeeName ?? null, status ?? "enrolled"]
     );
-    await rawExecute(`UPDATE training_programs SET enrolled = enrolled + 1 WHERE id=$1`, [programId]);
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    await rawExecute(`UPDATE training_programs SET enrolled = enrolled + 1 WHERE id=$1`, [Number(programId)]);
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "training_enrollments", entityId: r.insertId,
+      after: { programId: Number(programId), employeeId: employeeId ? Number(employeeId) : null, employeeName: employeeName ?? null, status: status ?? "enrolled" },
+    }).catch(console.error);
+    res.status(201).json({ id: r.insertId, programId: Number(programId), employeeId: employeeId ?? null, status: status ?? "enrolled" });
+  } catch (err) { handleRouteError(err, res, "Create training enrollment error:"); }
 });
 
 router.get("/enrollments/:id", async (req, res) => {

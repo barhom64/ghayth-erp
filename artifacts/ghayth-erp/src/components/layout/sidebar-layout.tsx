@@ -91,7 +91,7 @@ const allNavSections: NavSection[] = [
   {
     title: "الموارد البشرية",
     items: [
-      { label: "لوحة الموارد البشرية", path: "/hr", icon: Users, module: "hr" },
+      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr" },
       { label: "الموظفون", path: "/employees", icon: Users, module: "hr", children: [
         { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
@@ -224,6 +224,7 @@ const allNavSections: NavSection[] = [
         { label: "المهام", path: "/tasks", icon: ListTodo },
       ]},
       { label: "إدارة الأسطول", path: "/fleet", icon: Truck, module: "fleet", children: [
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard },
         { label: "المركبات", path: "/fleet", icon: Car },
         { label: "السائقين", path: "/fleet/drivers", icon: User },
         { label: "الرحلات", path: "/fleet/trips", icon: Navigation },

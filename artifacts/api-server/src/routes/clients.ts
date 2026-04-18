@@ -1,4 +1,4 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -68,15 +68,17 @@ router.post("/", async (req, res) => {
       notes,
     } = req.body as any;
 
-    if (!name) {
-      res.status(400).json({ error: "الاسم مطلوب" });
-      return;
+    if (!name || !String(name).trim()) {
+      throw new ValidationError("اسم العميل مطلوب", {
+        field: "name",
+        fix: "أدخل اسم العميل الكامل",
+      });
     }
 
     const { insertId } = await rawExecute(
       `INSERT INTO clients (name, phone, email, classification, source, notes, "companyId", "isBlacklisted")
        VALUES ($1, $2, $3, $4, $5, $6, $7, false)`,
-      [name, phone ?? null, email ?? null, classification, source ?? null, notes ?? null, scope.companyId]
+      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, scope.companyId]
     );
 
     const [client] = await rawQuery<any>(

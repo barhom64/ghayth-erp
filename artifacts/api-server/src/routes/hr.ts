@@ -2248,14 +2248,156 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
+    const {
+      assignmentId, type, description, severity, deduction,
+      period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
+    } = req.body as any;
+
+    if (!assignmentId) {
+      throw new ValidationError("يرجى اختيار الموظف", {
+        field: "assignmentId",
+        fix: "اختر التعيين الذي تُنسب إليه المخالفة",
+      });
+    }
+    if (!type) {
+      throw new ValidationError("نوع المخالفة مطلوب", {
+        field: "type",
+        fix: "حدد نوع المخالفة (late | early_leave | absence | behavior | organization | gps_out_of_range | custom)",
+      });
+    }
+    if (!description || !String(description).trim()) {
+      throw new ValidationError("وصف المخالفة مطلوب", {
+        field: "description",
+        fix: "اكتب تفاصيل المخالفة",
+      });
+    }
+
+    // FK pre-check: assignment must exist inside the caller's company scope.
+    // Without this, a bad assignmentId would fail as a deep 23503 whose
+    // detail string doesn't always carry the field name.
+    const [asn] = await rawQuery<any>(
+      `SELECT ea.id, ea."employeeId", ea."branchId", e.name AS "employeeName"
+         FROM employee_assignments ea
+         JOIN employees e ON e.id = ea."employeeId"
+        WHERE ea.id = $1 AND ea."companyId" = $2
+        LIMIT 1`,
+      [Number(assignmentId), scope.companyId]
+    );
+    if (!asn) {
+      throw new ValidationError(`التعيين رقم ${assignmentId} غير موجود في هذه الشركة`, {
+        field: "assignmentId",
+        fix: "اختر تعيينًا من قائمة الموظفين الحاليين",
+      });
+    }
+
     const period = reqPeriod || new Date().toISOString().slice(0, 7);
+    const incidentDate = reqIncidentDate || new Date().toISOString().slice(0, 10);
+    const effectiveSeverity = severity ?? "medium";
+    const effectiveDeduction = Number(deduction ?? 0);
+
     const { insertId } = await rawExecute(
       `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, assignmentId, type, description, severity ?? "medium", deduction ?? 0, period]
+      [scope.companyId, Number(assignmentId), type, description, effectiveSeverity, effectiveDeduction, period]
     );
-    res.status(201).json({ id: insertId, ...req.body });
+
+    // Discipline ladder — create the inquiry memo (idempotent). This wires
+    // the violation to the 5-step penalty scale and the pending-employee
+    // workflow. Known IncidentType strings map through; anything else
+    // becomes "custom" which the regulation engine handles as a free-form
+    // case.
+    const knownIncidentTypes = new Set([
+      "late", "early_leave", "absence", "behavior",
+      "organization", "gps_out_of_range", "custom",
+    ]);
+    const incidentType = knownIncidentTypes.has(String(type)) ? (type as any) : "custom";
+    ensureInquiryMemoForViolation({
+      companyId: scope.companyId,
+      branchId: asn.branchId ?? scope.branchId ?? null,
+      assignmentId: Number(assignmentId),
+      employeeId: asn.employeeId,
+      violationId: insertId,
+      incidentType,
+      incidentDate,
+      incidentDescription: String(description),
+      regulationId: regulationId ? Number(regulationId) : undefined,
+      source: "manual",
+      createdBy: scope.userId,
+    }).catch((err) => console.error("inquiry memo create failed:", err));
+
+    // Notify the offender and their manager.
+    createNotification({
+      companyId: scope.companyId,
+      assignmentId: Number(assignmentId),
+      type: "violation_created",
+      title: "تم تسجيل مخالفة",
+      body: `نوع: ${type} — بتاريخ ${incidentDate}${effectiveDeduction ? ` — الخصم المتوقع ${effectiveDeduction} ريال` : ""}`,
+      priority: "high",
+      refType: "employee_violations",
+      refId: insertId,
+    }).catch(console.error);
+    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch(() => null);
+    if (managerAsn && managerAsn !== Number(assignmentId)) {
+      createNotification({
+        companyId: scope.companyId,
+        assignmentId: managerAsn,
+        type: "violation_created",
+        title: "مخالفة جديدة في فريقك",
+        body: `الموظف ${asn.employeeName} — ${type}`,
+        priority: "normal",
+        refType: "employee_violations",
+        refId: insertId,
+      }).catch(console.error);
+    }
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "violation.created",
+      entity: "employee_violations",
+      entityId: insertId,
+      details: JSON.stringify({
+        assignmentId: Number(assignmentId),
+        employeeId: asn.employeeId,
+        type,
+        severity: effectiveSeverity,
+        deduction: effectiveDeduction,
+        period,
+      }),
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId,
+      branchId: asn.branchId ?? scope.branchId ?? null,
+      userId: scope.userId,
+      action: "create",
+      entity: "employee_violations",
+      entityId: insertId,
+      after: {
+        assignmentId: Number(assignmentId),
+        employeeId: asn.employeeId,
+        employeeName: asn.employeeName,
+        type,
+        description,
+        severity: effectiveSeverity,
+        deduction: effectiveDeduction,
+        period,
+        incidentDate,
+      },
+    });
+
+    res.status(201).json({
+      id: insertId,
+      assignmentId: Number(assignmentId),
+      employeeId: asn.employeeId,
+      employeeName: asn.employeeName,
+      type,
+      description,
+      severity: effectiveSeverity,
+      deduction: effectiveDeduction,
+      period,
+      incidentDate,
+    });
   } catch (err) { handleRouteError(err, res, "Create violation error:"); }
 });
 
@@ -2313,15 +2455,80 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
   try {
     const scope = req.scope!;
     const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = req.body as any;
-    const finalEmployeeId = employeeId || assignmentId;
-    const finalScores = scores || categories ? JSON.stringify(scores || categories) : null;
-    const finalComments = comments || notes || null;
+
+    // Resolve the employee PK — performance_reviews."employeeId" is a FK
+    // on employees.id, NOT employee_assignments.id. The old handler blindly
+    // fell back to assignmentId, which corrupts data when the frontend
+    // sends the assignmentId. Accept either shape, but always resolve to
+    // the employee PK before inserting.
+    let resolvedEmployeeId: number | null = null;
+    if (employeeId) {
+      const [emp] = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE id = $1 LIMIT 1`,
+        [Number(employeeId)]
+      );
+      if (!emp) {
+        throw new ValidationError(`الموظف رقم ${employeeId} غير موجود`, {
+          field: "employeeId",
+          fix: "اختر موظفًا من القائمة",
+        });
+      }
+      resolvedEmployeeId = emp.id;
+    } else if (assignmentId) {
+      const [asn] = await rawQuery<{ employeeId: number }>(
+        `SELECT "employeeId" FROM employee_assignments
+          WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [Number(assignmentId), scope.companyId]
+      );
+      if (!asn) {
+        throw new ValidationError(`التعيين رقم ${assignmentId} غير موجود`, {
+          field: "assignmentId",
+          fix: "اختر تعيينًا نشطًا من قائمة الموظفين",
+        });
+      }
+      resolvedEmployeeId = asn.employeeId;
+    } else {
+      throw new ValidationError("يرجى تحديد الموظف", {
+        field: "employeeId",
+        fix: "مرّر employeeId أو assignmentId",
+      });
+    }
+
+    if (!period) {
+      throw new ValidationError("فترة التقييم مطلوبة", {
+        field: "period",
+        fix: "مثال: 2026-Q1 أو 2026-04",
+      });
+    }
+
+    const finalScores = (scores ?? categories) ? JSON.stringify(scores ?? categories) : null;
+    const finalComments = comments ?? notes ?? null;
+    const effectiveStatus = status ?? "pending";
+
     const { insertId } = await rawExecute(
       `INSERT INTO performance_reviews ("companyId","employeeId",period,"overallScore",scores,comments,status)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, finalEmployeeId, period, overallScore ?? 0, finalScores, finalComments, status ?? "pending"]
+      [scope.companyId, resolvedEmployeeId, period, Number(overallScore ?? 0), finalScores, finalComments, effectiveStatus]
     );
-    res.status(201).json({ id: insertId, ...req.body });
+
+    await createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "performance_reviews",
+      entityId: insertId,
+      after: { employeeId: resolvedEmployeeId, period, overallScore: Number(overallScore ?? 0), status: effectiveStatus },
+    });
+
+    res.status(201).json({
+      id: insertId,
+      employeeId: resolvedEmployeeId,
+      period,
+      overallScore: Number(overallScore ?? 0),
+      status: effectiveStatus,
+      scores: scores ?? categories ?? null,
+      comments: finalComments,
+    });
   } catch (err) { handleRouteError(err, res, "Create performance error:"); }
 });
 
@@ -2393,12 +2600,26 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
   try {
     const scope = req.scope!;
     const { name, type, category, value, taxable } = req.body as any;
+    if (!name || !String(name).trim()) {
+      throw new ValidationError("اسم مكوّن الراتب مطلوب", {
+        field: "name",
+        fix: "مثال: سكن، نقل، خصم غياب",
+      });
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO salary_components ("companyId",name,type,category,value,taxable,status)
        VALUES ($1,$2,$3,$4,$5,$6,'active')`,
-      [scope.companyId, name, type ?? "fixed", category ?? "allowance", value ?? 0, taxable ?? true]
+      [scope.companyId, String(name).trim(), type ?? "fixed", category ?? "allowance", Number(value ?? 0), taxable ?? true]
     );
-    res.status(201).json({ id: insertId, ...req.body });
+    await createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "salary_components",
+      entityId: insertId,
+      after: { name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true },
+    });
+    res.status(201).json({ id: insertId, name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
 
