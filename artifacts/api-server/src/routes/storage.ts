@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 import { rawQuery } from "../lib/rawdb.js";
 
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -42,7 +43,7 @@ const RequestUploadUrlResponse = z.object({
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
-router.post("/storage/uploads/request-url", authMiddleware, async (req: Request, res: Response) => {
+router.post("/storage/uploads/request-url", authMiddleware, requirePermission("documents:write"), async (req: Request, res: Response) => {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.errors[0]?.message || "Missing or invalid required fields" });
@@ -59,6 +60,15 @@ router.post("/storage/uploads/request-url", authMiddleware, async (req: Request,
   try {
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+
+    const scope = req.scope;
+    if (scope) {
+      createAuditLog({
+        companyId: scope.companyId, userId: scope.userId, action: "request_upload_url",
+        entity: "storage", entityId: 0,
+        after: { name, size, contentType, objectPath },
+      }).catch(console.error);
+    }
 
     res.json(
       RequestUploadUrlResponse.parse({

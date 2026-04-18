@@ -639,7 +639,14 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
 
 router.delete("/approval-config/:id", requirePermission("settings:write"), async (req, res) => {
   try {
+    const scope = req.scope!;
+    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
     await rawExecute(`DELETE FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_approval_config",
+      entity: "approval_chains", entityId: Number(req.params.id),
+      before: beforeChain,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });

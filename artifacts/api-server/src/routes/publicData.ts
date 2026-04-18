@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
 
 const router = Router();
@@ -63,6 +64,12 @@ router.post("/forgot-password", publicLimiter, async (req, res) => {
       `INSERT INTO password_reset_requests (email, status) VALUES ($1, 'pending')`,
       [email.trim().toLowerCase()]
     );
+
+    createAuditLog({
+      companyId: 0, userId: 0, action: "forgot_password_request",
+      entity: "password_reset_requests", entityId: 0,
+      after: { email: email.trim().toLowerCase() },
+    }).catch(console.error);
 
     res.json({ message: "تم إرسال طلب استعادة كلمة المرور بنجاح. سيقوم مدير النظام بمراجعة طلبك." });
   } catch (err) {

@@ -2,6 +2,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -23,7 +25,7 @@ router.get("/comments/:entityType/:entityId", async (req, res) => {
   }
 });
 
-router.post("/comments/:entityType/:entityId", async (req, res): Promise<void> => {
+router.post("/comments/:entityType/:entityId", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.params;
@@ -36,20 +38,38 @@ router.post("/comments/:entityType/:entityId", async (req, res): Promise<void> =
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [entityType, Number(entityId), scope.companyId, scope.userId, scope.userName || "مستخدم", body.trim()]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_comment",
+      entity: String(entityType), entityId: Number(entityId),
+      after: { body: body.trim() },
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Create comment error");
   }
 });
 
-router.delete("/comments/:id", async (req, res) => {
+router.delete("/comments/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
+    const [before] = await rawQuery(
+      `SELECT * FROM entity_comments WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM entity_comments WHERE id = $1 AND "companyId" = $2`,
       [Number(id), scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_comment",
+      entity: "entity_comments", entityId: Number(id),
+      before,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete comment error");
@@ -73,7 +93,7 @@ router.get("/tags/:entityType/:entityId", async (req, res) => {
   }
 });
 
-router.post("/tags/:entityType/:entityId", async (req, res): Promise<void> => {
+router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.params;
@@ -91,20 +111,38 @@ router.post("/tags/:entityType/:entityId", async (req, res): Promise<void> => {
     if (rows.length === 0) {
       res.status(409).json({ error: "الوسم موجود بالفعل" }); return;
     }
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_tag",
+      entity: String(entityType), entityId: Number(entityId),
+      after: { tag: tag.trim(), color: color || "blue" },
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Create tag error");
   }
 });
 
-router.delete("/tags/:id", async (req, res) => {
+router.delete("/tags/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
+    const [before] = await rawQuery(
+      `SELECT * FROM entity_tags WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM entity_tags WHERE id = $1 AND "companyId" = $2`,
       [Number(id), scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_tag",
+      entity: "entity_tags", entityId: Number(id),
+      before,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete tag error");
@@ -148,7 +186,7 @@ router.get("/tags-list/:entityType", async (req, res) => {
   }
 });
 
-router.post("/bulk-action", async (req, res): Promise<void> => {
+router.post("/bulk-action", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { entityType, entityIds, action } = req.body;
@@ -239,6 +277,12 @@ router.post("/bulk-action", async (req, res): Promise<void> => {
         params
       );
     }
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: `bulk_${action}`,
+      entity: entityType, entityId: 0,
+      after: { action, entityType, affectedIds, updated },
+    }).catch(console.error);
 
     res.json({ success: true, updated, message: `تم تنفيذ الإجراء على ${updated} سجل` });
   } catch (err) {

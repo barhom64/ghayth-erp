@@ -2,11 +2,13 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rules = await rawQuery<any>(
@@ -21,7 +23,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/logs", async (req, res) => {
+router.get("/logs", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { ruleId, limit: lim = "50", page = "1" } = req.query as any;
@@ -59,7 +61,7 @@ router.get("/logs", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -81,13 +83,20 @@ router.post("/", async (req, res) => {
     );
 
     const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [insertId]);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_business_rule",
+      entity: "business_rules", entityId: insertId,
+      after: { name: b.name, triggerEvent: b.triggerEvent, actionType: b.actionType },
+    }).catch(console.error);
+
     res.status(201).json(rule);
   } catch (err) {
     handleRouteError(err, res, "إنشاء قاعدة");
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -122,18 +131,25 @@ router.patch("/:id", async (req, res) => {
     await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length}`, params);
 
     const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_business_rule",
+      entity: "business_rules", entityId: id,
+      before: existing, after: b,
+    }).catch(console.error);
+
     res.json(rule);
   } catch (err) {
     handleRouteError(err, res, "تعديل قاعدة");
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(
-      `SELECT id FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!existing) {
@@ -141,13 +157,20 @@ router.delete("/:id", async (req, res) => {
       return;
     }
     await rawExecute(`DELETE FROM business_rules WHERE id = $1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_business_rule",
+      entity: "business_rules", entityId: id,
+      before: existing,
+    }).catch(console.error);
+
     res.json({ message: "تم حذف القاعدة بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "حذف قاعدة");
   }
 });
 
-router.patch("/:id/toggle", async (req, res) => {
+router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -161,6 +184,13 @@ router.patch("/:id/toggle", async (req, res) => {
     }
     const newActive = !existing.isActive;
     await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND ("companyId" IS NULL OR "companyId" = $3)`, [newActive, id, scope.companyId]);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "toggle_business_rule",
+      entity: "business_rules", entityId: id,
+      before: { isActive: existing.isActive }, after: { isActive: newActive },
+    }).catch(console.error);
+
     res.json({ id, isActive: newActive, message: newActive ? "تم تفعيل القاعدة" : "تم تعطيل القاعدة" });
   } catch (err) {
     handleRouteError(err, res, "تبديل حالة القاعدة");
