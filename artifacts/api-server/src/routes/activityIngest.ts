@@ -1,10 +1,20 @@
 import { Router } from "express";
   import { authMiddleware } from "../middlewares/authMiddleware.js";
   import { logPageView } from "../lib/activityTracker.js";
+  import rateLimit from "express-rate-limit";
 
   const router = Router();
 
-  router.post("/intelligence/activity", authMiddleware, async (req, res): Promise<void> => {
+  const activityLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "تم تجاوز الحد الأقصى للطلبات" },
+    validate: { ip: false, trustProxy: false },
+  });
+
+  router.post("/intelligence/activity", activityLimiter, authMiddleware, async (req, res): Promise<void> => {
     try {
       const scope = req.scope!;
       const { page, sessionId } = req.body;
