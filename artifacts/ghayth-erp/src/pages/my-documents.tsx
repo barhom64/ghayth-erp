@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
 import { FileText, Download, Eye, Loader2, FolderOpen, ExternalLink } from "lucide-react";
@@ -17,7 +18,10 @@ const docTypeLabels: Record<string, string> = {
 };
 
 export default function MyDocuments() {
-  const { data, isLoading } = useApiQuery<any>(["my-documents"], "/my-space/documents");
+  const { data, isLoading, isError } = useApiQuery<any>(["my-documents"], "/my-space/documents");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const documents: any[] = data?.data ?? [];
 

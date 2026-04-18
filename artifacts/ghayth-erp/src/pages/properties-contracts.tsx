@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useSearch, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -257,6 +258,10 @@ export default function PropertiesContracts() {
     }
   }, [searchStr]);
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("contract");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const preFiltered = applyFilters(contracts, filters, {
     searchFields: ["tenantName", "unitNumber", "ejarNumber"] as any,
     statusField: "status" as any,

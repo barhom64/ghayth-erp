@@ -18,6 +18,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { ApprovalActions } from "@/components/approval-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
 
@@ -29,7 +30,7 @@ export default function TransfersPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ employeeId: "", toBranchId: "", reason: "", effectiveDate: "" });
 
-  const { data, refetch } = useApiQuery<any>(["transfers"], "/hr/transfers");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["transfers"], "/hr/transfers");
   const transfers = asList(data?.data || data);
 
   const { data: employees } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
@@ -187,6 +188,9 @@ export default function TransfersPage() {
       },
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

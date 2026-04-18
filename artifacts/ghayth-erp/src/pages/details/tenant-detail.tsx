@@ -17,6 +17,7 @@ import {
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Users2 },
@@ -40,15 +41,10 @@ export default function TenantDetail() {
     !!id
   );
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-10 w-64" />
-      <Skeleton className="h-40" />
-      <Skeleton className="h-64" />
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
-  if (isError || !tenant) return (
+  if (!tenant) return (
     <div className="text-center py-12">
       <Users2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
       <p className="text-gray-500">المستأجر غير موجود</p>

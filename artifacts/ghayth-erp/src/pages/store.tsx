@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -254,7 +255,11 @@ function OrdersTab() {
 }
 
 export default function StorePage() {
-  const { data: stats } = useApiQuery<any>(["store-stats"], "/store/stats");
+  const { data: stats, isLoading, isError } = useApiQuery<any>(["store-stats"], "/store/stats");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const s = stats || {};
   const statCards = [
     { label: "منتجات نشطة", value: s.activeProducts || 0, icon: Package, color: "text-blue-600 bg-blue-50" },

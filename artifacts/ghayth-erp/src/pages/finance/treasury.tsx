@@ -12,6 +12,7 @@ import {
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function TreasuryPage() {
   const { scopeQueryString } = useAppContext();
@@ -21,6 +22,9 @@ export default function TreasuryPage() {
     `/finance/treasury${scopeSuffix}`,
   );
   const [activeTab, setActiveTab] = useState<"accounts" | "movements" | "daily">("accounts");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const summary = data?.summary || {};
   const accounts = data?.accounts || [];

@@ -21,6 +21,7 @@ import { textColumn, dateColumn, statusColumn, actionsColumn } from "@/component
 import { LEAVE_TYPES, APPROVAL_ROLES } from "@/lib/hr-type-maps";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 function LeaveApprovalStages({ leaveId, leaveStatus }: { leaveId: number; leaveStatus: string }) {
   const { data } = useApiQuery<any>(
@@ -87,7 +88,7 @@ export default function LeavesPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [filters, setFilters] = useFilters();
-  const { data, refetch } = useApiQuery<any>(["leaves", scopeQueryString], `/hr/leave-requests${scopeSuffix}`);
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["leaves", scopeQueryString], `/hr/leave-requests${scopeSuffix}`);
   const { data: stats } = useApiQuery<any>(["leave-stats", scopeQueryString], `/hr/leave-stats${scopeSuffix}`);
   const items = asList(data);
   const qc = useQueryClient();
@@ -203,6 +204,9 @@ export default function LeavesPage() {
     { label: "موافق عليها", value: stats?.approved ?? items.filter((i: any) => i.status === "approved").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
     { label: "مرفوضة", value: stats?.rejected ?? items.filter((i: any) => i.status === "rejected").length, icon: XCircle, color: "text-red-600 bg-red-50" },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

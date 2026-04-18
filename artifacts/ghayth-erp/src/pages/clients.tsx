@@ -1,6 +1,7 @@
 import { useState, Fragment } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Link, useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,9 @@ export default function Clients() {
     queryKeys: [["clients", filters.search, filters.status, String(page)]],
     onSuccess: () => refetch(),
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const editFields = [
     { key: "name", label: "اسم العميل" },

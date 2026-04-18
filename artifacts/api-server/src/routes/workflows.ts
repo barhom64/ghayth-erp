@@ -37,7 +37,7 @@ router.post("/submit", requirePermission("admin:write"), async (req, res) => {
       submittedByName: scope.userName,
       data,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.id, after: { requestType, title } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.instanceId, after: { requestType, title } }).catch(console.error);
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -179,7 +179,7 @@ router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) =>
 router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const result = await getTimelineByRef(req.params.refTable, Number(req.params.refId), scope.companyId);
+    const result = await getTimelineByRef(String(req.params.refTable), Number(req.params.refId), scope.companyId);
     res.json(result);
   } catch (err) {
     handleRouteError(err, res, "workflows");

@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function BuildingDetail() {
   const [, params] = useRoute("/properties/buildings/:id");
@@ -32,17 +33,10 @@ export default function BuildingDetail() {
   );
   const units = asList(unitsResp);
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-10 w-64" />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[1,2,3,4].map(i => <Skeleton key={i} className="h-24" />)}
-      </div>
-      <Skeleton className="h-64" />
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
-  if (isError || !building) return (
+  if (!building) return (
     <div className="text-center py-12">
       <Building2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
       <p className="text-gray-500">المبنى غير موجود</p>

@@ -9,6 +9,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function ReceivablesPage() {
   const { scopeQueryString } = useAppContext();
@@ -17,6 +18,9 @@ export default function ReceivablesPage() {
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "clientName"],

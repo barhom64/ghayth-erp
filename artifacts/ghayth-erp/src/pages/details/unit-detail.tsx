@@ -22,6 +22,7 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, BookOpen } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },
@@ -109,15 +110,7 @@ export default function UnitDetail() {
 
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-10 w-64" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
-      </div>
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
 
   if (is404 || (!isLoading && !unit)) return (
     <div className="text-center py-12">
@@ -127,13 +120,7 @@ export default function UnitDetail() {
     </div>
   );
 
-  if (isError) return (
-    <div className="text-center py-12">
-      <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">حدث خطأ في تحميل البيانات</p>
-      <Link href="/properties"><Button variant="outline" className="mt-4">العودة للعقارات</Button></Link>
-    </div>
-  );
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const contracts: any[] = unit.contracts || [];
   const payments: any[] = unit.payments || [];

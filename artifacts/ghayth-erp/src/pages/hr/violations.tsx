@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { VIOLATION_STATUS } from "@/lib/hr-type-maps";
 
 const STATUS_OPTIONS = Object.entries(VIOLATION_STATUS).map(([value, { label }]) => ({ value, label }));
@@ -32,7 +33,7 @@ const INCIDENT_LABELS: Record<string, { label: string; Icon: typeof Clock; color
 export default function ViolationsPage() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
-  const { data } = useApiQuery<{ data: any[]; total: number }>(
+  const { data, isLoading, isError } = useApiQuery<{ data: any[]; total: number }>(
     ["discipline-memos"],
     "/hr/discipline/memos",
   );
@@ -204,6 +205,9 @@ export default function ViolationsPage() {
       render: (v) => <PageStatusBadge status={v.status} />,
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

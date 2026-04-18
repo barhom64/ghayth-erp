@@ -10,6 +10,7 @@ import { ArrowRight, BookOpen, Download, Printer } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 
@@ -34,7 +35,7 @@ export default function LedgerPage() {
     endDate ? `endDate=${endDate}` : "",
   ].filter(Boolean).join("&");
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["ledger", code || "", dateParams],
     `/finance/ledger/${code}${dateParams ? `?${dateParams}` : ""}`,
     !!code
@@ -45,12 +46,8 @@ export default function LedgerPage() {
   const summary = data?.summary || {};
   const balance = summary?.balance || 0;
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

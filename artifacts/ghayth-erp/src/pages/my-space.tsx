@@ -3,7 +3,8 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { useAuth } from "@/lib/auth";
-import { AlertTriangle, Briefcase, ArrowUpRight } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { Briefcase, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AlertsSection } from "./my-space/alerts-section";
 import { SecondaryAlertsSection } from "./my-space/secondary-alerts-section";
@@ -38,24 +39,8 @@ export default function MySpace() {
     roleLevel >= 40
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
-        <AlertTriangle className="w-12 h-12 text-red-400 mb-3" />
-        <h2 className="text-lg font-bold text-gray-800 mb-1">حدث خطأ في تحميل البيانات</h2>
-        <p className="text-sm text-gray-500 mb-4">{error?.message || "خطأ غير متوقع"}</p>
-        <Button variant="outline" onClick={() => refetch()}>إعادة المحاولة</Button>
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   const attendance = data?.attendance;
   const leaveBalances = data?.leaveBalances || [];

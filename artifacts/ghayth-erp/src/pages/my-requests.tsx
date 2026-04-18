@@ -3,10 +3,11 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   Clock, Calendar, DollarSign, FileSignature,
   CheckCircle2, XCircle, AlertCircle, ChevronLeft,
-  Loader2, RefreshCw, ClipboardList, Wallet, Timer, LogOut,
+  RefreshCw, ClipboardList, Wallet, Timer, LogOut,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +48,10 @@ function StatusBadge({ status }: { status: string }) {
 export default function MyRequests() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"workflow" | "leaves">("workflow");
-  const { data, isLoading, refetch } = useApiQuery<any>(["my-requests"], "/my-space/requests");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["my-requests"], "/my-space/requests");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   const workflowRequests: any[] = data?.data ?? [];
   const leaveRequests: any[] = data?.leaveRequests ?? [];
@@ -86,11 +90,7 @@ export default function MyRequests() {
         </Button>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="animate-spin text-primary" size={32} />
-        </div>
-      ) : activeTab === "workflow" ? (
+      {activeTab === "workflow" ? (
         workflowRequests.length === 0 ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">

@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useAuth } from "@/lib/auth";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { useSettings } from "@/contexts/settings-context";
 import type { ModuleType } from "@/contexts/app-context";
@@ -206,7 +207,7 @@ export default function Dashboard() {
 
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
 
-  const { data: cmdCenter } = useApiQuery<any>(["dashboard-cmd", scopeQueryString], `/dashboard${scopeSuffix}`);
+  const { data: cmdCenter, isLoading, isError } = useApiQuery<any>(["dashboard-cmd", scopeQueryString], `/dashboard${scopeSuffix}`);
   const { data: summary } = useApiQuery<any>(["dashboard-summary", scopeQueryString], `/dashboard/summary${scopeSuffix}`);
   const { data: revenueChart } = useApiQuery<any>(["dashboard-revenue", scopeQueryString], `/dashboard/charts/revenue${scopeSuffix}`);
   const { data: attendanceChart } = useApiQuery<any>(["dashboard-attendance", scopeQueryString], `/dashboard/charts/attendance${scopeSuffix}`);
@@ -214,6 +215,9 @@ export default function Dashboard() {
   const { data: recentEventsData } = useApiQuery<any>(["dashboard-events", scopeQueryString], `/dashboard/charts/recent-events${scopeSuffix}`);
   const { data: roleData } = useApiQuery<any>(["dashboard-role", scopeQueryString], `/dashboard/role-data${scopeSuffix}`);
   const { data: suggestionsResp } = useApiQuery<any>(["intelligence-suggestions"], "/intelligence/suggestions", roleLevel >= 40);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const cards = cmdCenter?.cards || {};
   const todayTasks = cmdCenter?.todayTasks || [];

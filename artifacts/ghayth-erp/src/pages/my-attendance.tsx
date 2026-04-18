@@ -2,9 +2,10 @@ import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   Clock, CheckCircle2, XCircle, AlertCircle, Calendar,
-  Loader2, TrendingUp, DollarSign, AlertTriangle,
+  TrendingUp, DollarSign, AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,10 +37,13 @@ export default function MyAttendance() {
   const today = new Date();
   const [month, setMonth] = useState(today.toISOString().slice(0, 7));
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["my-attendance", month],
     `/my-space/attendance?month=${month}`
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const records: any[] = data?.data ?? [];
   const monthly = data?.monthly;
@@ -87,11 +91,7 @@ export default function MyAttendance() {
         })}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="animate-spin text-primary" size={32} />
-        </div>
-      ) : records.length === 0 ? (
+      {records.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-gray-400">
             <Calendar size={36} className="mx-auto mb-3 opacity-40" />

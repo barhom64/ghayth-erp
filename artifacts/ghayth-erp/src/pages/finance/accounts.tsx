@@ -13,6 +13,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 // for the centralised delete flow with Phase C.7b blockers surfacing.
 import { PageShell } from "@/components/page-shell";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const typeMap: Record<string, string> = {
   asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات"
@@ -97,7 +98,7 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
 
 export default function AccountsPage() {
   const [, navigate] = useLocation();
-  const { data, isLoading } = useApiQuery<any>(["accounts"], "/finance/accounts");
+  const { data, isLoading, isError } = useApiQuery<any>(["accounts"], "/finance/accounts");
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [viewMode, setViewMode] = useState<"tree" | "flat">("tree");
@@ -105,6 +106,9 @@ export default function AccountsPage() {
   // dialog owns its own loading / error / blockers state, so the page
   // only tracks which row is currently being deleted.
   const [deleteAccount, setDeleteAccount] = useState<{ id: number; code: string; name: string } | null>(null);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const hasActiveSearch = !!(filters.search || filters.type);
 

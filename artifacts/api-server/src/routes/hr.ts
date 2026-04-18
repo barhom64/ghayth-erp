@@ -32,6 +32,172 @@ import {
 } from "../lib/impactPreview.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
+import { z } from "zod";
+
+// ── Zod request-body schemas ──
+
+const checkInSchema = z.object({
+  lat: z.number().optional(),
+  lon: z.number().optional(),
+  notes: z.string().optional(),
+  workType: z.string().optional(),
+});
+
+const leaveRequestSchema = z.object({
+  leaveTypeId: z.number().optional(),
+  leaveType: z.string().optional(),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
+  reason: z.string().optional(),
+  documentUrl: z.string().optional(),
+});
+
+const violationSchema = z.object({
+  assignmentId: z.number({ required_error: "يرجى اختيار الموظف" }),
+  type: z.string().min(1, "نوع المخالفة مطلوب"),
+  description: z.string().min(1, "وصف المخالفة مطلوب"),
+  severity: z.enum(["minor", "major", "critical"]).optional(),
+  deduction: z.number().optional(),
+  period: z.string().optional(),
+  incidentDate: z.string().optional(),
+  regulationId: z.number().optional(),
+});
+
+const shiftSchema = z.object({
+  name: z.string().min(1, "اسم الوردية مطلوب"),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  days: z.any().optional(),
+  isDefault: z.boolean().optional(),
+  shiftType: z.enum(["fixed", "flexible", "remote", "split"]).optional(),
+  remoteAllowed: z.boolean().optional(),
+  splitBreakStart: z.string().optional(),
+  splitBreakEnd: z.string().optional(),
+  flexStartEarliest: z.string().optional(),
+  flexStartLatest: z.string().optional(),
+});
+
+const performanceSchema = z.object({
+  employeeId: z.number().optional(),
+  assignmentId: z.number().optional(),
+  period: z.string().optional(),
+  overallScore: z.number().optional(),
+  scores: z.any().optional(),
+  categories: z.any().optional(),
+  comments: z.string().optional(),
+  notes: z.string().optional(),
+  status: z.string().optional(),
+});
+
+const salaryComponentSchema = z.object({
+  name: z.string().min(1, "اسم مكوّن الراتب مطلوب"),
+  type: z.enum(["fixed", "percentage"]).optional(),
+  category: z.enum(["allowance", "deduction", "bonus"]).optional(),
+  value: z.number().optional(),
+  taxable: z.boolean().optional(),
+});
+
+const approvalChainSchema = z.object({
+  name: z.string().min(1, "اسم السلسلة مطلوب"),
+  chainType: z.enum(["leaves", "purchases", "expenses", "advances", "letters", "loans", "overtime", "exit"], { required_error: "نوع السلسلة مطلوب" }),
+  minAmount: z.number().optional(),
+  maxAmount: z.number().optional(),
+  steps: z.array(z.object({
+    requiredRole: z.string().optional(),
+    timeoutHours: z.number().optional(),
+    autoApproveOnTimeout: z.boolean().optional(),
+  })).optional(),
+});
+
+const shiftAssignmentSchema = z.object({
+  assignmentId: z.number({ required_error: "يرجى اختيار الموظف" }),
+  shiftId: z.number({ required_error: "يرجى اختيار الوردية" }),
+  startDate: z.string().min(1, "تاريخ بداية الوردية مطلوب"),
+  endDate: z.string().optional(),
+});
+
+const officialLetterSchema = z.object({
+  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  type: z.string().optional(),
+  subject: z.string().min(1, "موضوع الخطاب مطلوب"),
+  content: z.string().min(1, "محتوى الخطاب مطلوب"),
+  status: z.string().optional(),
+});
+
+const publicHolidaySchema = z.object({
+  name: z.string().min(1, "اسم العطلة مطلوب"),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().optional(),
+  year: z.number().optional(),
+  type: z.string().optional(),
+  description: z.string().optional(),
+  isRecurring: z.boolean().optional(),
+});
+
+const transferSchema = z.object({
+  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  toBranchId: z.number({ required_error: "الفرع المستقبل مطلوب" }),
+});
+
+const idpSchema = z.object({
+  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  title: z.string().optional(),
+  goals: z.any().optional(),
+  skills: z.any().optional(),
+  trainingIds: z.any().optional(),
+  targetDate: z.string().optional(),
+  notes: z.string().optional(),
+  reviewDate: z.string().optional(),
+});
+
+const companyDocumentSchema = z.object({
+  documentType: z.string().min(1, "نوع الوثيقة مطلوب"),
+  documentNumber: z.string().optional(),
+  issueDate: z.string().optional(),
+  expiryDate: z.string().optional(),
+  issuingAuthority: z.string().optional(),
+  reminderDays: z.number().optional(),
+  notes: z.string().optional(),
+});
+
+const employeeDocumentSchema = z.object({
+  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  documentType: z.string().min(1, "نوع الوثيقة مطلوب"),
+  documentNumber: z.string().optional(),
+  issueDate: z.string().optional(),
+  expiryDate: z.string().optional(),
+  issuingAuthority: z.string().optional(),
+  reminderDays: z.number().optional(),
+  notes: z.string().optional(),
+});
+
+const excuseRequestSchema = z.object({
+  assignmentId: z.number().optional(),
+  excuseDate: z.string().min(1, "تاريخ الاستئذان مطلوب"),
+  excuseType: z.string().min(1, "نوع الاستئذان مطلوب"),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  estimatedMinutes: z.number().optional(),
+  reason: z.string().optional(),
+});
+
+const evaluationCycleSchema = z.object({
+  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  period: z.string().min(1, "الفترة مطلوبة"),
+  notes: z.string().optional(),
+  participants: z.array(z.object({
+    evaluatorId: z.number(),
+    evaluatorRole: z.enum(["manager", "peer"]),
+  })).optional(),
+});
+
+const delegationSchema = z.object({
+  delegateId: z.number({ required_error: "يرجى اختيار المفوَّض إليه" }),
+  scope: z.string().optional(),
+  reason: z.string().min(1, "سبب التفويض مطلوب"),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -59,7 +225,9 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const now = new Date();
     const today = now.toISOString().split("T")[0];
     const period = today.slice(0, 7);
-    const { lat, lon, notes, workType } = req.body as any;
+    const parsed = checkInSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { lat, lon, notes, workType } = parsed.data;
 
     // Guard: the caller must have an active assignment. Without this, the
     // INSERT INTO attendance below would hit a 23502 NOT NULL on
@@ -794,14 +962,9 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
   // explain the rejection precisely.
   try {
     const scope = req.scope!;
-    let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = req.body as any;
-
-    if (!startDate || !endDate) {
-      throw new ValidationError("تاريخا البداية والنهاية مطلوبان", {
-        field: !startDate ? "startDate" : "endDate",
-        fix: "حدّد تاريخ البداية وتاريخ النهاية للإجازة.",
-      });
-    }
+    const parsed = leaveRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = parsed.data as any;
 
     if (!leaveTypeId && leaveTypeName) {
       const [found] = await rawQuery<any>(
@@ -2287,29 +2450,12 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const parsed = violationSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const {
       assignmentId, type, description, severity, deduction,
       period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
-    } = req.body as any;
-
-    if (!assignmentId) {
-      throw new ValidationError("يرجى اختيار الموظف", {
-        field: "assignmentId",
-        fix: "اختر التعيين الذي تُنسب إليه المخالفة",
-      });
-    }
-    if (!type) {
-      throw new ValidationError("نوع المخالفة مطلوب", {
-        field: "type",
-        fix: "حدد نوع المخالفة (late | early_leave | absence | behavior | organization | gps_out_of_range | custom)",
-      });
-    }
-    if (!description || !String(description).trim()) {
-      throw new ValidationError("وصف المخالفة مطلوب", {
-        field: "description",
-        fix: "اكتب تفاصيل المخالفة",
-      });
-    }
+    } = parsed.data as any;
 
     // FK pre-check: assignment must exist inside the caller's company scope.
     // Without this, a bad assignmentId would fail as a deep 23503 whose
@@ -2451,19 +2597,14 @@ router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
 router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const parsed = shiftSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const {
       name, startTime, endTime, days, isDefault,
       shiftType, remoteAllowed,
       splitBreakStart, splitBreakEnd,
       flexStartEarliest, flexStartLatest,
-    } = req.body as any;
-
-    if (!name || !String(name).trim()) {
-      throw new ValidationError("اسم الوردية مطلوب", {
-        field: "name",
-        fix: "أدخل اسمًا للوردية (مثال: وردية صباحية)",
-      });
-    }
+    } = parsed.data;
     // shiftType: 'fixed' (default) | 'flexible' | 'remote' | 'split'
     const effectiveShiftType = shiftType ?? 'fixed';
     const validShiftTypes = ["fixed", "flexible", "remote", "split"];
@@ -2521,7 +2662,9 @@ router.get("/performance", requirePermission("hr:read"), async (req, res) => {
 router.post("/performance", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = req.body as any;
+    const parsed = performanceSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = parsed.data as any;
 
     // Resolve the employee PK — performance_reviews."employeeId" is a FK
     // on employees.id, NOT employee_assignments.id. The old handler blindly
@@ -2666,13 +2809,9 @@ router.get("/salary-components", requirePermission("hr:read"), async (req, res) 
 router.post("/salary-components", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, type, category, value, taxable } = req.body as any;
-    if (!name || !String(name).trim()) {
-      throw new ValidationError("اسم مكوّن الراتب مطلوب", {
-        field: "name",
-        fix: "مثال: سكن، نقل، خصم غياب",
-      });
-    }
+    const parsed = salaryComponentSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { name, type, category, value, taxable } = parsed.data;
     const { insertId } = await rawExecute(
       `INSERT INTO salary_components ("companyId",name,type,category,value,taxable,status)
        VALUES ($1,$2,$3,$4,$5,$6,'active')`,
@@ -2736,17 +2875,9 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بإنشاء سلاسل موافقات");
     }
-    const { name, chainType, minAmount, maxAmount, steps } = req.body as any;
-    if (!name || !chainType) {
-      throw new ValidationError("الاسم ونوع السلسلة مطلوبان", { field: name ? "chainType" : "name" });
-    }
-    const validTypes = ["leaves", "purchases", "expenses", "advances", "letters", "loans", "overtime", "exit"];
-    if (!validTypes.includes(chainType)) {
-      throw new ValidationError(
-        `نوع السلسلة يجب أن يكون أحد: ${validTypes.join(", ")}`,
-        { field: "chainType" },
-      );
-    }
+    const parsed = approvalChainSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { name, chainType, minAmount, maxAmount, steps } = parsed.data;
 
     const { insertId: chainId } = await rawExecute(
       `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
@@ -3217,26 +3348,9 @@ router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) 
 router.post("/shift-assignments", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId, shiftId, startDate, endDate } = req.body as any;
-
-    if (!assignmentId) {
-      throw new ValidationError("يرجى اختيار الموظف", {
-        field: "assignmentId",
-        fix: "اختر التعيين الذي سيُربط بالوردية",
-      });
-    }
-    if (!shiftId) {
-      throw new ValidationError("يرجى اختيار الوردية", {
-        field: "shiftId",
-        fix: "اختر وردية من القائمة",
-      });
-    }
-    if (!startDate) {
-      throw new ValidationError("تاريخ بداية الوردية مطلوب", {
-        field: "startDate",
-        fix: "حدّد تاريخ بداية ربط الموظف بالوردية",
-      });
-    }
+    const parsed = shiftAssignmentSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { assignmentId, shiftId, startDate, endDate } = parsed.data;
     if (endDate && new Date(endDate) < new Date(startDate)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
         field: "endDate",
@@ -3298,26 +3412,9 @@ router.get("/official-letters", requirePermission("hr:read"), async (req, res) =
 router.post("/official-letters", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, type, subject, content, status } = req.body as any;
-
-    if (!employeeId) {
-      throw new ValidationError("الموظف مطلوب", {
-        field: "employeeId",
-        fix: "اختر الموظف الذي يخصه الخطاب",
-      });
-    }
-    if (!subject || !String(subject).trim()) {
-      throw new ValidationError("موضوع الخطاب مطلوب", {
-        field: "subject",
-        fix: "أدخل موضوع الخطاب",
-      });
-    }
-    if (!content || !String(content).trim()) {
-      throw new ValidationError("محتوى الخطاب مطلوب", {
-        field: "content",
-        fix: "اكتب نص الخطاب",
-      });
-    }
+    const parsed = officialLetterSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { employeeId, type, subject, content, status } = parsed.data;
 
     // FK pre-check: employee must belong to this company (via any assignment).
     const [emp] = await rawQuery<{ id: number }>(
@@ -4486,12 +4583,9 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
       throw new ForbiddenError("مسموح فقط لـ HR بإنشاء دورات التقييم");
     }
 
-    const { employeeId, period, notes, participants = [] } = req.body as any;
-    if (!employeeId || !period) {
-      throw new ValidationError("employeeId و period مطلوبان", {
-        field: employeeId ? "period" : "employeeId",
-      });
-    }
+    const parsed = evaluationCycleSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { employeeId, period, notes, participants = [] } = parsed.data as any;
 
     // Validate subject employee belongs to this company (multi-tenant integrity)
     const [subjectAssign] = await rawQuery<any>(
@@ -5081,20 +5175,9 @@ router.get("/delegations", requirePermission("hr:read"), async (req, res) => {
 router.post("/delegations", requirePermission("hr:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { delegateId, scope: delegationScope, reason, startDate, endDate } = req.body;
-
-    if (!delegateId) {
-      throw new ValidationError("يرجى اختيار المفوَّض إليه", {
-        field: "delegateId",
-        fix: "اختر الموظف الذي ستُفوَّض إليه الصلاحيات",
-      });
-    }
-    if (!reason || !String(reason).trim()) {
-      throw new ValidationError("سبب التفويض مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب التفويض (إجازة، سفر، …)",
-      });
-    }
+    const parsed = delegationSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { delegateId, scope: delegationScope, reason, startDate, endDate } = parsed.data;
     if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
         field: "endDate",
@@ -5170,12 +5253,9 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: إدارة الإجازات الرسمية مقصورة على HR أو المالك");
     }
-    const b = req.body;
-    if (!b.name || !b.startDate) {
-      throw new ValidationError("اسم العطلة وتاريخ البداية مطلوبان", {
-        field: !b.name ? "name" : "startDate",
-      });
-    }
+    const parsed = publicHolidaySchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data;
     const startDate = new Date(b.startDate);
     const year = b.year || startDate.getFullYear();
     const { insertId } = await rawExecute(
@@ -5298,19 +5378,9 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
   // side-effect notification).
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.employeeId) {
-      throw new ValidationError("الموظف مطلوب", {
-        field: "employeeId",
-        fix: "اختر الموظف المراد نقله من قائمة الموظفين.",
-      });
-    }
-    if (!b.toBranchId) {
-      throw new ValidationError("الفرع المستقبل مطلوب", {
-        field: "toBranchId",
-        fix: "اختر الفرع المستقبل من قائمة فروع الشركة.",
-      });
-    }
+    const parsed = transferSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const [assignment] = await rawQuery<any>(
       `SELECT ea.id, ea."branchId", ea."departmentId", ea.salary, ea."jobTitle"
        FROM employee_assignments ea
@@ -5672,8 +5742,9 @@ router.get("/idp", requirePermission("hr:read"), async (req, res) => {
 router.post("/idp", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.employeeId) throw new ValidationError("الموظف مطلوب", { field: "employeeId" });
+    const parsed = idpSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const goals = Array.isArray(b.goals) ? JSON.stringify(b.goals) : (b.goals || '[]');
     const skills = Array.isArray(b.skills) ? JSON.stringify(b.skills) : (b.skills || '[]');
     const trainingIds = Array.isArray(b.trainingIds) ? JSON.stringify(b.trainingIds) : (b.trainingIds || '[]');
@@ -6295,8 +6366,9 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
 router.post("/company-documents", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body as any;
-    if (!b.documentType) throw new ValidationError("نوع الوثيقة مطلوب", { field: "documentType" });
+    const parsed = companyDocumentSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
     const { insertId } = await rawExecute(
       `INSERT INTO company_documents ("companyId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
@@ -6355,9 +6427,9 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
 router.post("/employee-documents", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body as any;
-    if (!b.employeeId) throw new ValidationError("الموظف مطلوب", { field: "employeeId" });
-    if (!b.documentType) throw new ValidationError("نوع الوثيقة مطلوب", { field: "documentType" });
+    const parsed = employeeDocumentSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
     const { insertId } = await rawExecute(
       `INSERT INTO employee_documents ("companyId","employeeId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
@@ -6402,9 +6474,9 @@ router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) =>
 router.post("/excuse-requests", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = req.body as any;
-    if (!excuseDate) throw new ValidationError("تاريخ الاستئذان مطلوب", { field: "excuseDate" });
-    if (!excuseType) throw new ValidationError("نوع الاستئذان مطلوب", { field: "excuseType" });
+    const parsed = excuseRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = parsed.data;
 
     const effectiveAssignmentId = assignmentId || scope.activeAssignmentId;
     const [assignment] = await rawQuery<any>(

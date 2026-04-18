@@ -1,5 +1,6 @@
 import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ import { PageShell } from "@/components/page-shell";
 import { SEVERITY_LEVELS } from "@/lib/hr-type-maps";
 
 export default function ViolationsManagementPage() {
-  const { data } = useApiQuery<any>(["violations"], "/hr/violations");
+  const { data, isLoading, isError } = useApiQuery<any>(["violations"], "/hr/violations");
   const { data: stats } = useApiQuery<any>(["violations-stats"], "/hr/violations-stats");
   const items = data?.data || [];
 
@@ -26,6 +27,10 @@ export default function ViolationsManagementPage() {
   const resolvingId = updateViolationMut.isPending ? updateViolationMut.variables?.id ?? null : null;
 
   const [filters, setFilters] = useFilters();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
 
   const byType = items.reduce((acc: Record<string, number>, v: any) => {

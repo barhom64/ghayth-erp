@@ -9,6 +9,7 @@ import { ArrowLeftRight, Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function IntercompanyPage() {
   const { scopeQueryString } = useAppContext();
@@ -16,7 +17,7 @@ export default function IntercompanyPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ toCompanyId: "", amount: "", description: "", transactionDate: new Date().toISOString().split("T")[0] });
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["intercompany"],
     `/finance/intercompany${scopeSuffix}`
   );
@@ -40,6 +41,9 @@ export default function IntercompanyPage() {
   );
 
   const companies = companiesData?.data ?? companiesData ?? [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

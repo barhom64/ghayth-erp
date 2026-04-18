@@ -12,6 +12,7 @@ import { ArrowRight, Headphones, User, MessageSquare, Send, Trash2, Clock, FileT
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function TicketDetail() {
   const [, params] = useRoute("/support/:id");
@@ -33,12 +34,7 @@ export default function TicketDetail() {
     low: { label: "منخفضة", color: "bg-green-100 text-green-700" },
   };
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-10 w-64" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
 
   if (is404 || (!isLoading && !ticket)) return (
     <div className="text-center py-12">
@@ -48,13 +44,7 @@ export default function TicketDetail() {
     </div>
   );
 
-  if (isError) return (
-    <div className="text-center py-12">
-      <Headphones className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">حدث خطأ في تحميل البيانات</p>
-      <Link href="/support"><Button variant="outline" className="mt-4">العودة للدعم الفني</Button></Link>
-    </div>
-  );
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const replies = ticket.replies || [];
 

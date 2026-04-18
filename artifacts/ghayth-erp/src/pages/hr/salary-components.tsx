@@ -14,9 +14,10 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function SalaryComponentsPage() {
-  const { data } = useApiQuery<any>(["salary-components"], "/hr/salary-components");
+  const { data, isLoading, isError } = useApiQuery<any>(["salary-components"], "/hr/salary-components");
   const items = data?.data || [];
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", type: "fixed", category: "allowance", value: "", taxable: true });
@@ -70,6 +71,9 @@ export default function SalaryComponentsPage() {
       render: (c) => <PageStatusBadge status={c.status || "inactive"} />,
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

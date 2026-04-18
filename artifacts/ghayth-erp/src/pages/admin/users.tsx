@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +35,7 @@ const ROLE_OPTIONS = [
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
-  const { data, refetch } = useApiQuery<any>(["admin-users"], "/admin/users");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: employeesData } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ email: "", role: "employee", password: "", employeeId: "" });
@@ -49,6 +50,9 @@ export default function AdminUsersPage() {
   const [editUser, setEditUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ email: "", role: "", employeeId: "" });
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const items: any[] = data?.data || [];
   const employees: any[] = employeesData?.data || [];

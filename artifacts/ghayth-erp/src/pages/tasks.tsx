@@ -2,6 +2,7 @@ import { useState, Fragment } from "react";
 import { Link, useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -73,22 +74,7 @@ export default function Tasks() {
   ];
 
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data: tasksResp, isLoading } = useApiQuery<any>(["tasks", scopeQueryString], `/tasks${scopeSuffix}`);
-  const tasks = asList(tasksResp);
-  const preFiltered = applyFilters(tasks, filters, {
-    searchFields: ["title", "assigneeName", "description"],
-    statusField: "status",
-    dateField: "",
-  });
-  const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
-
-  const startEdit = (task: any) => {
-    setEditingId(task.id);
-    setDeletingId(null);
-    setEditForm({ title: task.title, priority: task.priority, status: task.status, description: task.description || "" });
-  };
-
-  const cancelEdit = () => { setEditingId(null); setEditForm({}); };
+  const { data: tasksResp, isLoading, isError } = useApiQuery<any>(["tasks", scopeQueryString], `/tasks${scopeSuffix}`);
 
   const updateMut = useApiMutation<any, { id: number } & Record<string, any>>(
     (body) => `/tasks/${body.id}`,
@@ -118,6 +104,25 @@ export default function Tasks() {
   );
 
   const saving = updateMut.isPending || deleteMut.isPending;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const tasks = asList(tasksResp);
+  const preFiltered = applyFilters(tasks, filters, {
+    searchFields: ["title", "assigneeName", "description"],
+    statusField: "status",
+    dateField: "",
+  });
+  const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
+
+  const startEdit = (task: any) => {
+    setEditingId(task.id);
+    setDeletingId(null);
+    setEditForm({ title: task.title, priority: task.priority, status: task.status, description: task.description || "" });
+  };
+
+  const cancelEdit = () => { setEditingId(null); setEditForm({}); };
 
   const saveEdit = () => {
     if (!editingId) return;

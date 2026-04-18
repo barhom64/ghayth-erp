@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield, FileCheck, AlertTriangle, ClipboardCheck, CheckCircle2, Activity } from "lucide-react";
@@ -12,7 +13,10 @@ import { ComplianceActionsTab } from "./governance/compliance-actions-tab";
 import { CAPATab } from "./governance/capa-tab";
 
 export default function GovernancePage() {
-  const { data: stats } = useApiQuery<any>(["gov-stats"], "/governance/stats");
+  const { data: stats, isLoading, isError } = useApiQuery<any>(["gov-stats"], "/governance/stats");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell
