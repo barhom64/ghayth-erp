@@ -13,6 +13,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
+import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
 
@@ -128,6 +129,11 @@ export default function PurchaseOrdersCreate() {
             placeholder="ابحث عن مورد..."
             emptyMessage="لا يوجد موردين"
           />
+          {form.supplierId && (
+            <div className="mt-3">
+              <SupplierContextCard supplierId={form.supplierId} />
+            </div>
+          )}
         </div>
         <div>
           <Label>الفرع <span className="text-red-500">*</span></Label>

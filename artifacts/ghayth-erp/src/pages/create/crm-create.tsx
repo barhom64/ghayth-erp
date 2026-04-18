@@ -13,6 +13,7 @@ import { getCurrencySymbol } from "@/lib/formatters";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
+import { ClientContextCard } from "@/components/shared/client-context-card";
 
 const DRAFT_KEY = "crm_create";
 const INITIAL = {
@@ -86,6 +87,11 @@ export default function CrmCreate() {
                 {clients.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            {form.clientId && (
+              <div className="mt-3">
+                <ClientContextCard clientId={form.clientId} section="opportunity" />
+              </div>
+            )}
           </div>
           <div>
             <Label>المرحلة</Label>

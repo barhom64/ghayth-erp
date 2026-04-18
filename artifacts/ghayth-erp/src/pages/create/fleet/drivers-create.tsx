@@ -10,6 +10,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
 const DRAFT_KEY = "fleet_drivers_create";
 const INITIAL = { name: "", phone: "", licenseNumber: "", licenseExpiry: "", licenseType: "", employeeId: "", status: "available" };
@@ -76,6 +77,11 @@ export default function DriversCreate() {
               ))}
             </SelectContent>
           </Select>
+          {form.employeeId && (
+            <div className="mt-3">
+              <EmployeeContextCard employeeId={form.employeeId} />
+            </div>
+          )}
         </div>
         <div><Label>الاسم <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
         <div><Label>الهاتف</Label><Input className="mt-1" dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
