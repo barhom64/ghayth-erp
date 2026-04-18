@@ -107,6 +107,7 @@ const allNavSections: NavSection[] = [
         { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
         { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
+        { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: Clock, subKey: "attendance" },
       ]},
       { label: "الإجازات", path: "/hr/leaves", icon: Calendar, module: "hr", children: [
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
@@ -177,7 +178,8 @@ const allNavSections: NavSection[] = [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
         { label: "الموردين", path: "/finance/vendors", icon: Users },
       ]},
-      { label: "النقد والذمم", path: "/finance/bank-reconciliation", icon: Building, module: "finance", children: [
+      { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
+        { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
         { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
