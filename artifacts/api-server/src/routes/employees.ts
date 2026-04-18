@@ -108,7 +108,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
        JOIN employee_assignments ea ON ea."employeeId" = e.id
        LEFT JOIN branches b ON b.id = ea."branchId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
-       WHERE ${where}
+       WHERE ${where} AND e."deletedAt" IS NULL
        ORDER BY e.name ASC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params
@@ -119,7 +119,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
       `SELECT COUNT(*) AS total
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
-       WHERE ${where}`,
+       WHERE ${where} AND e."deletedAt" IS NULL`,
       countParams
     );
 
@@ -242,7 +242,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
     // early we give the caller a clean field-tagged error.
     if (managerId) {
       const mgrRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 LIMIT 1`,
+        `SELECT id FROM employees WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(managerId)]
       );
       if (mgrRows.length === 0) {
@@ -255,7 +255,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
 
     if (email) {
       const emailRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE email = $1 LIMIT 1`,
+        `SELECT id FROM employees WHERE email = $1 AND "deletedAt" IS NULL LIMIT 1`,
         [email]
       );
       if (emailRows.length > 0) {
@@ -268,7 +268,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
 
     if (nationalId) {
       const nidRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE "nationalId" = $1 LIMIT 1`,
+        `SELECT id FROM employees WHERE "nationalId" = $1 AND "deletedAt" IS NULL LIMIT 1`,
         [nationalId]
       );
       if (nidRows.length > 0) {
@@ -530,7 +530,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
        LEFT JOIN branches b ON b.id = ea."branchId"
-       WHERE e.id = $1`,
+       WHERE e.id = $1 AND e."deletedAt" IS NULL`,
       [empId]
     );
 
@@ -664,7 +664,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
        LEFT JOIN departments d ON d.id = ea."departmentId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        LEFT JOIN employees mgr ON mgr.id = ea."managerId"
-       WHERE e.id = $1 AND ea."companyId" = $2${extraCondition}`,
+       WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL${extraCondition}`,
       queryParams
     );
 
@@ -788,7 +788,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
               ea."branchId", ea."departmentId", ea."managerId"
          FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-        WHERE e.id = $1 AND ea."companyId" = $2`,
+        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
 
