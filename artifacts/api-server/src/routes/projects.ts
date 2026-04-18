@@ -83,7 +83,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
     const scope = req.scope!;
     const { status } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"', disableBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND p.status = $${paramIdx}`; params.push(status); paramIdx++; }

@@ -35,7 +35,7 @@ router.get("/tickets", async (req, res) => {
     const scope = req.scope!;
     const { status, priority } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', disableBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
@@ -529,7 +529,7 @@ router.get("/replies", async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', disableBranchScope: true });
     const rows = await rawQuery<any>(
       `SELECT tr.id, t.ref AS "ticketId", t.title AS "ticketTitle", tr.message AS reply, tr."authorName" AS agent, tr."createdAt" AS date, t.status
        FROM ticket_replies tr

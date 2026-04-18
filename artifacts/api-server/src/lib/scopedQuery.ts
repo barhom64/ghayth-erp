@@ -37,6 +37,13 @@ export interface ScopedQueryOptions {
    * scoped manager only sees data from their assigned branches.
    */
   enforceBranchScope?: boolean;
+  /**
+   * When true, completely disables branch filtering — even if the frontend
+   * sent a `?branchIds=...` query param. Use this for tables that do not
+   * have a `branchId` column (e.g. `clients`, `projects`, `crm_opportunities`,
+   * `support_tickets`, `hr_leave_requests`, `recurring_invoices`).
+   */
+  disableBranchScope?: boolean;
 }
 
 const BRANCH_SCOPE_EXEMPT_ROLES = new Set(["owner", "general_manager"]);
@@ -68,33 +75,35 @@ export function buildScopedWhere(
     paramIdx++;
   }
 
-  const requestedBranchIds = filters.branchIds?.length ? filters.branchIds : [];
-  let branchIds: number[] = requestedBranchIds.length > 0
-    ? requestedBranchIds.filter((id) => scope.allowedBranches.includes(id))
-    : [];
+  if (!options.disableBranchScope) {
+    const requestedBranchIds = filters.branchIds?.length ? filters.branchIds : [];
+    let branchIds: number[] = requestedBranchIds.length > 0
+      ? requestedBranchIds.filter((id) => scope.allowedBranches.includes(id))
+      : [];
 
-  // Cascade enforcement: when no explicit branch filter is provided and the
-  // caller opted in, apply the user's allowed branches so branch_managers
-  // and other scoped roles can't see data from branches they aren't
-  // assigned to. Owners and general_managers bypass this.
-  if (
-    branchIds.length === 0 &&
-    options.enforceBranchScope &&
-    !scope.isOwner &&
-    !BRANCH_SCOPE_EXEMPT_ROLES.has(scope.role) &&
-    scope.allowedBranches.length > 0
-  ) {
-    branchIds = scope.allowedBranches;
-  }
+    // Cascade enforcement: when no explicit branch filter is provided and the
+    // caller opted in, apply the user's allowed branches so branch_managers
+    // and other scoped roles can't see data from branches they aren't
+    // assigned to. Owners and general_managers bypass this.
+    if (
+      branchIds.length === 0 &&
+      options.enforceBranchScope &&
+      !scope.isOwner &&
+      !BRANCH_SCOPE_EXEMPT_ROLES.has(scope.role) &&
+      scope.allowedBranches.length > 0
+    ) {
+      branchIds = scope.allowedBranches;
+    }
 
-  if (branchIds.length === 1) {
-    conditions.push(`${branchCol} = $${paramIdx}`);
-    params.push(branchIds[0]);
-    paramIdx++;
-  } else if (branchIds.length > 1) {
-    conditions.push(`${branchCol} = ANY($${paramIdx})`);
-    params.push(branchIds);
-    paramIdx++;
+    if (branchIds.length === 1) {
+      conditions.push(`${branchCol} = $${paramIdx}`);
+      params.push(branchIds[0]);
+      paramIdx++;
+    } else if (branchIds.length > 1) {
+      conditions.push(`${branchCol} = ANY($${paramIdx})`);
+      params.push(branchIds);
+      paramIdx++;
+    }
   }
 
   if (filters.search && filters.searchColumns?.length) {
