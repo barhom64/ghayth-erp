@@ -193,7 +193,6 @@ const allNavSections: NavSection[] = [
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
         { label: "الفترات المالية", path: "/finance/fiscal-periods", icon: Calendar },
-        { label: "الإقفال اليومي", path: "/daily-close", icon: Shield, minRoleLevel: 40 },
         { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive },
       ]},
       { label: "الالتزامات والضمانات", path: "/finance/commitments", icon: FileSignature, module: "finance", children: [
@@ -303,6 +302,7 @@ const allNavSections: NavSection[] = [
   {
     title: "الإدارة والحوكمة",
     items: [
+      { label: "الإقفال اليومي", path: "/daily-close", icon: Shield, minRoleLevel: 40 },
       { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
         { label: "القضايا", path: "/legal/cases", icon: Briefcase },
         { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
