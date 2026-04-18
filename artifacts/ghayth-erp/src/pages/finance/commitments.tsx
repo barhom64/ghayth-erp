@@ -6,12 +6,16 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function CommitmentsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["commitments"], "/finance/commitments");
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "vendorName"],

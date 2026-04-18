@@ -27,6 +27,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**
  * Custodies list — migrated in R.3 iter 3 to the unified template stack.
@@ -81,6 +82,9 @@ export default function CustodiesPage() {
   const [showForm, setShowForm] = useState(false);
   const [settleTarget, setSettleTarget] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref", "employeeName", "purpose"],

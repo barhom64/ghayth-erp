@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ export default function IDPPage() {
   const [form, setForm] = useState({ employeeId: "", title: "", goals: "", skills: "", targetDate: "", notes: "" });
   const [filters, setFilters] = useFilters();
 
-  const { data, refetch } = useApiQuery<any>(["idp"], "/hr/idp");
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["idp"], "/hr/idp");
   const plans = asList(data?.data || data);
 
   const { data: employees } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
@@ -41,6 +42,9 @@ export default function IDPPage() {
     [["idp"]],
     { successMessage: "تم تحديث الحالة" },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSave = () => {
     if (!form.employeeId) { toast({ title: "الموظف مطلوب", variant: "destructive" }); return; }

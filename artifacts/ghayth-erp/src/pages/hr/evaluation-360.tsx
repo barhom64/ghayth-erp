@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -32,8 +33,11 @@ export default function Evaluation360Page() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
 
-  const { data: cyclesData } = useApiQuery<any>(["evaluation-cycles"], "/hr/evaluation-cycles");
+  const { data: cyclesData, isLoading, isError } = useApiQuery<any>(["evaluation-cycles"], "/hr/evaluation-cycles");
   const cycles = cyclesData?.data || [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(cycles, filters, {
     searchFields: ["employeeName", "period"],

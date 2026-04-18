@@ -220,13 +220,7 @@ export default function AdminLogsPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-400">جاري التحميل...</td></tr>
-              ) : isError ? (
-                <tr><td colSpan={7} className="p-8 text-center text-red-500">
-                  حدث خطأ <Button variant="outline" size="sm" className="ms-2" onClick={() => refetch()}>إعادة المحاولة</Button>
-                </td></tr>
-              ) : filteredLogs.length === 0 ? (
+              {filteredLogs.length === 0 ? (
                 <tr><td colSpan={7} className="p-8 text-center text-gray-400">
                   <ScrollText className="h-8 w-8 mx-auto mb-2 text-gray-300" />
                   لا توجد سجلات

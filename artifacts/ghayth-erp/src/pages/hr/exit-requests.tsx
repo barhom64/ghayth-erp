@@ -1,6 +1,7 @@
 import { formatCurrency } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
@@ -25,7 +26,7 @@ export default function ExitRequestsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data } = useApiQuery<{ data: any[]; stats: any; total: number }>(
+  const { data, isLoading, isError } = useApiQuery<{ data: any[]; stats: any; total: number }>(
     ["hr-exit"],
     "/hr/exit",
   );
@@ -35,6 +36,9 @@ export default function ExitRequestsPage() {
   const approveMut = useApiMutation(null as any, "PATCH", [["hr-exit"]], {
     successMessage: "تم اعتماد الطلب",
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleApprove = async (id: number) => {
     await approveMut.mutateAsync({ __url: `/hr/exit/${id}/approve` } as any);
