@@ -38,8 +38,6 @@ recurringRouter.get("/recurring-journals", async (req, res) => {
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, {
       companyColumn: '"companyId"',
-      branchColumn: '"branchId"',
-      enforceBranchScope: true,
     });
     const { active, frequency } = req.query as { active?: string; frequency?: string };
     let extra = ` AND "deletedAt" IS NULL`;
