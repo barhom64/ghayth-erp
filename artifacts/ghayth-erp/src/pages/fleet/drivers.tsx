@@ -11,6 +11,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function DriversPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
@@ -75,6 +76,9 @@ export default function DriversPage() {
       ),
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

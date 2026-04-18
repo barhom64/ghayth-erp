@@ -9,6 +9,7 @@ import { Plus, Users, Phone, Mail, Star, Building2, Calendar } from "lucide-reac
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 /**
@@ -44,6 +45,9 @@ export default function VendorsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["name", "contactPerson", "category"],

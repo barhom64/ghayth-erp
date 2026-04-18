@@ -7,6 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function FleetMaintenancePage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-maintenance"], "/fleet/maintenance");
@@ -30,6 +31,9 @@ export default function FleetMaintenancePage() {
     { key: "workshop", header: "الورشة", sortable: true, searchable: true, render: (m) => <span className="text-gray-500">{m.workshop || "-"}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (m) => <span className="text-gray-500">{m.date || "-"}</span> },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

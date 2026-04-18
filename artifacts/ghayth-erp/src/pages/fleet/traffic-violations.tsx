@@ -11,6 +11,7 @@ import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const VIOLATION_TYPES: Record<string, string> = {
   speeding: "تجاوز السرعة",
@@ -25,7 +26,7 @@ export default function TrafficViolationsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
 
-  const { data, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
   const violations = asList(data?.data || data);
 
   const { data: vehicles } = useApiQuery<any>(["fleet-vehicles"], "/fleet/vehicles?limit=200");
@@ -51,6 +52,9 @@ export default function TrafficViolationsPage() {
     try { await apiFetch(`/fleet/traffic-violations/${id}/pay`, { method: "PATCH", body: JSON.stringify({}) }); refetch(); toast({ title: "تم تسجيل الدفع" }); }
     catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

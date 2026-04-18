@@ -6,6 +6,7 @@ import {
   IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -15,6 +16,35 @@ import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+
+const createUnitSchema = z.object({
+  unitNumber: z.string().min(1, "رقم الوحدة مطلوب"),
+  buildingId: z.number().optional().nullable(),
+  buildingName: z.string().optional().nullable(),
+  name: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
+  area: z.number().min(0, "المساحة يجب أن تكون صفر أو أكثر").optional().nullable(),
+  bedrooms: z.number().optional().nullable(),
+  bathrooms: z.number().optional().nullable(),
+  floor: z.number().optional().nullable(),
+  monthlyRent: z.number().min(0, "الإيجار الشهري يجب أن يكون صفر أو أكثر").optional().nullable(),
+  status: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  direction: z.string().optional().nullable(),
+  finishing: z.string().optional().nullable(),
+  amenities: z.union([z.array(z.string()), z.string()]).optional().nullable(),
+  branchId: z.number().optional().nullable(),
+  electricityMeter: z.string().optional().nullable(),
+  waterMeter: z.string().optional().nullable(),
+  usageType: z.string().optional().nullable(),
+  ownerId: z.number().optional().nullable(),
+  parkingSpaces: z.number().optional().nullable(),
+  acType: z.string().optional().nullable(),
+  hasKitchen: z.boolean().optional().nullable(),
+  yearlyRent: z.number().optional().nullable(),
+  insurancePolicy: z.string().optional().nullable(),
+  insuranceExpiry: z.string().optional().nullable(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -128,22 +158,19 @@ router.get("/units", requirePermission("property:read"), async (req, res) => {
 router.post("/units", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createUnitSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    const b = parsed.data;
 
-    const unitNumber = (typeof b.unitNumber === "string" && b.unitNumber.trim())
-      ? b.unitNumber.trim()
-      : `UNIT-${Date.now().toString(36).toUpperCase()}`;
+    const unitNumber = b.unitNumber.trim();
 
     // Pre-checks — fail fast with a typed error so the frontend can highlight
     // the offending field. The old code used an auto-generated unit number
     // which hid the UX cue that the user forgot to fill it in.
-    if (b.monthlyRent !== undefined && b.monthlyRent !== null && b.monthlyRent !== "") {
-      const r = Number(b.monthlyRent);
-      if (!Number.isFinite(r) || r < 0) {
-        throw new ValidationError("الإيجار الشهري غير صالح", { field: "monthlyRent", fix: "أدخل قيمة غير سالبة" });
-      }
-    }
-    if (b.buildingId !== undefined && b.buildingId !== null && b.buildingId !== "") {
+    if (b.buildingId !== undefined && b.buildingId !== null) {
       const [bldg] = await rawQuery<any>(
         `SELECT id, name FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.buildingId, scope.companyId]
@@ -152,7 +179,7 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
         throw new ValidationError("المبنى غير موجود", { field: "buildingId", fix: "اختر مبنى مسجلاً أو أنشئه أولاً" });
       }
     }
-    if (b.ownerId !== undefined && b.ownerId !== null && b.ownerId !== "") {
+    if (b.ownerId !== undefined && b.ownerId !== null) {
       const [owner] = await rawQuery<any>(
         `SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.ownerId, scope.companyId]

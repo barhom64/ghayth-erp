@@ -7,6 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function FleetAlerts() {
   const [filters, setFilters] = useFilters();
@@ -65,6 +66,9 @@ export default function FleetAlerts() {
       render: (a) => a.message || "-",
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

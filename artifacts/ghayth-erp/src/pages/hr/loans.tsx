@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LOAN_TYPES, LOAN_STATUS } from "@/lib/hr-type-maps";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_OPTIONS = Object.entries(LOAN_STATUS).map(([value, { label }]) => ({ value, label }));
 
@@ -27,7 +28,7 @@ export default function LoansPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data } = useApiQuery<{ data: any[]; stats: any; total: number }>(
+  const { data, isLoading, isError } = useApiQuery<{ data: any[]; stats: any; total: number }>(
     ["hr-loans"],
     "/hr/loans",
   );
@@ -235,6 +236,9 @@ export default function LoansPage() {
       },
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

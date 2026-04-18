@@ -37,6 +37,7 @@ const OPERATION_LABELS: Record<string, string> = {
 };
 
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 
 export default function ExpensesPage() {
@@ -49,6 +50,9 @@ export default function ExpensesPage() {
   const advFilters = useAdvancedFilters();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("expense");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const preFiltered = applyFilters(items as Record<string, any>[], filters, {
     searchFields: ["description", "accountName", "ref", "operationType", "costCenter"],

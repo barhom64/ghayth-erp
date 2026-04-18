@@ -7,6 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function FuelPage() {
   const { scopeQueryString } = useAppContext();
@@ -21,6 +22,9 @@ export default function FuelPage() {
     { key: "odometer", header: "العداد", sortable: true, sortKey: "mileage", render: (f) => <span className="text-gray-500">{f.mileage} كم</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (f) => <span className="text-gray-500">{f.date || "-"}</span> },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

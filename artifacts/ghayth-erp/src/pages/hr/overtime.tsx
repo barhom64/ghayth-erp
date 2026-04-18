@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_OPTIONS = Object.entries(OVERTIME_STATUS).map(([value, { label }]) => ({ value, label }));
 const STATUS_MAP = OVERTIME_STATUS;
@@ -27,7 +28,7 @@ export default function OvertimePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data } = useApiQuery<{ data: any[]; stats: any; total: number }>(
+  const { data, isLoading, isError } = useApiQuery<{ data: any[]; stats: any; total: number }>(
     ["hr-overtime"],
     "/hr/overtime",
   );
@@ -216,6 +217,9 @@ export default function OvertimePage() {
       },
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

@@ -36,6 +36,7 @@ import {
 } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 // Phase A.1 — HR reference domain. This page is the pattern every other
@@ -240,6 +241,9 @@ export default function Employees() {
       { header: "الإجراءات", width: "160px" },
     ),
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const previewFields: PreviewField[] = [
     { label: "الاسم", key: "name" },

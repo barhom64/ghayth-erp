@@ -13,9 +13,10 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function ShiftsPage() {
-  const { data, refetch } = useApiQuery<any>(["shifts"], "/hr/shifts");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["shifts"], "/hr/shifts");
   const { data: assignmentsData } = useApiQuery<any>(["shift-assignments"], "/hr/shift-assignments");
   const items = data?.data || [];
   const assignments = assignmentsData?.data || [];
@@ -61,6 +62,9 @@ export default function ShiftsPage() {
     { key: "endTime", label: "وقت الانتهاء" },
     { key: "breakMinutes", label: "الاستراحة (دقيقة)", type: "number" as const },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

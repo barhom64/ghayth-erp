@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**
  * Journal entries list — migrated in R.5 iter 5 to the unified template
@@ -69,6 +70,9 @@ export default function JournalPage() {
       },
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref"],

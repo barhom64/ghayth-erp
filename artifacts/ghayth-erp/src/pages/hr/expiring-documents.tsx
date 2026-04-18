@@ -10,6 +10,7 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { DOCUMENT_TYPES, DOCUMENT_COLORS } from "@/lib/hr-type-maps";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const DOC_STATUS_OPTIONS = Object.entries(DOCUMENT_TYPES).map(([value, label]) => ({ value, label }));
 
@@ -25,7 +26,7 @@ export default function ExpiringDocumentsPage() {
   const [days, setDays] = useState("90");
   const [filters, setFilters] = useFilters();
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["expiring-documents", days],
     `/hr/expiring-documents?days=${days}`,
   );
@@ -112,6 +113,9 @@ export default function ExpiringDocumentsPage() {
       },
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

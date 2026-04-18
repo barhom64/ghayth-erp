@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import {
   handleRouteError,
@@ -13,6 +14,13 @@ import { assertRole } from "../lib/roleGuards.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+
+const createBudgetSchema = z.object({
+  accountCode: z.string().min(1, "رمز الحساب مطلوب"),
+  period: z.string().min(1, "الفترة مطلوبة"),
+  amount: z.number({ required_error: "المبلغ مطلوب" }).min(0, "المبلغ يجب أن يكون صفر أو أكثر"),
+  branchId: z.number().optional().nullable(),
+});
 
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
@@ -42,13 +50,12 @@ budgetRouter.post("/budget", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["director", "owner"]);
-    const { accountCode, period, amount, branchId } = req.body as any;
-    if (!accountCode || !period || !amount) {
-      throw new ValidationError("الحساب والفترة والمبلغ مطلوبة", {
-        field: !accountCode ? "accountCode" : !period ? "period" : "amount",
-        fix: "أدخل رمز الحساب والفترة بصيغة YYYY-MM والمبلغ",
-      });
+    const parsed = createBudgetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
     }
+    const { accountCode, period, amount, branchId } = parsed.data;
     const { insertId } = await rawExecute(
       `INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used)
        VALUES ($1,$2,$3,$4,$5,0)
