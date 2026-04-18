@@ -14,6 +14,10 @@ import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
+import { SupplierContextCard } from "@/components/shared/supplier-context-card";
+import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 
 const OPERATION_TYPES = [
   { value: "expense", label: "مصروف عام" },
@@ -514,6 +518,14 @@ export default function ExpensesCreate() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+            {form.relatedEntityType && form.relatedEntityId && (
+              <div className="md:col-span-3">
+                {form.relatedEntityType === "employee" && <EmployeeContextCard employeeId={form.relatedEntityId} />}
+                {form.relatedEntityType === "vehicle" && <VehicleContextCard vehicleId={form.relatedEntityId} section="maintenance" />}
+                {form.relatedEntityType === "supplier" && <SupplierContextCard supplierId={form.relatedEntityId} />}
+                {form.relatedEntityType === "property" && <PropertyUnitContextCard unitId={form.relatedEntityId} section="payment" />}
               </div>
             )}
             <div>
