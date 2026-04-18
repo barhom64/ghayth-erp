@@ -47,6 +47,7 @@ export default function PropertyMaintenanceCreate() {
         category: form.category || undefined,
         description: form.description,
         priority: form.priority,
+        cost: form.cost ? Number(form.cost) : undefined,
       });
       clearDraft();
       toast({ title: "تم إنشاء طلب الصيانة بنجاح" });

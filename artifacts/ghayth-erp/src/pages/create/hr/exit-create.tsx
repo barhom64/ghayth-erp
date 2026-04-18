@@ -38,6 +38,11 @@ export default function ExitCreate() {
     otherDeductions: "0",
   });
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
     [employees, form.assignmentId]
@@ -68,12 +73,19 @@ export default function ExitCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.assignmentId) {
-      toast({ title: "يرجى اختيار الموظف", variant: "destructive" });
-      return;
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
+    if (!form.lastWorkingDay) localErrors.lastWorkingDay = "آخر يوم عمل مطلوب";
+    if (!form.exitType) localErrors.exitType = "نوع نهاية الخدمة مطلوب";
+    if (form.lastWorkingDay) {
+      const today = new Date().toISOString().split("T")[0];
+      if (form.lastWorkingDay < today) localErrors.lastWorkingDay = "آخر يوم عمل يجب أن يكون اليوم أو في المستقبل";
     }
-    if (!form.exitType) {
-      toast({ title: "نوع نهاية الخدمة مطلوب", variant: "destructive" });
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
 

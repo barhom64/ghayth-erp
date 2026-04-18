@@ -152,7 +152,8 @@ export default function TrainingCreate() {
           </div>
           <div>
             <Label className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> السعة القصوى</Label>
-            <Input className="mt-1" type="number" value={form.maxParticipants} onChange={(e) => set("maxParticipants", e.target.value)} placeholder="عدد المشاركين" />
+            <Input className={`mt-1 ${errCls("maxParticipants")}`} type="number" value={form.maxParticipants} onChange={(e) => set("maxParticipants", e.target.value)} placeholder="عدد المشاركين" />
+            <FieldHint field="maxParticipants" />
           </div>
         </div>
 
@@ -179,7 +180,8 @@ export default function TrainingCreate() {
             </div>
             <div>
               <Label>تاريخ الانتهاء</Label>
-              <div className="mt-1"><DatePicker value={form.endDate} onChange={(v) => set("endDate", v)} /></div>
+              <div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={(v) => set("endDate", v)} /></div>
+              <FieldHint field="endDate" />
             </div>
           </div>
         </div>
