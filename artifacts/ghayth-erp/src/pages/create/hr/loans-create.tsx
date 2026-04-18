@@ -16,6 +16,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { LOAN_TYPES } from "@/lib/hr-type-maps";
 import { Banknote, Info, User, Calculator, Calendar, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
 const DRAFT_KEY = "hr_loans_create";
 
@@ -137,11 +138,6 @@ export default function LoansCreate() {
                 ))}
               </SelectContent>
             </Select>
-            {selectedEmployee && salary > 0 && (
-              <p className="text-xs text-gray-500">
-                الراتب: {formatCurrency(salary)} — الحد الأقصى للسلفة: {formatCurrency(maxLoan)}
-              </p>
-            )}
           </div>
 
           <div className="space-y-2">
@@ -164,6 +160,14 @@ export default function LoansCreate() {
             </Select>
           </div>
         </div>
+
+        {/* سياق الموظف: سلف سابقة + خصم شهري + قدرة استيعاب */}
+        {selectedEmployee && (
+          <EmployeeContextCard
+            employeeId={selectedEmployee.id}
+            section="loans"
+          />
+        )}
 
         {/* مبلغ السلفة والأقساط */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

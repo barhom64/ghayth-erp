@@ -1,0 +1,386 @@
+import { useApiQuery } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import {
+  User, Building, Briefcase, UserCheck, DollarSign, Calendar,
+  Banknote, AlertTriangle, CalendarDays, TrendingUp, Info,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export type EmployeeContextSection = "loans" | "leaves" | "violations" | "overtime";
+
+export interface EmployeeContextCardProps {
+  /** Person-level employee id (employees.id). Set to empty string/null when no employee selected. */
+  employeeId: string | number | null | undefined;
+  /** Additional section to emphasize (past loans, recent violations, etc.) */
+  section?: EmployeeContextSection;
+  className?: string;
+}
+
+interface EmployeeDetail {
+  id: number;
+  name: string;
+  empNumber: string;
+  status: string;
+  jobTitle: string;
+  branchName?: string;
+  departmentName?: string;
+  managerName?: string;
+  salary?: number | string;
+  hireDate?: string;
+  loans?: Array<{
+    id: number;
+    loanNumber: string;
+    amount: number | string;
+    remainingAmount: number | string;
+    installmentAmount: number | string;
+    installmentCount: number;
+    status: string;
+  }>;
+  leaves?: Array<{
+    id: number;
+    status: string;
+    startDate: string;
+    endDate: string;
+    days: number;
+    leaveTypeName: string;
+  }>;
+  violations?: Array<{
+    id: number;
+    type: string;
+    description?: string;
+    severity?: string;
+    deduction?: number | string;
+    period?: string;
+    createdAt: string;
+  }>;
+  overtime?: Array<{
+    id: number;
+    requestNumber: string;
+    overtimeDate: string;
+    hours: number | string;
+    totalAmount: number | string;
+    status: string;
+  }>;
+}
+
+/**
+ * Shows rich employee context when an employee is selected in a form.
+ * Replaces the "dead forms" pattern — instead of just a dropdown with
+ * a name, every HR form gets empNumber, department, branch, manager,
+ * salary, status, plus context-specific data (past loans, recent
+ * violations, open leaves) pulled from /employees/:id.
+ */
+export function EmployeeContextCard({
+  employeeId,
+  section,
+  className,
+}: EmployeeContextCardProps) {
+  const hasId = employeeId !== null && employeeId !== undefined && String(employeeId).trim() !== "";
+  const { data, isLoading } = useApiQuery<EmployeeDetail>(
+    ["employee-context", String(employeeId ?? "")],
+    hasId ? `/employees/${employeeId}` : null,
+    { enabled: hasId },
+  );
+
+  if (!hasId) return null;
+
+  if (isLoading) {
+    return (
+      <Card className={cn("border-gray-200 bg-gray-50/50 animate-pulse", className)}>
+        <CardContent className="p-4">
+          <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="space-y-1">
+                <div className="h-3 w-16 bg-gray-200 rounded" />
+                <div className="h-4 w-24 bg-gray-200 rounded" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) return null;
+
+  const salary = Number(data.salary || 0);
+  const activeLoans = (data.loans || []).filter((l) => l.status === "active" || l.status === "approved");
+  const totalRemainingLoans = activeLoans.reduce((sum, l) => sum + Number(l.remainingAmount || 0), 0);
+  const totalMonthlyInstallment = activeLoans.reduce((sum, l) => sum + Number(l.installmentAmount || 0), 0);
+  const pendingLeaves = (data.leaves || []).filter((l) => l.status === "pending");
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const recentViolations = (data.violations || []).filter((v) => v.period === thisMonth).slice(0, 3);
+
+  return (
+    <Card className={cn("border-blue-200 bg-blue-50/40", className)}>
+      <CardContent className="p-4 space-y-3">
+        {/* Header: name + status */}
+        <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+          <div className="flex items-center gap-2">
+            <User className="h-4 w-4 text-blue-600" />
+            <span className="font-semibold text-sm">{data.name}</span>
+            {data.empNumber && (
+              <Badge variant="outline" className="text-xs font-mono">
+                #{data.empNumber}
+              </Badge>
+            )}
+          </div>
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-xs",
+              data.status === "active" && "bg-green-50 text-green-700 border-green-200",
+              data.status === "inactive" && "bg-gray-50 text-gray-700 border-gray-200",
+              data.status === "terminated" && "bg-red-50 text-red-700 border-red-200",
+            )}
+          >
+            {data.status === "active" ? "نشط" : data.status === "inactive" ? "غير نشط" : data.status}
+          </Badge>
+        </div>
+
+        {/* Core context grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <ContextItem icon={Briefcase} label="المسمى" value={data.jobTitle || "—"} />
+          <ContextItem icon={Building} label="القسم / الفرع" value={[data.departmentName, data.branchName].filter(Boolean).join(" — ") || "—"} />
+          <ContextItem icon={UserCheck} label="المدير المباشر" value={data.managerName || "—"} />
+          <ContextItem icon={DollarSign} label="الراتب الأساسي" value={salary > 0 ? formatCurrency(salary) : "—"} highlight={salary > 0} />
+        </div>
+
+        {data.hireDate && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+            <Calendar className="h-3.5 w-3.5" />
+            <span>تاريخ المباشرة: {formatDateAr(data.hireDate)}</span>
+          </div>
+        )}
+
+        {/* Section-specific context */}
+        {section === "loans" && (
+          <LoansSection
+            activeLoans={activeLoans}
+            totalRemaining={totalRemainingLoans}
+            totalMonthlyInstallment={totalMonthlyInstallment}
+            salary={salary}
+          />
+        )}
+        {section === "leaves" && (
+          <LeavesSection pendingLeaves={pendingLeaves} allLeaves={data.leaves || []} />
+        )}
+        {section === "violations" && (
+          <ViolationsSection recentViolations={recentViolations} allViolations={data.violations || []} />
+        )}
+        {section === "overtime" && (
+          <OvertimeSection overtime={data.overtime || []} />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ContextItem({
+  icon: Icon,
+  label,
+  value,
+  highlight,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <div className="flex items-center gap-1 text-xs text-gray-500">
+        <Icon className="h-3 w-3" />
+        <span>{label}</span>
+      </div>
+      <div className={cn("text-sm", highlight ? "font-semibold text-blue-700" : "text-gray-800")}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function LoansSection({
+  activeLoans,
+  totalRemaining,
+  totalMonthlyInstallment,
+  salary,
+}: {
+  activeLoans: NonNullable<EmployeeDetail["loans"]>;
+  totalRemaining: number;
+  totalMonthlyInstallment: number;
+  salary: number;
+}) {
+  const maxLoan = salary * 3;
+  const remainingCapacity = Math.max(0, maxLoan - totalRemaining);
+  const installmentWarning = salary > 0 && totalMonthlyInstallment > salary * 0.3;
+
+  return (
+    <div className="pt-2 border-t border-blue-100 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+        <Banknote className="h-3.5 w-3.5" />
+        <span>سجل السلف</span>
+      </div>
+      {activeLoans.length === 0 ? (
+        <p className="text-xs text-gray-500">لا توجد سلف نشطة — يمكن طلب سلفة جديدة</p>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white rounded p-2 border border-gray-200">
+            <p className="text-xs text-gray-500">السلف النشطة</p>
+            <p className="text-sm font-semibold text-gray-800">{activeLoans.length}</p>
+          </div>
+          <div className="bg-white rounded p-2 border border-red-200">
+            <p className="text-xs text-gray-500">المتبقي الكلي</p>
+            <p className="text-sm font-semibold text-red-700">{formatCurrency(totalRemaining)}</p>
+          </div>
+          <div className="bg-white rounded p-2 border border-amber-200">
+            <p className="text-xs text-gray-500">خصم شهري</p>
+            <p className={cn("text-sm font-semibold", installmentWarning ? "text-red-700" : "text-amber-700")}>
+              {formatCurrency(totalMonthlyInstallment)}
+            </p>
+          </div>
+        </div>
+      )}
+      {salary > 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+          <Info className="h-3 w-3" />
+          <span>
+            الحد الأقصى للسلفة: {formatCurrency(maxLoan)} (3× الراتب) — المتاح حالياً: {formatCurrency(remainingCapacity)}
+          </span>
+        </div>
+      )}
+      {installmentWarning && (
+        <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <AlertTriangle className="h-3 w-3" />
+          <span>الخصم الشهري الحالي يتجاوز 30% من الراتب — يُنصح بعدم إضافة سلفة جديدة</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeavesSection({
+  pendingLeaves,
+  allLeaves,
+}: {
+  pendingLeaves: NonNullable<EmployeeDetail["leaves"]>;
+  allLeaves: NonNullable<EmployeeDetail["leaves"]>;
+}) {
+  const thisYearLeaves = allLeaves.filter((l) => {
+    const y = new Date(l.startDate).getFullYear();
+    return y === new Date().getFullYear() && l.status === "approved";
+  });
+  const usedDays = thisYearLeaves.reduce((sum, l) => sum + Number(l.days || 0), 0);
+
+  return (
+    <div className="pt-2 border-t border-blue-100 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+        <CalendarDays className="h-3.5 w-3.5" />
+        <span>سجل الإجازات</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white rounded p-2 border border-gray-200">
+          <p className="text-xs text-gray-500">أيام مستخدمة {new Date().getFullYear()}</p>
+          <p className="text-sm font-semibold text-gray-800">{usedDays} يوم</p>
+        </div>
+        <div className="bg-white rounded p-2 border border-amber-200">
+          <p className="text-xs text-gray-500">طلبات معلّقة</p>
+          <p className="text-sm font-semibold text-amber-700">{pendingLeaves.length}</p>
+        </div>
+        <div className="bg-white rounded p-2 border border-gray-200">
+          <p className="text-xs text-gray-500">إجمالي الطلبات</p>
+          <p className="text-sm font-semibold text-gray-800">{allLeaves.length}</p>
+        </div>
+      </div>
+      {pendingLeaves.length > 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5">
+          <AlertTriangle className="h-3 w-3" />
+          <span>يوجد {pendingLeaves.length} طلب إجازة بانتظار الموافقة — راجع قبل تقديم طلب جديد</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ViolationsSection({
+  recentViolations,
+  allViolations,
+}: {
+  recentViolations: NonNullable<EmployeeDetail["violations"]>;
+  allViolations: NonNullable<EmployeeDetail["violations"]>;
+}) {
+  const totalDeduction = allViolations.reduce((sum, v) => sum + Number(v.deduction || 0), 0);
+  const pendingCount = allViolations.filter((v) => !v.deduction).length;
+
+  return (
+    <div className="pt-2 border-t border-blue-100 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        <span>سجل المخالفات</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white rounded p-2 border border-gray-200">
+          <p className="text-xs text-gray-500">هذا الشهر</p>
+          <p className="text-sm font-semibold text-gray-800">{recentViolations.length}</p>
+        </div>
+        <div className="bg-white rounded p-2 border border-red-200">
+          <p className="text-xs text-gray-500">إجمالي الخصومات</p>
+          <p className="text-sm font-semibold text-red-700">{formatCurrency(totalDeduction)}</p>
+        </div>
+        <div className="bg-white rounded p-2 border border-amber-200">
+          <p className="text-xs text-gray-500">بدون جزاء محدد</p>
+          <p className="text-sm font-semibold text-amber-700">{pendingCount}</p>
+        </div>
+      </div>
+      {recentViolations.length >= 3 && (
+        <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <AlertTriangle className="h-3 w-3" />
+          <span>تكرار المخالفات هذا الشهر — سيُطبَّق سلم العقوبات تلقائياً عند إضافة مخالفة جديدة</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OvertimeSection({
+  overtime,
+}: {
+  overtime: NonNullable<EmployeeDetail["overtime"]>;
+}) {
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonthOT = overtime.filter((o) => o.overtimeDate?.slice(0, 7) === thisMonth);
+  const totalHoursThisMonth = thisMonthOT.reduce((sum, o) => sum + Number(o.hours || 0), 0);
+  const totalAmountThisMonth = thisMonthOT.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+
+  return (
+    <div className="pt-2 border-t border-blue-100 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+        <TrendingUp className="h-3.5 w-3.5" />
+        <span>ساعات إضافية — {thisMonth}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white rounded p-2 border border-gray-200">
+          <p className="text-xs text-gray-500">الطلبات هذا الشهر</p>
+          <p className="text-sm font-semibold text-gray-800">{thisMonthOT.length}</p>
+        </div>
+        <div className="bg-white rounded p-2 border border-gray-200">
+          <p className="text-xs text-gray-500">الساعات</p>
+          <p className="text-sm font-semibold text-gray-800">{totalHoursThisMonth.toFixed(1)} ساعة</p>
+        </div>
+        <div className="bg-white rounded p-2 border border-green-200">
+          <p className="text-xs text-gray-500">المبلغ التقديري</p>
+          <p className="text-sm font-semibold text-green-700">{formatCurrency(totalAmountThisMonth)}</p>
+        </div>
+      </div>
+      {totalHoursThisMonth > 40 && (
+        <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5">
+          <AlertTriangle className="h-3 w-3" />
+          <span>تجاوزت الساعات الإضافية 40 ساعة هذا الشهر — قد يتطلب موافقة إضافية</span>
+        </div>
+      )}
+    </div>
+  );
+}

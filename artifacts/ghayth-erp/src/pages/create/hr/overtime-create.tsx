@@ -14,6 +14,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { OVERTIME_MULTIPLIERS } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Clock, User, Calculator, Info } from "lucide-react";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
 const DRAFT_KEY = "hr_overtime_create";
 
@@ -167,6 +168,14 @@ export default function OvertimeCreate() {
             />
           </div>
         </div>
+
+        {/* سياق الموظف: ساعات إضافية هذا الشهر + تنبيهات */}
+        {selectedEmployee && (
+          <EmployeeContextCard
+            employeeId={selectedEmployee.id}
+            section="overtime"
+          />
+        )}
 
         {/* الأوقات والساعات */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
