@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Network, ChevronDown } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
@@ -6,8 +7,15 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 
 export default function OrganizationStructurePage() {
-  const { data: depts } = useApiQuery<any>(["departments"], "/settings/departments");
-  const { data: empData } = useApiQuery<any>(["employees"], "/employees?limit=200");
+  const { data: depts, isLoading: deptsLoading, isError: deptsError } = useApiQuery<any>(["departments"], "/settings/departments");
+  const { data: empData, isLoading: empLoading, isError: empError } = useApiQuery<any>(["employees"], "/employees?limit=200");
+
+  const isLoading = deptsLoading || empLoading;
+  const isError = deptsError || empError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const departments = depts?.data || [];
   const employees = empData?.data || [];
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,9 @@ export default function AutoDetectionPage() {
     "/hr/discipline/auto-detection/log?limit=50",
   );
 
+  const isLoading = settingsQuery.isLoading || summaryQuery.isLoading || logQuery.isLoading;
+  const isError = settingsQuery.isError || summaryQuery.isError || logQuery.isError;
+
   // ── التشغيل اليدوي ──
   const runMutation = useApiMutation<any, { date?: string }>(
     "/hr/discipline/auto-detection/run",
@@ -112,6 +116,9 @@ export default function AutoDetectionPage() {
     [["auto-detection-settings"]],
     { successMessage: "تم حفظ الإعدادات" },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const settings = settingsQuery.data;
   const summary = summaryQuery.data;

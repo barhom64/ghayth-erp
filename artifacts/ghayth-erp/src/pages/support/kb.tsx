@@ -3,6 +3,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface KBArticle {
   id: number;
@@ -27,6 +28,10 @@ const columns: DataTableColumn<KBArticle>[] = [
 
 export default function KnowledgeBase() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["support-kb"], "/support/kb");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const rows = asList(data?.data || data);
 
   return (

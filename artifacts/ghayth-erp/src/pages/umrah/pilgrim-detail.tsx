@@ -2,6 +2,7 @@ import { useState } from "react";
 import { formatDateAr } from "@/lib/formatters";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -25,10 +26,12 @@ const STATUS_OPTIONS = [
 export default function PilgrimDetail() {
   const [, params] = useRoute("/umrah/pilgrims/:id");
   const id = params?.id || "";
-  const { data, refetch, isLoading } = useApiQuery<any>(["umrah-pilgrim", id], `/umrah/pilgrims/${id}`);
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], `/umrah/pilgrims/${id}`);
   const [newStatus, setNewStatus] = useState("");
   const { toast } = useToast();
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return <div className="p-8 text-center text-muted-foreground">جارٍ التحميل...</div>;
 
   const updateStatus = async () => {

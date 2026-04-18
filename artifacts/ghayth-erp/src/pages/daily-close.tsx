@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function DailyClose() {
   const { scopeQueryString } = useAppContext();
@@ -44,23 +45,8 @@ export default function DailyClose() {
     closeMut.mutate({ notes: "", force });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
-        <AlertTriangle className="w-12 h-12 text-red-400 mb-3" />
-        <h2 className="text-lg font-bold text-gray-800 mb-1">تعذّر تحميل قائمة الإقفال</h2>
-        <Button variant="outline" onClick={() => refetch()}>إعادة المحاولة</Button>
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

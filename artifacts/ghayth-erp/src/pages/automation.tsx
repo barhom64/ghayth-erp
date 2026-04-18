@@ -11,6 +11,7 @@ import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const MODULE_LABELS: Record<string, string> = {
   hr: "الموارد البشرية",
@@ -54,15 +55,6 @@ export default function Automation() {
   const autoLogsTotal = autoLogsResp?.total || autoLogs.length;
   const { data: autoStats } = useApiQuery<any>(["automation-stats"], "/automation/automation-stats");
 
-  const filteredJobs = cronJobs.filter((j: any) => !jobSearch || j.name?.includes(jobSearch) || j.description?.includes(jobSearch));
-  const filteredLogs = cronLogs.filter((l: any) => !logSearch || l.jobName?.includes(logSearch) || l.result?.includes(logSearch));
-  const filteredAutoLogs = autoLogs.filter((l: any) =>
-    !autoLogSearch ||
-    l.automationType?.includes(autoLogSearch) ||
-    l.triggerReason?.includes(autoLogSearch) ||
-    l.actionTaken?.includes(autoLogSearch)
-  );
-
   const toggleJobMut = useApiMutation<any, { id: number }>(
     (body) => `/automation/cron-jobs/${body.id}/toggle`,
     "POST",
@@ -78,6 +70,18 @@ export default function Automation() {
     (body) => `/automation/proactive-rules/${body.id}/toggle`,
     "POST",
     [["proactive-rules"]]
+  );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const filteredJobs = cronJobs.filter((j: any) => !jobSearch || j.name?.includes(jobSearch) || j.description?.includes(jobSearch));
+  const filteredLogs = cronLogs.filter((l: any) => !logSearch || l.jobName?.includes(logSearch) || l.result?.includes(logSearch));
+  const filteredAutoLogs = autoLogs.filter((l: any) =>
+    !autoLogSearch ||
+    l.automationType?.includes(autoLogSearch) ||
+    l.triggerReason?.includes(autoLogSearch) ||
+    l.actionTaken?.includes(autoLogSearch)
   );
 
   const handleToggle = (id: number) => toggleJobMut.mutate({ id });

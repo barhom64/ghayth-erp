@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +10,15 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
 export default function RecruitmentAdvancedPage() {
-  const { data: stats } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
-  const { data: appsData } = useApiQuery<any>(["applicants"], "/recruitment/applications");
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
+  const { data: appsData, isLoading: appsLoading, isError: appsError } = useApiQuery<any>(["applicants"], "/recruitment/applications");
+
+  const isLoading = statsLoading || appsLoading;
+  const isError = statsError || appsError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const apps = appsData?.data || [];
 
   const pipeline = Object.entries(RECRUITMENT_STAGES).map(([key, val]) => ({

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Phone, Calendar, Search, CheckCircle2, Clock, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const TYPE_LABELS: Record<string, string> = {
   call: "مكالمة",
@@ -16,7 +17,11 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function CrmActivities() {
   const [search, setSearch] = useState("");
-  const { data: oppsResp } = useApiQuery<any>(["crm-opportunities"], "/crm/opportunities");
+  const { data: oppsResp, isLoading, isError } = useApiQuery<any>(["crm-opportunities"], "/crm/opportunities");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const opportunities = asList<any>(oppsResp);
 
   const allActivities = opportunities.flatMap((opp: any) =>

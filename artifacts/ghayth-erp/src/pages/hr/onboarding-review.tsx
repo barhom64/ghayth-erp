@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { UserPlus, CheckCircle, Clock, ClipboardCheck } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -17,8 +18,15 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 
 export default function OnboardingReviewPage() {
   const [filters, setFilters] = useFilters();
-  const { data } = useApiQuery<any>(["employees"], "/employees?limit=200");
-  const { data: stepsData } = useApiQuery<any>(["onboarding-steps"], "/hr/onboarding-steps");
+  const { data, isLoading: empLoading, isError: empError } = useApiQuery<any>(["employees"], "/employees?limit=200");
+  const { data: stepsData, isLoading: stepsLoading, isError: stepsError } = useApiQuery<any>(["onboarding-steps"], "/hr/onboarding-steps");
+
+  const isLoading = empLoading || stepsLoading;
+  const isError = empError || stepsError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const employees = data?.data || [];
   const steps: string[] = stepsData?.data || ["تسليم أجهزة تقنية المعلومات", "توقيع عقد العمل", "تعريف المدير", "دورة التعريف"];
 

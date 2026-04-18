@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Badge } from "@/components/ui/badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -60,27 +61,10 @@ export default function EmployeeActivationPage() {
   const canManage = permissions.canManageEmployees;
   const { toast } = useToast();
   const [filters, setFilters] = useFilters();
-  const { data, refetch } = useApiQuery<any>(["employees"], "/employees?limit=200");
-  const employees = data?.data || [];
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["employees"], "/employees?limit=200");
 
   const [pending, setPending] = useState<{ action: LifecycleAction; employee: any } | null>(null);
   const [reason, setReason] = useState("");
-
-  const filtered = applyFilters(employees, filters, {
-    searchFields: ["name", "empNumber"],
-    statusField: "status",
-  });
-
-  const active = employees.filter((e: any) => e.status === "active").length;
-  const inactive = employees.filter((e: any) => e.status !== "active").length;
-  const suspended = employees.filter((e: any) => e.status === "suspended").length;
-
-  const kpis = [
-    { label: "إجمالي الموظفين", value: employees.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "نشطين", value: active, icon: UserCheck, color: "text-green-600 bg-green-50" },
-    { label: "غير نشطين", value: inactive, icon: UserX, color: "text-red-600 bg-red-50" },
-    { label: "معلقين", value: suspended, icon: ToggleLeft, color: "text-yellow-600 bg-yellow-50" },
-  ];
 
   const onLifecycleSuccess = (action: LifecycleAction) => {
     const msg =
@@ -114,6 +98,27 @@ export default function EmployeeActivationPage() {
   );
 
   const lifecyclePending = patchMutation.isPending || terminateMutation.isPending;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const employees = data?.data || [];
+
+  const filtered = applyFilters(employees, filters, {
+    searchFields: ["name", "empNumber"],
+    statusField: "status",
+  });
+
+  const active = employees.filter((e: any) => e.status === "active").length;
+  const inactive = employees.filter((e: any) => e.status !== "active").length;
+  const suspended = employees.filter((e: any) => e.status === "suspended").length;
+
+  const kpis = [
+    { label: "إجمالي الموظفين", value: employees.length, icon: Users, color: "text-blue-600 bg-blue-50" },
+    { label: "نشطين", value: active, icon: UserCheck, color: "text-green-600 bg-green-50" },
+    { label: "غير نشطين", value: inactive, icon: UserX, color: "text-red-600 bg-red-50" },
+    { label: "معلقين", value: suspended, icon: ToggleLeft, color: "text-yellow-600 bg-yellow-50" },
+  ];
 
   const openConfirm = (action: LifecycleAction, employee: any) => {
     setReason("");

@@ -1,5 +1,6 @@
 import { useParams, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +44,7 @@ export default function ExitDetail() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useApiQuery<any>(["hr-exit-detail", id], `/hr/exit/${id}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-exit-detail", id], `/hr/exit/${id}`);
   const item = data?.data ?? data;
 
   const approveMut = useApiMutation(null as any, "PATCH", [["hr-exit"]], {
@@ -55,7 +56,10 @@ export default function ExitDetail() {
     queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 
-  if (!isLoading && !item) {
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  if (!item) {
     return (
       <PageShell title="الطلب غير موجود" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/exit", label: "نهاية الخدمة" }]}>
         <Card>

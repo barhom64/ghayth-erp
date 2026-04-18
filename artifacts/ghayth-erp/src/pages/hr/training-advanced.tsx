@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +10,16 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function TrainingAdvancedPage() {
-  const { data: statsData } = useApiQuery<any>(["training-stats"], "/training/stats");
-  const { data: programsData } = useApiQuery<any>(["training-programs"], "/training/programs");
-  const { data: enrollmentsData } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["training-stats"], "/training/stats");
+  const { data: programsData, isLoading: programsLoading, isError: programsError } = useApiQuery<any>(["training-programs"], "/training/programs");
+  const { data: enrollmentsData, isLoading: enrollmentsLoading, isError: enrollmentsError } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
+
+  const isLoading = statsLoading || programsLoading || enrollmentsLoading;
+  const isError = statsError || programsError || enrollmentsError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const stats = statsData || {};
   const programs = programsData?.data || [];
   const enrollments = enrollmentsData?.data || [];

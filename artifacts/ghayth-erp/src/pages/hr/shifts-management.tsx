@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,12 +14,9 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function ShiftsManagementPage() {
-  const { data: shiftsData } = useApiQuery<any>(["shifts"], "/hr/shifts");
-  const { data: assignmentsData } = useApiQuery<any>(["shift-assignments"], "/hr/shift-assignments");
-  const { data: empData } = useApiQuery<any>(["employees"], "/employees?limit=200");
-  const shifts = shiftsData?.data || [];
-  const assignments = assignmentsData?.data || [];
-  const employees = empData?.data || [];
+  const { data: shiftsData, isLoading: shiftsLoading, isError: shiftsError } = useApiQuery<any>(["shifts"], "/hr/shifts");
+  const { data: assignmentsData, isLoading: assignmentsLoading, isError: assignmentsError } = useApiQuery<any>(["shift-assignments"], "/hr/shift-assignments");
+  const { data: empData, isLoading: empLoading, isError: empError } = useApiQuery<any>(["employees"], "/employees?limit=200");
 
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignForm, setAssignForm] = useState({ assignmentId: "", shiftId: "", startDate: "" });
@@ -26,6 +24,16 @@ export default function ShiftsManagementPage() {
   const assignMut = useApiMutation("/hr/shift-assignments", "POST", [["shift-assignments"]], {
     successMessage: "تم تعيين الوردية",
   });
+
+  const isLoading = shiftsLoading || assignmentsLoading || empLoading;
+  const isError = shiftsError || assignmentsError || empError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const shifts = shiftsData?.data || [];
+  const assignments = assignmentsData?.data || [];
+  const employees = empData?.data || [];
 
   const handleAssign = () => {
     assignMut.mutate(

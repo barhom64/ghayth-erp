@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ interface MemoData {
 export default function DisciplineMemoDetailPage() {
   const [, params] = useRoute("/hr/discipline/memos/:id");
   const id = params?.id;
-  const { data, isLoading } = useApiQuery<MemoData>(
+  const { data, isLoading, isError } = useApiQuery<MemoData>(
     ["discipline-memo", String(id ?? "")],
     id ? `/hr/discipline/memos/${id}` : null
   );
@@ -65,7 +66,8 @@ export default function DisciplineMemoDetailPage() {
     }
   };
 
-  if (isLoading) return <div className="p-6">جاري التحميل...</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data?.memo) return <div className="p-6">المحضر غير موجود</div>;
 
   const memo = data.memo;

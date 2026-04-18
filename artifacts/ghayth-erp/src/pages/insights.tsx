@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import { formatCurrency } from "@/lib/formatters";
 import { apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316", "#84cc16"];
 
@@ -95,16 +96,8 @@ export default function Insights() {
     }
   };
 
-  if (loadingSummary) {
-    return (
-      <PageShell title="رؤى ذكية" loading>
-        <div className="grid gap-4 md:grid-cols-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
-        </div>
-        <Skeleton className="h-96 w-full" />
-      </PageShell>
-    );
-  }
+  if (loadingSummary) return <LoadingSpinner />;
+  if (!summary && !loadingSummary) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const overview = summary?.overview ?? {};
   const usageStats = summary?.usageStats ?? {};
