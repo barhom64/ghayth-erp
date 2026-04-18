@@ -277,18 +277,31 @@ async function postInventoryMovementGl(params: {
 router.get("/products", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search, status } = req.query as any;
+    const { search, status, page = "1", limit: lim = "50" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['p.name', 'p.sku']; }
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"', branchColumn: 'p."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND p.status = $${paramIdx}`; params.push(status); paramIdx++; }
+
+    const countParams = [...params];
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM warehouse_products p WHERE ${where} AND p."deletedAt" IS NULL`,
+      countParams
+    );
+
+    params.push(Number(lim));
+    const limitParam = paramIdx++;
+    params.push(offset);
+    const offsetParam = paramIdx++;
+
     const rows = await rawQuery<any>(
-      `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name`,
+      `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Warehouse products error:"); }
 });
 
@@ -871,8 +884,18 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
 router.get("/categories", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    const { page = "1", limit: lim = "50" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    const rows = await rawQuery<any>(
+      `SELECT * FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
+      [scope.companyId, Number(lim), offset]
+    );
+    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
@@ -904,8 +927,18 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
 router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    const { page = "1", limit: lim = "50" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    const rows = await rawQuery<any>(
+      `SELECT * FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
+      [scope.companyId, Number(lim), offset]
+    );
+    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 

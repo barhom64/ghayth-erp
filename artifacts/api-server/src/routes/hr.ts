@@ -6277,11 +6277,18 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
 router.get("/company-documents", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
-      `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST`,
+    const { page = "1", limit: lim = "50" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM company_documents WHERE "companyId"=$1 AND status != 'deleted'`,
       [scope.companyId]
+    ).catch(() => [{ total: 0 }] as any[]);
+    const rows = await rawQuery<any>(
+      `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
+      [scope.companyId, Number(lim), offset]
     ).catch(() => [] as any[]);
-    res.json({ data: rows, total: rows.length });
+    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
@@ -6308,20 +6315,40 @@ router.post("/company-documents", requirePermission("hr:create"), async (req, re
 router.get("/employee-documents", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const employeeId = req.query.employeeId;
-    const where = employeeId
-      ? `WHERE ed."companyId"=$1 AND ed."employeeId"=$2 AND ed.status != 'deleted'`
-      : `WHERE ed."companyId"=$1 AND ed.status != 'deleted'`;
-    const params = employeeId ? [scope.companyId, Number(employeeId)] : [scope.companyId];
+    const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
+    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+
+    let paramIdx = 1;
+    const params: any[] = [scope.companyId];
+    paramIdx++;
+    let where = `WHERE ed."companyId"=$1 AND ed.status != 'deleted'`;
+    if (employeeId) {
+      where += ` AND ed."employeeId"=$${paramIdx}`;
+      params.push(Number(employeeId));
+      paramIdx++;
+    }
+
+    const countParams = [...params];
+    const [countRow] = await rawQuery<any>(
+      `SELECT COUNT(*) AS total FROM employee_documents ed WHERE ${where.replace('WHERE ', '')}`,
+      countParams
+    ).catch(() => [{ total: 0 }] as any[]);
+
+    params.push(Number(lim));
+    const limitParam = paramIdx++;
+    params.push(offset);
+    const offsetParam = paramIdx++;
+
     const rows = await rawQuery<any>(
       `SELECT ed.*, e.name AS "employeeName"
        FROM employee_documents ed
        JOIN employees e ON e.id=ed."employeeId"
        ${where}
-       ORDER BY ed."expiryDate" ASC NULLS LAST`,
+       ORDER BY ed."expiryDate" ASC NULLS LAST
+       LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     ).catch(() => [] as any[]);
-    res.json({ data: rows, total: rows.length });
+    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 

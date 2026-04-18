@@ -3,6 +3,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import rateLimit from "express-rate-limit";
 import { pool } from "../lib/rawdb.js";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
@@ -11,6 +12,15 @@ import crypto from "crypto";
 
 const router = Router();
 router.use(authMiddleware);
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى لمحاولات إعادة تعيين كلمة المرور. يرجى المحاولة بعد دقيقة" },
+  validate: { ip: false, trustProxy: false },
+});
 
 const ADMIN_ROLES = ["owner", "admin", "general_manager"];
 const ADMIN_ROLE_LEVEL = 90;
@@ -222,7 +232,7 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.post("/users/:id/reset-password", requirePermission("admin:write"), async (req, res) => {
+router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission("admin:write"), async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return;
     const scope = req.scope!;

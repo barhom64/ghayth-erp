@@ -6,6 +6,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import { rawQuery } from "../lib/rawdb.js";
+import rateLimit from "express-rate-limit";
 
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/jpeg",
@@ -43,7 +44,16 @@ const RequestUploadUrlResponse = z.object({
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
-router.post("/storage/uploads/request-url", authMiddleware, requirePermission("documents:write"), async (req: Request, res: Response) => {
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى لطلبات الرفع. يرجى المحاولة بعد دقيقة" },
+  validate: { ip: false, trustProxy: false },
+});
+
+router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requirePermission("documents:write"), async (req: Request, res: Response) => {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.errors[0]?.message || "Missing or invalid required fields" });
