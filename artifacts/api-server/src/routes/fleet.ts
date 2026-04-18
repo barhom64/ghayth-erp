@@ -17,6 +17,43 @@ import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { z } from "zod";
+
+// ─── Zod schemas for POST route body validation ─────────────────────────────
+const createVehicleSchema = z.object({
+  plateNumber: z.string().min(1),
+  make: z.string().min(1),
+  model: z.string().min(1),
+  year: z.number().optional(),
+  fuelType: z.enum(["gasoline", "diesel", "electric", "hybrid", "lpg"]).optional(),
+});
+
+const createDriverSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().min(1),
+  licenseNumber: z.string().min(1),
+  licenseExpiry: z.string().optional(),
+});
+
+const createMaintenanceSchema = z.object({
+  vehicleId: z.number({ required_error: "المركبة مطلوبة" }),
+  type: z.string().min(1, "نوع الصيانة مطلوب"),
+  description: z.string().min(1, "وصف الصيانة مطلوب"),
+  cost: z.number().min(0).optional(),
+});
+
+const createFuelLogSchema = z.object({
+  vehicleId: z.number().optional(),
+  vehiclePlate: z.string().optional(),
+  liters: z.number().positive("كمية الوقود يجب أن تكون أكبر من صفر"),
+});
+
+const createInsuranceSchema = z.object({
+  vehicleId: z.number({ required_error: "المركبة مطلوبة" }),
+  provider: z.string().min(1, "شركة التأمين مطلوبة"),
+  startDate: z.string().min(1, "تاريخ بداية الوثيقة مطلوب"),
+  endDate: z.string().min(1, "تاريخ انتهاء الوثيقة مطلوب"),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -89,27 +126,17 @@ router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
 router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createVehicleSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
-    const plateNumber = typeof b.plateNumber === "string" ? b.plateNumber.trim() : "";
-    if (!plateNumber) {
-      throw new ValidationError("رقم اللوحة مطلوب", { field: "plateNumber", fix: "أدخل رقم لوحة المركبة" });
-    }
-    if (!b.make || typeof b.make !== "string" || !b.make.trim()) {
-      throw new ValidationError("الشركة المصنّعة مطلوبة", { field: "make", fix: "أدخل اسم الشركة المصنّعة للمركبة" });
-    }
-    if (!b.model || typeof b.model !== "string" || !b.model.trim()) {
-      throw new ValidationError("الموديل مطلوب", { field: "model", fix: "أدخل موديل المركبة" });
-    }
-    if (b.year !== undefined && b.year !== null && b.year !== "") {
+    const plateNumber = b.plateNumber.trim();
+    if (b.year !== undefined && b.year !== null) {
       const yr = Number(b.year);
       const currentYear = new Date().getFullYear();
       if (!Number.isFinite(yr) || yr < 1950 || yr > currentYear + 1) {
         throw new ValidationError(`السنة غير صالحة — يجب أن تكون بين 1950 و${currentYear + 1}`, { field: "year", fix: "أدخل سنة صنع المركبة بصيغة صحيحة" });
       }
-    }
-    if (b.fuelType && !["gasoline", "diesel", "electric", "hybrid", "lpg"].includes(b.fuelType)) {
-      throw new ValidationError("نوع الوقود غير صالح", { field: "fuelType", fix: "اختر من: بنزين، ديزل، كهربائي، هجين، غاز" });
     }
 
     const [existingVehicle] = await rawQuery<any>(

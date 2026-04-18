@@ -22,6 +22,7 @@ import {
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
+import { z } from "zod";
 
 export const purchaseRouter = Router();
 purchaseRouter.use(authMiddleware);
@@ -37,6 +38,36 @@ function assertRole(scope: any, allowedRoles: string[]): void {
     });
   }
 }
+
+const createPurchaseRequestSchema = z.object({
+  items: z.array(z.object({
+    description: z.string().optional(),
+    quantity: z.number().optional(),
+    unitPrice: z.number().optional(),
+    accountCode: z.string().optional(),
+  })).min(1, "يجب إضافة بند واحد على الأقل"),
+  supplierId: z.number().optional(),
+  notes: z.string().optional(),
+  expectedDate: z.string().optional(),
+  expectedDelivery: z.string().optional(),
+});
+
+const createPurchaseOrderSchema = z.object({
+  supplierId: z.number({ required_error: "المورد مطلوب" }),
+  totalAmount: z.number().optional(),
+  vatAmount: z.number().optional(),
+  notes: z.string().optional(),
+  expectedDelivery: z.string().optional(),
+  items: z.array(z.any()).optional(),
+});
+
+const executePaymentRunSchema = z.object({
+  poIds: z.array(z.number()).min(1, "يجب اختيار أمر شراء واحد على الأقل"),
+  paymentDate: z.string().optional(),
+  method: z.string().optional(),
+  reference: z.string().optional(),
+  bankAccount: z.string().optional(),
+});
 
 purchaseRouter.get("/purchase-requests", async (req, res) => {
   try {
