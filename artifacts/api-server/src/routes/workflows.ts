@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError } from "../lib/errorHandler.js";
 import {
   submitWorkflow,
   approveWorkflow,
@@ -35,8 +36,8 @@ router.post("/submit", async (req, res) => {
       data,
     });
     res.status(201).json(result);
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -172,8 +173,8 @@ router.get("/timeline/:refTable/:refId", async (req, res) => {
     const scope = req.scope!;
     const result = await getTimelineByRef(req.params.refTable, Number(req.params.refId), scope.companyId);
     res.json(result);
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -203,8 +204,8 @@ router.get("/", async (req, res) => {
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -228,8 +229,8 @@ router.get("/pending", async (req, res) => {
       [scope.companyId, scope.activeAssignmentId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -244,8 +245,8 @@ router.get("/definitions", async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: defs, total: defs.length });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -262,8 +263,8 @@ router.get("/definitions/:id", async (req, res) => {
       [def.id]
     );
     res.json({ ...def, steps });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -291,8 +292,8 @@ router.post("/definitions", async (req, res) => {
       }
     }
     res.status(201).json({ id: insertId });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -326,8 +327,8 @@ router.put("/definitions/:id", async (req, res) => {
     const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
     const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`, [id]);
     res.json({ ...def, steps: updatedSteps });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -336,8 +337,8 @@ router.delete("/definitions/:id", async (req, res) => {
     const scope = req.scope!;
     await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [Number(req.params.id), scope.companyId]);
     res.json({ message: "تم الحذف" });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -349,8 +350,8 @@ router.get("/sla-definitions", async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -368,8 +369,8 @@ router.post("/sla-definitions", async (req, res) => {
       [scope.companyId, requestType, warningHours ?? 24, deadlineHours ?? 48, escalationHours ?? 72, autoApproveOnTimeout ?? false, escalateTo ?? "hr_manager"]
     );
     res.status(201).json({ id: insertId });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 
@@ -386,8 +387,8 @@ router.get("/stats", async (req, res) => {
       slaWarning: Number(slaWarning.count),
       escalated: Number(escalated.count),
     });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "workflows");
   }
 });
 

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -34,8 +35,8 @@ router.get("/overrides/report", async (req, res) => {
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "approvalActions");
   }
 });
 
@@ -52,8 +53,8 @@ router.get("/:entityType/:entityId", async (req, res) => {
       [entityType, Number(entityId), scope.companyId]
     );
     res.json({ data: rows });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "approvalActions");
   }
 });
 

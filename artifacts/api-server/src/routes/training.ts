@@ -12,7 +12,7 @@ router.get("/programs", async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM training_programs WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 router.post("/programs", async (req, res) => {
@@ -50,7 +50,7 @@ router.get("/programs/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 router.patch("/programs/:id", async (req, res) => {
@@ -76,7 +76,7 @@ router.patch("/programs/:id", async (req, res) => {
     await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1`, [id]);
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 router.delete("/programs/:id", async (req, res) => {
@@ -87,7 +87,7 @@ router.delete("/programs/:id", async (req, res) => {
     if (!existing) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
     await rawExecute(`DELETE FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ message: "تم حذف البرنامج التدريبي بنجاح" });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 router.get("/enrollments", async (req, res) => {
@@ -99,7 +99,7 @@ router.get("/enrollments", async (req, res) => {
     if (programId) { params.push(programId); where += ` AND e."programId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE ${where} ORDER BY e."createdAt" DESC`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 router.post("/enrollments", async (req, res) => {
@@ -152,7 +152,7 @@ router.get("/enrollments/:id", async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "التسجيل غير موجود" }); return; }
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 router.patch("/enrollments/:id", async (req, res) => {
@@ -172,7 +172,7 @@ router.patch("/enrollments/:id", async (req, res) => {
     await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1`, [id]);
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 router.delete("/enrollments/:id", async (req, res) => {
@@ -184,7 +184,7 @@ router.delete("/enrollments/:id", async (req, res) => {
     await rawExecute(`DELETE FROM training_enrollments WHERE id=$1`, [id]);
     await rawExecute(`UPDATE training_programs SET enrolled = GREATEST(0, enrolled - 1) WHERE id=$1`, [existing.programId]);
     res.json({ message: "تم حذف التسجيل بنجاح" });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 router.get("/stats", async (req, res) => {
@@ -201,7 +201,7 @@ router.get("/stats", async (req, res) => {
       totalEnrollments: Number(enrollments.count),
       completedEnrollments: Number(completed.count),
     });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "training"); }
 });
 
 export default router;

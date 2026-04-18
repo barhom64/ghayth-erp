@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -167,9 +168,8 @@ router.get("/", async (req, res) => {
       limit: pageLimit,
       offset: pageOffset,
     });
-  } catch (e: any) {
-    console.error("Activity log error:", e);
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "activityLog");
   }
 });
 
@@ -206,9 +206,8 @@ router.get("/summary", async (req, res) => {
       lowStock: Number(lowStock?.count ?? 0),
       unreadNotifications: Number(unreadNotifications?.count ?? 0),
     });
-  } catch (e: any) {
-    console.error("Activity summary error:", e);
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    handleRouteError(err, res, "activityLog");
   }
 });
 

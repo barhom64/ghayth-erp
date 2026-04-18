@@ -46,7 +46,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
 
     const rows = await rawQuery(`SELECT * FROM documents ${where} ORDER BY "createdAt" DESC`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.post("/", requirePermission("documents:create"), async (req: Request, res: Response) => {
@@ -119,7 +119,7 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
     res.status(201).json(doc);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.get("/:id/download", requirePermission("documents:download"), async (req: Request, res: Response) => {
@@ -153,7 +153,7 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
     } catch {
       res.status(404).json({ error: "الملف غير موجود في التخزين" });
     }
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 // P02-S4-HIGH — `POST /:id/versions` used to read documents with the
@@ -194,7 +194,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
 
     const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [docId, scope.companyId]);
     res.json(updated);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.get("/:id/versions", requirePermission("documents:read"), async (req: Request, res: Response) => {
@@ -212,7 +212,7 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
       [docId]
     );
     res.json({ data: versions });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.patch("/:id/status", requirePermission("documents:update"), async (req: Request, res: Response) => {
@@ -259,7 +259,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
     res.json({ ...(doc as any), impact });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.post("/:id/entity-links", requirePermission("documents:update"), async (req: Request, res: Response) => {
@@ -280,7 +280,7 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
       [docId, entityType, entityId]
     );
     res.json({ message: "تم الربط بنجاح" });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.get("/:id/entity-links", requirePermission("documents:read"), async (req: Request, res: Response) => {
@@ -299,7 +299,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
       [docId]
     );
     res.json({ data: links });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.get("/folders", requirePermission("documents:read"), async (req, res) => {
@@ -307,7 +307,7 @@ router.get("/folders", requirePermission("documents:read"), async (req, res) => 
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY name`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.post("/folders", requirePermission("documents:create"), async (req, res) => {
@@ -348,7 +348,7 @@ router.get("/templates", requirePermission("documents:read"), async (req, res) =
       [scope.companyId]
     );
     res.json(rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.get("/templates/:id", requirePermission("documents:read"), async (req, res) => {
@@ -357,7 +357,7 @@ router.get("/templates/:id", requirePermission("documents:read"), async (req, re
     const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "القالب غير موجود" }); return; }
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.post("/templates", requirePermission("documents:create"), async (req, res) => {
@@ -583,7 +583,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       signatureUrl: template.signatureUrl,
       variables: entityData,
     });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.get("/templates/:id/variables", requirePermission("documents:read"), async (req, res) => {
@@ -595,7 +595,7 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
     let variables = [];
     try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch { variables = []; }
     res.json({ variables });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.get("/stats", requirePermission("documents:read"), async (req, res) => {
@@ -614,7 +614,7 @@ router.get("/stats", requirePermission("documents:read"), async (req, res) => {
       draftDocuments: Number(drafts.count),
       approvedDocuments: Number(approved.count),
     });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.get("/:id", requirePermission("documents:read"), async (req, res) => {
@@ -623,7 +623,7 @@ router.get("/:id", requirePermission("documents:read"), async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "المستند غير موجود" }); return; }
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.patch("/:id", requirePermission("documents:update"), async (req, res) => {
@@ -646,7 +646,7 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     if (result.affectedRows === 0) { res.status(404).json({ error: "المستند غير موجود" }); return; }
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 router.delete("/:id", requirePermission("documents:delete"), async (req, res) => {
@@ -656,7 +656,7 @@ router.delete("/:id", requirePermission("documents:delete"), async (req, res) =>
     const result = await rawExecute(`DELETE FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "المستند غير موجود" }); return; }
     res.json({ message: "تم حذف المستند بنجاح" });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
 export default router;
