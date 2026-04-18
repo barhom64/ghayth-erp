@@ -298,7 +298,7 @@ export default function VouchersCreate() {
           <div>
             <Label>الحساب المقابل <span className="text-red-500">*</span></Label>
             <Select value={form.accountCode || "_none"} onValueChange={(v) => setField("accountCode", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger className={`mt-1 ${errCls("accountCode")}`}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">{form.type === "receipt" ? "إيرادات (4000)" : "مصروفات (5000)"}</SelectItem>
                 {targetAccounts.map((a: any) => (
@@ -306,6 +306,7 @@ export default function VouchersCreate() {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint field="accountCode" />
           </div>
           <div>
             <Label>الخزنة / البنك</Label>
@@ -422,12 +423,13 @@ export default function VouchersCreate() {
           <div>
             <Label>الفرع <span className="text-red-500">*</span></Label>
             <Select value={form.branchId || "_none"} onValueChange={(v) => setField("branchId", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger className={`mt-1 ${errCls("branchId")}`}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر الفرع</SelectItem>
                 {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <FieldHint field="branchId" />
           </div>
           <div>
             <Label>القسم / الإدارة</Label>

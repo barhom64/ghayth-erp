@@ -76,7 +76,8 @@ export default function BuildingsCreate() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>اسم المبنى <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="برج X / مجمع Y" />
+              <Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="برج X / مجمع Y" />
+              <FieldHint field="name" />
             </div>
             <div>
               <Label>نوع المبنى</Label>
@@ -96,7 +97,8 @@ export default function BuildingsCreate() {
             </div>
             <div>
               <Label>عدد الطوابق</Label>
-              <Input className="mt-1" type="number" value={form.floors} onChange={e => setForm({ ...form, floors: e.target.value })} />
+              <Input className={`mt-1 ${errCls("floors")}`} type="number" value={form.floors} onChange={e => setForm({ ...form, floors: e.target.value })} />
+              <FieldHint field="floors" />
             </div>
           </div>
 

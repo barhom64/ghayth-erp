@@ -106,11 +106,13 @@ export default function TenantsCreate() {
               </div>
               <div className="space-y-2">
                 <Label>{isCompany ? "اسم الشركة" : "الاسم الكامل"} <span className="text-red-500">*</span></Label>
-                <Input value={form.name} onChange={e => set("name", e.target.value)} placeholder={isCompany ? "اسم الشركة أو المؤسسة" : "الاسم الرباعي"} />
+                <Input className={errCls("name")} value={form.name} onChange={e => set("name", e.target.value)} placeholder={isCompany ? "اسم الشركة أو المؤسسة" : "الاسم الرباعي"} />
+                <FieldHint field="name" />
               </div>
               <div className="space-y-2">
                 <Label>رقم الجوال</Label>
-                <Input dir="ltr" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="05XXXXXXXX" />
+                <Input className={errCls("phone")} dir="ltr" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="05XXXXXXXX" />
+                <FieldHint field="phone" />
               </div>
               <div className="space-y-2">
                 <Label>البريد الإلكتروني</Label>
@@ -130,7 +132,8 @@ export default function TenantsCreate() {
               </div>
               <div className="space-y-2">
                 <Label>رقم الهوية</Label>
-                <Input dir="ltr" value={form.nationalId} onChange={e => set("nationalId", e.target.value)} placeholder="رقم الهوية أو الإقامة" />
+                <Input className={errCls("nationalId")} dir="ltr" value={form.nationalId} onChange={e => set("nationalId", e.target.value)} placeholder="رقم الهوية أو الإقامة" />
+                <FieldHint field="nationalId" />
               </div>
               <div className="space-y-2">
                 <Label>الجنسية</Label>

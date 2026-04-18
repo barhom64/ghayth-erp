@@ -36,6 +36,10 @@ export default function TrainingCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const set = (key: string, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -46,8 +50,15 @@ export default function TrainingCreate() {
     : null;
 
   const handleSubmit = () => {
-    if (!form.title) {
-      toast({ variant: "destructive", title: "عنوان البرنامج مطلوب" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.title) localErrors.title = "عنوان البرنامج مطلوب";
+    if (form.maxParticipants && Number(form.maxParticipants) <= 0) localErrors.maxParticipants = "السعة القصوى يجب أن تكون أكبر من صفر";
+    if (form.startDate && form.endDate && form.endDate < form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     createMut.mutate(
@@ -117,7 +128,8 @@ export default function TrainingCreate() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label>العنوان <span className="text-red-500">*</span></Label>
-            <Input className="mt-1" value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="اسم البرنامج التدريبي" />
+            <Input className={`mt-1 ${errCls("title")}`} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="اسم البرنامج التدريبي" />
+            <FieldHint field="title" />
           </div>
           <div>
             <Label>التصنيف</Label>

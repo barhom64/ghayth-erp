@@ -72,7 +72,8 @@ export default function OwnersCreate() {
             </div>
             <div>
               <Label>الاسم <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={form.ownerType === "company" ? "اسم الشركة" : "الاسم الكامل"} />
+              <Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={form.ownerType === "company" ? "اسم الشركة" : "الاسم الكامل"} />
+              <FieldHint field="name" />
             </div>
             <div>
               <Label>رقم الهوية</Label>
@@ -86,11 +87,13 @@ export default function OwnersCreate() {
             )}
             <div>
               <Label>الهاتف</Label>
-              <Input className="mt-1" dir="ltr" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              <Input className={`mt-1 ${errCls("phone")}`} dir="ltr" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              <FieldHint field="phone" />
             </div>
             <div>
               <Label>البريد الإلكتروني</Label>
-              <Input className="mt-1" type="email" dir="ltr" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              <Input className={`mt-1 ${errCls("email")}`} type="email" dir="ltr" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              <FieldHint field="email" />
             </div>
           </div>
 

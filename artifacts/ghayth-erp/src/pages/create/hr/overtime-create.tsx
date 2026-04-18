@@ -160,11 +160,14 @@ export default function OvertimeCreate() {
 
           <div className="space-y-2">
             <Label>تاريخ الوقت الإضافي <span className="text-red-500">*</span></Label>
-            <DatePicker
-              value={form.overtimeDate}
-              onChange={(v) => setForm({ ...form, overtimeDate: v })}
-              maxDate={new Date()}
-            />
+            <div className={errCls("overtimeDate")}>
+              <DatePicker
+                value={form.overtimeDate}
+                onChange={(v) => setForm({ ...form, overtimeDate: v })}
+                maxDate={new Date()}
+              />
+            </div>
+            <FieldHint field="overtimeDate" />
           </div>
         </div>
 
@@ -208,7 +211,9 @@ export default function OvertimeCreate() {
               max="12"
               value={form.hours}
               onChange={(e) => setForm({ ...form, hours: e.target.value })}
+              className={errCls("hours")}
             />
+            <FieldHint field="hours" />
           </div>
 
           <div className="space-y-2">
