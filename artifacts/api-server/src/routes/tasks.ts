@@ -162,12 +162,12 @@ router.get("/entity-search", requirePermission("tasks:read"), async (req, res) =
     if (!type) { res.json([]); return; }
 
     const searchMap: Record<string, string> = {
-      property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE "companyId"=$1 AND ("unitNumber" ILIKE $2 OR "buildingName" ILIKE $2) ORDER BY id DESC LIMIT 10`,
-      vehicle: `SELECT id, COALESCE("plateNumber", make || ' ' || model) AS name FROM vehicles WHERE "companyId"=$1 AND ("plateNumber" ILIKE $2 OR make ILIKE $2 OR model ILIKE $2) ORDER BY id DESC LIMIT 10`,
-      client: `SELECT id, name FROM clients WHERE "companyId"=$1 AND (name ILIKE $2 OR phone ILIKE $2) ORDER BY id DESC LIMIT 10`,
+      property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL AND ("unitNumber" ILIKE $2 OR "buildingName" ILIKE $2) ORDER BY id DESC LIMIT 10`,
+      vehicle: `SELECT id, COALESCE("plateNumber", make || ' ' || model) AS name FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL AND ("plateNumber" ILIKE $2 OR make ILIKE $2 OR model ILIKE $2) ORDER BY id DESC LIMIT 10`,
+      client: `SELECT id, name FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (name ILIKE $2 OR phone ILIKE $2) ORDER BY id DESC LIMIT 10`,
       project: `SELECT id, name FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND name ILIKE $2 ORDER BY id DESC LIMIT 10`,
-      contract: `SELECT id, COALESCE(ref, 'عقد #' || id) AS name FROM contracts WHERE "companyId"=$1 AND (ref ILIKE $2 OR "tenantName" ILIKE $2) ORDER BY id DESC LIMIT 10`,
-      legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id) AS name FROM legal_cases WHERE "companyId"=$1 AND (title ILIKE $2 OR "caseNumber" ILIKE $2) ORDER BY id DESC LIMIT 10`,
+      contract: `SELECT id, COALESCE("contractNumber", 'عقد #' || id::text) AS name FROM rental_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL AND ("contractNumber" ILIKE $2 OR "tenantName" ILIKE $2) ORDER BY id DESC LIMIT 10`,
+      legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id::text) AS name FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (title ILIKE $2 OR "caseNumber" ILIKE $2) ORDER BY id DESC LIMIT 10`,
       maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE "companyId"=$1 AND (description ILIKE $2 OR category ILIKE $2) ORDER BY id DESC LIMIT 10`,
     };
 
