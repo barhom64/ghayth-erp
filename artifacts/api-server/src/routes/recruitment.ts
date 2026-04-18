@@ -2,7 +2,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -19,12 +20,29 @@ router.post("/postings", async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = req.body;
+    if (!title || !String(title).trim()) {
+      throw new ValidationError("عنوان الإعلان الوظيفي مطلوب", {
+        field: "title",
+        fix: "أدخل عنواناً واضحاً للإعلان (مثل: محاسب، مندوب مبيعات...)",
+      });
+    }
+    if (salaryMin !== undefined && salaryMax !== undefined && Number(salaryMax) < Number(salaryMin)) {
+      throw new ValidationError("الحد الأعلى للراتب أقل من الحد الأدنى", {
+        field: "salaryMax",
+        fix: "تأكد من أن الحد الأعلى أكبر من الحد الأدنى",
+      });
+    }
     const r = await rawExecute(
       `INSERT INTO job_postings (title, department, location, type, description, requirements, "salaryMin", "salaryMax", status, "closingDate", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [title, department, location, type || "full-time", description, requirements, salaryMin, salaryMax, status || "open", closingDate, scope.companyId]
+      [String(title).trim(), department ?? null, location ?? null, type || "full-time", description ?? null, requirements ?? null, salaryMin ?? null, salaryMax ?? null, status || "open", closingDate ?? null, scope.companyId]
     );
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "job_postings", entityId: r.insertId,
+      after: { title, type: type || "full-time", status: status || "open" },
+    }).catch(console.error);
+    res.status(201).json({ id: r.insertId, title, status: status || "open" });
+  } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
 
 router.get("/postings/:id", async (req, res) => {
@@ -158,14 +176,34 @@ router.post("/applications", async (req, res) => {
   try {
     const scope = req.scope!;
     const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = req.body;
-    const [posting] = await rawQuery<any>(`SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [postingId, scope.companyId]);
-    if (!posting) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
+    if (!postingId) {
+      throw new ValidationError("الإعلان الوظيفي مطلوب", {
+        field: "postingId",
+        fix: "اختر الإعلان الوظيفي المتقدم عليه",
+      });
+    }
+    if (!applicantName || !String(applicantName).trim()) {
+      throw new ValidationError("اسم المتقدم مطلوب", {
+        field: "applicantName",
+        fix: "أدخل اسم المتقدم الكامل",
+      });
+    }
+    const [posting] = await rawQuery<{ id: number }>(
+      `SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [Number(postingId), scope.companyId]
+    );
+    if (!posting) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     const r = await rawExecute(
       `INSERT INTO job_applications ("postingId", "applicantName", email, phone, "resumeUrl", status, notes, rating) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [postingId, applicantName, email, phone, resumeUrl, status || "new", notes, rating]
+      [Number(postingId), String(applicantName).trim(), email ?? null, phone ?? null, resumeUrl ?? null, status || "new", notes ?? null, rating ?? null]
     );
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "job_applications", entityId: r.insertId,
+      after: { postingId: Number(postingId), applicantName, status: status || "new" },
+    }).catch(console.error);
+    res.status(201).json({ id: r.insertId, postingId: Number(postingId), applicantName, status: status || "new" });
+  } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
 
 router.get("/applications/:id", async (req, res) => {
