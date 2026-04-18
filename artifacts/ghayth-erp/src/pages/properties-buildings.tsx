@@ -10,11 +10,12 @@ import { Building2, Home, Plus, Eye, Pencil, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function PropertiesBuildings() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
-  const { data: buildingsResp, isLoading } = useApiQuery<any>(
+  const { data: buildingsResp, isLoading, isError } = useApiQuery<any>(
     ["property-buildings", scopeQueryString],
     `/properties/buildings?${scopeQueryString || ""}`
   );
@@ -25,14 +26,8 @@ export default function PropertiesBuildings() {
     !search || b.name?.includes(search) || b.address?.includes(search) || b.city?.includes(search)
   );
 
-  if (isLoading) return (
-    <div className="space-y-6">
-      <Skeleton className="h-10 w-64" />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[1,2,3].map(i => <Skeleton key={i} className="h-48" />)}
-      </div>
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">

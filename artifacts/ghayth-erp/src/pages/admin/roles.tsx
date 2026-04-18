@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,7 +65,7 @@ const ROLE_OPTIONS = [
 
 export default function AdminRolesPage() {
   const { toast } = useToast();
-  const { data: predefinedData, refetch: refetchPredefined } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
+  const { data: predefinedData, isLoading, isError, refetch: refetchPredefined } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
   const { data: roleModulesData, refetch } = useApiQuery<any>(["role-modules"], "/settings/role-modules");
   const predefinedRoles: any[] = predefinedData?.data || [];
   const roleModulesMap = new Map<string, string[]>(
