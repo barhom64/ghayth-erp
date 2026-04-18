@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,52 +38,29 @@ export default function ProductDetailPage() {
     !!id
   );
 
-  // Stock movements — try filter, fallback to client filter
-  // TODO: prefer a dedicated /warehouse/movements?productId= endpoint with real join
+  // Stock movements filtered by product
   const { data: movementsResp } = useApiQuery<any>(
     ["product-movements", id],
     id ? `/warehouse/movements?productId=${id}` : null,
     !!id
   );
-  const allMovements: any[] = movementsResp?.data || [];
-  const movements = useMemo(
-    () => allMovements.filter((m) => String(m.productId ?? m.itemId ?? "") === String(id)),
-    [allMovements, id]
-  );
+  const movements: any[] = movementsResp?.data || [];
 
-  // Sales history — filter orders containing this product
-  // TODO: prefer /store/orders?productId= with server-side join
+  // Sales history filtered by product
   const { data: ordersResp } = useApiQuery<any>(
     ["product-orders", id],
-    id ? `/store/orders` : null,
+    id ? `/store/orders?productId=${id}` : null,
     !!id
   );
-  const allOrders: any[] = ordersResp?.data || [];
-  const sales = useMemo(
-    () =>
-      allOrders.filter((o) => {
-        const items: any[] = o.items || o.orderItems || [];
-        return items.some((it) => String(it.productId) === String(id));
-      }),
-    [allOrders, id]
-  );
+  const sales: any[] = ordersResp?.data || [];
 
-  // Purchase orders — no dedicated endpoint filter by product
-  // TODO: prefer /finance/purchase-orders?productId= with server filter
+  // Purchase orders filtered by product
   const { data: poResp } = useApiQuery<any>(
     ["product-purchase-orders", id],
-    id ? `/finance/purchase-orders` : null,
+    id ? `/finance/purchase-orders?productId=${id}` : null,
     !!id
   );
-  const allPos: any[] = poResp?.data || [];
-  const purchaseOrders = useMemo(
-    () =>
-      allPos.filter((p) => {
-        const items: any[] = p.items || p.orderItems || [];
-        return items.some((it) => String(it.productId) === String(id));
-      }),
-    [allPos, id]
-  );
+  const purchaseOrders: any[] = poResp?.data || [];
 
   const currentStock = Number(product?.quantity) || 0;
   const reserved = Number(product?.reservedQuantity) || 0;

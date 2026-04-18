@@ -292,7 +292,7 @@ router.get("/vehicles/:id", requirePermission("fleet:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const vehicleId = Number(req.params.id);
-    const [row] = await rawQuery<any>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" WHERE v.id=$1 AND v."companyId"=$2`, [vehicleId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [vehicleId, scope.companyId]);
     if (!row) throw new NotFoundError("المركبة غير موجودة");
     const [trips, maintenance, fuelLogs, insurance] = await Promise.all([
       rawQuery<any>(
@@ -669,6 +669,23 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet trips error:"); }
 });
 
+router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const tripId = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT t.*, v."plateNumber", d.name AS "driverName"
+       FROM fleet_trips t
+       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
+       LEFT JOIN fleet_drivers d ON d.id = t."driverId"
+       WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`,
+      [tripId, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الرحلة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get trip error:"); }
+});
+
 router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -723,7 +740,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
                 (SELECT COUNT(*) FROM fleet_trips WHERE "vehicleId"=v.id AND status='completed') AS "tripCount",
                 (SELECT MAX("endDate") FROM fleet_insurance WHERE "vehicleId"=v.id) AS "insuranceEnd"
          FROM fleet_vehicles v
-         WHERE v."companyId"=$1 AND v.status='available'
+         WHERE v."companyId"=$1 AND v.status='available' AND v."deletedAt" IS NULL
          ORDER BY v.id LIMIT 20`,
         [scope.companyId]
       );
@@ -1484,7 +1501,7 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
     }
 
     const oilDue = await rawQuery<any>(
-      `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
+      `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
       [cid]
     );
     oilDue.forEach((r: any) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
@@ -1518,7 +1535,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
     const vehiclePlate = b.vehiclePlate || null;
     let resolvedVehicleId = vehicleId;
     if (!resolvedVehicleId && vehiclePlate) {
-      const [v] = await rawQuery<any>(`SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2`, [vehiclePlate, scope.companyId]);
+      const [v] = await rawQuery<any>(`SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [vehiclePlate, scope.companyId]);
       if (v) resolvedVehicleId = v.id;
     }
     if (!resolvedVehicleId) {
@@ -2165,10 +2182,10 @@ router.get("/stats", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1`, [cid]);
-    const [trips] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1`, [cid]);
-    const [fuel] = await rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1`, [cid]);
-    const [insurance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1`, [cid]);
+    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [trips] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [fuel] = await rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [insurance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [drivers] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]);
@@ -2588,7 +2605,7 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
     const [vehicle] = await rawQuery<any>(
       `SELECT v.*, d.name AS "driverName"
        FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id=v."assignedDriverId"
-       WHERE v.id=$1 AND v."companyId"=$2`,
+       WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
       [vehicleId, scope.companyId]
     );
     if (!vehicle) throw new NotFoundError("المركبة غير موجودة");

@@ -367,7 +367,7 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
 router.get("/products/:id", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) throw new NotFoundError("المنتج غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
@@ -1028,8 +1028,8 @@ router.get("/stats", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [products] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [value] = await rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active'`, [cid]);
+    const [products] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
+    const [value] = await rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
     const [movements] = await rawQuery<any>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]);
     res.json({ totalProducts: Number(products.total), lowStock: Number(products.lowStock), totalValue: Number(value.totalValue), todayMovements: Number(movements.todayMovements) });
   } catch (err) { handleRouteError(err, res, "Warehouse stats error:"); }
@@ -1136,7 +1136,7 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
     }
 
     const [product] = await rawQuery<any>(
-      `SELECT id, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2`,
+      `SELECT id, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [b.productId, scope.companyId]
     );
     if (!product) throw new NotFoundError("المنتج غير موجود");

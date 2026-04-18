@@ -139,19 +139,19 @@ router.get("/contracts/renewal-alerts", async (req, res) => {
 
     const alerts90 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
-       FROM legal_contracts WHERE "companyId"=$1 AND status='active'
+       FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
        AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '90 days'`,
       [cid]
     );
     const alerts30 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
-       FROM legal_contracts WHERE "companyId"=$1 AND status='active'
+       FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
        AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '15 days' AND CURRENT_DATE + INTERVAL '30 days'`,
       [cid]
     );
     const alerts14 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
-       FROM legal_contracts WHERE "companyId"=$1 AND status='active'
+       FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
        AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '14 days'`,
       [cid]
     );
@@ -175,7 +175,7 @@ router.get("/contracts/renewal-alerts", async (req, res) => {
 router.get("/contracts/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) throw new NotFoundError("العقد غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
@@ -506,7 +506,7 @@ router.post("/cases", async (req, res) => {
 router.get("/cases/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) throw new NotFoundError("القضية غير موجودة");
 
     const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [row.id]);
@@ -519,7 +519,7 @@ router.patch("/cases/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القضية غير موجودة");
     const b = req.body;
 
@@ -588,7 +588,7 @@ router.patch("/cases/:id", async (req, res) => {
       }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     res.json({ ...row, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Update case error:"); }
 });
@@ -669,7 +669,7 @@ router.post("/cases/:id/close", async (req, res) => {
       after: { status: "closed", reason: b.closureReason, outcome: b.outcome },
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     res.json({ ...updated, event: "legal.case.closed" });
   } catch (err) { handleRouteError(err, res, "Close case error:"); }
 });
@@ -678,7 +678,7 @@ router.get("/cases/:caseId/sessions", async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
-    const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [caseId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -840,11 +840,11 @@ router.get("/stats", async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [contracts] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1`, [cid]);
-    const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1`, [cid]);
-    const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active'`, [cid]);
-    const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
-    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed')`, [cid]).catch(() => [{ total: 0 }]);
+    const [contracts] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]);
+    const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
+    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch(() => [{ total: 0 }]);
     res.json({
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
       totalCases: Number(cases.total), openCases: Number(cases.open), inProgressCases: Number(cases.inProgress),
@@ -858,7 +858,7 @@ router.get("/cases/:caseId/correspondence", async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
-    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC`, [caseId]);
     res.json({ data: rows, total: rows.length });
@@ -870,7 +870,7 @@ router.post("/cases/:caseId/correspondence", async (req, res) => {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
     const b = req.body;
-    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
       `INSERT INTO legal_correspondence ("caseId","companyId",direction,subject,parties,"correspondenceDate","documentRef",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -885,7 +885,7 @@ router.get("/cases/:caseId/judgments", async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
-    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 ORDER BY "judgmentDate" DESC`, [caseId]);
     res.json({ data: rows, total: rows.length });
@@ -909,7 +909,7 @@ router.post("/cases/:caseId/judgments", async (req, res) => {
         throw new ValidationError("قيمة الحكم غير صالحة", { field: "amount", fix: "أدخل قيمة غير سالبة" });
       }
     }
-    const [lc] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+    const [lc] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
       `INSERT INTO legal_judgments ("caseId","companyId","judgmentDate","judgmentType",verdict,amount,"paidAmount","dueDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -1078,7 +1078,7 @@ router.get("/sessions/upcoming", async (req, res) => {
               (ls."sessionDate"::date - CURRENT_DATE) AS "daysUntil"
        FROM legal_sessions ls
        JOIN legal_cases lc ON lc.id=ls."caseId"
-       WHERE lc."companyId"=$1 AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL
+       WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL
        ORDER BY ls."sessionDate" ASC`,
       [scope.companyId, days]
     );
@@ -1107,7 +1107,7 @@ router.get("/judgments/financial-report", async (req, res) => {
       [scope.companyId]
     );
     const [contingent] = await rawQuery<any>(
-      `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed')`,
+      `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`,
       [scope.companyId]
     ).catch(() => [{ total: 0 }]);
     res.json({

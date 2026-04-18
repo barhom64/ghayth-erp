@@ -50,18 +50,13 @@ export default function JobDetailPage() {
     !!id
   );
 
-  // Applications — filter client-side
-  // TODO: prefer /recruitment/applications?postingId= with server filter
+  // Applications filtered by posting
   const { data: appsResp } = useApiQuery<any>(
     ["job-applications", id],
     id ? `/recruitment/applications?postingId=${id}` : null,
     !!id
   );
-  const allApps: any[] = appsResp?.data || [];
-  const applicants = useMemo(
-    () => allApps.filter((a) => String(a.postingId) === String(id)),
-    [allApps, id]
-  );
+  const applicants: any[] = appsResp?.data || [];
 
   const inInterview = applicants.filter((a) => (a.status || a.stage) === "interview").length;
   const offered = applicants.filter((a) => (a.status || a.stage) === "offer").length;

@@ -457,6 +457,23 @@ router.get("/contracts", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Rental contracts error:"); }
 });
 
+router.get("/contracts/:id", requirePermission("properties:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const contractId = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT c.*, u."unitNumber", u."buildingName", t.name AS "tenantFullName", t.phone AS "tenantPhoneFromRecord", t.email AS "tenantEmailFromRecord"
+       FROM rental_contracts c
+       LEFT JOIN property_units u ON u.id = c."unitId"
+       LEFT JOIN tenants t ON t.id = c."tenantId"
+       WHERE c.id = $1 AND c."companyId" = $2 AND c."deletedAt" IS NULL`,
+      [contractId, scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get contract error:"); }
+});
+
 router.post("/contracts", async (req, res) => {
   try {
     const scope = req.scope!;

@@ -331,14 +331,14 @@ purchaseRouter.get("/purchase-orders", async (req, res) => {
               po."expectedDelivery", po.notes, s.name AS "supplierName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId"
-       WHERE ${where}${extraWhere}
+       WHERE ${where}${extraWhere} AND po."deletedAt" IS NULL
        ORDER BY po."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM purchase_orders po WHERE ${where}${extraWhere}`, countParams);
+    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM purchase_orders po WHERE ${where}${extraWhere} AND po."deletedAt" IS NULL`, countParams);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
   } catch (err) {
     handleRouteError(err, res, "List purchase orders error:");
@@ -394,7 +394,7 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
     const { id } = req.params;
     const { notes } = req.body as any;
 
-    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
@@ -444,7 +444,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", async (req, res) => {
     const { receivedDate, qualityNotes, lines } = req.body as any;
 
     const [po] = await rawQuery<any>(
-      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
@@ -673,7 +673,7 @@ purchaseRouter.get("/purchase-orders/:id/match", async (req, res) => {
     const poId = Number(req.params.id);
     const [po] = await rawQuery<any>(
       `SELECT id, ref, status, "totalAmount", "vatAmount", "supplierId"
-         FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+         FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [poId, scope.companyId]
     );
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
@@ -728,7 +728,7 @@ purchaseRouter.get("/payment-run/pending", async (req, res) => {
     assertRole(scope, FINANCE_ROLES);
     const { cutoffDate, supplierId } = req.query as any;
     const params: any[] = [scope.companyId];
-    let where = `po."companyId" = $1 AND po.status = 'invoice_matched'`;
+    let where = `po."companyId" = $1 AND po.status = 'invoice_matched' AND po."deletedAt" IS NULL`;
     if (supplierId) { params.push(Number(supplierId)); where += ` AND po."supplierId" = $${params.length}`; }
     if (cutoffDate) { params.push(cutoffDate); where += ` AND COALESCE(po."expectedDelivery", po."createdAt") <= $${params.length}`; }
 
@@ -784,7 +784,7 @@ purchaseRouter.post("/payment-run/execute", async (req, res) => {
     const pos = await rawQuery<any>(
       `SELECT id, ref, "totalAmount", "supplierId", "branchId", status
          FROM purchase_orders
-        WHERE id = ANY($1) AND "companyId" = $2`,
+        WHERE id = ANY($1) AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [poIdNums, scope.companyId]
     );
     if (pos.length !== poIdNums.length) {
@@ -1019,7 +1019,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", async (req, res) => 
       `SELECT po.*, s.name AS "supplierName", s.email AS "supplierEmail"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId"
-       WHERE po.id = $1`,
+       WHERE po.id = $1 AND po."deletedAt" IS NULL`,
       [poId]
     );
 
@@ -1059,7 +1059,7 @@ purchaseRouter.get("/purchase-orders/:id", async (req, res) => {
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId"
        LEFT JOIN branches b ON b.id = po."branchId"
-       WHERE po.id = $1 AND po."companyId" = $2`,
+       WHERE po.id = $1 AND po."companyId" = $2 AND po."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
@@ -1086,7 +1086,7 @@ purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", async (req, res) => 
     const { confirmedDelivery, notes } = req.body as any;
 
     const [po] = await rawQuery<any>(
-      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!po) {
@@ -1130,7 +1130,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", async (req, res) => {
     }
 
     const [po] = await rawQuery<any>(
-      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!po) {
@@ -1235,7 +1235,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", async (req, res) =>
     }
 
     const [po] = await rawQuery<any>(
-      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!po) {

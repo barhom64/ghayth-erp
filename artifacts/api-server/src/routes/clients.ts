@@ -82,7 +82,7 @@ router.post("/", async (req, res) => {
     );
 
     const [client] = await rawQuery<any>(
-      `SELECT * FROM clients WHERE id = $1`,
+      `SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`,
       [insertId]
     );
 
@@ -110,7 +110,7 @@ router.get("/:id", async (req, res) => {
     const { id } = req.params;
 
     const [client] = await rawQuery<any>(
-      `SELECT * FROM clients WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
 
@@ -223,7 +223,7 @@ router.patch("/:id", async (req, res) => {
     const scope = req.scope!;
     const { id } = req.params;
     const [existing] = await rawQuery<any>(
-      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!existing) { res.status(404).json({ error: "العميل غير موجود" }); return; }
@@ -241,7 +241,7 @@ router.patch("/:id", async (req, res) => {
     if (sets.length === 0) { res.json(existing); return; }
     params.push(Number(id));
     await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length}`, params);
-    const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1`, [Number(id)]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`, [Number(id)]);
     res.json(updated);
   } catch (err) {
     handleRouteError(err, res, "Update client error:");
@@ -258,7 +258,7 @@ router.post("/auto-create", async (req, res) => {
     }
 
     const existing = await rawQuery<any>(
-      `SELECT * FROM clients WHERE phone = $1 AND "companyId" = $2 LIMIT 1`,
+      `SELECT * FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
       [phone, scope.companyId]
     );
 
@@ -276,7 +276,7 @@ router.post("/auto-create", async (req, res) => {
       [clientName, phone, source, code, scope.companyId]
     );
 
-    const [newClient] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1`, [insertId]);
+    const [newClient] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`, [insertId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -299,7 +299,7 @@ router.delete("/:id", async (req, res) => {
     const scope = req.scope!;
     const { id } = req.params;
     const [existing] = await rawQuery<any>(
-      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!existing) { res.status(404).json({ error: "العميل غير موجود" }); return; }
@@ -315,7 +315,7 @@ router.get("/:id/portal-account", async (req, res) => {
     const scope = req.scope!;
     const { id } = req.params;
     const [existing] = await rawQuery<any>(
-      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!existing) { res.status(404).json({ error: "العميل غير موجود" }); return; }
@@ -348,7 +348,7 @@ router.post("/:id/portal-account", async (req, res) => {
     const email = rawEmail.trim().toLowerCase();
 
     const [client] = await rawQuery<any>(
-      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!client) { res.status(404).json({ error: "العميل غير موجود" }); return; }
