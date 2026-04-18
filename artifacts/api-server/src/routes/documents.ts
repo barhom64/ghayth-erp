@@ -5,6 +5,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
 import { createAuditLog } from "../lib/businessHelpers.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -52,17 +53,24 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
   try {
     const scope = req.scope!;
     const { title, description, type, department, folder } = req.body;
-    if (!title) {
-      res.status(400).json({ error: "عنوان المستند مطلوب" });
-      return;
+    if (!title || !String(title).trim()) {
+      throw new ValidationError("عنوان المستند مطلوب", {
+        field: "title",
+        fix: "أدخل عنواناً واضحاً للمستند",
+      });
     }
     const r = await rawExecute(
       `INSERT INTO documents (title, description, category, "fileName", "storageKey", "companyId", "uploadedBy", status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft')`,
-      [title, description || null, type || 'document', folder || title, `doc-${Date.now()}`, scope.companyId, scope.userId]
+      [String(title).trim(), description || null, type || 'document', folder || String(title).trim(), `doc-${Date.now()}`, scope.companyId, scope.userId]
     );
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "documents", entityId: r.insertId,
+      after: { title, type: type || "document", department: department ?? null },
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId, title, type, department });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (err) { handleRouteError(err, res, "Create document error:"); }
 });
 
 router.post("/upload", requirePermission("documents:create"), async (req: Request, res: Response) => {
@@ -306,12 +314,30 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
   try {
     const scope = req.scope!;
     const { name, parentId, color } = req.body;
+    if (!name || !String(name).trim()) {
+      throw new ValidationError("اسم المجلد مطلوب", {
+        field: "name",
+        fix: "أدخل اسماً للمجلد",
+      });
+    }
+    if (parentId) {
+      const [parent] = await rawQuery<{ id: number }>(
+        `SELECT id FROM document_folders WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [Number(parentId), scope.companyId]
+      );
+      if (!parent) {
+        throw new ValidationError(`المجلد الأب رقم ${parentId} غير موجود`, {
+          field: "parentId",
+          fix: "اختر مجلد أب مسجلاً أو اتركه فارغاً",
+        });
+      }
+    }
     const r = await rawExecute(
       `INSERT INTO document_folders (name, "parentId", color, "companyId") VALUES ($1,$2,$3,$4)`,
-      [name, parentId, color, scope.companyId]
+      [String(name).trim(), parentId ? Number(parentId) : null, color ?? null, scope.companyId]
     );
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    res.status(201).json({ id: r.insertId, name, parentId: parentId ? Number(parentId) : null });
+  } catch (err) { handleRouteError(err, res, "Create folder error:"); }
 });
 
 router.get("/templates", requirePermission("documents:read"), async (req, res) => {
@@ -338,12 +364,29 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
   try {
     const scope = req.scope!;
     const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl } = req.body;
+    if (!name || !String(name).trim()) {
+      throw new ValidationError("اسم القالب مطلوب", {
+        field: "name",
+        fix: "أدخل اسماً للقالب",
+      });
+    }
+    if (!content || !String(content).trim()) {
+      throw new ValidationError("محتوى القالب مطلوب", {
+        field: "content",
+        fix: "اكتب نص القالب (يمكن استخدام {{placeholder}} للحقول القابلة للتعبئة)",
+      });
+    }
     const r = await rawExecute(
       `INSERT INTO document_templates (name, description, content, category, "type", "variables", "htmlContent", "branchId", "signatureUrl", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [name, description, content, category, type || 'letter', JSON.stringify(variables || []), htmlContent || '', branchId || null, signatureUrl || null, scope.companyId]
+      [String(name).trim(), description ?? null, String(content), category ?? null, type || 'letter', JSON.stringify(variables || []), htmlContent || '', branchId || null, signatureUrl || null, scope.companyId]
     );
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "document_templates", entityId: r.insertId,
+      after: { name, type: type || "letter", category: category ?? null },
+    }).catch(console.error);
+    res.status(201).json({ id: r.insertId, name, type: type || "letter" });
+  } catch (err) { handleRouteError(err, res, "Create template error:"); }
 });
 
 // P02-S4-MED — both PUT and DELETE on /templates/:id used to read the
