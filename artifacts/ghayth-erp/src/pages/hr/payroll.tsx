@@ -14,6 +14,7 @@ import { ExportButton } from "@/components/shared/export-buttons";
 
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 
 
@@ -41,7 +42,7 @@ function PayrollLines({ runId }: { runId: number }) {
 export default function PayrollPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data } = useApiQuery<any>(["payroll", scopeQueryString], `/hr/payroll${scopeSuffix}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["payroll", scopeQueryString], `/hr/payroll${scopeSuffix}`);
   const items = data?.data || [];
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [filters, setFilters] = useFilters();
@@ -100,6 +101,9 @@ export default function PayrollPage() {
       ),
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

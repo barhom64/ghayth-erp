@@ -12,20 +12,17 @@ import { ArrowRight, ShoppingCart, User, Phone, Calendar, Package, FileText } fr
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function StoreOrderDetailPage() {
   const [, params] = useRoute("/store/orders/:id");
   const id = params?.id;
-  const { data: order, isLoading } = useApiQuery<any>(["store-order-detail", id || ""], `/store/orders/${id}`, !!id);
+  const { data: order, isLoading, isError } = useApiQuery<any>(["store-order-detail", id || ""], `/store/orders/${id}`, !!id);
   const [showPreview, setShowPreview] = useState(false);
   const printContainerRef = useRef<HTMLDivElement>(null);
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   if (!order) return (
     <div className="text-center py-12">

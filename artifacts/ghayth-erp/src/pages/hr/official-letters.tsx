@@ -19,6 +19,7 @@ import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@/components/approval-actions";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { LETTER_TYPES } from "@/lib/hr-type-maps";
 
 export default function OfficialLettersPage() {
@@ -96,6 +97,9 @@ export default function OfficialLettersPage() {
       },
     );
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Edit2, Save, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
 
@@ -19,7 +20,7 @@ export default function PublicHolidaysPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false });
 
-  const { data, isLoading } = useApiQuery<any>(["public-holidays", String(year)], `/hr/public-holidays?year=${year}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["public-holidays", String(year)], `/hr/public-holidays?year=${year}`);
   const holidays = asList(data?.data || data);
 
   const resetForm = () => {
@@ -141,7 +142,9 @@ export default function PublicHolidaysPage() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-10 text-gray-400">جاري التحميل...</div>
+        <LoadingSpinner />
+      ) : isError ? (
+        <ErrorState onRetry={() => window.location.reload()} />
       ) : holidays.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-gray-400">لا توجد عطل لهذا العام</CardContent></Card>
       ) : (

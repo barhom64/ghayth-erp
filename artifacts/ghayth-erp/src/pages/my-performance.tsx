@@ -1,7 +1,8 @@
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
-import { Target, Star, TrendingUp, CheckCircle2, Clock, Loader2, BarChart3 } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { Target, Star, TrendingUp, CheckCircle2, Clock, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -27,18 +28,17 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 };
 
 export default function MyPerformance() {
-  const { data, isLoading } = useApiQuery<any>(["my-performance"], "/my-space/performance");
+  const { data, isLoading, isError } = useApiQuery<any>(["my-performance"], "/my-space/performance");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const reviews: any[] = data?.data ?? [];
   const latestReview = reviews[0];
 
   return (
     <PageShell title="تقييمي" subtitle="نتائج تقييمات الأداء الخاصة بك" loading={isLoading}>
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="animate-spin text-primary" size={32} />
-        </div>
-      ) : reviews.length === 0 ? (
+      {reviews.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center text-gray-400">
             <Target size={40} className="mx-auto mb-3 opacity-40" />

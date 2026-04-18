@@ -19,6 +19,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**
  * Custody detail — migrated in R.3 iter 3 to the unified template stack.
@@ -93,6 +94,9 @@ export default function CustodyDetailPage() {
     id ? `/finance/custodies/${id}` : null,
     !!id,
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError && (!data || data.error)) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const notFound = !isLoading && (!data || data.error);
 

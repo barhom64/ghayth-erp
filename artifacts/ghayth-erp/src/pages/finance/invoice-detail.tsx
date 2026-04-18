@@ -27,6 +27,7 @@ import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline, ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**
  * Invoice detail page — migrated in R.4 iter 4 to the unified template
@@ -131,6 +132,9 @@ export default function InvoiceDetailPage() {
       successMessage: "تم الإرسال لهيئة الزكاة",
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError && !invoice) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const notFound = !isLoading && !invoice;
   const lines = invoice?.lines || [];

@@ -11,6 +11,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useQueryClient } from "@tanstack/react-query";
 
 const EXCUSE_TYPES: Record<string, string> = {
@@ -25,7 +26,7 @@ export default function ExcuseRequestsPage() {
   const [filters, setFilters] = useFilters();
   const qc = useQueryClient();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
-  const { data } = useApiQuery<any>(["excuse-requests", scopeQueryString], `/hr/excuse-requests?${scopeSuffix}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["excuse-requests", scopeQueryString], `/hr/excuse-requests?${scopeSuffix}`);
   const items = asList(data);
 
   const filtered = applyFilters(items, filters, {
@@ -122,6 +123,9 @@ export default function ExcuseRequestsPage() {
       ),
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

@@ -10,11 +10,12 @@ import { Plus, Star, Target, TrendingUp, Users, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 
 export default function PerformancePage() {
   const [filters, setFilters] = useFilters();
-  const { data } = useApiQuery<any>(["performance"], "/hr/performance");
+  const { data, isLoading, isError } = useApiQuery<any>(["performance"], "/hr/performance");
   const items = data?.data || [];
 
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
@@ -86,6 +87,9 @@ export default function PerformancePage() {
       render: (p) => <PageStatusBadge status={p.status || "draft"} />,
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

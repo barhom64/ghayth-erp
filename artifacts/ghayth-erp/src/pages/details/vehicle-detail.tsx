@@ -19,6 +19,7 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
@@ -78,15 +79,7 @@ export default function VehicleDetail() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-10 w-64" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1,2,3,4].map(i => <Skeleton key={i} className="h-24" />)}
-      </div>
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
 
   if (is404 || (!isLoading && !vehicle)) return (
     <div className="text-center py-12">
@@ -96,13 +89,7 @@ export default function VehicleDetail() {
     </div>
   );
 
-  if (isError) return (
-    <div className="text-center py-12">
-      <Car className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">حدث خطأ في تحميل البيانات</p>
-      <Link href="/fleet"><Button variant="outline" className="mt-4">العودة للأسطول</Button></Link>
-    </div>
-  );
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const trips: any[] = vehicle.trips || [];
   const maintenance: any[] = vehicle.maintenance || [];
