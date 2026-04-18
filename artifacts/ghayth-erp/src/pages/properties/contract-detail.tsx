@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -38,14 +37,11 @@ export default function ContractDetailPage() {
   const id = params?.id || "";
   const queryClient = useQueryClient();
 
-  // TODO: prefer dedicated GET /properties/contracts/:id endpoint — currently fetches list and filters
-  const { data: contractsResp, isLoading, isError, refetch } = useApiQuery<any>(
+  const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
     ["properties-contract", id],
-    id ? `/properties/contracts` : null,
+    id ? `/properties/contracts/${id}` : null,
     !!id
   );
-  const allContracts: any[] = contractsResp?.data || [];
-  const contract = useMemo(() => allContracts.find((c) => String(c.id) === String(id)) || null, [allContracts, id]);
 
   // Payment schedule
   const { data: scheduleResp } = useApiQuery<any>(
@@ -55,41 +51,21 @@ export default function ContractDetailPage() {
   );
   const schedule: any[] = scheduleResp?.data || (Array.isArray(scheduleResp) ? scheduleResp : []);
 
-  // Maintenance requests — filter by contract/unit
-  // TODO: prefer /properties/maintenance?contractId= with server filter
+  // Maintenance requests filtered by contract
   const { data: maintResp } = useApiQuery<any>(
     ["contract-maintenance", id],
-    id ? `/properties/maintenance` : null,
+    id ? `/properties/maintenance?contractId=${id}` : null,
     !!id
   );
-  const allMaint: any[] = maintResp?.data || [];
-  const maintRequests = useMemo(
-    () =>
-      allMaint.filter(
-        (m) =>
-          String(m.contractId ?? "") === String(id) ||
-          (contract && String(m.unitId) === String(contract.unitId))
-      ),
-    [allMaint, contract, id]
-  );
+  const maintRequests: any[] = maintResp?.data || [];
 
-  // Inspections — filter client-side
-  // TODO: prefer /properties/inspections?contractId=
+  // Inspections filtered by contract
   const { data: inspResp } = useApiQuery<any>(
     ["contract-inspections", id],
-    id ? `/properties/inspections` : null,
+    id ? `/properties/inspections?contractId=${id}` : null,
     !!id
   );
-  const allInsp: any[] = inspResp?.data || [];
-  const inspections = useMemo(
-    () =>
-      allInsp.filter(
-        (i) =>
-          String(i.contractId ?? "") === String(id) ||
-          (contract && String(i.unitId) === String(contract.unitId))
-      ),
-    [allInsp, contract, id]
-  );
+  const inspections: any[] = inspResp?.data || [];
 
   const monthlyRent = Number(contract?.monthlyRent) || 0;
   const totalPaid = schedule

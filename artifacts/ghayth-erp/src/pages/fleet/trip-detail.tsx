@@ -36,17 +36,13 @@ export default function TripDetailPage() {
   const id = params?.id || "";
   const queryClient = useQueryClient();
 
-  // TODO: prefer dedicated GET /fleet/trips/:id endpoint — currently fetches list and filters
-  const { data: tripsResp, isLoading, isError, refetch } = useApiQuery<any>(
+  const { data: trip, isLoading, isError, refetch } = useApiQuery<any>(
     ["fleet-trip", id],
-    id ? `/fleet/trips` : null,
+    id ? `/fleet/trips/${id}` : null,
     !!id
   );
-  const allTrips: any[] = tripsResp?.data || [];
-  const trip = useMemo(() => allTrips.find((t) => String(t.id) === String(id)) || null, [allTrips, id]);
 
-  // Fuel logs — try filter param, fallback to client-side filter
-  // TODO: prefer a dedicated /fleet/fuel?tripId= filter
+  // Fuel logs filtered by trip
   const { data: fuelResp } = useApiQuery<any>(
     ["trip-fuel", id],
     id ? `/fleet/fuel?tripId=${id}` : null,
@@ -63,8 +59,7 @@ export default function TripDetailPage() {
     [allFuel, trip, id]
   );
 
-  // Maintenance during trip — fallback to vehicle-wide filter
-  // TODO: prefer /fleet/maintenance?tripId= or date-range filter
+  // Maintenance during trip — vehicle-wide filter scoped to trip dates
   const { data: maintResp } = useApiQuery<any>(
     ["trip-maintenance", id],
     id && trip?.vehicleId ? `/fleet/maintenance?vehicleId=${trip.vehicleId}` : null,
