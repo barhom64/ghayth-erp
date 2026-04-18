@@ -397,13 +397,20 @@ custodiesRouter.post("/custodies", async (req, res) => {
     const ref = `CUSTODY-${Date.now()}`;
     const custodyAssignmentId = resolvedAssignmentId || scope.activeAssignmentId;
 
+    // Resolve the real employee PK once. Journal lines tag employees by
+    // employees.id, NOT employee_assignments.id (golden rule:
+    // assignmentId = assignment-level, employeeId = person-level). The old
+    // code passed resolvedAssignmentId to the journal line as employeeId,
+    // which silently linked subsidiary balances to the wrong row.
+    let custodyEmployeeId: number | null = null;
     let custodyAccountCode = await getAccountCodeFromMapping(scope.companyId, "custody_account", "debit", "1400");
     if (resolvedAssignmentId) {
-      const [empRow] = await rawQuery<any>(
+      const [empRow] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employee_assignments ea JOIN employees e ON e.id = ea."employeeId" WHERE ea.id = $1`,
         [resolvedAssignmentId]
       );
       if (empRow) {
+        custodyEmployeeId = empRow.id;
         const [subAcc] = await rawQuery<any>(
           `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
            WHERE sa."companyId" = $1 AND sa."entityType" = 'employee' AND sa."entityId" = $2 AND sa."accountType" = 'custody'`,
@@ -421,7 +428,7 @@ custodiesRouter.post("/custodies", async (req, res) => {
       description: description ?? `عهدة ${resolvedEmployeeName}`,
       sourceType: "custody", sourceId: undefined,
       lines: [
-        { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: resolvedAssignmentId || undefined },
+        { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined },
         { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
       ],
     });
