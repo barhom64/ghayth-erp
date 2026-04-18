@@ -20,10 +20,22 @@ export default function VendorsCreate() {
   const createMut = useApiMutation("/finance/vendors/create", "POST", [["vendors"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "اسم المورد مطلوب" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "اسم المورد مطلوب";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
+    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الهاتف يجب أن يكون 9 أرقام على الأقل";
+    if (form.taxNumber && !/^\d{15}$/.test(form.taxNumber.replace(/\s/g, ""))) localErrors.taxNumber = "الرقم الضريبي يجب أن يكون 15 رقماً";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -52,11 +64,11 @@ export default function VendorsCreate() {
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div><Label>الاسم</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+        <div><Label>الاسم <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /><FieldHint field="name" /></div>
         <div><Label>جهة الاتصال</Label><Input className="mt-1" value={form.contactPerson} onChange={(e) => setForm((f) => ({ ...f, contactPerson: e.target.value }))} /></div>
-        <div><Label>الهاتف</Label><Input className="mt-1" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
-        <div><Label>البريد</Label><Input className="mt-1" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></div>
-        <div><Label>الرقم الضريبي</Label><Input className="mt-1" dir="ltr" value={form.taxNumber} onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))} /></div>
+        <div><Label>الهاتف</Label><Input className={`mt-1 ${errCls("phone")}`} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /><FieldHint field="phone" /></div>
+        <div><Label>البريد</Label><Input className={`mt-1 ${errCls("email")}`} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /><FieldHint field="email" /></div>
+        <div><Label>الرقم الضريبي</Label><Input className={`mt-1 ${errCls("taxNumber")}`} dir="ltr" value={form.taxNumber} onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))} /><FieldHint field="taxNumber" /></div>
         <div><Label>العنوان</Label><Input className="mt-1" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} /></div>
         <div>
           <Label>شروط الدفع</Label>

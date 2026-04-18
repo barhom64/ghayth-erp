@@ -41,6 +41,11 @@ export default function LoansCreate() {
     reason: "",
   });
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
     [employees, form.assignmentId]
@@ -55,16 +60,15 @@ export default function LoansCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.assignmentId) {
-      toast({ title: "يرجى اختيار الموظف", variant: "destructive" });
-      return;
-    }
-    if (!form.amount || amount <= 0) {
-      toast({ title: "يرجى إدخال مبلغ صحيح", variant: "destructive" });
-      return;
-    }
-    if (installmentCount < 1) {
-      toast({ title: "عدد الأقساط يجب أن يكون 1 على الأقل", variant: "destructive" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
+    if (!form.amount || amount <= 0) localErrors.amount = "يرجى إدخال مبلغ صحيح أكبر من صفر";
+    if (form.installmentCount && installmentCount <= 0) localErrors.installmentCount = "عدد الأقساط يجب أن يكون أكبر من صفر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     if (exceedsMax) {
@@ -125,7 +129,7 @@ export default function LoansCreate() {
               value={form.assignmentId}
               onValueChange={(v) => setForm({ ...form, assignmentId: v })}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errCls("assignmentId")}>
                 <SelectValue placeholder="اختر الموظف..." />
               </SelectTrigger>
               <SelectContent>
@@ -139,6 +143,7 @@ export default function LoansCreate() {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint field="assignmentId" />
           </div>
 
           <div className="space-y-2">
@@ -184,8 +189,9 @@ export default function LoansCreate() {
               placeholder="0.00"
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              className={cn(exceedsMax && "border-red-300 focus:ring-red-300")}
+              className={cn(exceedsMax && "border-red-300 focus:ring-red-300", errCls("amount"))}
             />
+            <FieldHint field="amount" />
             {exceedsMax && (
               <p className="text-xs text-red-600 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
@@ -202,7 +208,9 @@ export default function LoansCreate() {
               max="60"
               value={form.installmentCount}
               onChange={(e) => setForm({ ...form, installmentCount: e.target.value })}
+              className={errCls("installmentCount")}
             />
+            <FieldHint field="installmentCount" />
           </div>
 
           <div className="space-y-2">

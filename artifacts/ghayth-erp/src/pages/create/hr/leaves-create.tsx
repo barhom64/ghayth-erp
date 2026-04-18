@@ -51,6 +51,10 @@ export default function LeavesCreate() {
     contactDuringLeave: "",
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const selectedType = leaveTypes.find((lt: any) => String(lt.id) === form.leaveTypeId);
 
@@ -68,20 +72,16 @@ export default function LeavesCreate() {
   );
 
   const handleSubmit = () => {
-    if (!form.startDate) {
-      toast({ variant: "destructive", title: "تاريخ البداية مطلوب" });
-      return;
-    }
-    if (!form.endDate) {
-      toast({ variant: "destructive", title: "تاريخ النهاية مطلوب" });
-      return;
-    }
-    if (form.endDate < form.startDate) {
-      toast({ variant: "destructive", title: "تاريخ النهاية يجب أن يكون بعد تاريخ البدء" });
-      return;
-    }
-    if (!form.leaveTypeId) {
-      toast({ variant: "destructive", title: "يرجى اختيار نوع الإجازة" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.leaveTypeId) localErrors.leaveTypeId = "يرجى اختيار نوع الإجازة";
+    if (!form.startDate) localErrors.startDate = "تاريخ البداية مطلوب";
+    if (!form.endDate) localErrors.endDate = "تاريخ النهاية مطلوب";
+    if (form.startDate && form.endDate && form.endDate < form.startDate) localErrors.endDate = "تاريخ النهاية يجب أن يكون بعد تاريخ البدء";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     createMut.mutate(
@@ -143,7 +143,7 @@ export default function LeavesCreate() {
             <div>
               <Label>نوع الإجازة <span className="text-red-500">*</span></Label>
               <Select value={form.leaveTypeId} onValueChange={(v) => setForm((f) => ({ ...f, leaveTypeId: v }))}>
-                <SelectTrigger className="mt-1">
+                <SelectTrigger className={`mt-1 ${errCls("leaveTypeId")}`}>
                   <SelectValue placeholder="اختر النوع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -160,6 +160,7 @@ export default function LeavesCreate() {
                   )}
                 </SelectContent>
               </Select>
+              <FieldHint field="leaveTypeId" />
             </div>
             <div>
               <Label>السبب</Label>
@@ -167,11 +168,13 @@ export default function LeavesCreate() {
             </div>
             <div>
               <Label>من تاريخ <span className="text-red-500">*</span></Label>
-              <div className="mt-1"><DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></div>
+              <div className={`mt-1 ${errCls("startDate")}`}><DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></div>
+              <FieldHint field="startDate" />
             </div>
             <div>
               <Label>إلى تاريخ <span className="text-red-500">*</span></Label>
-              <div className="mt-1"><DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></div>
+              <div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></div>
+              <FieldHint field="endDate" />
             </div>
           </div>
         </div>

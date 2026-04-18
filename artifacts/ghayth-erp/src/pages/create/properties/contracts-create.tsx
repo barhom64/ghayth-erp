@@ -34,6 +34,11 @@ export default function ContractsCreate() {
   const [isDirty, setIsDirty] = useState(false);
   useUnsavedChanges(isDirty);
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const [form, setForm] = useState({
     unitId: "",
     tenantId: "",
@@ -139,24 +144,18 @@ export default function ContractsCreate() {
   }, [form.startDate, form.endDate, form.monthlyRent, form.paymentFrequency, form.paymentDay, form.totalContractValue, form.numberOfInstallments]);
 
   const handleSubmit = async () => {
-    if (!form.unitId) {
-      toast({ variant: "destructive", title: "يرجى اختيار الوحدة" });
-      return;
-    }
-    if (!form.tenantName) {
-      toast({ variant: "destructive", title: "اسم المستأجر مطلوب" });
-      return;
-    }
-    if (!form.startDate || !form.endDate) {
-      toast({ variant: "destructive", title: "تاريخ بدء وانتهاء العقد مطلوبان" });
-      return;
-    }
-    if (form.endDate <= form.startDate) {
-      toast({ variant: "destructive", title: "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء" });
-      return;
-    }
-    if (!form.monthlyRent || Number(form.monthlyRent) <= 0) {
-      toast({ variant: "destructive", title: "الإيجار الشهري مطلوب" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.unitId) localErrors.unitId = "يرجى اختيار الوحدة";
+    if (!form.tenantId && !form.tenantName) localErrors.tenantId = "يرجى اختيار أو إدخال المستأجر";
+    if (!form.startDate) localErrors.startDate = "تاريخ بدء العقد مطلوب";
+    if (!form.endDate) localErrors.endDate = "تاريخ انتهاء العقد مطلوب";
+    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
+    if (!form.monthlyRent || Number(form.monthlyRent) <= 0) localErrors.monthlyRent = "الإيجار الشهري يجب أن يكون أكبر من صفر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {

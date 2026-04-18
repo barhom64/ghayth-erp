@@ -17,6 +17,11 @@ export default function TenantsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/tenants", "POST", [["property-tenants-list"]]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -51,8 +56,15 @@ export default function TenantsCreate() {
   const isCompany = form.tenantType === "company";
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم المستأجر" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name.trim()) localErrors.name = "يرجى إدخال اسم المستأجر";
+    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الجوال يجب أن يكون 9 أرقام على الأقل";
+    if (form.nationalId && !/^\d{10}$/.test(form.nationalId.trim())) localErrors.nationalId = "رقم الهوية يجب أن يكون 10 أرقام";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {

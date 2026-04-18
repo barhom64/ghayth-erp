@@ -81,6 +81,10 @@ export default function InvoicesCreate() {
   const [lines, setLines] = useState([{ description: "", quantity: "1", unitPrice: "" }]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [copied, setCopied] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   useEffect(() => {
     if (copySource && !copied) {
@@ -116,20 +120,20 @@ export default function InvoicesCreate() {
   const total = subtotal + vatAmount;
 
   const handleSubmit = async () => {
-    if (!form.clientId) {
-      toast({ variant: "destructive", title: "يرجى اختيار العميل" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.clientId) localErrors.clientId = "يرجى اختيار العميل";
+    if (!form.dueDate && !form.paymentTermsDays) localErrors.dueDate = "حدد شروط الدفع أو تاريخ الاستحقاق";
+    if (lines.length === 0 || !lines[0].unitPrice) localErrors.lines = "يرجى إضافة بند واحد على الأقل بسعر";
+    if (total <= 0) localErrors.totalAmount = "إجمالي الفاتورة يجب أن يكون أكبر من صفر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     if (!form.branchId) {
       toast({ variant: "destructive", title: "الفرع مطلوب" });
-      return;
-    }
-    if (!form.paymentTermsDays && !form.dueDate) {
-      toast({ variant: "destructive", title: "حدد شروط الدفع أو تاريخ الاستحقاق" });
-      return;
-    }
-    if (lines.length === 0 || !lines[0].unitPrice) {
-      toast({ variant: "destructive", title: "يرجى إضافة بند واحد على الأقل" });
       return;
     }
     try {
@@ -190,8 +194,9 @@ export default function InvoicesCreate() {
             onChange={(val) => setForm(prev => ({ ...prev, clientId: String(val) }))}
             placeholder="ابحث عن عميل..."
             loading={clientsLoading}
-            className="mt-1"
+            className={`mt-1 ${errCls("clientId")}`}
           />
+          <FieldHint field="clientId" />
           {form.clientId && (
             <div className="mt-3">
               <ClientContextCard clientId={form.clientId} section="invoice" />
@@ -223,7 +228,8 @@ export default function InvoicesCreate() {
         </div>
         <div>
           <Label>تاريخ الاستحقاق {!form.paymentTermsDays && <span className="text-red-500">*</span>}</Label>
-          <div className="mt-1"><DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} /></div>
+          <div className={`mt-1 ${errCls("dueDate")}`}><DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} /></div>
+          <FieldHint field="dueDate" />
         </div>
         <div className="md:col-span-3"><Label>الوصف</Label><Input className="mt-1" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
         <div className="md:col-span-3"><Label>ملاحظات إضافية</Label><Input className="mt-1" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="ملاحظات أو تعليمات للعميل" /></div>
@@ -231,6 +237,7 @@ export default function InvoicesCreate() {
 
       <div className="mb-4">
         <Label className="text-base font-semibold">البنود</Label>
+        <FieldHint field="lines" />
         {lines.map((line, idx) => (
           <div key={idx} className="grid grid-cols-4 gap-2 mt-2 items-end">
             <div><Label className="text-xs">الوصف</Label><Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} /></div>
@@ -242,11 +249,12 @@ export default function InvoicesCreate() {
         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addLine}>+ إضافة بند</Button>
       </div>
 
-      <div className="bg-muted/50 p-4 rounded-md text-sm space-y-1">
+      <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${errCls("totalAmount")}`}>
         <div className="flex justify-between"><span>المجموع الفرعي:</span><span>{subtotal.toFixed(2)}</span></div>
         <div className="flex justify-between"><span>الضريبة ({form.vatRate}%):</span><span>{vatAmount.toFixed(2)}</span></div>
         <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{total.toFixed(2)}</span></div>
       </div>
+      <FieldHint field="totalAmount" />
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
 

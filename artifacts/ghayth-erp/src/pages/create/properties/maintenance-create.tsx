@@ -8,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 
@@ -18,18 +19,26 @@ export default function PropertyMaintenanceCreate() {
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
   const units = unitsData?.data || [];
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("property_maintenance_create", {
-    unitId: "", category: "", description: "", priority: "medium",
+    unitId: "", category: "", description: "", priority: "medium", cost: "",
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const handleSubmit = async () => {
-    if (!form.unitId) {
-      toast({ variant: "destructive", title: "يرجى اختيار الوحدة" });
-      return;
-    }
-    if (!form.description) {
-      toast({ variant: "destructive", title: "وصف الطلب مطلوب" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.unitId) localErrors.unitId = "يرجى اختيار الوحدة";
+    if (!form.description) localErrors.description = "وصف الطلب مطلوب";
+    if (form.cost && Number(form.cost) < 0) localErrors.cost = "التكلفة يجب أن تكون صفر أو أكثر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
