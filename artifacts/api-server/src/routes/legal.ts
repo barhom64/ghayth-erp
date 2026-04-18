@@ -106,7 +106,7 @@ router.post("/contracts", async (req, res) => {
       `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","partyContact","startDate","endDate",value,status,notes,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, b.ref || null, b.title.trim(), b.contractType || null, b.partyName.trim(), b.partyContact || null, b.startDate, b.endDate, b.value || 0, b.status || 'draft', b.notes || null, scope.userId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -251,7 +251,7 @@ router.patch("/contracts/:id", async (req, res) => {
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -498,7 +498,7 @@ router.post("/cases", async (req, res) => {
       }).catch(console.error);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create legal case error:"); }
 });
@@ -1052,7 +1052,7 @@ router.patch("/cases/:id/financial-risk", async (req, res) => {
       `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3`,
       [financialRisk || 0, riskLevel || 'medium', id]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
       companyId: scope.companyId,

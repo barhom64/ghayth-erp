@@ -116,7 +116,7 @@ invoicesRouter.get("/invoices", async (req, res) => {
 
     const countParams = params.slice(0, params.length - 2);
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM invoices i WHERE ${where} AND i."deletedAt" IS NULL`,
+      `SELECT COUNT(*) AS total FROM invoices i WHERE ${where}`,
       countParams
     );
 
@@ -937,11 +937,11 @@ invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
     }
 
     const [invoice] = await rawQuery<any>(
-      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate", "deletedAt"
-         FROM invoices WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate"
+         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!invoice || invoice.deletedAt) {
+    if (!invoice) {
       throw new NotFoundError("الفاتورة غير موجودة");
     }
 

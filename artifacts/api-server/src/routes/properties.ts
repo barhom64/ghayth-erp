@@ -2472,7 +2472,7 @@ router.get("/operations-dashboard", async (req, res) => {
       `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available,
         COUNT(*) FILTER (WHERE status='rented') as rented,
         COUNT(*) FILTER (WHERE status='under_maintenance') as maintenance
-       FROM property_units WHERE "companyId"=$1`, [cid]
+       FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]
     );
     const expiringContracts = await rawQuery<any>(
       `SELECT c.id, c."tenantName", c."endDate", u."unitNumber", u."buildingName"
