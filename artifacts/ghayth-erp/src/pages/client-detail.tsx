@@ -23,6 +23,7 @@ import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Activity },
@@ -59,24 +60,11 @@ const TIMELINE_ICONS: Record<string, { icon: typeof FileText; color: string; bg:
 export default function ClientDetail() {
   const [, params] = useRoute("/clients/:id");
   const id = params?.id || "";
-  const { data: client, isLoading } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
+  const { data: client, isLoading, isError } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
-        <div className="grid gap-6 md:grid-cols-2">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!client) {
-    return <div className="text-center py-12">العميل غير موجود</div>;
-  }
+  if (isLoading) return <LoadingSpinner />;
+  if (isError || !client) return <ErrorState />;
 
   const invoices: any[] = client.invoices || [];
   const opportunities: any[] = client.opportunities || [];

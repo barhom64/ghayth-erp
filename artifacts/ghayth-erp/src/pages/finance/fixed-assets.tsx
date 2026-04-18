@@ -13,6 +13,7 @@ import { Building2, Plus, TrendingDown, Calculator, CheckCircle, DollarSign, Pac
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function FixedAssetsPage() {
   const [showCreate, setShowCreate] = useState(false);
@@ -74,6 +75,9 @@ export default function FixedAssetsPage() {
       console.error(err);
     }
   }
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const totalCost = assets.reduce((s: number, a: any) => s + Number(a.purchaseCost ?? 0), 0);
   const totalBookValue = assets.reduce((s: number, a: any) => s + Number(a.currentBookValue ?? 0), 0);

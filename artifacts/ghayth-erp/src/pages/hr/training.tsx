@@ -14,6 +14,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "planned",   label: "مخطط"   },
@@ -27,7 +28,7 @@ export default function TrainingPage() {
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
-  const { data, refetch: refetchPrograms } = useApiQuery<any>(["training-programs"], "/training/programs");
+  const { data, isLoading, isError, refetch: refetchPrograms } = useApiQuery<any>(["training-programs"], "/training/programs");
   const { data: statsData } = useApiQuery<any>(["training-stats"], "/training/stats");
   const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
   const items = data?.data || [];
@@ -99,6 +100,9 @@ export default function TrainingPage() {
       ),
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

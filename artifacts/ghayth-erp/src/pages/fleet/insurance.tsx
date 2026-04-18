@@ -7,6 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function InsurancePage() {
   const { data: insuranceResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -26,6 +27,9 @@ export default function InsurancePage() {
     { key: "endDate", header: "إلى", sortable: true, render: (i) => formatDateAr(i.endDate) },
     { key: "premium", header: "القسط", sortable: true, className: "font-bold", render: (i) => formatCurrency(i.premium || 0) },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

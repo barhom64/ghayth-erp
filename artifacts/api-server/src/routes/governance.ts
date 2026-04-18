@@ -1,9 +1,31 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+
+const createPolicySchema = z.object({
+  title: z.string().min(1, "عنوان السياسة مطلوب"),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  effectiveDate: z.string().optional().nullable(),
+  expiryDate: z.string().optional().nullable(),
+  modules: z.array(z.string()).optional().nullable(),
+});
+
+const createRiskSchema = z.object({
+  title: z.string().min(1, "عنوان المخاطرة مطلوب"),
+  description: z.string().optional().nullable(),
+  severity: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
+  likelihood: z.string().optional().nullable(),
+  impact: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  mitigationPlan: z.string().optional().nullable(),
+  assignedTo: z.number().optional().nullable(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -30,7 +52,12 @@ router.get("/policies", requirePermission("governance:read"), async (req, res) =
 router.post("/policies", requirePermission("governance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, description, category, status, effectiveDate, expiryDate, modules } = req.body;
+    const parsed = createPolicySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    const { title, description, category, status, effectiveDate, expiryDate, modules } = parsed.data;
     const r = await rawExecute(
       `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "companyId")
        VALUES ($1,$2,$3,$4,$5,$6,1,$7)`,
@@ -219,20 +246,12 @@ router.get("/risks", requirePermission("governance:read"), async (req, res) => {
 router.post("/risks", requirePermission("governance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, description, severity, likelihood, impact, status, mitigationPlan, assignedTo } = req.body;
-    if (!title || !String(title).trim()) {
-      throw new ValidationError("عنوان المخاطرة مطلوب", {
-        field: "title",
-        fix: "أدخل عنواناً مختصراً للمخاطرة",
-      });
+    const parsed = createRiskSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
     }
-    const validSeverities = ["low", "medium", "high", "critical"];
-    if (severity && !validSeverities.includes(severity)) {
-      throw new ValidationError(`خطورة غير صالحة: ${severity}`, {
-        field: "severity",
-        fix: `اختر من: ${validSeverities.join(", ")}`,
-      });
-    }
+    const { title, description, severity, likelihood, impact, status, mitigationPlan, assignedTo } = parsed.data;
     const r = await rawExecute(
       `INSERT INTO governance_risks (title, description, severity, likelihood, impact, status, "mitigationPlan", "assignedTo", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [String(title).trim(), description ?? null, severity ?? "medium", likelihood ?? null, impact ?? null, status || "open", mitigationPlan ?? null, assignedTo ?? null, scope.companyId]

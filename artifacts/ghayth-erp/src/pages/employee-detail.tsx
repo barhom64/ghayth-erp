@@ -33,6 +33,7 @@ import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Activity },
@@ -296,80 +297,8 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
     }
   };
 
-  if (isLoading) {
-    // Loading state stays inside PageShell so the sidebar + breadcrumbs
-    // remain rendered — no jarring layout shift when the data arrives.
-    return (
-      <PageShell
-        title="جارٍ تحميل بيانات الموظف..."
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/employees", label: "الموظفون" },
-        ]}
-        loading
-      >
-        <div className="grid gap-6 md:grid-cols-2">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
-        </div>
-      </PageShell>
-    );
-  }
-
-  // Friendly 404 — replaces the bare "الموظف غير موجود" text with a
-  // proper fallback card that explains what happened and offers both
-  // Back (to the list) and Home routes. This is the specific
-  // regression the programmer reported on /employees/734.
-  if (isError || !employee) {
-    const is404 = error instanceof ApiError && error.status === 404;
-    const headline = is404 ? "الموظف غير موجود" : "تعذّر تحميل بيانات الموظف";
-    const body = is404
-      ? `لا يوجد موظف بالرقم ${id} في قاعدة البيانات. قد يكون محذوفاً أو الرقم غير صحيح.`
-      : (error instanceof Error ? error.message : "حدث خطأ أثناء الاتصال بالخادم.");
-
-    return (
-      <PageShell
-        title={headline}
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/employees", label: "الموظفون" },
-        ]}
-      >
-        <Card className="max-w-2xl mx-auto">
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="shrink-0 rounded-full bg-amber-50 p-2">
-                <AlertTriangle className="h-6 w-6 text-amber-500" />
-              </div>
-              <div className="flex-1 space-y-2">
-                <h2 className="text-lg font-semibold text-gray-900">{headline}</h2>
-                <p className="text-sm text-gray-600">{body}</p>
-                {is404 && (
-                  <p className="text-xs text-gray-500">
-                    المعرّف المطلوب: <code className="bg-gray-100 px-1 rounded">{id}</code>
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 pt-2 border-t">
-              <Link href="/employees">
-                <Button variant="default" size="sm">
-                  <ArrowLeft className="h-4 w-4 ms-1" />
-                  قائمة الموظفين
-                </Button>
-              </Link>
-              <Link href="/hr">
-                <Button variant="outline" size="sm">
-                  <Home className="h-4 w-4 ms-1" />
-                  الموارد البشرية
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
+  if (isLoading) return <LoadingSpinner />;
+  if (isError || !employee) return <ErrorState />;
 
   const tasks: any[] = employee.tasks || [];
   const attendance: any[] = employee.attendance || [];

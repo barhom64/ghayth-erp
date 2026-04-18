@@ -14,6 +14,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const jobStatusMap: Record<string, { label: string; color: string }> = {
   open: { label: "مفتوح", color: "bg-green-100 text-green-700" },
@@ -26,7 +27,7 @@ export default function RecruitmentPage() {
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
-  const { data: jobsData, refetch: refetchJobs } = useApiQuery<any>(["jobs"], "/recruitment/postings");
+  const { data: jobsData, isLoading, isError, refetch: refetchJobs } = useApiQuery<any>(["jobs"], "/recruitment/postings");
   const { data: appsData, refetch: refetchApps } = useApiQuery<any>(["applicants"], "/recruitment/applications");
   const { data: stats } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
   const jobs = jobsData?.data || [];
@@ -150,6 +151,9 @@ export default function RecruitmentPage() {
       ),
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

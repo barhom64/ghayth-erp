@@ -1,10 +1,35 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+
+const createPostingSchema = z.object({
+  title: z.string().min(1, "عنوان الإعلان الوظيفي مطلوب"),
+  department: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  requirements: z.string().optional().nullable(),
+  salaryMin: z.number().optional().nullable(),
+  salaryMax: z.number().optional().nullable(),
+  status: z.enum(["open", "closed", "draft", "paused"]).default("open"),
+  closingDate: z.string().optional().nullable(),
+});
+
+const createApplicationSchema = z.object({
+  postingId: z.number({ required_error: "الإعلان الوظيفي مطلوب" }),
+  applicantName: z.string().min(1, "اسم المتقدم مطلوب"),
+  email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
+  phone: z.string().optional().nullable(),
+  resumeUrl: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  rating: z.number().optional().nullable(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -20,14 +45,13 @@ router.get("/postings", requirePermission("hr:read"), async (req, res) => {
 router.post("/postings", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = req.body;
-    if (!title || !String(title).trim()) {
-      throw new ValidationError("عنوان الإعلان الوظيفي مطلوب", {
-        field: "title",
-        fix: "أدخل عنواناً واضحاً للإعلان (مثل: محاسب، مندوب مبيعات...)",
-      });
+    const parsed = createPostingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
     }
-    if (salaryMin !== undefined && salaryMax !== undefined && Number(salaryMax) < Number(salaryMin)) {
+    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = parsed.data;
+    if (salaryMin !== undefined && salaryMin !== null && salaryMax !== undefined && salaryMax !== null && Number(salaryMax) < Number(salaryMin)) {
       throw new ValidationError("الحد الأعلى للراتب أقل من الحد الأدنى", {
         field: "salaryMax",
         fix: "تأكد من أن الحد الأعلى أكبر من الحد الأدنى",
@@ -181,19 +205,12 @@ router.get("/applications", requirePermission("hr:read"), async (req, res) => {
 router.post("/applications", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = req.body;
-    if (!postingId) {
-      throw new ValidationError("الإعلان الوظيفي مطلوب", {
-        field: "postingId",
-        fix: "اختر الإعلان الوظيفي المتقدم عليه",
-      });
+    const parsed = createApplicationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
     }
-    if (!applicantName || !String(applicantName).trim()) {
-      throw new ValidationError("اسم المتقدم مطلوب", {
-        field: "applicantName",
-        fix: "أدخل اسم المتقدم الكامل",
-      });
-    }
+    const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = parsed.data;
     const [posting] = await rawQuery<{ id: number }>(
       `SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [Number(postingId), scope.companyId]
