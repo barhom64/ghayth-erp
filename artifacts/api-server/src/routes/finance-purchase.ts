@@ -115,15 +115,18 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PROCUREMENT_ROLES);
+
+    const parsed = createPurchaseRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
+
     // The frontend create-form (purchase-orders-create.tsx) sends
     // `expectedDelivery` + items with `productId`, while the API
     // historically accepted `expectedDate` + items with `itemName`.
     // Accept BOTH conventions so the frontend is not silently saving
     // lines named "بند" and losing the delivery date.
-    const { items, supplierId, notes } = req.body as any;
-    const expectedDate = req.body?.expectedDate ?? req.body?.expectedDelivery ?? null;
-
-    if (!items || !Array.isArray(items) || items.length === 0) { throw new ValidationError("عناصر طلب الشراء مطلوبة"); return; }
+    const { items, supplierId, notes } = b;
+    const expectedDate = b.expectedDate ?? b.expectedDelivery ?? null;
 
     const totalAmount = items.reduce((sum: number, i: any) => sum + Number(i.quantity ?? 1) * Number(i.unitPrice ?? 0), 0);
     if (totalAmount <= 0) { throw new ValidationError("إجمالي الطلب يجب أن يكون أكبر من صفر"); return; }
@@ -382,9 +385,11 @@ purchaseRouter.post("/purchase-orders", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PROCUREMENT_ROLES);
-    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, items } = req.body as any;
 
-    if (!supplierId) { throw new ValidationError("المورد مطلوب"); return; }
+    const parsed = createPurchaseOrderSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, items } = parsed.data as any;
+
     if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
@@ -802,11 +807,10 @@ purchaseRouter.post("/payment-run/execute", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = req.body as any;
 
-    if (!Array.isArray(poIds) || poIds.length === 0) {
-      throw new ValidationError("يجب اختيار أوامر شراء واحد على الأقل للدفع");
-    }
+    const parsed = executePaymentRunSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = parsed.data as any;
     const payDate = paymentDate || new Date().toISOString().slice(0, 10);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, payDate);
     if (!periodCheck.open) {
