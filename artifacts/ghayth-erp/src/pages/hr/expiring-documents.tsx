@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, FileText, Clock, Shield } from "lucide-react";
+import { AlertTriangle, FileText, Clock, Shield, Car, Building2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
@@ -32,7 +32,7 @@ export default function ExpiringDocumentsPage() {
   const allDocs = asList(data?.data || data);
 
   const filtered = applyFilters(allDocs, filters, {
-    searchFields: ["employeeName"],
+    searchFields: ["employeeName", "entityName"],
     statusField: "docType",
     dateField: "expiryDate",
   });
@@ -47,17 +47,33 @@ export default function ExpiringDocumentsPage() {
     { label: "قريبة الانتهاء", value: allDocs.length - expiredCount - criticalCount, icon: Shield, color: "text-amber-600 bg-amber-50" },
   ];
 
+  const ENTITY_ICONS: Record<string, { Icon: typeof User; color: string; label: string }> = {
+    employee: { Icon: User, color: "text-blue-600 bg-blue-50", label: "موظف" },
+    driver: { Icon: User, color: "text-cyan-600 bg-cyan-50", label: "سائق" },
+    vehicle: { Icon: Car, color: "text-teal-600 bg-teal-50", label: "مركبة" },
+    company: { Icon: Building2, color: "text-rose-600 bg-rose-50", label: "منشأة" },
+  };
+
   const columns: DataTableColumn<any>[] = [
     {
-      key: "employeeName",
-      header: "الموظف",
+      key: "entityName",
+      header: "الجهة",
       sortable: true,
-      render: (v) => (
-        <div className="flex items-center gap-2">
-          <AvatarInitial name={v.employeeName} color="blue" />
-          <span className="font-medium text-sm">{v.employeeName}</span>
-        </div>
-      ),
+      render: (v) => {
+        const name = v.entityName || v.employeeName || "-";
+        const ent = ENTITY_ICONS[v.entityType || "employee"];
+        return (
+          <div className="flex items-center gap-2">
+            <div className={cn("w-7 h-7 rounded-full flex items-center justify-center", ent?.color.split(" ")[1])}>
+              {ent ? <ent.Icon className={cn("h-3.5 w-3.5", ent.color.split(" ")[0])} /> : <AvatarInitial name={name} color="blue" />}
+            </div>
+            <div>
+              <span className="font-medium text-sm block">{name}</span>
+              <span className="text-xs text-gray-400">{ent?.label}</span>
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: "docType",
@@ -100,7 +116,7 @@ export default function ExpiringDocumentsPage() {
   return (
     <PageShell
       title="متابعة الوثائق المنتهية"
-      subtitle="تتبع تصاريح العمل، الإقامات، جوازات السفر والعقود"
+      subtitle="تتبع وثائق الموظفين والمركبات والمنشأة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       loading={isLoading}
       actions={
@@ -129,7 +145,7 @@ export default function ExpiringDocumentsPage() {
       {/* Filters */}
       <AdvancedFilters
         config={{
-          searchPlaceholder: "بحث بالاسم...",
+          searchPlaceholder: "بحث بالاسم أو المركبة...",
           statuses: DOC_STATUS_OPTIONS,
           showDateRange: true,
         }}

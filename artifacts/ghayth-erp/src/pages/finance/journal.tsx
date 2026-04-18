@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
-import { Plus, ScrollText, ArrowLeftRight, Undo2 } from "lucide-react";
+import { Plus, ScrollText, ArrowLeftRight, Undo2, Calendar, FileEdit } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 /**
  * Journal entries list — migrated in R.5 iter 5 to the unified template
@@ -51,6 +52,7 @@ export default function JournalPage() {
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const [reversalTarget, setReversalTarget] = useState<any>(null);
   const [reversalReason, setReversalReason] = useState("");
   const { toast } = useToast();
@@ -74,6 +76,16 @@ export default function JournalPage() {
   });
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "ref",
       header: "المرجع",
@@ -170,41 +182,12 @@ export default function JournalPage() {
         </Button>
       }
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
-              <ScrollText className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">إجمالي القيود</p>
-              <p className="text-xl font-bold">{formatNumber(totalEntries)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 border border-emerald-100">
-              <ArrowLeftRight className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">إجمالي الحركات</p>
-              <p className="text-xl font-bold">{formatCurrency(totalDebit)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100">
-              <ScrollText className="h-5 w-5 text-violet-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">قيد مزدوج</p>
-              <p className="text-xl font-bold text-violet-600">نشط</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي القيود", value: formatNumber(totalEntries), icon: ScrollText, color: "text-blue-600 bg-blue-50" },
+        { label: "هذا الشهر", value: formatNumber(items.filter((j: any) => { const d = new Date(j.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },
+        { label: "إجمالي المدين", value: formatCurrency(totalDebit), icon: ArrowLeftRight, color: "text-emerald-600 bg-emerald-50" },
+        { label: "مسودات", value: formatNumber(items.filter((j: any) => j.status === "draft").length), icon: FileEdit, color: "text-violet-600 bg-violet-50" },
+      ]} />
 
       <AdvancedFilters
         config={{
@@ -225,6 +208,23 @@ export default function JournalPage() {
           )
         }
         resultCount={filtered?.length}
+      />
+
+      <BulkActionsBar
+        entityType="journal_entry"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["journal"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "ref", label: "المرجع" },
+          { key: "description", label: "الوصف" },
+          { key: "createdAt", label: "التاريخ" },
+        ]}
+        csvFileName="القيود_اليومية"
       />
 
       <DataTable

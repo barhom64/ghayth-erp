@@ -4,12 +4,13 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -98,6 +99,7 @@ export default function RecurringJournalsCreatePage() {
 
   return (
     <CreatePageLayout title="قيد دوري جديد" backPath="/finance/recurring-journals">
+      <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="md:col-span-2">
           <Label>اسم القيد *</Label>
@@ -118,7 +120,7 @@ export default function RecurringJournalsCreatePage() {
         </div>
         <div>
           <Label>تاريخ البدء *</Label>
-          <Input type="date" className="mt-1" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <div className="mt-1"><DatePicker value={startDate} onChange={(v) => setStartDate(v)} /></div>
         </div>
         <div className="md:col-span-2">
           <Label>الوصف</Label>

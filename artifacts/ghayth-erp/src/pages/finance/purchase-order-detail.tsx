@@ -132,14 +132,11 @@ export default function PurchaseOrderDetailPage() {
               entityType="purchase_order"
               entityId={Number(id)}
               approveEndpoint={`/finance/purchase-orders/${id}/approve`}
-              rejectEndpoint={`/finance/purchase-orders/${id}/approve`}
-              returnEndpoint={`/finance/purchase-orders/${id}/approve`}
+              rejectEndpoint={`/finance/purchase-orders/${id}/reject`}
+              returnEndpoint={`/finance/purchase-orders/${id}/return`}
               approveMethod="PATCH"
               rejectMethod="PATCH"
               returnMethod="PATCH"
-              approveBody={() => ({ approved: true })}
-              rejectBody={(r) => ({ approved: false, notes: r })}
-              returnBody={(r) => ({ approved: "returned", notes: r })}
               invalidateKeys={[["po-detail", id || ""], ["purchase-orders"]]}
             />
           </CardContent>

@@ -6,9 +6,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Timer, Calendar, DollarSign, Clock, User } from "lucide-react";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
+
+const OVERTIME_LIFECYCLE = [
+  { key: "pending",  label: "بانتظار الموافقة" },
+  { key: "approved", label: "معتمد" },
+  { key: "paid",     label: "تم الصرف" },
+];
+
+function buildOvertimeSteps(status: string | undefined): StageStep[] {
+  const s = status ?? "pending";
+  if (s === "rejected") {
+    return [{ label: "مرفوض", status: "rejected" }];
+  }
+  const idx = OVERTIME_LIFECYCLE.findIndex((x) => x.key === s);
+  return OVERTIME_LIFECYCLE.map((step, i): StageStep => {
+    if (idx === -1) return { label: step.label, status: "pending" };
+    if (i < idx)    return { label: step.label, status: "completed" };
+    if (i === idx)  return { label: step.label, status: "current" };
+    return { label: step.label, status: "pending" };
+  });
+}
 
 export default function OvertimeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -58,6 +80,14 @@ export default function OvertimeDetail() {
     >
       {/* KPI cards */}
       <KpiGrid items={kpis.map(k => ({ ...k, size: "sm" as const }))} />
+
+      {/* شريط مراحل الوقت الإضافي */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">دورة حياة الطلب</p>
+          <ProcessStages steps={buildOvertimeSteps(item.status)} />
+        </CardContent>
+      </Card>
 
       {/* تفاصيل الطلب */}
       <Card className="border-0 shadow-sm">
@@ -154,6 +184,22 @@ export default function OvertimeDetail() {
           </div>
         </CardContent>
       </Card>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2"><CardTitle className="text-base">إجراءات الاعتماد</CardTitle></CardHeader>
+        <CardContent>
+          <ApprovalActions
+            entityType="overtime"
+            entityId={Number(id)}
+            approveEndpoint={`/hr/overtime/${id}/approve`}
+            rejectEndpoint={`/hr/overtime/${id}/reject`}
+            approveMethod="PATCH"
+            rejectMethod="PATCH"
+            invalidateKeys={[["hr-overtime-detail", id || ""], ["hr-overtime"]]}
+          />
+        </CardContent>
+      </Card>
+      <ActionHistory entityType="overtime" entityId={Number(id)} />
     </PageShell>
   );
 }

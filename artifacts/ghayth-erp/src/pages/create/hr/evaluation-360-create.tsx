@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Save, Star, Plus, X, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
@@ -82,6 +82,7 @@ export default function Evaluation360Create() {
       isDirty={Boolean(form.employeeId || form.period)}
     >
       <div className="space-y-6">
+        <CreationDateField />
         {hasDraft && (
           <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
             <Info className="h-4 w-4 shrink-0" />

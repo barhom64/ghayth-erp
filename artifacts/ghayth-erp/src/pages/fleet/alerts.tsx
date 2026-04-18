@@ -2,9 +2,10 @@ import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useApiQuery, asList } from "@/lib/api";
-import { AlertTriangle, Bell, Plus } from "lucide-react";
+import { AlertTriangle, Bell, Plus, AlertOctagon, ShieldAlert, CheckCircle } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 
 export default function FleetAlerts() {
@@ -76,11 +77,12 @@ export default function FleetAlerts() {
         </Link>
       }
     >
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي التنبيهات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{allAlerts.length}</div></CardContent></Card>
-        <Card className="bg-amber-50"><CardHeader className="pb-2"><CardTitle className="text-sm text-amber-600">تنبيهات معروضة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{filtered.length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">أنواع التنبيهات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{uniqueTypes.length}</div></CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي التنبيهات", value: allAlerts.length, icon: Bell, color: "text-blue-600 bg-blue-50" },
+        { label: "حرجة", value: allAlerts.filter((a: any) => a.severity === "critical" || a.type?.includes("overdue")).length, icon: AlertOctagon, color: "text-red-600 bg-red-50" },
+        { label: "عالية", value: allAlerts.filter((a: any) => a.severity === "high" || a.type?.includes("expiry")).length, icon: ShieldAlert, color: "text-amber-600 bg-amber-50" },
+        { label: "تم الحل", value: allAlerts.filter((a: any) => a.status === "resolved").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+      ]} />
 
       <AdvancedFilters
         config={{

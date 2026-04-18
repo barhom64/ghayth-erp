@@ -3,6 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { EntityDocuments } from "@/components/shared/entity-documents";
@@ -187,7 +188,7 @@ export default function TripDetailPage() {
     trip?.startTime && { icon: Clock, label: formatDateAr(trip.startTime) },
   ].filter(Boolean) as Array<{ icon: any; label: string }>;
 
-  const badges = trip?.status ? <Badge variant="outline">{trip.status}</Badge> : null;
+  const badges = trip?.status ? <PageStatusBadge status={trip.status} domain="trip" /> : null;
 
   const notFound = !isLoading && !trip;
 

@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -32,6 +33,7 @@ export default function OvertimePage() {
   );
   const items = data?.data || [];
   const stats = data?.stats || {};
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const approveMut = useApiMutation(null as any, "PATCH", [["hr-overtime"]], {
     successMessage: "تم اعتماد الطلب",
@@ -84,6 +86,16 @@ export default function OvertimePage() {
   ];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "requestNumber",
       header: "رقم الطلب",
@@ -239,6 +251,27 @@ export default function OvertimePage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+      />
+
+      <BulkActionsBar
+        entityType="overtime"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["hr-overtime"]]}
+        actions={["approve", "reject", "export"]}
+        csvColumns={[
+          { key: "requestNumber", label: "رقم الطلب" },
+          { key: "employeeName", label: "الموظف" },
+          { key: "overtimeDate", label: "التاريخ" },
+          { key: "hours", label: "الساعات" },
+          { key: "multiplier", label: "المعامل" },
+          { key: "totalAmount", label: "المبلغ" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="الوقت_الإضافي"
       />
 
       <DataTable

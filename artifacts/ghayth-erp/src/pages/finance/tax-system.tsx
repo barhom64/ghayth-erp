@@ -71,11 +71,7 @@ export default function TaxSystemPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (d: any) => (
-        <Badge className={d.status === "submitted" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
-          {d.status === "submitted" ? "مقدم" : "معلق"}
-        </Badge>
-      ),
+      render: (d: any) => <PageStatusBadge status={d.status} domain="tax" />,
     },
   ];
 

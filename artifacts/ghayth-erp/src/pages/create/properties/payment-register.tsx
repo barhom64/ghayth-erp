@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -94,12 +95,7 @@ export default function PaymentRegisterPage() {
               </div>
               <div>
                 <Label>تاريخ الدفع</Label>
-                <Input
-                  className="mt-1"
-                  type="date"
-                  value={form.paymentDate}
-                  onChange={e => setForm(f => ({ ...f, paymentDate: e.target.value }))}
-                />
+                <div className="mt-1"><DatePicker value={form.paymentDate} onChange={v => setForm(f => ({ ...f, paymentDate: v }))} /></div>
               </div>
               <div>
                 <Label>طريقة الدفع</Label>

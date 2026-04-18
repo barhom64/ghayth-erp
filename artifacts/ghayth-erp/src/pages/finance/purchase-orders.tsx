@@ -1,18 +1,18 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import {
   Plus,
   ShoppingCart,
-  Package,
   Clock,
   CheckCircle,
   Eye,
   ChevronDown,
   ChevronUp,
   Copy,
+  DollarSign,
 } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { ActionHistory, NotesDisplay, ApprovalActions } from "@/components/approval-actions";
@@ -21,6 +21,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 /**
  * Purchase orders list — migrated in R.4 iter 4 to the unified
@@ -56,6 +57,7 @@ export default function PurchaseOrdersPage() {
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "supplierName"],
@@ -68,6 +70,16 @@ export default function PurchaseOrdersPage() {
   const receivedCount = items.filter((po: any) => po.status === "received").length;
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "ref",
       header: "الرقم",
@@ -163,52 +175,12 @@ export default function PurchaseOrdersPage() {
         </Button>
       }
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
-              <ShoppingCart className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">إجمالي الطلبات</p>
-              <p className="text-xl font-bold">{formatNumber(items.length)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 border border-emerald-100">
-              <Package className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">إجمالي المبالغ</p>
-              <p className="text-xl font-bold">{formatCurrency(totalAmount)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 border border-amber-100">
-              <Clock className="h-5 w-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">معلقة</p>
-              <p className="text-xl font-bold text-amber-700">{formatNumber(pendingCount)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100">
-              <CheckCircle className="h-5 w-5 text-violet-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">مستلمة</p>
-              <p className="text-xl font-bold text-violet-700">{formatNumber(receivedCount)}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي الطلبات", value: formatNumber(items.length), icon: ShoppingCart, color: "text-blue-600 bg-blue-50" },
+        { label: "بانتظار الاعتماد", value: formatNumber(pendingCount), icon: Clock, color: "text-amber-600 bg-amber-50" },
+        { label: "معتمدة", value: formatNumber(items.filter((po: any) => po.status === "approved").length), icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي المبالغ", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
+      ]} />
 
       <AdvancedFilters
         config={{
@@ -241,6 +213,24 @@ export default function PurchaseOrdersPage() {
           )
         }
         resultCount={filtered?.length}
+      />
+
+      <BulkActionsBar
+        entityType="purchase_order"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["purchase-orders"]]}
+        actions={["approve", "reject", "export"]}
+        csvColumns={[
+          { key: "ref", label: "الرقم" },
+          { key: "supplierName", label: "المورد" },
+          { key: "totalAmount", label: "المبلغ" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="طلبات_الشراء"
       />
 
       <DataTable

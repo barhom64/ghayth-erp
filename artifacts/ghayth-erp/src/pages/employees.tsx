@@ -13,6 +13,7 @@ import {
   Users,
   UserCheck,
   UserX,
+  UserPlus,
   Briefcase,
   ChevronDown,
   ChevronUp,
@@ -44,6 +45,7 @@ import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/e
 // elements (fixes the "<button> inside <button>" DOM warning).
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { textColumn, actionsColumn } from "@/components/data-table-presets";
 
 type OperationalStatus = {
@@ -302,26 +304,12 @@ export default function Employees() {
         </div>
       }
     >
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        {[
-          { label: "إجمالي الموظفين", value: total, icon: Users, color: "text-blue-600 bg-blue-50" },
-          { label: "نشطين", value: employees?.filter((e: any) => e.status === "active").length || 0, icon: UserCheck, color: "text-green-600 bg-green-50" },
-          { label: "غير نشطين", value: employees?.filter((e: any) => e.status === "inactive").length || 0, icon: UserX, color: "text-red-600 bg-red-50" },
-          { label: "المسميات الوظيفية", value: new Set(employees?.map((e: any) => e.jobTitle).filter(Boolean)).size || 0, icon: Briefcase, color: "text-purple-600 bg-purple-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي الموظفين", value: total, icon: Users, color: "text-blue-600 bg-blue-50" },
+        { label: "نشط", value: employees?.filter((e: any) => e.status === "active").length || 0, icon: UserCheck, color: "text-green-600 bg-green-50" },
+        { label: "في فترة تجربة", value: employees?.filter((e: any) => e.status === "probation").length || 0, icon: UserX, color: "text-amber-600 bg-amber-50" },
+        { label: "جديد هذا الشهر", value: employees?.filter((e: any) => { const d = new Date(e.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length || 0, icon: UserPlus, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <DataTable
         columns={columns}

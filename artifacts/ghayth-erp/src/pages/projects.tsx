@@ -10,9 +10,11 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { FolderKanban, Plus, Activity, CheckCircle, DollarSign, Eye } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 const PROJECT_STATUS_OPTIONS = [
   { value: "active", label: "نشط" },
@@ -30,6 +32,7 @@ export default function Projects() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const canManage = roleLevel >= 50;
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const { data: projectsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["projects", String(page), scopeQueryString],
     `/projects?page=${page}&limit=${pageSize}${scopeSuffix}`
@@ -57,6 +60,16 @@ export default function Projects() {
   ];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "name", header: "المشروع", sortable: true, render: (p) => <Link href={`/projects/${p.id}`}><span className="font-medium text-primary hover:underline cursor-pointer">{p.name}</span></Link> },
     { key: "clientName", header: "العميل", sortable: true, render: (p) => p.clientName || "-" },
     { key: "startDate", header: "البدء", sortable: true, render: (p) => formatDateAr(p.startDate) },
@@ -109,24 +122,12 @@ export default function Projects() {
         ) : null
       }
     >
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50"><FolderKanban className="w-6 h-6 text-blue-600" /></div>
-          <div><p className="text-2xl font-bold">{stats?.totalProjects || 0}</p><p className="text-xs text-gray-500">إجمالي المشاريع</p></div>
-        </CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-green-50"><Activity className="w-6 h-6 text-green-600" /></div>
-          <div><p className="text-2xl font-bold">{stats?.activeProjects || 0}</p><p className="text-xs text-gray-500">مشاريع نشطة</p></div>
-        </CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-50"><CheckCircle className="w-6 h-6 text-emerald-600" /></div>
-          <div><p className="text-2xl font-bold">{stats?.completedProjects || 0}</p><p className="text-xs text-gray-500">مكتملة</p></div>
-        </CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-purple-50"><DollarSign className="w-6 h-6 text-purple-600" /></div>
-          <div><p className="text-2xl font-bold">{formatCurrency(stats?.totalBudget || 0)}</p><p className="text-xs text-gray-500">الميزانية الإجمالية</p></div>
-        </CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي المشاريع", value: stats?.totalProjects || 0, icon: FolderKanban, color: "text-blue-600 bg-blue-50" },
+        { label: "نشط", value: stats?.activeProjects || 0, icon: Activity, color: "text-green-600 bg-green-50" },
+        { label: "مكتمل", value: stats?.completedProjects || 0, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
+        { label: "إجمالي الميزانية", value: formatCurrency(stats?.totalBudget || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <div className="flex flex-col gap-4">
         <AdvancedFilters
@@ -154,6 +155,25 @@ export default function Projects() {
           resultCount={filtered?.length}
         />
       </div>
+
+      <BulkActionsBar
+        entityType="project"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["projects"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "name", label: "المشروع" },
+          { key: "clientName", label: "العميل" },
+          { key: "budget", label: "الميزانية" },
+          { key: "progress", label: "التقدم" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="المشاريع"
+      />
 
       <Card>
         <CardHeader><CardTitle className="gap-2 flex items-center"><FolderKanban className="h-5 w-5" /> المشاريع</CardTitle></CardHeader>

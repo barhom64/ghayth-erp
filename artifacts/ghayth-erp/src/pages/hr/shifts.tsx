@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Plus, Clock, Users, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,6 +11,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { PageShell } from "@/components/page-shell";
 
 export default function ShiftsPage() {
@@ -17,11 +19,22 @@ export default function ShiftsPage() {
   const { data: assignmentsData } = useApiQuery<any>(["shift-assignments"], "/hr/shift-assignments");
   const items = data?.data || [];
   const assignments = assignmentsData?.data || [];
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const [filters, setFilters] = useFilters();
 
   const filteredAssignments = applyFilters(assignments, filters, { searchFields: ["employeeName", "shiftName"] });
 
   const assignmentColumns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "employeeName", header: "الموظف", sortable: true, render: (a) => <span className="font-medium">{a.employeeName || "-"}</span> },
     { key: "shiftName", header: "الوردية", sortable: true, render: (a) => a.shiftName || "-" },
     { key: "startDate", header: "من", sortable: true, className: "text-gray-500", render: (a) => a.startDate || "-" },
@@ -62,6 +75,25 @@ export default function ShiftsPage() {
     >
       <KpiGrid items={kpis} />
 
+      <BulkActionsBar
+        entityType="shift"
+        items={items}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(items.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["shifts"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "name", label: "اسم الوردية" },
+          { key: "startTime", label: "وقت البدء" },
+          { key: "endTime", label: "وقت الانتهاء" },
+          { key: "breakMinutes", label: "الاستراحة (دقيقة)" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="الورديات"
+      />
+
       <Tabs defaultValue="shifts" dir="rtl">
         <TabsList>
           <TabsTrigger value="shifts">الورديات</TabsTrigger>
@@ -81,9 +113,7 @@ export default function ShiftsPage() {
                       </div>
                       <div className="flex gap-1 items-center">
                         {s.isDefault && <Badge className="bg-blue-100 text-blue-700 text-xs">افتراضية</Badge>}
-                        <Badge className={s.status === "active" || s.isActive !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
-                          {s.status === "active" || s.isActive !== false ? "نشطة" : "غير نشطة"}
-                        </Badge>
+                        <PageStatusBadge status={s.status || (s.isActive !== false ? "active" : "inactive")} />
                         <RowActions
                           onEdit={() => startEdit(s.id, { name: s.name, startTime: s.startTime || "", endTime: s.endTime || "", breakMinutes: s.breakMinutes || s.breakDuration || 0 })}
                           onDelete={() => startDelete(s.id)}

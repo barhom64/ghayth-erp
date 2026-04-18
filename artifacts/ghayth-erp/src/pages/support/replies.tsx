@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Input } from "@/components/ui/input";
 import { MessageSquare, Clock, CheckCircle2, User, Search, Loader2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -110,9 +111,7 @@ export default function SupportReplies() {
                   <td className="p-3 text-gray-500">{r.agent}</td>
                   <td className="p-3 text-gray-500 whitespace-nowrap">{r.date}</td>
                   <td className="p-3">
-                    <Badge className={r.status === "resolved" || r.status === "closed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
-                      {r.status === "resolved" || r.status === "closed" ? "تم الحل" : "بانتظار الرد"}
-                    </Badge>
+                    <PageStatusBadge status={r.status} domain="ticket" />
                   </td>
                 </tr>
               ))}

@@ -11,10 +11,11 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { textColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp } from "lucide-react";
+import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { EntityComments } from "@/components/shared/entity-comments";
@@ -120,12 +121,12 @@ function Support() {
         </Link>
       }
     >
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي التذاكر</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.totalTickets || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-amber-600">مفتوحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{stats?.openTickets || 0}</div></CardContent></Card>
-        <Card className="bg-emerald-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">محلولة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.resolvedTickets || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-rose-600">تجاوزت مستوى الخدمة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-rose-600">{stats?.slaBreach || 0}</div></CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي التذاكر", value: stats?.totalTickets || 0, icon: Headphones, color: "text-blue-600 bg-blue-50" },
+        { label: "مفتوحة", value: stats?.openTickets || 0, icon: Clock, color: "text-amber-600 bg-amber-50" },
+        { label: "محلولة", value: stats?.resolvedTickets || 0, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
+        { label: "هذا الأسبوع", value: stats?.slaBreach || 0, icon: AlertTriangle, color: "text-rose-600 bg-rose-50" },
+      ]} />
 
       <div className="flex flex-col gap-4">
         <AdvancedFilters

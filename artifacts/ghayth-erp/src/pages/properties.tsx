@@ -7,8 +7,9 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
-import { Building, Plus, Eye } from "lucide-react";
+import { Building, Building2, Plus, Eye, Home, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
@@ -95,12 +96,12 @@ export default function Properties() {
         ) : null
       }
     >
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي الوحدات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.totalUnits || 0}</div></CardContent></Card>
-        <Card className="bg-emerald-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">متاحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.available || 0}</div></CardContent></Card>
-        <Card className="bg-blue-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">مؤجرة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.rented || 0}</div></CardContent></Card>
-        <Card className="bg-primary text-primary-foreground"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">إجمالي التحصيل</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(stats?.totalCollected || 0)}</div></CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي العقارات", value: stats?.totalUnits || 0, icon: Building2, color: "text-blue-600 bg-blue-50" },
+        { label: "وحدات شاغرة", value: stats?.available || 0, icon: Home, color: "text-emerald-600 bg-emerald-50" },
+        { label: "وحدات مؤجرة", value: stats?.rented || 0, icon: Building, color: "text-indigo-600 bg-indigo-50" },
+        { label: "نسبة الإشغال", value: stats?.totalUnits ? `${Math.round(((stats?.rented || 0) / stats.totalUnits) * 100)}%` : "0%", icon: DollarSign, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <AdvancedFilters
         config={{

@@ -387,17 +387,16 @@ purchaseRouter.post("/purchase-orders", async (req, res) => {
   }
 });
 
-purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
+async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
-    const { approved, notes } = req.body as any;
+    const { notes } = req.body as any;
 
     const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
-    const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
         newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
@@ -408,9 +407,6 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
     await rawExecute(`UPDATE purchase_orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
-    // Emit a lifecycle event so downstream listeners (audit, procurement
-    // notification, vendor confirmation workflow) can react. Without this
-    // the approval silently mutates status and no one is told.
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -428,7 +424,10 @@ purchaseRouter.patch("/purchase-orders/:id/approve", async (req, res) => {
   } catch (err) {
     handleRouteError(err, res, "Finance purchase error:");
   }
-});
+}
+purchaseRouter.patch("/purchase-orders/:id/approve", (req, res) => poApprovalAction(req, res, "approved"));
+purchaseRouter.patch("/purchase-orders/:id/reject", (req, res) => poApprovalAction(req, res, "rejected"));
+purchaseRouter.patch("/purchase-orders/:id/return", (req, res) => poApprovalAction(req, res, "returned"));
 
 /**
  * Record goods receipt (GRN) against a purchase order.

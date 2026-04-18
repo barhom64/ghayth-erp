@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -130,9 +131,7 @@ export default function DepositsPage() {
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{d.tenantName}</span>
                   <span className="text-sm text-gray-500">— {d.unitNumber || `وحدة #${d.unitId}`} ({d.buildingName || ""})</span>
-                  <Badge className={d.status === "held" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}>
-                    {d.status === "held" ? "محتجزة" : "مستردة"}
-                  </Badge>
+                  <PageStatusBadge status={d.status} />
                 </div>
                 <div className="text-sm text-gray-500 mt-1">
                   تاريخ الاستلام: {d.receivedDate?.split("T")[0]}

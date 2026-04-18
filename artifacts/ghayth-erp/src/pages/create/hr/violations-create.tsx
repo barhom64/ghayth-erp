@@ -26,6 +26,7 @@ import {
   Autocomplete,
   type AutocompleteOption,
 } from "@/components/ui/autocomplete";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   AlertTriangle,
@@ -777,6 +778,13 @@ function StepEmployee({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Employee context card */}
+      {assignmentId && selectedEmp && (
+        <div className="mt-3">
+          <EmployeeContextCard employeeId={selectedEmp.id} section="violations" />
         </div>
       )}
     </div>

@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Megaphone, Plus, DollarSign, Eye, TrendingUp, Users, BarChart2, Target } from "lucide-react";
+import { Megaphone, Plus, DollarSign, Eye, TrendingUp, Users, BarChart2, Target, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 const STAGE_LABELS: Record<string, string> = {
@@ -188,23 +189,12 @@ function CampaignsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "إجمالي الحملات", value: s.totalCampaigns || 0, icon: Megaphone, color: "text-pink-600 bg-pink-50" },
-          { label: "حملات نشطة", value: s.activeCampaigns || 0, icon: Megaphone, color: "text-green-600 bg-green-50" },
-          { label: "الميزانية الكلية", value: formatCurrency(s.totalBudget || 0), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
-          { label: `عائد الإنفاق — ${s.roas ? `${s.roas}×` : "—"}`, value: formatCurrency(s.totalRevenue || 0), icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
-                <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
-              </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي الحملات", value: s.totalCampaigns || 0, icon: Megaphone, color: "text-pink-600 bg-pink-50" },
+        { label: "نشطة", value: s.activeCampaigns || 0, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "مكتملة", value: s.completedCampaigns || 0, icon: Target, color: "text-blue-600 bg-blue-50" },
+        { label: "إجمالي العملاء المحتملين", value: s.totalLeads || 0, icon: Users, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       {s.sourceCounts && s.sourceCounts.length > 0 && (
         <Card className="border-0 shadow-sm">

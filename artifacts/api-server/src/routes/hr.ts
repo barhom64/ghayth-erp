@@ -59,7 +59,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const now = new Date();
     const today = now.toISOString().split("T")[0];
     const period = today.slice(0, 7);
-    const { lat, lon, notes } = req.body as any;
+    const { lat, lon, notes, workType } = req.body as any;
 
     // Guard: the caller must have an active assignment. Without this, the
     // INSERT INTO attendance below would hit a 23502 NOT NULL on
@@ -69,6 +69,21 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
       throw new ConflictError("لا يوجد تعيين نشط لهذا الحساب", {
         field: "assignmentId",
         fix: "تواصل مع مدير الموارد البشرية لتفعيل تعيينك الوظيفي.",
+      });
+    }
+
+    // ── Step 1b: Verify active contract exists ──
+    const [activeContract] = await rawQuery<any>(
+      `SELECT id, "endDate", status FROM employee_contracts
+       WHERE "assignmentId" = $1 AND status = 'active'
+         AND "startDate" <= $2 AND ("endDate" IS NULL OR "endDate" >= $2)
+       LIMIT 1`,
+      [scope.activeAssignmentId, today]
+    );
+    if (!activeContract) {
+      throw new ConflictError("لا يوجد عقد نشط لتعيينك الحالي — لا يمكن تسجيل الحضور", {
+        field: "contract",
+        fix: "تواصل مع الموارد البشرية للتأكد من وجود عقد ساري المفعول.",
       });
     }
 
@@ -165,7 +180,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
 
     // ── Step 6: GPS validation (Haversine) ──
     // Remote and flexible shifts skip GPS enforcement
-    const isRemoteShift = shift?.remoteAllowed === true || shift?.shiftType === 'remote';
+    const isRemoteShift = shift?.remoteAllowed === true || shift?.shiftType === 'remote' || workType === 'remote';
     let distanceMeters: number | null = null;
     let isOutOfRange = false;
     const [policy] = await rawQuery<any>(
@@ -243,11 +258,12 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     }
 
     const { insertId: attendanceId } = await rawExecute(
-      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
         today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
-        lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null]
+        lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
+        isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
     );
 
     // ── Step 11: Auto violation if late > threshold ──
@@ -2766,7 +2782,13 @@ router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"),
       throw new ForbiddenError("غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام");
     }
     const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     await rawExecute(`DELETE FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "approval_chains", entityId: id,
+      before: existing ?? { id },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -2907,6 +2929,12 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       }
     }
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "approval_requests", entityId: Number(req.params.id),
+      before: { status: request.status, refType: request.refType, refId: request.refId },
+      after: { status: result.status, approved: !!approved, reason: reason ?? null },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: `approval.${result.status}`, entity: "approval_requests",
@@ -2959,6 +2987,11 @@ router.put("/attendance-policy", requirePermission("hr:update"), async (req, res
         b.penaltyLevel3Label ?? "خصم يوم", b.penaltyLevel4Label ?? "خصم يومين",
         b.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي"]
     );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "attendance_policies", entityId: scope.companyId,
+      after: { lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3063,12 +3096,51 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_violations", entityId: id,
+      before: beforeRow ?? {},
+      after: updated ?? {},
+    }).catch(console.error);
     res.json(updated || { message: "تم التحديث" });
   } catch (err) { handleRouteError(err, res, "Patch violation error:"); }
 });
+
+async function violationApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
+  try {
+    const scope = req.scope!;
+    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+      throw new ForbiddenError("غير مصرح: اعتماد المخالفات مقصور على HR أو المدير أو المالك");
+    }
+    const id = Number(req.params.id);
+    const { notes } = req.body as any;
+    const [violation] = await rawQuery<any>(
+      `SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!violation) throw new NotFoundError("المخالفة غير موجودة");
+    if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
+      throw new ValidationError(newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع", { field: "notes" });
+    }
+    await rawExecute(`UPDATE employee_violations SET status=$1 WHERE id=$2`, [newStatus, id]);
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('violation',$1,$2,$3,$4,$5)`,
+        [id, newStatus, notes || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error(e); }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: `violation.${newStatus}`, entity: "employee_violations", entityId: id, before: { status: violation.status }, after: { status: newStatus } }).catch(console.error);
+    const labels: Record<string, string> = { approved: "تم اعتماد المخالفة", rejected: "تم رفض المخالفة", returned: "تم إرجاع المخالفة" };
+    res.json({ message: labels[newStatus], status: newStatus });
+  } catch (err) { handleRouteError(err, res, "Violation approval error:"); }
+}
+router.patch("/violations/:id/approve", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "approved"));
+router.patch("/violations/:id/reject", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "rejected"));
+router.patch("/violations/:id/return", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "returned"));
 
 router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => {
   try {
@@ -3095,9 +3167,16 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "shifts", entityId: id,
+      before: beforeRow ?? {},
+      after: row ?? {},
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch shift error:"); }
 });
@@ -3105,7 +3184,14 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
 router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    await rawExecute(`DELETE FROM shifts WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = Number(req.params.id);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`DELETE FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "shifts", entityId: id,
+      before: beforeRow ?? { id },
+    }).catch(console.error);
     res.json({ message: "تم حذف الوردية" });
   } catch (err) { handleRouteError(err, res, "Delete shift error:"); }
 });
@@ -3352,6 +3438,11 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     if (!row) {
       throw new NotFoundError("طلب الإجازة غير موجود");
     }
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_leave_requests", entityId: Number(req.params.id),
+      after: { status: status ?? undefined, reason: reason ?? undefined },
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3443,6 +3534,12 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
     // Cancel return-to-work obligation
     await cancelObligation(scope.companyId, "hr_leave_request", id);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_leave_requests", entityId: id,
+      before: { status: request.status, employeeId: request.employeeId, days: request.days },
+      after: { status: "cancelled", reason: b.reason },
+    }).catch(console.error);
     await emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -3657,6 +3754,12 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
         `SELECT * FROM payroll_runs WHERE id = $1`,
         [Number(req.params.id)]
       );
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "update", entity: "payroll_runs", entityId: Number(req.params.id),
+        before: { status: existing.status, period: existing.period },
+        after: { status: "posted", period: existing.period },
+      }).catch(console.error);
       res.json(row);
       return;
     }
@@ -3667,6 +3770,12 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
     );
     if (!row) throw new NotFoundError("دورة الرواتب غير موجودة");
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "payroll_runs", entityId: Number(req.params.id),
+      before: { status: existing.status },
+      after: { status },
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3730,11 +3839,18 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
     }
     sets.push(`"updatedAt" = NOW()`);
     params.push(Number(req.params.id), scope.companyId);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [Number(req.params.id), scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("التقييم غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "performance_reviews", entityId: Number(req.params.id),
+      before: beforeRow ?? {},
+      after: row,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch performance error:"); }
 });
@@ -3745,11 +3861,18 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف التقييمات مقصور على HR أو المالك");
     }
+    const id = Number(req.params.id);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `DELETE FROM performance_reviews WHERE id = $1 AND "companyId" = $2 RETURNING id`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("التقييم غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "performance_reviews", entityId: id,
+      before: beforeRow ?? { id },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3761,11 +3884,18 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف المخالفات مقصور على HR أو المالك");
     }
+    const id = Number(req.params.id);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE employee_violations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "employee_violations", entityId: id,
+      before: beforeRow ?? { id },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3788,12 +3918,20 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
-    params.push(Number(req.params.id), scope.companyId);
+    const letterId = Number(req.params.id);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [letterId, scope.companyId]);
+    params.push(letterId, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("الخطاب غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "official_letters", entityId: letterId,
+      before: beforeRow ?? {},
+      after: row,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3804,11 +3942,18 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف الخطابات مقصور على HR أو المالك");
     }
+    const id = Number(req.params.id);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `DELETE FROM official_letters WHERE id = $1 AND "companyId" = $2 RETURNING id`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الخطاب غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "official_letters", entityId: id,
+      before: beforeRow ?? { id },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4013,6 +4158,11 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
        ON CONFLICT (key, scope, "scopeId") DO UPDATE SET value = $1`,
       [val, scope.companyId]
     );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "settings", entityId: scope.companyId,
+      after: { key: "hr.onboarding_steps", steps },
+    }).catch(console.error);
     res.json({ data: steps });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4393,6 +4543,11 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
     // Update cycle status
     await rawExecute(`UPDATE evaluation_cycles SET status='in_progress' WHERE id=$1`, [cycleId]);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "evaluation_cycles", entityId: cycleId,
+      after: { employeeId, period, status: "in_progress", participantCount: participants.length },
+    }).catch(console.error);
     res.status(201).json({ id: cycleId, period, employeeId, status: 'in_progress', systemEval: evalData });
   } catch (err) { handleRouteError(err, res, "خطأ في بدء دورة التقييم"); }
 });
@@ -5030,6 +5185,11 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
        b.type || 'national', b.description || null, b.isRecurring || false]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1`, [insertId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "public_holidays", entityId: insertId,
+      after: { name: b.name, startDate: b.startDate, endDate: b.endDate || b.startDate, year, type: b.type || "national" },
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create holiday error:"); }
 });
@@ -5052,11 +5212,18 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
     if (b.isRecurring !== undefined) { params.push(b.isRecurring); sets.push(`"isRecurring"=$${params.length}`); }
     if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const rows = await rawQuery<any>(
       `UPDATE public_holidays SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("العطلة غير موجودة");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "public_holidays", entityId: id,
+      before: beforeRow ?? {},
+      after: rows[0],
+    }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update holiday error:"); }
 });
@@ -5067,7 +5234,14 @@ router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
-    await rawExecute(`DELETE FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = Number(req.params.id);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`DELETE FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "public_holidays", entityId: id,
+      before: beforeRow ?? { id },
+    }).catch(console.error);
     res.json({ message: "تم حذف العطلة" });
   } catch (err) { handleRouteError(err, res, "Delete holiday error:"); }
 });
@@ -5196,6 +5370,11 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
       }).catch(console.error);
     }
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "employee_transfers", entityId: insertId,
+      after: { employeeId: b.employeeId, fromBranchId: assignment.branchId, toBranchId: b.toBranchId, status: "pending" },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -5506,6 +5685,11 @@ router.post("/idp", requirePermission("hr:create"), async (req, res) => {
        goals, skills, trainingIds, b.targetDate || null, b.notes || null, b.reviewDate || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1`, [insertId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "employee_development_plans", entityId: insertId,
+      after: { employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي", status: "planned" },
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create IDP error:"); }
 });
@@ -5526,11 +5710,18 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
     if (b.progress !== undefined) { params.push(b.progress); sets.push(`progress=$${params.length}`); }
     if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const rows = await rawQuery<any>(
       `UPDATE employee_development_plans SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("خطة التطوير غير موجودة");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_development_plans", entityId: id,
+      before: beforeRow ?? {},
+      after: rows[0],
+    }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update IDP error:"); }
 });
@@ -5538,7 +5729,14 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
 router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    await rawExecute(`DELETE FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = Number(req.params.id);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`DELETE FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "employee_development_plans", entityId: id,
+      before: beforeRow ?? { id },
+    }).catch(console.error);
     res.json({ message: "تم حذف خطة التطوير" });
   } catch (err) { handleRouteError(err, res, "Delete IDP error:"); }
 });
@@ -5973,11 +6171,176 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
       [scope.companyId, days]
     );
 
-    const all = [...workPermits, ...iqamas, ...passports, ...contracts]
-      .sort((a: any, b: any) => Number(a.daysLeft) - Number(b.daysLeft));
+    // Driver licenses
+    const driverLicenses = await rawQuery<any>(
+      `SELECT fd.id AS "entityId", fd.name AS "entityName", fd."licenseExpiry" AS "expiryDate",
+              'driving_license' AS "docType", 'رخصة القيادة' AS "docLabel",
+              (fd."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft",
+              'driver' AS "entityType"
+       FROM fleet_drivers fd
+       WHERE fd."companyId"=$1 AND fd.status='active'
+         AND fd."licenseExpiry" IS NOT NULL
+         AND fd."licenseExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    // Vehicle registration expiry
+    const vehicleRegistrations = await rawQuery<any>(
+      `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
+              fv."registrationExpiry" AS "expiryDate",
+              'vehicle_registration' AS "docType", 'رخصة السير' AS "docLabel",
+              (fv."registrationExpiry"::date - CURRENT_DATE) AS "daysLeft",
+              'vehicle' AS "entityType"
+       FROM fleet_vehicles fv
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+         AND fv."registrationExpiry" IS NOT NULL
+         AND fv."registrationExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    // Vehicle insurance expiry
+    const vehicleInsurance = await rawQuery<any>(
+      `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
+              fv."insuranceExpiry" AS "expiryDate",
+              'vehicle_insurance' AS "docType", 'تأمين المركبة' AS "docLabel",
+              (fv."insuranceExpiry"::date - CURRENT_DATE) AS "daysLeft",
+              'vehicle' AS "entityType"
+       FROM fleet_vehicles fv
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+         AND fv."insuranceExpiry" IS NOT NULL
+         AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    // Vehicle inspection expiry
+    const vehicleInspections = await rawQuery<any>(
+      `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
+              fv."nextInspectionDate" AS "expiryDate",
+              'vehicle_inspection' AS "docType", 'الفحص الدوري' AS "docLabel",
+              (fv."nextInspectionDate"::date - CURRENT_DATE) AS "daysLeft",
+              'vehicle' AS "entityType"
+       FROM fleet_vehicles fv
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+         AND fv."nextInspectionDate" IS NOT NULL
+         AND fv."nextInspectionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    );
+
+    // Employee documents (iqama, work permit, driving license, etc.) from employee_documents table
+    const employeeDocs = await rawQuery<any>(
+      `SELECT ed."employeeId" AS "entityId", e.name AS "entityName", ed."expiryDate",
+              ed."documentType" AS "docType", ed."documentType" AS "docLabel",
+              (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
+              'employee' AS "entityType"
+       FROM employee_documents ed
+       JOIN employees e ON e.id=ed."employeeId"
+       WHERE ed."companyId"=$1 AND ed.status='active'
+         AND ed."expiryDate" IS NOT NULL
+         AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    ).catch(() => [] as any[]);
+
+    // Company documents (commercial registration, chamber of commerce, etc.)
+    const companyDocs = await rawQuery<any>(
+      `SELECT cd.id AS "entityId", cd."documentType" AS "entityName", cd."expiryDate",
+              cd."documentType" AS "docType", cd."documentType" AS "docLabel",
+              (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
+              'company' AS "entityType"
+       FROM company_documents cd
+       WHERE cd."companyId"=$1 AND cd.status='active'
+         AND cd."expiryDate" IS NOT NULL
+         AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
+      [scope.companyId, days]
+    ).catch(() => [] as any[]);
+
+    const all = [
+      ...workPermits.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...iqamas.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...passports.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...contracts.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...driverLicenses,
+      ...vehicleRegistrations,
+      ...vehicleInsurance,
+      ...vehicleInspections,
+      ...employeeDocs,
+      ...companyDocs,
+    ].sort((a: any, b: any) => Number(a.daysLeft) - Number(b.daysLeft));
 
     res.json({ data: all, total: all.length, criticalCount: all.filter((d: any) => Number(d.daysLeft) <= 14).length });
   } catch (err) { handleRouteError(err, res, "Expiring documents error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPANY DOCUMENTS — وثائق المنشأة (سجل تجاري، رخصة بلدية، غرفة تجارية)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/company-documents", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST`,
+      [scope.companyId]
+    ).catch(() => [] as any[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Company documents error:"); }
+});
+
+router.post("/company-documents", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body as any;
+    if (!b.documentType) throw new ValidationError("نوع الوثيقة مطلوب", { field: "documentType" });
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO company_documents ("companyId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scope.companyId, b.documentType, b.documentNumber || null, b.issueDate || null,
+       b.expiryDate || null, b.issuingAuthority || null, b.reminderDays || 30, b.notes || null]
+    );
+    res.status(201).json({ id: insertId, message: "تم إضافة وثيقة المنشأة" });
+  } catch (err) { handleRouteError(err, res, "Company documents error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPLOYEE DOCUMENTS — وثائق الموظف الإضافية (رخصة قيادة، شهادات، إلخ)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/employee-documents", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employeeId = req.query.employeeId;
+    const where = employeeId
+      ? `WHERE ed."companyId"=$1 AND ed."employeeId"=$2 AND ed.status != 'deleted'`
+      : `WHERE ed."companyId"=$1 AND ed.status != 'deleted'`;
+    const params = employeeId ? [scope.companyId, Number(employeeId)] : [scope.companyId];
+    const rows = await rawQuery<any>(
+      `SELECT ed.*, e.name AS "employeeName"
+       FROM employee_documents ed
+       JOIN employees e ON e.id=ed."employeeId"
+       ${where}
+       ORDER BY ed."expiryDate" ASC NULLS LAST`,
+      params
+    ).catch(() => [] as any[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
+});
+
+router.post("/employee-documents", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body as any;
+    if (!b.employeeId) throw new ValidationError("الموظف مطلوب", { field: "employeeId" });
+    if (!b.documentType) throw new ValidationError("نوع الوثيقة مطلوب", { field: "documentType" });
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO employee_documents ("companyId","employeeId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, Number(b.employeeId), b.documentType, b.documentNumber || null,
+       b.issueDate || null, b.expiryDate || null, b.issuingAuthority || null,
+       b.reminderDays || 30, b.notes || null]
+    );
+    res.status(201).json({ id: insertId, message: "تم إضافة وثيقة الموظف" });
+  } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

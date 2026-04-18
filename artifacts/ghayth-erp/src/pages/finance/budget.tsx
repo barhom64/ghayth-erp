@@ -1,8 +1,8 @@
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
-import { Plus, FileBarChart, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react";
+import { Plus, FileBarChart, TrendingUp, CheckCircle, PieChart } from "lucide-react";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
@@ -103,24 +103,12 @@ export default function BudgetPage() {
         </Button>
       }
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><FileBarChart className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">المخصص</p><p className="text-xl font-bold">{formatCurrency(totalAllocated)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-red-100 rounded-lg"><TrendingUp className="h-5 w-5 text-red-600" /></div>
-          <div><p className="text-xs text-gray-500">المنفق</p><p className="text-xl font-bold text-red-600">{formatCurrency(totalUsed)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg"><CheckCircle className="h-5 w-5 text-green-600" /></div>
-          <div><p className="text-xs text-gray-500">المتبقي</p><p className="text-xl font-bold text-green-600">{formatCurrency(totalAllocated - totalUsed)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg"><AlertTriangle className="h-5 w-5 text-orange-600" /></div>
-          <div><p className="text-xs text-gray-500">تجاوز</p><p className="text-xl font-bold text-orange-600">{formatNumber(overBudget)}</p></div>
-        </CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي البنود", value: formatNumber(items.length), icon: FileBarChart, color: "text-blue-600 bg-blue-50" },
+        { label: "المخصص", value: formatCurrency(totalAllocated), icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "المنفق", value: formatCurrency(totalUsed), icon: TrendingUp, color: "text-red-600 bg-red-50" },
+        { label: "نسبة الاستخدام", value: totalAllocated > 0 ? `${formatNumber(Math.round((totalUsed / totalAllocated) * 100))}%` : "0%", icon: PieChart, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <AdvancedFilters
         config={{

@@ -8,8 +8,9 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
-import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2 } from "lucide-react";
+import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2, DollarSign, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
@@ -24,21 +25,12 @@ export default function Legal() {
       subtitle="العقود والقضايا والجلسات والأحكام"
       breadcrumbs={[{ label: "القانونية" }]}
     >
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "العقود النشطة", value: s.activeContracts || 0, color: "text-blue-600 bg-blue-50" },
-          { label: "القضايا المفتوحة", value: s.openCases || 0, color: "text-red-600 bg-red-50" },
-          { label: "العقود المنتهية قريباً", value: s.expiringContracts || 0, color: "text-amber-600 bg-amber-50" },
-          { label: "الالتزامات المحتملة", value: formatCurrency(s.contingentLiabilities || 0), color: "text-purple-600 bg-purple-50" },
-        ].map(c => (
-          <Card key={c.label} className="border-0 shadow-sm">
-            <CardContent className="p-3">
-              <p className={`text-xl font-bold ${c.color.split(' ')[0]}`}>{c.value}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{c.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي القضايا", value: (s.openCases || 0) + (s.closedCases || 0), icon: Scale, color: "text-blue-600 bg-blue-50" },
+        { label: "نشطة", value: s.activeContracts || 0, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
+        { label: "منتهية", value: s.expiringContracts || 0, icon: Gavel, color: "text-amber-600 bg-amber-50" },
+        { label: "قيمة المطالبات", value: formatCurrency(s.contingentLiabilities || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
+      ]} />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-3">

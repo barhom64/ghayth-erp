@@ -4,9 +4,10 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -108,15 +109,11 @@ export default function OpeningBalancesCreatePage() {
 
   return (
     <CreatePageLayout title="أرصدة افتتاحية جديدة" backPath="/finance/opening-balances">
+      <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
           <Label>تاريخ بداية الفترة *</Label>
-          <Input
-            type="date"
-            className="mt-1"
-            value={periodStart}
-            onChange={(e) => setPeriodStart(e.target.value)}
-          />
+          <div className="mt-1"><DatePicker value={periodStart} onChange={(v) => setPeriodStart(v)} /></div>
         </div>
         <div className="flex items-end gap-2">
           <label className="inline-flex items-center gap-2 text-sm">

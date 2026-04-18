@@ -11,6 +11,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
@@ -30,6 +31,7 @@ export default function RecruitmentPage() {
   const { data: stats } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
   const jobs = jobsData?.data || [];
   const apps = appsData?.data || [];
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const filteredJobs = applyFilters(jobs, filters, { searchFields: ["title", "department"], statusField: "status" });
   const filteredApps = applyFilters(apps, filters, { searchFields: ["applicantName", "name"], statusField: "status" });
 
@@ -66,6 +68,16 @@ export default function RecruitmentPage() {
   ];
 
   const jobColumns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "title",
       header: "المسمى الوظيفي",
@@ -170,6 +182,26 @@ export default function RecruitmentPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filteredJobs.length + filteredApps.length}
+      />
+
+      <BulkActionsBar
+        entityType="job_posting"
+        items={filteredJobs}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filteredJobs.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["jobs"], ["recruitment-stats"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "title", label: "المسمى الوظيفي" },
+          { key: "department", label: "القسم" },
+          { key: "location", label: "الموقع" },
+          { key: "type", label: "النوع" },
+          { key: "applicantsCount", label: "عدد المتقدمين" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="التوظيف_والاستقطاب"
       />
 
       <Tabs defaultValue="jobs" dir="rtl">

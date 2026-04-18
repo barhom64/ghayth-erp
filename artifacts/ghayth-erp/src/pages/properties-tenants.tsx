@@ -8,10 +8,12 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import {
-  Users2, Plus, Eye, Phone, Mail, ChevronDown, ChevronUp
+  Users2, Users, Plus, Eye, Phone, Mail, ChevronDown, ChevronUp, UserCheck, UserX, UserPlus
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 export default function PropertiesTenants() {
   const { scopeQueryString } = useAppContext();
@@ -24,6 +26,7 @@ export default function PropertiesTenants() {
 
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<any>(null);
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const filtered = applyFilters(tenants, filters, {
     searchFields: ["name", "phone", "email", "nationalId"] as any,
   });
@@ -31,6 +34,16 @@ export default function PropertiesTenants() {
   const rowKeyOf = (t: any) => t.id ?? t.name;
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "name",
       header: "الاسم",
@@ -135,6 +148,13 @@ export default function PropertiesTenants() {
         </Link>
       </div>
 
+      <KpiGrid items={[
+        { label: "إجمالي المستأجرين", value: tenants.length, icon: Users, color: "text-blue-600 bg-blue-50" },
+        { label: "نشط", value: tenants.filter((t: any) => t.activeContracts > 0).length, icon: UserCheck, color: "text-emerald-600 bg-emerald-50" },
+        { label: "عقود منتهية", value: tenants.filter((t: any) => !t.activeContracts || t.activeContracts === 0).length, icon: UserX, color: "text-red-600 bg-red-50" },
+        { label: "جديد هذا الشهر", value: tenants.filter((t: any) => { const d = new Date(t.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length, icon: UserPlus, color: "text-purple-600 bg-purple-50" },
+      ]} />
+
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالاسم أو الهاتف أو رقم الهوية...",
@@ -150,6 +170,25 @@ export default function PropertiesTenants() {
           { key: "activeContracts", label: "العقود النشطة" },
         ], "المستأجرون")}
         resultCount={filtered?.length}
+      />
+
+      <BulkActionsBar
+        entityType="tenant"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["property-tenants-list"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "name", label: "الاسم" },
+          { key: "phone", label: "الهاتف" },
+          { key: "email", label: "البريد" },
+          { key: "nationalId", label: "رقم الهوية" },
+          { key: "activeContracts", label: "العقود النشطة" },
+        ]}
+        csvFileName="المستأجرون"
       />
 
       <Card>

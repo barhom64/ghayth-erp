@@ -12,6 +12,7 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useAppContext } from "@/contexts/app-context";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
@@ -31,6 +32,7 @@ export default function TrainingPage() {
   const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
   const items = data?.data || [];
   const enrollments = enrollmentsData?.data || [];
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const filteredEnrollments = applyFilters(enrollments, filters, { searchFields: ["employeeName"], statusField: "status" });
   const stats = statsData || {};
 
@@ -69,6 +71,16 @@ export default function TrainingPage() {
   ];
 
   const enrollmentColumns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     { key: "employeeName", header: "الموظف", sortable: true, render: (e) => <span className="font-medium">{e.employeeName || "-"}</span> },
     { key: "programTitle", header: "البرنامج", sortable: true, render: (e) => e.programTitle || "-" },
     { key: "status", header: "الحالة", sortable: true, render: (e) => <PageStatusBadge status={e.status} /> },
@@ -110,6 +122,27 @@ export default function TrainingPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+      />
+
+      <BulkActionsBar
+        entityType="training_program"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["training-programs"], ["training-stats"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "title", label: "عنوان البرنامج" },
+          { key: "trainer", label: "المدرب" },
+          { key: "startDate", label: "تاريخ البدء" },
+          { key: "endDate", label: "تاريخ الانتهاء" },
+          { key: "location", label: "الموقع" },
+          { key: "capacity", label: "السعة" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="برامج_التدريب"
       />
 
       <Tabs defaultValue="programs" dir="rtl">

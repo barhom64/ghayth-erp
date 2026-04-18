@@ -1,41 +1,21 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, ArrowDownCircle, ArrowUpCircle, Wallet, ChevronDown, ChevronUp, ExternalLink, Paperclip } from "lucide-react";
+import { PageStatusBadge } from "@/components/page-status-badge";
+import { Plus, FileText, ArrowDownCircle, ArrowUpCircle, Wallet, ChevronDown, ChevronUp, ExternalLink, Paperclip, Calendar } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "نقدي",
-  bank_transfer: "تحويل بنكي",
-  bank: "تحويل بنكي",
-  check: "شيك",
-  credit_card: "بطاقة ائتمان",
-};
+import { PAYMENT_METHODS, VOUCHER_OPERATIONS } from "@/lib/finance-type-maps";
 
-const OPERATION_LABELS: Record<string, string> = {
-  receipt: "قبض إيراد",
-  rent: "تحصيل إيجار",
-  invoice_payment: "سداد فاتورة عميل",
-  deposit: "إيداع ضمان",
-  refund: "استرداد",
-  payment: "صرف مبلغ",
-  vendor_invoice: "سداد فاتورة مورد",
-  salary: "صرف راتب",
-  advance: "سلفة موظف",
-  legal_fee: "أتعاب قانونية",
-  purchase: "مشتريات",
-  custody: "صرف عهدة",
-  insurance: "سداد تأمين",
-  maintenance: "دفع صيانة",
-};
 
 export default function VouchersPage() {
   const { scopeQueryString } = useAppContext();
@@ -44,6 +24,7 @@ export default function VouchersPage() {
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref", "operationType"],
@@ -52,6 +33,16 @@ export default function VouchersPage() {
   });
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "ref",
       header: "المرجع",
@@ -81,7 +72,7 @@ export default function VouchersPage() {
       render: (v) =>
         v.operationType ? (
           <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs">
-            {OPERATION_LABELS[v.operationType] || v.operationType}
+            {VOUCHER_OPERATIONS[v.operationType] || v.operationType}
           </span>
         ) : (
           <span className="text-gray-400">-</span>
@@ -107,11 +98,7 @@ export default function VouchersPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => (
-        <Badge variant="outline" className="bg-green-50 text-green-700">
-          {v.status === "posted" ? "مسجل" : v.status || "مسجل"}
-        </Badge>
-      ),
+      render: (v) => <PageStatusBadge status={v.status || "posted"} domain="journal" />,
     },
     {
       key: "_expand",
@@ -144,24 +131,12 @@ export default function VouchersPage() {
         </Link>
       }
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><FileText className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">إجمالي السندات</p><p className="text-xl font-bold">{formatNumber(items.length)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg"><ArrowDownCircle className="h-5 w-5 text-green-600" /></div>
-          <div><p className="text-xs text-gray-500">سندات القبض</p><p className="text-xl font-bold text-green-600">{formatCurrency(totalReceipts)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-red-100 rounded-lg"><ArrowUpCircle className="h-5 w-5 text-red-600" /></div>
-          <div><p className="text-xs text-gray-500">سندات الصرف</p><p className="text-xl font-bold text-red-600">{formatCurrency(totalPayments)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-purple-100 rounded-lg"><Wallet className="h-5 w-5 text-purple-600" /></div>
-          <div><p className="text-xs text-gray-500">الصافي</p><p className="text-xl font-bold">{formatCurrency(totalReceipts - totalPayments)}</p></div>
-        </CardContent></Card>
-      </div>
+      <KpiGrid items={[
+        { label: "إجمالي السندات", value: formatNumber(items.length), icon: FileText, color: "text-blue-600 bg-blue-50" },
+        { label: "هذا الشهر", value: formatNumber(items.filter((v: any) => { const d = new Date(v.date); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },
+        { label: "سندات القبض", value: formatCurrency(totalReceipts), icon: ArrowDownCircle, color: "text-green-600 bg-green-50" },
+        { label: "سندات الصرف", value: formatCurrency(totalPayments), icon: ArrowUpCircle, color: "text-red-600 bg-red-50" },
+      ]} />
 
       <AdvancedFilters
         config={{
@@ -197,6 +172,25 @@ export default function VouchersPage() {
         resultCount={filtered?.length}
       />
 
+      <BulkActionsBar
+        entityType="voucher"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["vouchers"]]}
+        actions={["export"]}
+        csvColumns={[
+          { key: "ref", label: "المرجع" },
+          { key: "type", label: "النوع" },
+          { key: "amount", label: "المبلغ" },
+          { key: "description", label: "الوصف" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="السندات"
+      />
+
       <DataTable
         columns={columns}
         data={filtered}
@@ -225,13 +219,13 @@ export default function VouchersPage() {
                   {v.operationType && (
                     <div>
                       <span className="text-gray-500">نوع العملية:</span>
-                      <span className="block font-medium">{OPERATION_LABELS[v.operationType] || v.operationType}</span>
+                      <span className="block font-medium">{VOUCHER_OPERATIONS[v.operationType] || v.operationType}</span>
                     </div>
                   )}
                   {v.paymentMethod && (
                     <div>
                       <span className="text-gray-500">طريقة الدفع:</span>
-                      <span className="block font-medium">{PAYMENT_METHOD_LABELS[v.paymentMethod] || v.paymentMethod}</span>
+                      <span className="block font-medium">{PAYMENT_METHODS[v.paymentMethod] || v.paymentMethod}</span>
                     </div>
                   )}
                   {v.reference && (

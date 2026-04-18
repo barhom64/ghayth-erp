@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -32,6 +33,7 @@ export default function LoansPage() {
   );
   const items = data?.data || [];
   const stats = data?.stats || {};
+  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const approveMut = useApiMutation(null as any, "PATCH", [["hr-loans"]], {
     successMessage: "تم اعتماد السلفة بنجاح",
@@ -84,6 +86,16 @@ export default function LoansPage() {
   ];
 
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (v) => (
+        <span onClick={(ev) => ev.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
+        </span>
+      ),
+    },
     {
       key: "loanNumber",
       header: "رقم السلفة",
@@ -260,6 +272,27 @@ export default function LoansPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+      />
+
+      <BulkActionsBar
+        entityType="loan"
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggle={toggleSelect}
+        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
+        onClear={clearSelection}
+        invalidateKeys={[["hr-loans"]]}
+        actions={["approve", "reject", "export"]}
+        csvColumns={[
+          { key: "loanNumber", label: "رقم السلفة" },
+          { key: "employeeName", label: "الموظف" },
+          { key: "loanType", label: "النوع" },
+          { key: "amount", label: "المبلغ" },
+          { key: "installmentCount", label: "عدد الأقساط" },
+          { key: "remainingAmount", label: "المتبقي" },
+          { key: "status", label: "الحالة" },
+        ]}
+        csvFileName="سلف_الموظفين"
       />
 
       {/* Table */}

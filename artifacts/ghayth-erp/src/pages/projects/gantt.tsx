@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { BarChart2, Flag, CheckCircle2, Clock, AlertCircle } from "lucide-react";
@@ -157,9 +158,7 @@ export default function GanttPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500">{m.end?.split("T")[0]}</span>
-                      <Badge className={m.status === "completed" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>
-                        {m.status === "completed" ? "مكتمل" : "معلق"}
-                      </Badge>
+                      <PageStatusBadge status={m.status} domain="project" />
                     </div>
                   </div>
                 ))}

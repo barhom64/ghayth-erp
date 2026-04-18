@@ -4,6 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Clock, Users, AlertTriangle, DollarSign } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -54,9 +55,7 @@ export default function AttendanceReportsPage() {
     { key: "minutes", header: "الدقائق", sortable: true, render: (d) => d.minutes || 0 },
     { key: "amount", header: "المبلغ", sortable: true, render: (d) => <span className="text-red-600 font-medium">{formatCurrency(Number(d.amount || 0))}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (d) => (
-      <Badge className={d.status === "pending_payroll" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}>
-        {d.status === "pending_payroll" ? "معلق" : "مطبق"}
-      </Badge>
+      <PageStatusBadge status={d.status} />
     ) },
   ];
 
