@@ -364,11 +364,11 @@ router.delete("/journal-templates/:id", requirePermission("finance:write"), asyn
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
     if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
-    await rawExecute(`DELETE FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [Number(req.params.id), scope.companyId]);
+    await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: Number(req.params.id), before: existing }).catch(console.error);
     res.json({ message: "تم حذف القالب" });
   } catch (err) {

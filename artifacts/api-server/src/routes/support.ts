@@ -682,7 +682,7 @@ router.delete("/kb/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    await rawExecute(`DELETE FROM kb_articles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE kb_articles SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ message: "تم حذف المقالة بنجاح" });
   } catch (err) { handleRouteError(err, res, "KB delete error:"); }
 });

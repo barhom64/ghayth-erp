@@ -319,6 +319,8 @@ purchaseRouter.get("/purchase-orders", async (req, res) => {
     let extraWhere = "";
     let paramIdx = nextParamIndex;
     if (filterStatus) { params.push(filterStatus); extraWhere += ` AND po.status = $${paramIdx++}`; }
+    const { productId } = req.query as any;
+    if (productId) { params.push(Number(productId)); extraWhere += ` AND po.id IN (SELECT "purchaseOrderId" FROM purchase_order_lines WHERE "productId" = $${paramIdx++})`; }
 
     const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
     params.push(Number(lim));

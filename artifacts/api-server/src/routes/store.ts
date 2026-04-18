@@ -85,7 +85,18 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
 router.get("/orders", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM store_orders WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const { productId, status } = req.query as any;
+    let where = `o."companyId"=$1 AND o."deletedAt" IS NULL`;
+    const params: any[] = [scope.companyId];
+    if (productId) {
+      params.push(Number(productId));
+      where += ` AND o.id IN (SELECT "orderId" FROM store_order_items WHERE "productId"=$${params.length})`;
+    }
+    if (status) {
+      params.push(status);
+      where += ` AND o.status=$${params.length}`;
+    }
+    const rows = await rawQuery(`SELECT o.* FROM store_orders o WHERE ${where} ORDER BY o."createdAt" DESC`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "List store orders"); }
 });

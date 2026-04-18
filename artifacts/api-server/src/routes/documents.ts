@@ -429,7 +429,7 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     if (isNaN(id) || id <= 0) { res.status(400).json({ error: "معرف القالب غير صالح" }); return; }
     const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
-    await rawExecute(`DELETE FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ message: "تم حذف القالب بنجاح" });
   } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء حذف القالب" }); }
 });
@@ -653,7 +653,7 @@ router.delete("/:id", requirePermission("documents:delete"), async (req, res) =>
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const result = await rawExecute(`DELETE FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const result = await rawExecute(`UPDATE documents SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "المستند غير موجود" }); return; }
     res.json({ message: "تم حذف المستند بنجاح" });
   } catch (err) { handleRouteError(err, res, "documents"); }

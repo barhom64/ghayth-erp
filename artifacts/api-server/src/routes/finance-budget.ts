@@ -173,7 +173,7 @@ budgetRouter.delete("/budget/:id", async (req, res) => {
     const budgetId = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(
-      `SELECT id, "accountCode", period, amount, used FROM budgets WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, "accountCode", period, amount, used FROM budgets WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [budgetId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الميزانية غير موجودة");
@@ -195,7 +195,7 @@ budgetRouter.delete("/budget/:id", async (req, res) => {
     }
 
     const rows = await rawQuery<any>(
-      `DELETE FROM budgets WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      `UPDATE budgets SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [budgetId, scope.companyId]
     );
     if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
