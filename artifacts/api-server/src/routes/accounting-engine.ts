@@ -210,7 +210,7 @@ router.post("/accounting-mappings/batch", requirePermission("finance:write"), as
 router.get("/accounting-mappings/:operationType/validate", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const result = await validateAccountingMapping(scope.companyId, req.params.operationType);
+    const result = await validateAccountingMapping(scope.companyId, String(req.params.operationType));
     res.json(result);
   } catch (err) {
     handleRouteError(err, res, "Validate accounting mapping error:");

@@ -555,7 +555,7 @@ router.post("/integration-logs/retry", requirePermission("admin:write"), async (
     const result = await integrationService.retryFailed(scope.companyId);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "retry", entity: "integrations",
+      action: "retry", entity: "integrations", entityId: 0,
     }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -923,7 +923,7 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
     invalidatePermissionCache(role, scope.companyId);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "update", entity: "role_permissions",
+      action: "update", entity: "role_permissions", entityId: 0,
       after: { role, permissionCount: permissions.length },
     }).catch(console.error);
     res.json({ success: true, role, count: permissions.length });
