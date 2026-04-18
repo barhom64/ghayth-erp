@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 
 const VALID_REQUEST_TRANSITIONS: Record<string, string[]> = {
@@ -123,6 +124,40 @@ router.post("/", async (req, res) => {
   try {
     const scope = req.scope!;
     const { typeId, requesterName, title, description, priority, data, attachments } = req.body;
+
+    if (!title || !String(title).trim()) {
+      throw new ValidationError("عنوان الطلب مطلوب", {
+        field: "title",
+        fix: "أدخل عنواناً مختصراً للطلب",
+      });
+    }
+    if (!description || !String(description).trim()) {
+      throw new ValidationError("وصف الطلب مطلوب", {
+        field: "description",
+        fix: "اكتب تفاصيل الطلب ليتمكن المختص من معالجته",
+      });
+    }
+    if (priority && !["low", "medium", "high", "critical"].includes(priority)) {
+      throw new ValidationError(`أولوية غير صالحة: ${priority}`, {
+        field: "priority",
+        fix: "اختر من: low, medium, high, critical",
+      });
+    }
+    // FK pre-check on typeId so a stale id yields a clean field-tagged error
+    // instead of a deep 23503.
+    if (typeId) {
+      const [rt] = await rawQuery<{ id: number }>(
+        `SELECT id FROM request_types WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+        [Number(typeId), scope.companyId]
+      );
+      if (!rt) {
+        throw new ValidationError(`نوع الطلب رقم ${typeId} غير موجود`, {
+          field: "typeId",
+          fix: "اختر نوع طلب مفعّلًا من القائمة",
+        });
+      }
+    }
+
     const enforcedRequesterId = scope.activeAssignmentId;
     let validatedAttachments: any[] = [];
     if (attachments && Array.isArray(attachments)) {
@@ -132,7 +167,7 @@ router.post("/", async (req, res) => {
     }
     const r = await rawExecute(
       `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [typeId || null, enforcedRequesterId, requesterName, title, description, "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments)]
+      [typeId ? Number(typeId) : null, enforcedRequesterId, requesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments)]
     );
     await logCommunication(
       scope.companyId, 'inbound',
@@ -140,8 +175,13 @@ router.post("/", async (req, res) => {
       `تم إنشاء طلب جديد بواسطة ${requesterName || 'مستخدم'} - الأولوية: ${priority || 'متوسطة'} - ${description || ''}`,
       'request', r.insertId
     );
-    res.status(201).json({ id: r.insertId });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "requests", entityId: r.insertId,
+      after: { typeId: typeId ? Number(typeId) : null, title, description, priority: priority || "medium" },
+    }).catch(console.error);
+    res.status(201).json({ id: r.insertId, title, description, priority: priority || "medium", status: "pending" });
+  } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
 
 router.get("/catalog", async (req, res) => {
