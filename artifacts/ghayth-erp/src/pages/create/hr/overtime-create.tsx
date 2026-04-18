@@ -39,6 +39,11 @@ export default function OvertimeCreate() {
     reason: "",
   });
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
     [employees, form.assignmentId]
@@ -72,24 +77,16 @@ export default function OvertimeCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.assignmentId) {
-      toast({ title: "يرجى اختيار الموظف", variant: "destructive" });
-      return;
-    }
-    if (!form.overtimeDate) {
-      toast({ title: "تاريخ الوقت الإضافي مطلوب", variant: "destructive" });
-      return;
-    }
-    if (!form.startTime || !form.endTime) {
-      toast({ title: "وقت البداية والنهاية مطلوبان", variant: "destructive" });
-      return;
-    }
-    if (hours <= 0) {
-      toast({ title: "عدد الساعات يجب أن يكون أكبر من صفر", variant: "destructive" });
-      return;
-    }
-    if (hours > 12) {
-      toast({ title: "لا يمكن تسجيل أكثر من 12 ساعة في اليوم", variant: "destructive" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
+    if (!form.overtimeDate) localErrors.overtimeDate = "تاريخ الوقت الإضافي مطلوب";
+    if (hours <= 0) localErrors.hours = "عدد الساعات يجب أن يكون أكبر من صفر";
+    if (hours > 12) localErrors.hours = "لا يمكن تسجيل أكثر من 12 ساعة في اليوم";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
 
@@ -139,7 +136,7 @@ export default function OvertimeCreate() {
               value={form.assignmentId}
               onValueChange={(v) => setForm({ ...form, assignmentId: v })}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errCls("assignmentId")}>
                 <SelectValue placeholder="اختر الموظف..." />
               </SelectTrigger>
               <SelectContent>
@@ -153,6 +150,7 @@ export default function OvertimeCreate() {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint field="assignmentId" />
             {selectedEmployee && salary > 0 && (
               <p className="text-xs text-gray-500">
                 معدل الساعة: {formatCurrency(hourlyRate)}
