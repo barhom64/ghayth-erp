@@ -1,4 +1,4 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -345,9 +345,36 @@ router.post("/send", async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    if (!b.channel) {
+      throw new ValidationError("قناة المراسلة مطلوبة", {
+        field: "channel",
+        fix: "اختر القناة (whatsapp | sms | email | call)",
+      });
+    }
+    const validChannels = ["whatsapp", "sms", "email", "call", "push"];
+    if (!validChannels.includes(String(b.channel).toLowerCase())) {
+      throw new ValidationError(`قناة غير مدعومة: ${b.channel}`, {
+        field: "channel",
+        fix: `اختر قناة من: ${validChannels.join(", ")}`,
+      });
+    }
+    if (!b.toNumber && !b.toEmail) {
+      throw new ValidationError("المستلم مطلوب", {
+        field: "toNumber",
+        fix: "أدخل رقم المستلم أو بريده الإلكتروني",
+      });
+    }
+    if (!b.body || !String(b.body).trim()) {
+      throw new ValidationError("محتوى الرسالة مطلوب", {
+        field: "body",
+        fix: "اكتب نص الرسالة",
+      });
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId") VALUES ($1,$2,'outbound',$3,$4,$5,$6,'queued',$7,$8)`,
-      [scope.companyId, b.channel, b.fromNumber, b.toNumber, b.subject, b.body, b.relatedType, b.relatedId]
+      [scope.companyId, String(b.channel).toLowerCase(), b.fromNumber ?? null, b.toNumber ?? b.toEmail, b.subject ?? null, String(b.body).trim(), b.relatedType ?? null, b.relatedId ?? null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id=$1`, [insertId]);
     res.status(201).json(row);

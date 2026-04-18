@@ -2418,20 +2418,48 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
       splitBreakStart, splitBreakEnd,
       flexStartEarliest, flexStartLatest,
     } = req.body as any;
+
+    if (!name || !String(name).trim()) {
+      throw new ValidationError("اسم الوردية مطلوب", {
+        field: "name",
+        fix: "أدخل اسمًا للوردية (مثال: وردية صباحية)",
+      });
+    }
     // shiftType: 'fixed' (default) | 'flexible' | 'remote' | 'split'
     const effectiveShiftType = shiftType ?? 'fixed';
+    const validShiftTypes = ["fixed", "flexible", "remote", "split"];
+    if (!validShiftTypes.includes(effectiveShiftType)) {
+      throw new ValidationError(`نوع وردية غير صالح: ${effectiveShiftType}`, {
+        field: "shiftType",
+        fix: `اختر من: ${validShiftTypes.join(", ")}`,
+      });
+    }
+    // Fixed/split shifts must have startTime + endTime. Remote/flexible can
+    // rely on flexStart bounds or have no hard clock-in window.
+    if ((effectiveShiftType === "fixed" || effectiveShiftType === "split") && (!startTime || !endTime)) {
+      throw new ValidationError("وقت البداية والنهاية مطلوبان للوردية الثابتة", {
+        field: !startTime ? "startTime" : "endTime",
+        fix: "حدّد وقت بداية ونهاية الوردية (HH:MM)",
+      });
+    }
     const effectiveRemote = remoteAllowed ?? (effectiveShiftType === 'remote');
+
     if (isDefault) {
       await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1`, [scope.companyId]);
     }
     const { insertId } = await rawExecute(
       `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
        VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, scope.branchId, name, startTime, endTime, days ?? "0,1,2,3,4", isDefault ?? false,
+      [scope.companyId, scope.branchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
        effectiveShiftType, effectiveRemote,
        splitBreakStart || null, splitBreakEnd || null,
        flexStartEarliest || null, flexStartLatest || null]
     );
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "shifts", entityId: insertId,
+      after: { name, startTime: startTime ?? null, endTime: endTime ?? null, days: days ?? "0,1,2,3,4", shiftType: effectiveShiftType, isDefault: !!isDefault },
+    }).catch(console.error);
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1`, [insertId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create shift error:"); }
@@ -3081,20 +3109,65 @@ router.post("/shift-assignments", requirePermission("hr:create"), async (req, re
   try {
     const scope = req.scope!;
     const { assignmentId, shiftId, startDate, endDate } = req.body as any;
-    const [validAssignment] = await rawQuery<any>(
-      `SELECT id FROM employee_assignments WHERE id=$1 AND "companyId"=$2`, [assignmentId, scope.companyId]
-    );
-    const [validShift] = await rawQuery<any>(
-      `SELECT id FROM shifts WHERE id=$1 AND "companyId"=$2`, [shiftId, scope.companyId]
-    );
-    if (!validAssignment || !validShift) {
-      throw new ForbiddenError("غير مصرح");
+
+    if (!assignmentId) {
+      throw new ValidationError("يرجى اختيار الموظف", {
+        field: "assignmentId",
+        fix: "اختر التعيين الذي سيُربط بالوردية",
+      });
     }
+    if (!shiftId) {
+      throw new ValidationError("يرجى اختيار الوردية", {
+        field: "shiftId",
+        fix: "اختر وردية من القائمة",
+      });
+    }
+    if (!startDate) {
+      throw new ValidationError("تاريخ بداية الوردية مطلوب", {
+        field: "startDate",
+        fix: "حدّد تاريخ بداية ربط الموظف بالوردية",
+      });
+    }
+    if (endDate && new Date(endDate) < new Date(startDate)) {
+      throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
+        field: "endDate",
+        fix: "اختر تاريخ نهاية بعد تاريخ البداية أو اتركه فارغاً",
+      });
+    }
+
+    // FK pre-checks (both scoped by companyId). A wrong id used to return
+    // ForbiddenError which is semantically wrong — it's a not-found/bad-
+    // input case, not a permissions issue. Return ValidationError so the
+    // frontend surfaces the exact bad field.
+    const [validAssignment] = await rawQuery<{ id: number }>(
+      `SELECT id FROM employee_assignments WHERE id=$1 AND "companyId"=$2`, [Number(assignmentId), scope.companyId]
+    );
+    if (!validAssignment) {
+      throw new ValidationError(`التعيين رقم ${assignmentId} غير موجود في هذه الشركة`, {
+        field: "assignmentId",
+        fix: "اختر تعيينًا موجودًا",
+      });
+    }
+    const [validShift] = await rawQuery<{ id: number }>(
+      `SELECT id FROM shifts WHERE id=$1 AND "companyId"=$2`, [Number(shiftId), scope.companyId]
+    );
+    if (!validShift) {
+      throw new ValidationError(`الوردية رقم ${shiftId} غير موجودة في هذه الشركة`, {
+        field: "shiftId",
+        fix: "اختر وردية موجودة",
+      });
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO employee_shift_assignments ("assignmentId","shiftId","startDate","endDate") VALUES ($1,$2,$3,$4)`,
-      [assignmentId, shiftId, startDate, endDate ?? null]
+      [Number(assignmentId), Number(shiftId), startDate, endDate ?? null]
     );
-    res.status(201).json({ id: insertId });
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "employee_shift_assignments", entityId: insertId,
+      after: { assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null },
+    }).catch(console.error);
+    res.status(201).json({ id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
   } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
 
@@ -3117,10 +3190,44 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
   try {
     const scope = req.scope!;
     const { employeeId, type, subject, content, status } = req.body as any;
+
+    if (!employeeId) {
+      throw new ValidationError("الموظف مطلوب", {
+        field: "employeeId",
+        fix: "اختر الموظف الذي يخصه الخطاب",
+      });
+    }
+    if (!subject || !String(subject).trim()) {
+      throw new ValidationError("موضوع الخطاب مطلوب", {
+        field: "subject",
+        fix: "أدخل موضوع الخطاب",
+      });
+    }
+    if (!content || !String(content).trim()) {
+      throw new ValidationError("محتوى الخطاب مطلوب", {
+        field: "content",
+        fix: "اكتب نص الخطاب",
+      });
+    }
+
+    // FK pre-check: employee must belong to this company (via any assignment).
+    const [emp] = await rawQuery<{ id: number }>(
+      `SELECT e.id FROM employees e
+        JOIN employee_assignments ea ON ea."employeeId" = e.id
+        WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+      [Number(employeeId), scope.companyId]
+    );
+    if (!emp) {
+      throw new ValidationError(`الموظف رقم ${employeeId} غير موجود في هذه الشركة`, {
+        field: "employeeId",
+        fix: "اختر موظفاً مسجّلاً في الشركة",
+      });
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId")
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, employeeId, type ?? "general", subject, content, status ?? "draft", scope.activeAssignmentId]
+      [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId]
     );
 
     const approvalResult = await initiateApprovalChain({
@@ -4797,16 +4904,66 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
   try {
     const scope = req.scope!;
     const { delegateId, scope: delegationScope, reason, startDate, endDate } = req.body;
-    const [emp] = await rawQuery<any>(
+
+    if (!delegateId) {
+      throw new ValidationError("يرجى اختيار المفوَّض إليه", {
+        field: "delegateId",
+        fix: "اختر الموظف الذي ستُفوَّض إليه الصلاحيات",
+      });
+    }
+    if (!reason || !String(reason).trim()) {
+      throw new ValidationError("سبب التفويض مطلوب", {
+        field: "reason",
+        fix: "اكتب سبب التفويض (إجازة، سفر، …)",
+      });
+    }
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
+        field: "endDate",
+        fix: "اختر تاريخ نهاية بعد تاريخ البداية",
+      });
+    }
+
+    const [emp] = await rawQuery<{ id: number }>(
       `SELECT id FROM employees WHERE "userId" = $1 LIMIT 1`,
       [scope.userId]
     );
     if (!emp) throw new ValidationError("لم يتم العثور على الموظف المرتبط بحسابك");
+
+    // FK pre-check: delegateId must be a real employee scoped to this company.
+    const [delegate] = await rawQuery<{ id: number }>(
+      `SELECT e.id FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id
+        WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+      [Number(delegateId), scope.companyId]
+    );
+    if (!delegate) {
+      throw new ValidationError(`الموظف رقم ${delegateId} غير موجود في هذه الشركة`, {
+        field: "delegateId",
+        fix: "اختر موظفاً مسجّلاً في الشركة",
+      });
+    }
+    if (Number(delegateId) === emp.id) {
+      throw new ValidationError("لا يمكن تفويض نفسك", {
+        field: "delegateId",
+        fix: "اختر موظفاً مختلفاً",
+      });
+    }
+
+    // The old handler wrapped rawExecute in .catch(() => ({ insertId: null }))
+    // which silently swallowed FK / constraint errors and still returned
+    // { success: true, id: null } — a lie to the caller. Drop the catch so
+    // real DB errors surface through handleRouteError (with requestId).
     const r = await rawExecute(
       `INSERT INTO delegations ("delegatorId","delegateId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
-      [emp.id, delegateId, scope.companyId, delegationScope || "عام", reason, startDate || new Date(), endDate || null]
-    ).catch(() => ({ insertId: null }));
-    res.status(201).json({ success: true, id: r.insertId });
+      [emp.id, Number(delegateId), scope.companyId, delegationScope || "عام", String(reason).trim(), startDate || new Date(), endDate || null]
+    );
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "delegations", entityId: r.insertId,
+      after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
+    }).catch(console.error);
+    res.status(201).json({ success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
 });
 
