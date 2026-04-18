@@ -1883,11 +1883,11 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       [scope.companyId]
     );
 
-    // Late deductions per assignment (type = 'late')
+    // Late + early-departure deductions per assignment
     const lateDeductionRows = await rawQuery<any>(
       `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
        FROM attendance_deductions
-       WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'late'
+       WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type IN ('late', 'early_departure')
        GROUP BY "assignmentId"`,
       [scope.companyId, targetPeriod]
     );
@@ -2046,6 +2046,8 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
 
     const totalGross = Math.round(lines.reduce((s, l) => s + l.gross, 0) * 100) / 100;
     const totalGosiEmployee = Math.round(lines.reduce((s, l) => s + l.gosiEmployee, 0) * 100) / 100;
+    const totalOvertime = Math.round(lines.reduce((s, l) => s + l.overtime, 0) * 100) / 100;
+    const totalOtherDeductions = Math.round(lines.reduce((s, l) => s + l.lateDeduction + l.absenceDeduction + l.violationDeduction + l.loanDeduction, 0) * 100) / 100;
     const totalBankPayout = Math.round(totalNet * 100) / 100;
     const totalGosiPayable = Math.round((totalGosiEmployer + totalGosiEmployee) * 100) / 100;
 
@@ -2130,11 +2132,13 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     });
 
     try {
-      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
+      const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, bankCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
         getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
         getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_overtime_expense", "debit", "5120"),
         getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
         getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
+        getAccountCodeFromMapping(scope.companyId, "payroll_deductions_payable", "credit", "2210"),
       ]);
 
       await createJournalEntry({
@@ -2145,10 +2149,11 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
         description: `صرف رواتب ${targetPeriod} – ${lines.length} موظف`,
         lines: [
           { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
+          { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
           { accountCode: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0 },
           { accountCode: bankCode, debit: 0, credit: totalBankPayout },
           { accountCode: gosiPayableCode, debit: 0, credit: totalGosiPayable },
-          { accountCode: "2210", debit: 0, credit: Math.round((totalGross - totalNet - totalGosiEmployee) * 100) / 100 || 0 },
+          { accountCode: deductionsPayableCode, debit: 0, credit: totalOtherDeductions },
         ].filter(l => l.debit > 0 || l.credit > 0),
       });
     } catch (journalErr) {
