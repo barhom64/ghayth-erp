@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahSeasons() {
-  const { data: resp, refetch } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
+  const { data: resp, refetch, isLoading, isError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const items = resp?.data || [];
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>({});

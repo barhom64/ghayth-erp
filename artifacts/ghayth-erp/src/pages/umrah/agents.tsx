@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Building2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahAgents() {
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
@@ -27,6 +28,9 @@ export default function UmrahAgents() {
       refetch();
     } catch { toast({ variant: "destructive", title: "خطأ" }); }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const activeCount = items.filter((a: any) => a.status === "active").length;
   const kpiCards = [

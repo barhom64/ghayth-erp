@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Receipt, DollarSign, FileText } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahInvoices() {
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agent-invoices"], "/umrah/agent-invoices");
@@ -21,6 +22,9 @@ export default function UmrahInvoices() {
   const [genSeason, setGenSeason] = useState("");
   const pageSize = 20;
   const { toast } = useToast();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const generate = async () => {
     try {

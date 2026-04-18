@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Mail } from "lucide-react";
 import { useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface LegalCase {
   id: number;
@@ -26,6 +27,9 @@ export default function LegalCorrespondence() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["legal-cases-corr"], "/legal/cases");
   const cases = asList(data?.data || data);
   const [, navigate] = useLocation();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

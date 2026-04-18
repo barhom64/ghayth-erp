@@ -2,6 +2,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Truck } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface TransportEntry {
   id: number;
@@ -35,6 +36,9 @@ const columns: DataTableColumn<TransportEntry>[] = [
 export default function UmrahTransport() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["umrah-transport"], "/umrah/transport");
   const rows = asList(data?.data || data);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">
