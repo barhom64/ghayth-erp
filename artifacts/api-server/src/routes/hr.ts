@@ -2247,14 +2247,156 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId, type, description, severity, deduction, period: reqPeriod } = req.body as any;
+    const {
+      assignmentId, type, description, severity, deduction,
+      period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
+    } = req.body as any;
+
+    if (!assignmentId) {
+      throw new ValidationError("يرجى اختيار الموظف", {
+        field: "assignmentId",
+        fix: "اختر التعيين الذي تُنسب إليه المخالفة",
+      });
+    }
+    if (!type) {
+      throw new ValidationError("نوع المخالفة مطلوب", {
+        field: "type",
+        fix: "حدد نوع المخالفة (late | early_leave | absence | behavior | organization | gps_out_of_range | custom)",
+      });
+    }
+    if (!description || !String(description).trim()) {
+      throw new ValidationError("وصف المخالفة مطلوب", {
+        field: "description",
+        fix: "اكتب تفاصيل المخالفة",
+      });
+    }
+
+    // FK pre-check: assignment must exist inside the caller's company scope.
+    // Without this, a bad assignmentId would fail as a deep 23503 whose
+    // detail string doesn't always carry the field name.
+    const [asn] = await rawQuery<any>(
+      `SELECT ea.id, ea."employeeId", ea."branchId", e.name AS "employeeName"
+         FROM employee_assignments ea
+         JOIN employees e ON e.id = ea."employeeId"
+        WHERE ea.id = $1 AND ea."companyId" = $2
+        LIMIT 1`,
+      [Number(assignmentId), scope.companyId]
+    );
+    if (!asn) {
+      throw new ValidationError(`التعيين رقم ${assignmentId} غير موجود في هذه الشركة`, {
+        field: "assignmentId",
+        fix: "اختر تعيينًا من قائمة الموظفين الحاليين",
+      });
+    }
+
     const period = reqPeriod || new Date().toISOString().slice(0, 7);
+    const incidentDate = reqIncidentDate || new Date().toISOString().slice(0, 10);
+    const effectiveSeverity = severity ?? "medium";
+    const effectiveDeduction = Number(deduction ?? 0);
+
     const { insertId } = await rawExecute(
       `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, assignmentId, type, description, severity ?? "medium", deduction ?? 0, period]
+      [scope.companyId, Number(assignmentId), type, description, effectiveSeverity, effectiveDeduction, period]
     );
-    res.status(201).json({ id: insertId, ...req.body });
+
+    // Discipline ladder — create the inquiry memo (idempotent). This wires
+    // the violation to the 5-step penalty scale and the pending-employee
+    // workflow. Known IncidentType strings map through; anything else
+    // becomes "custom" which the regulation engine handles as a free-form
+    // case.
+    const knownIncidentTypes = new Set([
+      "late", "early_leave", "absence", "behavior",
+      "organization", "gps_out_of_range", "custom",
+    ]);
+    const incidentType = knownIncidentTypes.has(String(type)) ? (type as any) : "custom";
+    ensureInquiryMemoForViolation({
+      companyId: scope.companyId,
+      branchId: asn.branchId ?? scope.branchId ?? null,
+      assignmentId: Number(assignmentId),
+      employeeId: asn.employeeId,
+      violationId: insertId,
+      incidentType,
+      incidentDate,
+      incidentDescription: String(description),
+      regulationId: regulationId ? Number(regulationId) : undefined,
+      source: "manual",
+      createdBy: scope.userId,
+    }).catch((err) => console.error("inquiry memo create failed:", err));
+
+    // Notify the offender and their manager.
+    createNotification({
+      companyId: scope.companyId,
+      assignmentId: Number(assignmentId),
+      type: "violation_created",
+      title: "تم تسجيل مخالفة",
+      body: `نوع: ${type} — بتاريخ ${incidentDate}${effectiveDeduction ? ` — الخصم المتوقع ${effectiveDeduction} ريال` : ""}`,
+      priority: "high",
+      refType: "employee_violations",
+      refId: insertId,
+    }).catch(console.error);
+    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch(() => null);
+    if (managerAsn && managerAsn !== Number(assignmentId)) {
+      createNotification({
+        companyId: scope.companyId,
+        assignmentId: managerAsn,
+        type: "violation_created",
+        title: "مخالفة جديدة في فريقك",
+        body: `الموظف ${asn.employeeName} — ${type}`,
+        priority: "normal",
+        refType: "employee_violations",
+        refId: insertId,
+      }).catch(console.error);
+    }
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "violation.created",
+      entity: "employee_violations",
+      entityId: insertId,
+      details: JSON.stringify({
+        assignmentId: Number(assignmentId),
+        employeeId: asn.employeeId,
+        type,
+        severity: effectiveSeverity,
+        deduction: effectiveDeduction,
+        period,
+      }),
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId,
+      branchId: asn.branchId ?? scope.branchId ?? null,
+      userId: scope.userId,
+      action: "create",
+      entity: "employee_violations",
+      entityId: insertId,
+      after: {
+        assignmentId: Number(assignmentId),
+        employeeId: asn.employeeId,
+        employeeName: asn.employeeName,
+        type,
+        description,
+        severity: effectiveSeverity,
+        deduction: effectiveDeduction,
+        period,
+        incidentDate,
+      },
+    });
+
+    res.status(201).json({
+      id: insertId,
+      assignmentId: Number(assignmentId),
+      employeeId: asn.employeeId,
+      employeeName: asn.employeeName,
+      type,
+      description,
+      severity: effectiveSeverity,
+      deduction: effectiveDeduction,
+      period,
+      incidentDate,
+    });
   } catch (err) { handleRouteError(err, res, "Create violation error:"); }
 });
 
