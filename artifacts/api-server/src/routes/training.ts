@@ -133,7 +133,7 @@ router.get("/enrollments", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { programId } = req.query;
-    let where = `tp."companyId"=$1`;
+    let where = `tp."companyId"=$1 AND tp."deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
     if (programId) { params.push(programId); where += ` AND e."programId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE ${where} ORDER BY e."createdAt" DESC`, params);
@@ -161,7 +161,7 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
     if (!prog) throw new NotFoundError("البرنامج التدريبي غير موجود");
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id=$1 LIMIT 1`,
+        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(employeeId)]
       );
       if (!emp) {
@@ -240,10 +240,10 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [programs] = await rawQuery(`SELECT COUNT(*) as count FROM training_programs WHERE "companyId"=$1`, [cid]);
-    const [active] = await rawQuery(`SELECT COUNT(*) as count FROM training_programs WHERE status='active' AND "companyId"=$1`, [cid]);
-    const [enrollments] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE tp."companyId"=$1`, [cid]);
-    const [completed] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.status='completed' AND tp."companyId"=$1`, [cid]);
+    const [programs] = await rawQuery(`SELECT COUNT(*) as count FROM training_programs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [active] = await rawQuery(`SELECT COUNT(*) as count FROM training_programs WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [enrollments] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE tp."companyId"=$1 AND tp."deletedAt" IS NULL`, [cid]);
+    const [completed] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.status='completed' AND tp."companyId"=$1 AND tp."deletedAt" IS NULL`, [cid]);
     res.json({
       totalPrograms: Number(programs.count),
       activePrograms: Number(active.count),

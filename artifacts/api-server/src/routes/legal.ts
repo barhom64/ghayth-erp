@@ -843,7 +843,7 @@ router.get("/stats", async (req, res) => {
     const [contracts] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
+    const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
     const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch(() => [{ total: 0 }]);
     res.json({
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
@@ -1078,7 +1078,7 @@ router.get("/sessions/upcoming", async (req, res) => {
               (ls."sessionDate"::date - CURRENT_DATE) AS "daysUntil"
        FROM legal_sessions ls
        JOIN legal_cases lc ON lc.id=ls."caseId"
-       WHERE lc."companyId"=$1 AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL
+       WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL
        ORDER BY ls."sessionDate" ASC`,
       [scope.companyId, days]
     );
@@ -1107,7 +1107,7 @@ router.get("/judgments/financial-report", async (req, res) => {
       [scope.companyId]
     );
     const [contingent] = await rawQuery<any>(
-      `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed')`,
+      `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`,
       [scope.companyId]
     ).catch(() => [{ total: 0 }]);
     res.json({

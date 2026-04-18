@@ -740,7 +740,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
                 (SELECT COUNT(*) FROM fleet_trips WHERE "vehicleId"=v.id AND status='completed') AS "tripCount",
                 (SELECT MAX("endDate") FROM fleet_insurance WHERE "vehicleId"=v.id) AS "insuranceEnd"
          FROM fleet_vehicles v
-         WHERE v."companyId"=$1 AND v.status='available'
+         WHERE v."companyId"=$1 AND v.status='available' AND v."deletedAt" IS NULL
          ORDER BY v.id LIMIT 20`,
         [scope.companyId]
       );
@@ -1501,7 +1501,7 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
     }
 
     const oilDue = await rawQuery<any>(
-      `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
+      `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
       [cid]
     );
     oilDue.forEach((r: any) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
@@ -1535,7 +1535,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
     const vehiclePlate = b.vehiclePlate || null;
     let resolvedVehicleId = vehicleId;
     if (!resolvedVehicleId && vehiclePlate) {
-      const [v] = await rawQuery<any>(`SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2`, [vehiclePlate, scope.companyId]);
+      const [v] = await rawQuery<any>(`SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [vehiclePlate, scope.companyId]);
       if (v) resolvedVehicleId = v.id;
     }
     if (!resolvedVehicleId) {
