@@ -11,7 +11,7 @@ import { formatNumber } from "@/lib/formatters";
 import { useChartExport } from "./shared";
 
 export function OverviewTab() {
-  const { data } = useApiQuery<any>(["bi-overview"], "/bi/overview");
+  const { data, isLoading } = useApiQuery<any>(["bi-overview"], "/bi/overview");
   const d = data || {};
   const chartRef = useRef<HTMLDivElement>(null);
   const { exportChart } = useChartExport();
@@ -24,6 +24,12 @@ export function OverviewTab() {
     { label: "تذاكر مفتوحة", value: d.openTickets || 0, icon: Headphones, color: "text-red-600 bg-red-50" },
     { label: "الإيرادات", value: `${formatNumber(((d.totalRevenue || 0) / 1000))}K`, icon: DollarSign, color: "text-indigo-600 bg-indigo-50" },
   ];
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">

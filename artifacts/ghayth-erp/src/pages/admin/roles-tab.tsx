@@ -13,8 +13,8 @@ const ALL_MODULES = Object.keys(MODULE_LABELS);
 
 export function RolesTab() {
   const { toast } = useToast();
-  const { data: predefinedData } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
-  const { data: roleModulesData, refetch } = useApiQuery<any>(["role-modules"], "/settings/role-modules");
+  const { data: predefinedData, isLoading: isLoading1 } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
+  const { data: roleModulesData, refetch, isLoading: isLoading2 } = useApiQuery<any>(["role-modules"], "/settings/role-modules");
   const predefinedRoles: PredefinedRole[] = predefinedData?.data || [];
   const roleModulesMap = new Map<string, string[]>(
     (roleModulesData?.data || []).map((r: any) => [r.roleKey, Array.isArray(r.modules) ? r.modules : []])
@@ -51,6 +51,12 @@ export function RolesTab() {
     }
     setSaving(false);
   };
+
+  if (isLoading1 || isLoading2) return (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">

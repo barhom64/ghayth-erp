@@ -39,7 +39,7 @@ export function PermissionsTab() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
 
-  const { data: usersData } = useApiQuery<any>(["admin-users"], "/admin/users");
+  const { data: usersData, isLoading } = useApiQuery<any>(["admin-users"], "/admin/users");
   const users = usersData?.data || [];
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userPerms, setUserPerms] = useState<any[]>([]);
@@ -120,6 +120,12 @@ export function PermissionsTab() {
       toast({ variant: "destructive", title: "فشل في تحديث الصلاحية" });
     }
   };
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
