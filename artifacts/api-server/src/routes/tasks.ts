@@ -278,19 +278,13 @@ router.post("/", requirePermission("tasks:write"), async (req, res) => {
              WHERE a."companyId" = $1
                AND (e.name = $2 OR e.email = $2)
                AND a.status = 'active'
-             ORDER BY a."isPrimary" DESC, a."createdAt" DESC LIMIT 2`,
+             ORDER BY a."isPrimary" DESC, a."createdAt" DESC LIMIT 1`,
             [scope.companyId, trimmed]
           );
           if (resolved.length === 0) {
             throw new ValidationError(`الموظف "${trimmed}" غير موجود`, {
               field: "assignedTo",
               fix: "اختر موظفاً من القائمة أو اترك الحقل فارغاً",
-            });
-          }
-          if (resolved.length > 1) {
-            throw new ValidationError(`أكثر من موظف يحمل اسم "${trimmed}"`, {
-              field: "assignedTo",
-              fix: "اختر الموظف من القائمة باستخدام رقمه بدلاً من الاسم",
             });
           }
           finalAssignedTo = resolved[0].id;
