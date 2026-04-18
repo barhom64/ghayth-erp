@@ -9,12 +9,13 @@ import { Calculator, DollarSign, Calendar, User } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { TERMINATION_TYPES } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function GratuityPage() {
   const [form, setForm] = useState({ employeeId: "", terminationType: "end_of_service", terminationDate: new Date().toISOString().split("T")[0] });
   const [calcUrl, setCalcUrl] = useState<string>("");
 
-  const { data: employees } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
+  const { data: employees, isLoading: employeesLoading, isError: employeesError } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
   const employeeList = asList(employees?.data || employees);
 
   const { data: result, isLoading, error } = useApiQuery<any>(
@@ -22,6 +23,9 @@ export default function GratuityPage() {
     calcUrl || "",
     { enabled: !!calcUrl }
   );
+
+  if (employeesLoading) return <LoadingSpinner />;
+  if (employeesError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleCalc = () => {
     if (!form.employeeId) return;

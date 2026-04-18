@@ -22,6 +22,48 @@ import {
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { z } from "zod";
+
+// ── Zod schemas for POST route validation ──────────────────────────────────
+const createInvoiceSchema = z.object({
+  clientId: z.number({ required_error: "العميل مطلوب" }),
+  lines: z.array(z.object({
+    description: z.string().optional(),
+    quantity: z.number().optional(),
+    unitPrice: z.number().optional(),
+    accountCode: z.string().optional(),
+  })).min(1, "يجب إضافة بند واحد على الأقل").optional(),
+  vatRate: z.number().optional(),
+  dueDate: z.string().optional(),
+  date: z.string().optional(),
+  description: z.string().optional(),
+  subtotal: z.number().optional(),
+  total: z.number().optional(),
+  notes: z.string().optional(),
+  paymentTermsDays: z.number().optional(),
+  branchId: z.number().optional(),
+}).passthrough();
+
+const createPaymentSchema = z.object({
+  amount: z.number().positive("المبلغ مطلوب"),
+  method: z.string().optional(),
+});
+
+const createCreditMemoSchema = z.object({
+  amount: z.number().positive("المبلغ مطلوب"),
+  reason: z.string().min(1, "السبب مطلوب"),
+  vatIncluded: z.boolean().optional(),
+  memoDate: z.string().optional(),
+});
+
+const createCustomerAdvanceSchema = z.object({
+  clientId: z.number({ required_error: "العميل مطلوب" }),
+  amount: z.number().positive("المبلغ مطلوب"),
+  method: z.string().optional(),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+  receivedDate: z.string().optional(),
+});
 
 export const invoicesRouter = Router();
 invoicesRouter.use(authMiddleware);
@@ -130,11 +172,13 @@ invoicesRouter.post("/invoices", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
+    const parsed = createInvoiceSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const {
       clientId, description, subtotal, total: rawTotal, lines: lineItems,
       vatRate = 15, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
       isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason,
-    } = req.body as any;
+    } = parsed.data as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
     if (!clientId) {
@@ -410,14 +454,9 @@ invoicesRouter.post("/invoices/:id/payment", async (req, res) => {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
-    const { amount, method = "bank_transfer" } = req.body as any;
-
-    if (!amount) {
-      throw new ValidationError("المبلغ مطلوب", { field: "amount", fix: "أدخل مبلغ الدفعة" });
-    }
-    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
-      throw new ValidationError("يجب أن يكون المبلغ أكبر من صفر", { field: "amount", fix: "أدخل مبلغاً موجباً" });
-    }
+    const parsedPayment = createPaymentSchema.safeParse(req.body);
+    if (!parsedPayment.success) throw new ValidationError(parsedPayment.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { amount, method = "bank_transfer" } = parsedPayment.data;
 
     const [cashAccountCode, arAccountCode] = await Promise.all([
       getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
@@ -773,14 +812,9 @@ invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
-    const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
-
-    if (!amount || Number(amount) <= 0) {
-      throw new ValidationError("المبلغ مطلوب ويجب أن يكون أكبر من صفر");
-    }
-    if (!reason) {
-      throw new ValidationError("سبب الإشعار الدائن مطلوب");
-    }
+    const parsedMemo = createCreditMemoSchema.safeParse(req.body);
+    if (!parsedMemo.success) throw new ValidationError(parsedMemo.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { amount, reason, vatIncluded = true, memoDate } = parsedMemo.data;
 
     const [invoice] = await rawQuery<any>(
       `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
@@ -1267,10 +1301,9 @@ invoicesRouter.post("/customer-advances", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = req.body as any;
-
-    if (!clientId) { throw new ValidationError("العميل مطلوب"); return; }
-    if (!amount || Number(amount) <= 0) { throw new ValidationError("المبلغ مطلوب ويجب أن يكون أكبر من صفر"); return; }
+    const parsedAdvance = createCustomerAdvanceSchema.safeParse(req.body);
+    if (!parsedAdvance.success) throw new ValidationError(parsedAdvance.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = parsedAdvance.data;
 
     const recvDate = receivedDate || new Date().toISOString().slice(0, 10);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);

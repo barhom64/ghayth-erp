@@ -22,6 +22,7 @@ import {
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
+import { z } from "zod";
 
 export const purchaseRouter = Router();
 purchaseRouter.use(authMiddleware);
@@ -37,6 +38,36 @@ function assertRole(scope: any, allowedRoles: string[]): void {
     });
   }
 }
+
+const createPurchaseRequestSchema = z.object({
+  items: z.array(z.object({
+    description: z.string().optional(),
+    quantity: z.number().optional(),
+    unitPrice: z.number().optional(),
+    accountCode: z.string().optional(),
+  })).min(1, "يجب إضافة بند واحد على الأقل"),
+  supplierId: z.number().optional(),
+  notes: z.string().optional(),
+  expectedDate: z.string().optional(),
+  expectedDelivery: z.string().optional(),
+});
+
+const createPurchaseOrderSchema = z.object({
+  supplierId: z.number({ required_error: "المورد مطلوب" }),
+  totalAmount: z.number().optional(),
+  vatAmount: z.number().optional(),
+  notes: z.string().optional(),
+  expectedDelivery: z.string().optional(),
+  items: z.array(z.any()).optional(),
+});
+
+const executePaymentRunSchema = z.object({
+  poIds: z.array(z.number()).min(1, "يجب اختيار أمر شراء واحد على الأقل"),
+  paymentDate: z.string().optional(),
+  method: z.string().optional(),
+  reference: z.string().optional(),
+  bankAccount: z.string().optional(),
+});
 
 purchaseRouter.get("/purchase-requests", async (req, res) => {
   try {
@@ -84,15 +115,18 @@ purchaseRouter.post("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PROCUREMENT_ROLES);
+
+    const parsed = createPurchaseRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
+
     // The frontend create-form (purchase-orders-create.tsx) sends
     // `expectedDelivery` + items with `productId`, while the API
     // historically accepted `expectedDate` + items with `itemName`.
     // Accept BOTH conventions so the frontend is not silently saving
     // lines named "بند" and losing the delivery date.
-    const { items, supplierId, notes } = req.body as any;
-    const expectedDate = req.body?.expectedDate ?? req.body?.expectedDelivery ?? null;
-
-    if (!items || !Array.isArray(items) || items.length === 0) { throw new ValidationError("عناصر طلب الشراء مطلوبة"); return; }
+    const { items, supplierId, notes } = b;
+    const expectedDate = b.expectedDate ?? b.expectedDelivery ?? null;
 
     const totalAmount = items.reduce((sum: number, i: any) => sum + Number(i.quantity ?? 1) * Number(i.unitPrice ?? 0), 0);
     if (totalAmount <= 0) { throw new ValidationError("إجمالي الطلب يجب أن يكون أكبر من صفر"); return; }
@@ -351,9 +385,11 @@ purchaseRouter.post("/purchase-orders", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PROCUREMENT_ROLES);
-    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, items } = req.body as any;
 
-    if (!supplierId) { throw new ValidationError("المورد مطلوب"); return; }
+    const parsed = createPurchaseOrderSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, items } = parsed.data as any;
+
     if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
@@ -771,11 +807,10 @@ purchaseRouter.post("/payment-run/execute", async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = req.body as any;
 
-    if (!Array.isArray(poIds) || poIds.length === 0) {
-      throw new ValidationError("يجب اختيار أوامر شراء واحد على الأقل للدفع");
-    }
+    const parsed = executePaymentRunSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = parsed.data as any;
     const payDate = paymentDate || new Date().toISOString().slice(0, 10);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, payDate);
     if (!periodCheck.open) {

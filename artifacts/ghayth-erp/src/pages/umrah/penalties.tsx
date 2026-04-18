@@ -5,12 +5,16 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AlertTriangle, DollarSign, Clock } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahPenalties() {
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-penalties"], "/umrah/penalties");
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
   const items = resp?.data || [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filteredItems = items.filter((p: any) => {
     if (filters.status && p.status !== filters.status) return false;

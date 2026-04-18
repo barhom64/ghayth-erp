@@ -17,6 +17,43 @@ import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { z } from "zod";
+
+// ─── Zod schemas for POST route body validation ─────────────────────────────
+const createVehicleSchema = z.object({
+  plateNumber: z.string().min(1),
+  make: z.string().min(1),
+  model: z.string().min(1),
+  year: z.number().optional(),
+  fuelType: z.enum(["gasoline", "diesel", "electric", "hybrid", "lpg"]).optional(),
+});
+
+const createDriverSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().min(1),
+  licenseNumber: z.string().min(1),
+  licenseExpiry: z.string().optional(),
+});
+
+const createMaintenanceSchema = z.object({
+  vehicleId: z.number({ required_error: "المركبة مطلوبة" }),
+  type: z.string().min(1, "نوع الصيانة مطلوب"),
+  description: z.string().min(1, "وصف الصيانة مطلوب"),
+  cost: z.number().min(0).optional(),
+});
+
+const createFuelLogSchema = z.object({
+  vehicleId: z.number().optional(),
+  vehiclePlate: z.string().optional(),
+  liters: z.number().positive("كمية الوقود يجب أن تكون أكبر من صفر"),
+});
+
+const createInsuranceSchema = z.object({
+  vehicleId: z.number({ required_error: "المركبة مطلوبة" }),
+  provider: z.string().min(1, "شركة التأمين مطلوبة"),
+  startDate: z.string().min(1, "تاريخ بداية الوثيقة مطلوب"),
+  endDate: z.string().min(1, "تاريخ انتهاء الوثيقة مطلوب"),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -89,27 +126,17 @@ router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
 router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createVehicleSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
-    const plateNumber = typeof b.plateNumber === "string" ? b.plateNumber.trim() : "";
-    if (!plateNumber) {
-      throw new ValidationError("رقم اللوحة مطلوب", { field: "plateNumber", fix: "أدخل رقم لوحة المركبة" });
-    }
-    if (!b.make || typeof b.make !== "string" || !b.make.trim()) {
-      throw new ValidationError("الشركة المصنّعة مطلوبة", { field: "make", fix: "أدخل اسم الشركة المصنّعة للمركبة" });
-    }
-    if (!b.model || typeof b.model !== "string" || !b.model.trim()) {
-      throw new ValidationError("الموديل مطلوب", { field: "model", fix: "أدخل موديل المركبة" });
-    }
-    if (b.year !== undefined && b.year !== null && b.year !== "") {
+    const plateNumber = b.plateNumber.trim();
+    if (b.year !== undefined && b.year !== null) {
       const yr = Number(b.year);
       const currentYear = new Date().getFullYear();
       if (!Number.isFinite(yr) || yr < 1950 || yr > currentYear + 1) {
         throw new ValidationError(`السنة غير صالحة — يجب أن تكون بين 1950 و${currentYear + 1}`, { field: "year", fix: "أدخل سنة صنع المركبة بصيغة صحيحة" });
       }
-    }
-    if (b.fuelType && !["gasoline", "diesel", "electric", "hybrid", "lpg"].includes(b.fuelType)) {
-      throw new ValidationError("نوع الوقود غير صالح", { field: "fuelType", fix: "اختر من: بنزين، ديزل، كهربائي، هجين، غاز" });
     }
 
     const [existingVehicle] = await rawQuery<any>(
@@ -217,20 +244,13 @@ router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
 router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createDriverSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
-    const name = typeof b.name === "string" ? b.name.trim() : "";
-    if (!name) {
-      throw new ValidationError("اسم السائق مطلوب", { field: "name", fix: "أدخل الاسم الكامل للسائق" });
-    }
-    const phone = typeof b.phone === "string" ? b.phone.trim() : "";
-    if (!phone) {
-      throw new ValidationError("رقم الهاتف مطلوب", { field: "phone", fix: "أدخل رقم جوال للسائق للتواصل والإشعارات" });
-    }
-    const licenseNumber = typeof b.licenseNumber === "string" ? b.licenseNumber.trim() : "";
-    if (!licenseNumber) {
-      throw new ValidationError("رقم الرخصة مطلوب", { field: "licenseNumber", fix: "أدخل رقم رخصة القيادة" });
-    }
+    const name = b.name.trim();
+    const phone = b.phone.trim();
+    const licenseNumber = b.licenseNumber.trim();
     if (b.licenseExpiry) {
       const exp = new Date(b.licenseExpiry);
       if (Number.isNaN(exp.getTime())) {
@@ -1127,23 +1147,9 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
 router.post("/maintenance", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-
-    if (!b.vehicleId) {
-      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر المركبة التي ستخضع للصيانة" });
-    }
-    if (!b.type || typeof b.type !== "string" || !b.type.trim()) {
-      throw new ValidationError("نوع الصيانة مطلوب", { field: "type", fix: "اختر نوع الصيانة (مثال: تغيير زيت، إصلاح، فحص دوري)" });
-    }
-    if (!b.description || typeof b.description !== "string" || !b.description.trim()) {
-      throw new ValidationError("وصف الصيانة مطلوب", { field: "description", fix: "اكتب وصفاً موجزاً للعمل المطلوب" });
-    }
-    if (b.cost !== undefined && b.cost !== null && b.cost !== "") {
-      const c = Number(b.cost);
-      if (!Number.isFinite(c) || c < 0) {
-        throw new ValidationError("التكلفة غير صالحة", { field: "cost", fix: "أدخل قيمة غير سالبة" });
-      }
-    }
+    const parsed = createMaintenanceSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
     // FK pre-check: vehicle must exist and not be deleted
     const [vehicleRow] = await rawQuery<any>(
@@ -1530,7 +1536,10 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
 router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createFuelLogSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
+
     const vehicleId = b.vehicleId || null;
     const vehiclePlate = b.vehiclePlate || null;
     let resolvedVehicleId = vehicleId;
@@ -1545,13 +1554,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       });
     }
 
-    const liters = Number(b.liters) || 0;
-    if (liters <= 0) {
-      throw new ValidationError("كمية الوقود يجب أن تكون أكبر من صفر", {
-        field: "liters",
-        fix: "أدخل كمية الوقود باللتر",
-      });
-    }
+    const liters = b.liters;
 
     // FK pre-check: the vehicle must exist in the caller's company. Without
     // this, bogus vehicleId would fail inside the INSERT as an opaque
@@ -1650,20 +1653,10 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
 router.post("/insurance", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createInsuranceSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
-    if (!b.vehicleId) {
-      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر المركبة المؤمن عليها" });
-    }
-    if (!b.provider || typeof b.provider !== "string" || !b.provider.trim()) {
-      throw new ValidationError("شركة التأمين مطلوبة", { field: "provider", fix: "أدخل اسم شركة التأمين" });
-    }
-    if (!b.startDate) {
-      throw new ValidationError("تاريخ بداية الوثيقة مطلوب", { field: "startDate", fix: "أدخل تاريخ بداية سريان التأمين" });
-    }
-    if (!b.endDate) {
-      throw new ValidationError("تاريخ انتهاء الوثيقة مطلوب", { field: "endDate", fix: "أدخل تاريخ انتهاء سريان التأمين" });
-    }
     const startD = new Date(b.startDate);
     const endD = new Date(b.endDate);
     if (Number.isNaN(startD.getTime()) || Number.isNaN(endD.getTime())) {

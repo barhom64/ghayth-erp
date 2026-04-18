@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -165,7 +166,7 @@ export default function BankGuaranteesPage() {
   const [actionModal, setActionModal] = useState<ActionModal | null>(null);
   const [actionReason, setActionReason] = useState("");
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["bank-guarantees", scopeQueryString],
     `/finance/bank-guarantees${scopeSuffix}`,
   );
@@ -247,6 +248,9 @@ export default function BankGuaranteesPage() {
       },
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const list: BankGuarantee[] = data?.data ?? data ?? [];
   const summary = data?.summary ?? {};

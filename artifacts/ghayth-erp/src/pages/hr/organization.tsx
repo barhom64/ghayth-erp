@@ -3,12 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Network, Briefcase, MapPin, User } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function OrganizationPage() {
-  const { data: depts } = useApiQuery<any>(["departments"], "/settings/departments");
+  const { data: depts, isLoading, isError } = useApiQuery<any>(["departments"], "/settings/departments");
   const { data: empData } = useApiQuery<any>(["employees"], "/employees");
   const items = depts?.data || [];
   const employees = empData?.data || [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const kpis = [
     { label: "الأقسام", value: items.length, icon: Building2, color: "text-blue-600 bg-blue-50" },

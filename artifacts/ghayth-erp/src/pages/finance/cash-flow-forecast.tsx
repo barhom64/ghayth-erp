@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
@@ -43,10 +44,13 @@ function ForecastCard({ label, days, data }: { label: string; days: string; data
 export default function CashFlowForecastPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["cash-flow-forecast"],
     `/finance/cash-flow-forecast${scopeSuffix}`
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const forecast = data?.forecast ?? {};
   const inflows = data?.inflows ?? {};

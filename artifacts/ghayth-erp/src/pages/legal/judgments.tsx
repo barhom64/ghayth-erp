@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface Judgment {
   id: number;
@@ -43,6 +44,9 @@ export default function LegalJudgments() {
   const totalAmount = data?.totalAmount || 0;
   const totalPaid = data?.totalPaid || 0;
   const outstanding = data?.outstanding || 0;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

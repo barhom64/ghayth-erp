@@ -7,15 +7,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeftRight, CheckCircle, AlertCircle, AlertTriangle, Save, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function AccountingMappingsTab() {
-  const { data, refetch, isLoading } = useApiQuery<any>(["accounting-mappings"], "/finance/accounting-mappings");
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["accounting-mappings"], "/finance/accounting-mappings");
   const { data: accountsData } = useApiQuery<any>(["accounts-list"], "/finance/accounts");
   const { toast } = useToast();
   const mappings: any[] = data?.data || [];
   const accounts: any[] = accountsData?.data || [];
   const [editingMap, setEditingMap] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState<string | null>(null);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const postingAccounts = accounts.filter((a: any) => a.allowPosting !== false);
 

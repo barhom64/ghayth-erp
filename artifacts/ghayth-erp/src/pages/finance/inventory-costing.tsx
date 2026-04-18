@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ export default function InventoryCostingPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [setupResult, setSetupResult] = useState<any>(null);
 
-  const { data, isLoading } = useApiQuery<any>(["inventory-costing"], "/finance/inventory-costing");
+  const { data, isLoading, isError } = useApiQuery<any>(["inventory-costing"], "/finance/inventory-costing");
   const products = data?.products || [];
   const summary = data?.summary || {};
 
@@ -24,6 +25,9 @@ export default function InventoryCostingPage() {
 
   const roundingSetup = useApiMutation("/finance/rounding-account/setup", "POST", [["rounding-account"]]);
   const { data: roundingAccount } = useApiQuery<any>(["rounding-account"], "/finance/rounding-account");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   async function handleSetupRounding() {
     try {

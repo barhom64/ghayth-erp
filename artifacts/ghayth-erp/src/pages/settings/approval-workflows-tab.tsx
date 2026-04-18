@@ -6,13 +6,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GitBranch, Plus, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function ApprovalWorkflowsTab() {
-  const { data, refetch } = useApiQuery<any>(["approval-config"], "/settings/approval-config");
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["approval-config"], "/settings/approval-config");
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ entityType: "leave", chainOrder: 1, approverRole: "manager", label: "" });
   const chains = data?.data || [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const entityTypes = [
     { value: "leave", label: "الإجازات" },

@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ClipboardCheck, Clock, CheckCircle, DollarSign } from "lucide-react";
@@ -12,6 +13,9 @@ export default function FinancialRequestsPage() {
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "supplierName", "requestedByName"],

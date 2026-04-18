@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,10 +48,13 @@ export default function ProjectCostingPage() {
     addCostMutation.mutate({ ...costForm, projectId: Number(costForm.projectId), amount: Number(costForm.amount) });
   }
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["projects-finance"],
     `/finance/projects${scopeSuffix}`
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const list: Project[] = data?.data ?? data ?? [];
 

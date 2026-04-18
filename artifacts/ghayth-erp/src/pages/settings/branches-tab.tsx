@@ -7,12 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function BranchesTab() {
   const { refreshFilters } = useAppContext();
-  const { data: companiesResp } = useApiQuery<any>(["settings-companies"], "/settings/companies");
+  const { data: companiesResp, isLoading: companiesLoading, isError: companiesError } = useApiQuery<any>(["settings-companies"], "/settings/companies");
   const companies = asList(companiesResp);
-  const { data, refetch } = useApiQuery<any>(["settings-branches"], "/settings/branches");
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["settings-branches"], "/settings/branches");
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -35,6 +36,9 @@ export function BranchesTab() {
       setForm((f) => ({ ...f, companyId: companies[0]?.id?.toString() || "" }));
     }
   }, [companies]);
+
+  if (isLoading || companiesLoading) return <LoadingSpinner />;
+  if (isError || companiesError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleEdit = (item: any) => {
     setForm({

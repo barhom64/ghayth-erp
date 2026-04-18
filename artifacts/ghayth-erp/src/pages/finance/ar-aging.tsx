@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,9 @@ export default function ArAgingPage() {
     ["ar-aging", asOfDate],
     `/finance/ar-aging?asOfDate=${asOfDate}`
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const clients = (data?.clients || []) as any[];
   const summary = data?.summary || {};

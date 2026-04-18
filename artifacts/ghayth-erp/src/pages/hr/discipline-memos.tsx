@@ -12,6 +12,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { INCIDENT_LABELS } from "@/lib/hr-type-maps";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "pending_employee", label: "بانتظار الموظف" },
@@ -26,7 +27,7 @@ export default function DisciplineMemosPage() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
 
-  const { data: listData } = useApiQuery<{ data: any[]; total: number }>(
+  const { data: listData, isLoading, isError } = useApiQuery<{ data: any[]; total: number }>(
     ["discipline-memos"],
     "/hr/discipline/memos",
   );
@@ -35,6 +36,9 @@ export default function DisciplineMemosPage() {
     "/hr/discipline/stats",
   );
   const memos = listData?.data ?? [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(memos, filters, {
     searchFields: ["employeeName", "memoNumber", "empNumber"],

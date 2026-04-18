@@ -2,6 +2,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Package, Check, X } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface UmrahPackage {
   id: number;
@@ -41,6 +42,9 @@ const columns: DataTableColumn<UmrahPackage>[] = [
 export default function UmrahPackages() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
   const rows = asList(data?.data || data);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">
