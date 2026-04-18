@@ -224,6 +224,18 @@ export default function LegalCaseDetail() {
 
   const { data: caseData, refetch, isLoading } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
 
+  const transitionMut = useApiMutation<any, { status: string }>(
+    `/legal/cases/${id}`,
+    "PATCH",
+    [["legal-case", String(id)], ["legal-cases"]],
+    {
+      successMessage: false,
+      onSuccess: (_d, body) => {
+        toast({ title: `تم تحديث حالة القضية إلى: ${STATUSES[body.status] || body.status}` });
+      },
+    }
+  );
+
   const sessions = caseData?.sessions || [];
 
   const handleSessionAdded = () => {
@@ -231,6 +243,10 @@ export default function LegalCaseDetail() {
     refetch();
     qc.invalidateQueries({ queryKey: ["legal-cases"] });
     qc.invalidateQueries({ queryKey: ["legal-stats"] });
+  };
+
+  const handleTransition = (newStatus: string) => {
+    transitionMut.mutate({ status: newStatus });
   };
 
   if (isLoading) {
@@ -253,22 +269,6 @@ export default function LegalCaseDetail() {
   }
 
   const allowedTransitions: string[] = caseData.allowedTransitions || [];
-
-  const transitionMut = useApiMutation<any, { status: string }>(
-    `/legal/cases/${id}`,
-    "PATCH",
-    [["legal-case", String(id)], ["legal-cases"]],
-    {
-      successMessage: false,
-      onSuccess: (_d, body) => {
-        toast({ title: `تم تحديث حالة القضية إلى: ${STATUSES[body.status] || body.status}` });
-      },
-    }
-  );
-
-  const handleTransition = (newStatus: string) => {
-    transitionMut.mutate({ status: newStatus });
-  };
 
   return (
     <PageShell
