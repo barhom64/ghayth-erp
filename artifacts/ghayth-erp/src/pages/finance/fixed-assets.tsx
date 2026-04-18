@@ -4,6 +4,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -118,11 +119,7 @@ export default function FixedAssetsPage() {
               {a.depreciationMethod === "declining_balance" ? "القسط المتناقص" : "القسط الثابت"}
             </Badge>
           ) },
-          { key: "status", header: "الحالة", render: (a: any) => (
-            <Badge className={a.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>
-              {a.status === "active" ? "نشط" : "متقاعد"}
-            </Badge>
-          ) },
+          { key: "status", header: "الحالة", render: (a: any) => <PageStatusBadge status={a.status} domain="asset" /> },
           { key: "actions", header: "", render: (a: any) => (
             <Button
               variant="ghost"

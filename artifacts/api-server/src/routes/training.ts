@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/programs", async (req, res) => {
+router.get("/programs", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM training_programs WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
@@ -15,7 +16,7 @@ router.get("/programs", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.post("/programs", async (req, res) => {
+router.post("/programs", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, description, category, startDate, endDate, location, trainer, capacity, status } = req.body;
@@ -44,7 +45,7 @@ router.post("/programs", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create training program error:"); }
 });
 
-router.get("/programs/:id", async (req, res) => {
+router.get("/programs/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
@@ -53,7 +54,7 @@ router.get("/programs/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.patch("/programs/:id", async (req, res) => {
+router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -75,11 +76,16 @@ router.patch("/programs/:id", async (req, res) => {
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "training_programs", entityId: id,
+      before: existing, after: b,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.patch("/programs/:id/approve", async (req, res) => {
+router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -92,7 +98,7 @@ router.patch("/programs/:id/approve", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Training approve error:"); }
 });
 
-router.patch("/programs/:id/reject", async (req, res) => {
+router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -107,18 +113,23 @@ router.patch("/programs/:id/reject", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Training reject error:"); }
 });
 
-router.delete("/programs/:id", async (req, res) => {
+router.delete("/programs/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
     await rawExecute(`DELETE FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "training_programs", entityId: id,
+      before: existing,
+    }).catch(console.error);
     res.json({ message: "تم حذف البرنامج التدريبي بنجاح" });
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.get("/enrollments", async (req, res) => {
+router.get("/enrollments", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { programId } = req.query;
@@ -130,7 +141,7 @@ router.get("/enrollments", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.post("/enrollments", async (req, res) => {
+router.post("/enrollments", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { programId, employeeId, employeeName, status } = req.body;
@@ -174,7 +185,7 @@ router.post("/enrollments", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create training enrollment error:"); }
 });
 
-router.get("/enrollments/:id", async (req, res) => {
+router.get("/enrollments/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [Number(req.params.id), scope.companyId]);
@@ -183,7 +194,7 @@ router.get("/enrollments/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.patch("/enrollments/:id", async (req, res) => {
+router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -199,11 +210,16 @@ router.patch("/enrollments/:id", async (req, res) => {
     params.push(id);
     await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "training_enrollments", entityId: id,
+      before: existing, after: b,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.delete("/enrollments/:id", async (req, res) => {
+router.delete("/enrollments/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -211,11 +227,16 @@ router.delete("/enrollments/:id", async (req, res) => {
     if (!existing) { res.status(404).json({ error: "التسجيل غير موجود" }); return; }
     await rawExecute(`DELETE FROM training_enrollments WHERE id=$1`, [id]);
     await rawExecute(`UPDATE training_programs SET enrolled = GREATEST(0, enrolled - 1) WHERE id=$1`, [existing.programId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "training_enrollments", entityId: id,
+      before: existing,
+    }).catch(console.error);
     res.json({ message: "تم حذف التسجيل بنجاح" });
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.get("/stats", async (req, res) => {
+router.get("/stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

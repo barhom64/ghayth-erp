@@ -36,13 +36,7 @@ const OPERATION_LABELS: Record<string, string> = {
   work_permit_renewal: "تجديد رخصة عمل",
 };
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "نقدي",
-  bank_transfer: "تحويل بنكي",
-  check: "شيك",
-  credit_card: "بطاقة ائتمان",
-  custody: "من العهدة",
-};
+import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 
 
 export default function ExpensesPage() {
@@ -275,7 +269,7 @@ export default function ExpensesPage() {
                   {e.paymentMethod && (
                     <div>
                       <span className="text-gray-500">طريقة الدفع:</span>
-                      <span className="block font-medium">{PAYMENT_METHOD_LABELS[e.paymentMethod] || e.paymentMethod}</span>
+                      <span className="block font-medium">{PAYMENT_METHODS[e.paymentMethod] || e.paymentMethod}</span>
                     </div>
                   )}
                   {e.costCenter && (

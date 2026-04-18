@@ -223,6 +223,49 @@ export const STATUS_MAP = {
     cancelled:            { label: "ملغاة",           tone: "neutral"  },
   },
 
+  // ── Finance: Fixed Assets ──────────────────────────────────────────
+  asset: {
+    active:               { label: "نشط",             tone: "success"  },
+    retired:              { label: "متقاعد",           tone: "muted"    },
+    disposed:             { label: "مُستبعَد",         tone: "neutral"  },
+    under_maintenance:    { label: "تحت الصيانة",      tone: "warning"  },
+  },
+
+  // ── Finance: Tax ──────────────────────────────────────────────────
+  tax: {
+    submitted:            { label: "مُقدَّم",           tone: "success"  },
+    pending:              { label: "معلّق",            tone: "warning"  },
+    payable:              { label: "مستحقة الدفع",     tone: "danger"   },
+    refundable:           { label: "قابلة للاسترداد",   tone: "success"  },
+  },
+
+  // ── Finance: Expenses ─────────────────────────────────────────────
+  expense: {
+    draft:                { label: "مسودة",           tone: "muted"    },
+    pending_approval:     { label: "بانتظار الاعتماد", tone: "warning"  },
+    approved:             { label: "معتمد",           tone: "success"  },
+    rejected:             { label: "مرفوض",           tone: "danger"   },
+    returned:             { label: "مُرجَع",           tone: "warning"  },
+    paid:                 { label: "مدفوع",           tone: "success"  },
+  },
+
+  // ── Finance: Salary Advances ──────────────────────────────────────
+  salary_advance: {
+    pending:              { label: "قيد الانتظار",    tone: "warning"  },
+    approved:             { label: "معتمدة",          tone: "success"  },
+    rejected:             { label: "مرفوضة",          tone: "danger"   },
+    paid:                 { label: "مصروفة",          tone: "success"  },
+    deducted:             { label: "مخصومة",          tone: "info"     },
+  },
+
+  // ── Finance: Bank Guarantees ──────────────────────────────────────
+  guarantee: {
+    active:               { label: "نشط",             tone: "success"  },
+    expired:              { label: "منتهي",           tone: "danger"   },
+    released:             { label: "مُحرَّر",          tone: "info"     },
+    claimed:              { label: "مُطالَب به",       tone: "danger"   },
+  },
+
   // ── Fleet ──────────────────────────────────────────────────────────
   trip: {
     scheduled:            { label: "مجدولة",          tone: "info"     },
@@ -236,6 +279,28 @@ export const STATUS_MAP = {
     in_use:               { label: "قيد الاستخدام",   tone: "progress" },
     maintenance:          { label: "في الصيانة",      tone: "warning"  },
     out_of_service:       { label: "خارج الخدمة",     tone: "danger"   },
+  },
+  maintenance: {
+    scheduled:            { label: "مجدولة",          tone: "info"     },
+    in_progress:          { label: "جارية",           tone: "progress" },
+    completed:            { label: "مُنجَزة",         tone: "success"  },
+    cancelled:            { label: "ملغاة",           tone: "neutral"  },
+    overdue:              { label: "متأخرة",          tone: "danger"   },
+  },
+  insurance: {
+    active:               { label: "ساري",            tone: "success"  },
+    expired:              { label: "منتهي",           tone: "danger"   },
+    pending_renewal:      { label: "بانتظار التجديد", tone: "warning"  },
+  },
+  traffic_violation: {
+    paid:                 { label: "مدفوعة",          tone: "success"  },
+    unpaid:               { label: "غير مدفوعة",      tone: "danger"   },
+    contested:            { label: "مُعترَض عليها",   tone: "warning"  },
+  },
+  driver: {
+    active:               { label: "نشط",             tone: "success"  },
+    inactive:             { label: "غير نشط",         tone: "muted"    },
+    suspended:            { label: "مُوقَف",           tone: "danger"   },
   },
 
   // ── Projects ───────────────────────────────────────────────────────

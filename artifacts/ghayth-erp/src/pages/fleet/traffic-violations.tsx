@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -155,7 +156,7 @@ export default function TrafficViolationsPage() {
               <div className="flex items-center gap-3">
                 <div className="text-end">
                   <div className="font-bold text-red-600">{Number(v.fineAmount || 0).toFixed(0)} ر.س</div>
-                  <Badge className={v.status === "paid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>{v.status === "paid" ? "مدفوعة" : "غير مدفوعة"}</Badge>
+                  <PageStatusBadge status={v.status || "unpaid"} domain="traffic_violation" />
                 </div>
                 {v.status !== "paid" && (
                   <Button size="sm" onClick={() => handlePay(v.id)}>

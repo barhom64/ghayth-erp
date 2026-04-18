@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, Eye, Users, UserCheck, UserX, Car } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -58,11 +59,7 @@ export default function DriversPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (d) => (
-        <Badge className={d.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
-          {d.status === "active" ? "نشط" : "غير نشط"}
-        </Badge>
-      ),
+      render: (d) => <PageStatusBadge status={d.status || "active"} domain="driver" />,
     },
     {
       key: "actions",

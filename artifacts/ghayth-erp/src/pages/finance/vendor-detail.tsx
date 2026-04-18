@@ -3,6 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { EntityDocuments } from "@/components/shared/entity-documents";
@@ -90,14 +91,14 @@ export default function VendorDetailPage() {
   const poColumns: DataTableColumn<any>[] = [
     { key: "id", header: "#", sortable: true, render: (r) => <span className="font-mono text-xs">{r.id}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.date || r.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} /> },
     { key: "total", header: "الإجمالي", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.total) || 0)}</span> },
   ];
 
   const invoiceColumns: DataTableColumn<any>[] = [
     { key: "invoiceNumber", header: "رقم الفاتورة", sortable: true, render: (r) => <span className="font-mono text-xs">{r.invoiceNumber || r.number || r.id}</span> },
     { key: "issueDate", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.issueDate || r.date || r.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} /> },
     { key: "total", header: "الإجمالي", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.total) || 0)}</span> },
   ];
 

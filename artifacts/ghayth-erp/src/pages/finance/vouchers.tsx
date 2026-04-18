@@ -4,6 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, FileText, ArrowDownCircle, ArrowUpCircle, Wallet, ChevronDown, ChevronUp, ExternalLink, Paperclip, Calendar } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
@@ -13,30 +14,8 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "نقدي",
-  bank_transfer: "تحويل بنكي",
-  bank: "تحويل بنكي",
-  check: "شيك",
-  credit_card: "بطاقة ائتمان",
-};
+import { PAYMENT_METHODS, VOUCHER_OPERATIONS } from "@/lib/finance-type-maps";
 
-const OPERATION_LABELS: Record<string, string> = {
-  receipt: "قبض إيراد",
-  rent: "تحصيل إيجار",
-  invoice_payment: "سداد فاتورة عميل",
-  deposit: "إيداع ضمان",
-  refund: "استرداد",
-  payment: "صرف مبلغ",
-  vendor_invoice: "سداد فاتورة مورد",
-  salary: "صرف راتب",
-  advance: "سلفة موظف",
-  legal_fee: "أتعاب قانونية",
-  purchase: "مشتريات",
-  custody: "صرف عهدة",
-  insurance: "سداد تأمين",
-  maintenance: "دفع صيانة",
-};
 
 export default function VouchersPage() {
   const { scopeQueryString } = useAppContext();
@@ -93,7 +72,7 @@ export default function VouchersPage() {
       render: (v) =>
         v.operationType ? (
           <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs">
-            {OPERATION_LABELS[v.operationType] || v.operationType}
+            {VOUCHER_OPERATIONS[v.operationType] || v.operationType}
           </span>
         ) : (
           <span className="text-gray-400">-</span>
@@ -119,11 +98,7 @@ export default function VouchersPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => (
-        <Badge variant="outline" className="bg-green-50 text-green-700">
-          {v.status === "posted" ? "مسجل" : v.status || "مسجل"}
-        </Badge>
-      ),
+      render: (v) => <PageStatusBadge status={v.status || "posted"} domain="journal" />,
     },
     {
       key: "_expand",
@@ -244,13 +219,13 @@ export default function VouchersPage() {
                   {v.operationType && (
                     <div>
                       <span className="text-gray-500">نوع العملية:</span>
-                      <span className="block font-medium">{OPERATION_LABELS[v.operationType] || v.operationType}</span>
+                      <span className="block font-medium">{VOUCHER_OPERATIONS[v.operationType] || v.operationType}</span>
                     </div>
                   )}
                   {v.paymentMethod && (
                     <div>
                       <span className="text-gray-500">طريقة الدفع:</span>
-                      <span className="block font-medium">{PAYMENT_METHOD_LABELS[v.paymentMethod] || v.paymentMethod}</span>
+                      <span className="block font-medium">{PAYMENT_METHODS[v.paymentMethod] || v.paymentMethod}</span>
                     </div>
                   )}
                   {v.reference && (
