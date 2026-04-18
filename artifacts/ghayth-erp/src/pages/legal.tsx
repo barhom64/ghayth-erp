@@ -106,6 +106,13 @@ function ContractsTab() {
     },
   ];
 
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
@@ -228,6 +235,13 @@ function CasesTab() {
     },
   ];
 
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -286,7 +300,7 @@ function CasesTab() {
 }
 
 function FinancialLegalTab() {
-  const { data: reportResp, isLoading } = useApiQuery<any>(["legal-financial-report"], "/legal/financial-report");
+  const { data: reportResp, isLoading, isError } = useApiQuery<any>(["legal-financial-report"], "/legal/financial-report");
   const report = reportResp || {};
 
   const RISK_COLORS: Record<string, string> = {
@@ -298,6 +312,13 @@ function FinancialLegalTab() {
   const RISK_LABELS: Record<string, string> = {
     critical: "حرجة", high: "عالية", medium: "متوسطة", low: "منخفضة",
   };
+
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-5">

@@ -111,6 +111,13 @@ function ProductsTab() {
     },
   ];
 
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <KpiGrid items={[
@@ -208,6 +215,13 @@ function MovementsTab() {
     { key: "createdAt", header: "التاريخ", sortable: true, render: (m) => formatDateAr(m.createdAt) },
   ];
 
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -270,6 +284,13 @@ function CategoriesTab() {
     { key: "createdAt", header: "تاريخ الإنشاء", sortable: true, render: (c) => formatDateAr(c.createdAt) },
   ];
 
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -328,6 +349,13 @@ function SuppliersTab() {
     { key: "rating", header: "التقييم", sortable: true, render: (s) => <span>⭐ {s.rating}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (s) => <PageStatusBadge status={s.status} /> },
   ];
+
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-4">

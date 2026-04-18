@@ -34,9 +34,16 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 function FunnelTab() {
-  const { data: funnelResp, isLoading } = useApiQuery<any>(["mkt-funnel"], "/marketing/funnel");
+  const { data: funnelResp, isLoading, isError } = useApiQuery<any>(["mkt-funnel"], "/marketing/funnel");
   const stages: any[] = funnelResp?.stages || [];
   const sourceFunnel: any[] = funnelResp?.sourceFunnel || [];
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <Card>
@@ -186,6 +193,13 @@ function CampaignsTab() {
       ),
     },
   ];
+
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
