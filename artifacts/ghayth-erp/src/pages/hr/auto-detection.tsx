@@ -117,6 +117,9 @@ export default function AutoDetectionPage() {
     { successMessage: "تم حفظ الإعدادات" },
   );
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const settings = settingsQuery.data;
   const summary = summaryQuery.data;
   const logs = logQuery.data?.data ?? [];

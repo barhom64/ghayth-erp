@@ -53,7 +53,6 @@ export default function TurnoverReportPage() {
       title="تقرير دوران الموظفين"
       subtitle="تحليل معدل الدوران الوظيفي والتكاليف المرتبطة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تقرير دوران الموظفين" }]}
-      loading={isLoading}
       actions={
         <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
           <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>

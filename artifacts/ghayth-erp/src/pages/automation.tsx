@@ -55,18 +55,6 @@ export default function Automation() {
   const autoLogsTotal = autoLogsResp?.total || autoLogs.length;
   const { data: autoStats } = useApiQuery<any>(["automation-stats"], "/automation/automation-stats");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const filteredJobs = cronJobs.filter((j: any) => !jobSearch || j.name?.includes(jobSearch) || j.description?.includes(jobSearch));
-  const filteredLogs = cronLogs.filter((l: any) => !logSearch || l.jobName?.includes(logSearch) || l.result?.includes(logSearch));
-  const filteredAutoLogs = autoLogs.filter((l: any) =>
-    !autoLogSearch ||
-    l.automationType?.includes(autoLogSearch) ||
-    l.triggerReason?.includes(autoLogSearch) ||
-    l.actionTaken?.includes(autoLogSearch)
-  );
-
   const toggleJobMut = useApiMutation<any, { id: number }>(
     (body) => `/automation/cron-jobs/${body.id}/toggle`,
     "POST",
@@ -82,6 +70,18 @@ export default function Automation() {
     (body) => `/automation/proactive-rules/${body.id}/toggle`,
     "POST",
     [["proactive-rules"]]
+  );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const filteredJobs = cronJobs.filter((j: any) => !jobSearch || j.name?.includes(jobSearch) || j.description?.includes(jobSearch));
+  const filteredLogs = cronLogs.filter((l: any) => !logSearch || l.jobName?.includes(logSearch) || l.result?.includes(logSearch));
+  const filteredAutoLogs = autoLogs.filter((l: any) =>
+    !autoLogSearch ||
+    l.automationType?.includes(autoLogSearch) ||
+    l.triggerReason?.includes(autoLogSearch) ||
+    l.actionTaken?.includes(autoLogSearch)
   );
 
   const handleToggle = (id: number) => toggleJobMut.mutate({ id });

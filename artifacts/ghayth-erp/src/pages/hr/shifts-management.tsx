@@ -25,6 +25,16 @@ export default function ShiftsManagementPage() {
     successMessage: "تم تعيين الوردية",
   });
 
+  const isLoading = shiftsLoading || assignmentsLoading || empLoading;
+  const isError = shiftsError || assignmentsError || empError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const shifts = shiftsData?.data || [];
+  const assignments = assignmentsData?.data || [];
+  const employees = empData?.data || [];
+
   const handleAssign = () => {
     assignMut.mutate(
       {

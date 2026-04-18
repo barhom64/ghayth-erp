@@ -54,35 +54,6 @@ export default function ManagerBoard() {
     `/hr/delegations${scopeSuffix}`
   );
 
-  if (actionLoading) return <LoadingSpinner />;
-
-  const pending = actionData || {};
-  const leaves = pending.pendingLeaves || [];
-  const advances = pending.pendingAdvances || [];
-  const custodies = pending.pendingCustodies || [];
-  const letters = pending.pendingLetters || [];
-  const workflows = pending.pendingWorkflows || [];
-  const allPending = [
-    ...leaves.map((l: any) => ({ ...l, _type: "leave", _label: "إجازة" })),
-    ...advances.map((a: any) => ({ ...a, _type: "advance", _label: "سلفة" })),
-    ...custodies.map((c: any) => ({ ...c, _type: "custody", _label: "عُهدة" })),
-    ...letters.map((l: any) => ({ ...l, _type: "letter", _label: "خطاب" })),
-  ];
-  const urgentPending = allPending.filter((r: any) => r.priority === "high" || r.priority === "urgent");
-  const todayPending = allPending.filter((r: any) => {
-    const created = new Date(r.createdAt);
-    const today = new Date();
-    return created.toDateString() === today.toDateString();
-  });
-
-  const team: any[] = teamData?.data || [];
-  const tasks: any[] = tasksData?.data || [];
-
-  const presentCount = team.filter((m: any) => m.status === "present" || m.status === "present_off_day").length;
-  const absentCount = team.filter((m: any) => m.status === "absent").length;
-  const lateCount = team.filter((m: any) => m.lateMinutes > 0).length;
-  const onLeaveCount = team.filter((m: any) => m.status === "on_leave").length;
-
   type ApprovalBody = { _type: string; _itemId: number; approved: boolean; reason?: string; notes?: string };
   const endpointFor = (type: string, id: number) => {
     const map: Record<string, string> = {
@@ -111,6 +82,35 @@ export default function ManagerBoard() {
       },
     }
   );
+
+  if (actionLoading) return <LoadingSpinner />;
+
+  const pending = actionData || {};
+  const leaves = pending.pendingLeaves || [];
+  const advances = pending.pendingAdvances || [];
+  const custodies = pending.pendingCustodies || [];
+  const letters = pending.pendingLetters || [];
+  const workflows = pending.pendingWorkflows || [];
+  const allPending = [
+    ...leaves.map((l: any) => ({ ...l, _type: "leave", _label: "إجازة" })),
+    ...advances.map((a: any) => ({ ...a, _type: "advance", _label: "سلفة" })),
+    ...custodies.map((c: any) => ({ ...c, _type: "custody", _label: "عُهدة" })),
+    ...letters.map((l: any) => ({ ...l, _type: "letter", _label: "خطاب" })),
+  ];
+  const urgentPending = allPending.filter((r: any) => r.priority === "high" || r.priority === "urgent");
+  const todayPending = allPending.filter((r: any) => {
+    const created = new Date(r.createdAt);
+    const today = new Date();
+    return created.toDateString() === today.toDateString();
+  });
+
+  const team: any[] = teamData?.data || [];
+  const tasks: any[] = tasksData?.data || [];
+
+  const presentCount = team.filter((m: any) => m.status === "present" || m.status === "present_off_day").length;
+  const absentCount = team.filter((m: any) => m.status === "absent").length;
+  const lateCount = team.filter((m: any) => m.lateMinutes > 0).length;
+  const onLeaveCount = team.filter((m: any) => m.status === "on_leave").length;
 
   const doApprove = (item: any) => {
     const key = `${item._type}-${item.id}`;
