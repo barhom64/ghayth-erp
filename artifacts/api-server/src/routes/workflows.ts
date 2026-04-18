@@ -1,8 +1,9 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import {
   submitWorkflow,
@@ -15,17 +16,92 @@ import {
   getTimelineByRef,
 } from "../lib/workflowEngine.js";
 
+// ── Zod Schemas ──────────────────────────────────────────────────────────────
+
+const submitSchema = z.object({
+  requestType: z.string().min(1),
+  refTable: z.string().optional(),
+  refId: z.number().optional(),
+  title: z.string().min(1),
+  data: z.any().optional(),
+});
+
+const approveSchema = z.object({
+  notes: z.string().optional(),
+  attachments: z.any().optional(),
+  overrideReason: z.string().optional(),
+});
+
+const rejectSchema = z.object({
+  notes: z.string().min(1),
+  overrideReason: z.string().optional(),
+});
+
+const referSchema = z.object({
+  referredTo: z.number(),
+  referredToName: z.string().optional(),
+  notes: z.string().optional(),
+  overrideReason: z.string().optional(),
+});
+
+const escalateSchema = z.object({
+  notes: z.string().optional(),
+  overrideReason: z.string().optional(),
+});
+
+const returnSchema = z.object({
+  notes: z.string().min(1),
+  overrideReason: z.string().optional(),
+});
+
+const workflowStepSchema = z.object({
+  stepName: z.string().min(1),
+  requiredRole: z.string().min(1),
+  slaHours: z.number().optional(),
+  autoApproveOnTimeout: z.boolean().optional(),
+  canReject: z.boolean().optional(),
+  canRefer: z.boolean().optional(),
+});
+
+const createDefinitionSchema = z.object({
+  requestType: z.string().min(1),
+  requestTypeLabel: z.string().min(1),
+  description: z.string().optional(),
+  isReturnable: z.boolean().optional(),
+  enableEscalation: z.boolean().optional(),
+  defaultSlaHours: z.number().optional(),
+  steps: z.array(workflowStepSchema).optional(),
+});
+
+const updateDefinitionSchema = z.object({
+  requestTypeLabel: z.string().min(1).optional(),
+  description: z.string().optional(),
+  isReturnable: z.boolean().optional(),
+  enableEscalation: z.boolean().optional(),
+  defaultSlaHours: z.number().optional(),
+  isActive: z.boolean().optional(),
+  steps: z.array(workflowStepSchema).optional(),
+});
+
+const slaDefinitionSchema = z.object({
+  requestType: z.string().min(1),
+  warningHours: z.number().optional(),
+  deadlineHours: z.number().optional(),
+  escalationHours: z.number().optional(),
+  autoApproveOnTimeout: z.boolean().optional(),
+  escalateTo: z.string().optional(),
+});
+
 const router = Router();
 router.use(authMiddleware);
 
 router.post("/submit", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_submitSchema = submitSchema.safeParse(req.body);
+    if (!parsed_submitSchema.success) throw new ValidationError(parsed_submitSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_submitSchema.data;
     const scope = req.scope!;
-    const { requestType, refTable, refId, title, data } = req.body;
-    if (!requestType || !title) {
-      res.status(400).json({ error: "نوع الطلب والعنوان مطلوبان" });
-      return;
-    }
+    const { requestType, refTable, refId, title, data } = body;
     const result = await submitWorkflow({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -46,6 +122,9 @@ router.post("/submit", requirePermission("admin:write"), async (req, res) => {
 
 router.post("/:id/approve", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_approveSchema = approveSchema.safeParse(req.body);
+    if (!parsed_approveSchema.success) throw new ValidationError(parsed_approveSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_approveSchema.data;
     const scope = req.scope!;
     const result = await approveWorkflow({
       instanceId: Number(req.params.id),
@@ -53,9 +132,9 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
       actionByName: scope.userName,
-      notes: req.body.notes,
-      attachments: req.body.attachments,
-      overrideReason: req.body.overrideReason,
+      notes: body.notes,
+      attachments: body.attachments,
+      overrideReason: body.overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "approve" } }).catch(console.error);
     res.json(result);
@@ -69,19 +148,18 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
 
 router.post("/:id/reject", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_rejectSchema = rejectSchema.safeParse(req.body);
+    if (!parsed_rejectSchema.success) throw new ValidationError(parsed_rejectSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_rejectSchema.data;
     const scope = req.scope!;
-    if (!req.body.notes) {
-      res.status(400).json({ error: "يجب ذكر سبب الرفض" });
-      return;
-    }
     const result = await rejectWorkflow({
       instanceId: Number(req.params.id),
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
       actionByName: scope.userName,
-      notes: req.body.notes,
-      overrideReason: req.body.overrideReason,
+      notes: body.notes,
+      overrideReason: body.overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "reject" } }).catch(console.error);
     res.json(result);
@@ -94,12 +172,11 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
 
 router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_referSchema = referSchema.safeParse(req.body);
+    if (!parsed_referSchema.success) throw new ValidationError(parsed_referSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_referSchema.data;
     const scope = req.scope!;
-    const { referredTo, referredToName, notes, overrideReason } = req.body;
-    if (!referredTo) {
-      res.status(400).json({ error: "يجب تحديد الشخص المحال إليه" });
-      return;
-    }
+    const { referredTo, referredToName, notes, overrideReason } = body;
     const result = await referWorkflow({
       instanceId: Number(req.params.id),
       companyId: scope.companyId,
@@ -122,6 +199,9 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
 
 router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_escalateSchema = escalateSchema.safeParse(req.body);
+    if (!parsed_escalateSchema.success) throw new ValidationError(parsed_escalateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_escalateSchema.data;
     const scope = req.scope!;
     const result = await escalateWorkflow({
       instanceId: Number(req.params.id),
@@ -129,8 +209,8 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
       actionByName: scope.userName,
-      notes: req.body.notes,
-      overrideReason: req.body.overrideReason,
+      notes: body.notes,
+      overrideReason: body.overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "escalate" } }).catch(console.error);
     res.json(result);
@@ -143,19 +223,18 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
 
 router.post("/:id/return", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_returnSchema = returnSchema.safeParse(req.body);
+    if (!parsed_returnSchema.success) throw new ValidationError(parsed_returnSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_returnSchema.data;
     const scope = req.scope!;
-    if (!req.body.notes) {
-      res.status(400).json({ error: "يجب ذكر سبب الإرجاع" });
-      return;
-    }
     const result = await returnWorkflow({
       instanceId: Number(req.params.id),
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
       actionByName: scope.userName,
-      notes: req.body.notes,
-      overrideReason: req.body.overrideReason,
+      notes: body.notes,
+      overrideReason: body.overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "return" } }).catch(console.error);
     res.json(result);
@@ -278,12 +357,11 @@ router.get("/definitions/:id", requirePermission("admin:read"), async (req, res)
 
 router.post("/definitions", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_createDefinitionSchema = createDefinitionSchema.safeParse(req.body);
+    if (!parsed_createDefinitionSchema.success) throw new ValidationError(parsed_createDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createDefinitionSchema.data;
     const scope = req.scope!;
-    const { requestType, requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, steps } = req.body;
-    if (!requestType || !requestTypeLabel) {
-      res.status(400).json({ error: "نوع الطلب والعنوان مطلوبان" });
-      return;
-    }
+    const { requestType, requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, steps } = body;
     const { insertId } = await rawExecute(
       `INSERT INTO workflow_definitions ("companyId", "requestType", "requestTypeLabel", description, "isReturnable", "enableEscalation", "defaultSlaHours")
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -308,9 +386,12 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
 
 router.put("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_updateDefinitionSchema = updateDefinitionSchema.safeParse(req.body);
+    if (!parsed_updateDefinitionSchema.success) throw new ValidationError(parsed_updateDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateDefinitionSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, isActive, steps } = req.body;
+    const { requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, isActive, steps } = body;
 
     await rawExecute(
       `UPDATE workflow_definitions SET "requestTypeLabel" = COALESCE($1, "requestTypeLabel"),
@@ -370,8 +451,11 @@ router.get("/sla-definitions", requirePermission("admin:read"), async (req, res)
 
 router.post("/sla-definitions", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_slaDefinitionSchema = slaDefinitionSchema.safeParse(req.body);
+    if (!parsed_slaDefinitionSchema.success) throw new ValidationError(parsed_slaDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_slaDefinitionSchema.data;
     const scope = req.scope!;
-    const { requestType, warningHours, deadlineHours, escalationHours, autoApproveOnTimeout, escalateTo } = req.body;
+    const { requestType, warningHours, deadlineHours, escalationHours, autoApproveOnTimeout, escalateTo } = body;
     const { insertId } = await rawExecute(
       `INSERT INTO sla_definitions ("companyId", "requestType", "warningHours", "deadlineHours", "escalationHours", "autoApproveOnTimeout", "escalateTo")
        VALUES ($1,$2,$3,$4,$5,$6,$7)

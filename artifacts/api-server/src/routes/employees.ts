@@ -18,6 +18,75 @@ import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+import { z } from "zod";
+
+const createEmployeeSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().min(1),
+  email: z.string().email().optional().nullable(),
+  empNumber: z.string().optional().nullable(),
+  nationalId: z.string().min(1),
+  gender: z.string().optional().nullable(),
+  nationality: z.string().min(1),
+  dateOfBirth: z.string().optional().nullable(),
+  jobTitle: z.string().optional(),
+  role: z.string().optional(),
+  salary: z.number().optional(),
+  branchId: z.number().optional().nullable(),
+  companyId: z.number().optional().nullable(),
+  departmentId: z.number().optional().nullable(),
+  department: z.string().optional().nullable(),
+  hireDate: z.string().optional().nullable(),
+  contractType: z.string().optional(),
+  probationDays: z.number().optional(),
+  managerId: z.number().optional().nullable(),
+  iqamaNumber: z.string().optional().nullable(),
+  iqamaExpiry: z.string().optional().nullable(),
+  passportNumber: z.string().optional().nullable(),
+  passportExpiry: z.string().optional().nullable(),
+  borderNumber: z.string().optional().nullable(),
+  visaNumber: z.string().optional().nullable(),
+  visaType: z.string().optional().nullable(),
+  visaExpiry: z.string().optional().nullable(),
+  sponsorNumber: z.string().optional().nullable(),
+  workPermitNumber: z.string().optional().nullable(),
+  workPermitExpiry: z.string().optional().nullable(),
+  iqamaStatus: z.string().optional().nullable(),
+  jobTitleId: z.number().optional().nullable(),
+});
+
+const patchEmployeeSchema = z.object({
+  name: z.string().min(1).optional(),
+  phone: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
+  jobTitle: z.string().optional().nullable(),
+  jobTitleId: z.number().optional().nullable(),
+  role: z.string().optional().nullable(),
+  salary: z.number().optional().nullable(),
+  branchId: z.number().optional().nullable(),
+  departmentId: z.number().optional().nullable(),
+  status: z.string().optional().nullable(),
+  managerId: z.number().optional().nullable(),
+  nationalId: z.string().optional().nullable(),
+  iqamaNumber: z.string().optional().nullable(),
+  iqamaExpiry: z.string().optional().nullable(),
+  passportNumber: z.string().optional().nullable(),
+  passportExpiry: z.string().optional().nullable(),
+  borderNumber: z.string().optional().nullable(),
+  visaNumber: z.string().optional().nullable(),
+  visaType: z.string().optional().nullable(),
+  visaExpiry: z.string().optional().nullable(),
+  sponsorNumber: z.string().optional().nullable(),
+  workPermitNumber: z.string().optional().nullable(),
+  workPermitExpiry: z.string().optional().nullable(),
+  iqamaStatus: z.string().optional().nullable(),
+});
+
+const patchOnboardingTaskSchema = z.object({
+  status: z.string().min(1),
+});
+
+const seedObligationsSchema = z.object({}).passthrough().optional();
 
 // Register document expiry obligations for an employee.
 // Called on create/update — idempotent via dedupeKey.
@@ -131,6 +200,9 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
 
 router.post("/", requirePermission("hr:create"), async (req, res) => {
   try {
+    const parsed_createEmployeeSchema = createEmployeeSchema.safeParse(req.body);
+    if (!parsed_createEmployeeSchema.success) throw new ValidationError(parsed_createEmployeeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createEmployeeSchema.data;
     const scope = req.scope!;
     const {
       name,
@@ -155,7 +227,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       iqamaNumber, iqamaExpiry, passportNumber, passportExpiry,
       borderNumber, visaNumber, visaType, visaExpiry,
       sponsorNumber, workPermitNumber, workPermitExpiry, iqamaStatus,
-    } = req.body as any;
+    } = body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
     // Step 1 audit — typed ValidationError on every required field so the
@@ -575,8 +647,11 @@ router.get("/onboarding-tasks", requirePermission("hr:read"), async (req, res) =
 
 router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req, res) => {
   try {
+    const parsed_patchOnboardingTaskSchema = patchOnboardingTaskSchema.safeParse(req.body);
+    if (!parsed_patchOnboardingTaskSchema.success) throw new ValidationError(parsed_patchOnboardingTaskSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_patchOnboardingTaskSchema.data;
     const scope = req.scope!;
-    const { status } = req.body as any;
+    const { status } = body;
     const completedAt = status === "completed" ? "NOW()" : "NULL";
     const [row] = await rawQuery<any>(
       `UPDATE onboarding_tasks SET status = $1, "completedAt" = ${completedAt}, "completedBy" = $2
@@ -761,6 +836,9 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
   //   5. Explicitly emits `employee.updated` — the listener already exists
   //      in eventListeners.ts but nobody was firing the event.
   try {
+    const parsed_patchEmployee = patchEmployeeSchema.safeParse(req.body);
+    if (!parsed_patchEmployee.success) throw new ValidationError(parsed_patchEmployee.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const validatedBody = parsed_patchEmployee.data;
     const scope = req.scope!;
     const { id } = req.params;
     const {
@@ -768,8 +846,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       borderNumber, visaNumber, visaType, visaExpiry, sponsorNumber,
       workPermitNumber, workPermitExpiry, iqamaStatus,
       nationalId, iqamaNumber, iqamaExpiry, passportNumber, passportExpiry,
-    } = req.body as any;
-    const { jobTitleId: bodyJobTitleId, managerId: bodyManagerId } = req.body as any;
+    } = validatedBody as any;
+    const { jobTitleId: bodyJobTitleId, managerId: bodyManagerId } = validatedBody as any;
 
     // Load the full employee + assignment row BEFORE we mutate anything. We
     // need:
@@ -1130,6 +1208,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
  */
 router.post("/obligations/seed", requirePermission("hr:update"), async (req, res) => {
   try {
+    { const _guard = seedObligationsSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     const emps = await rawQuery<any>(
       `SELECT e.id, e.name, e."iqamaExpiry", e."passportExpiry", e."workPermitExpiry", e."visaExpiry"

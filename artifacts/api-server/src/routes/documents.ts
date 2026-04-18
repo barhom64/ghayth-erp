@@ -6,6 +6,97 @@ import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { z } from "zod";
+
+/* ── Zod Schemas ────────────────────────────────────────────── */
+
+const createDocumentSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  type: z.string().optional(),
+  department: z.string().optional(),
+  folder: z.string().optional(),
+});
+
+const entityLinkItem = z.object({
+  entityType: z.string().min(1),
+  entityId: z.union([z.number().int(), z.string()]),
+});
+
+const uploadDocumentSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  fileName: z.string().min(1),
+  fileSize: z.number().optional(),
+  mimeType: z.string().optional(),
+  category: z.string().optional(),
+  storageKey: z.string().min(1),
+  entityLinks: z.array(entityLinkItem).optional(),
+});
+
+const createVersionSchema = z.object({
+  fileName: z.string().optional(),
+  fileSize: z.number().optional(),
+  mimeType: z.string().optional(),
+  storageKey: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const updateStatusSchema = z.object({
+  status: z.enum(["draft", "approved", "cancelled"]),
+});
+
+const createEntityLinkSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: z.union([z.number().int(), z.string()]),
+});
+
+const createFolderSchema = z.object({
+  name: z.string().min(1),
+  parentId: z.number().optional(),
+  color: z.string().optional(),
+});
+
+const createTemplateSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  content: z.string().min(1),
+  category: z.string().optional(),
+  type: z.string().optional(),
+  variables: z.array(z.unknown()).optional(),
+  htmlContent: z.string().optional(),
+  branchId: z.number().optional(),
+  signatureUrl: z.string().optional(),
+});
+
+const updateTemplateSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  content: z.string().optional(),
+  category: z.string().optional(),
+  type: z.string().optional(),
+  variables: z.array(z.unknown()).optional(),
+  htmlContent: z.string().optional(),
+  branchId: z.number().optional(),
+  signatureUrl: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const generateTemplateSchema = z.object({
+  entityType: z.string().optional(),
+  entityId: z.union([z.number(), z.string()]).optional(),
+  customData: z.record(z.string(), z.unknown()).optional(),
+});
+
+const patchDocumentSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  fileName: z.string().optional(),
+  fileUrl: z.string().optional(),
+  folderId: z.number().nullable().optional(),
+  tags: z.unknown().optional(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -51,9 +142,12 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
 
 router.post("/", requirePermission("documents:create"), async (req: Request, res: Response) => {
   try {
+    const parsed_createDocumentSchema = createDocumentSchema.safeParse(req.body);
+    if (!parsed_createDocumentSchema.success) throw new ValidationError(parsed_createDocumentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createDocumentSchema.data;
     const scope = req.scope!;
-    const { title, description, type, department, folder } = req.body;
-    if (!title || !String(title).trim()) {
+    const { title, description, type, department, folder } = body;
+    if (!String(title).trim()) {
       throw new ValidationError("عنوان المستند مطلوب", {
         field: "title",
         fix: "أدخل عنواناً واضحاً للمستند",
@@ -75,13 +169,11 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
 
 router.post("/upload", requirePermission("documents:create"), async (req: Request, res: Response) => {
   try {
+    const parsed_uploadDocumentSchema = uploadDocumentSchema.safeParse(req.body);
+    if (!parsed_uploadDocumentSchema.success) throw new ValidationError(parsed_uploadDocumentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_uploadDocumentSchema.data;
     const scope = req.scope!;
-    const { title, description, fileName, fileSize, mimeType, category, storageKey, entityLinks } = req.body;
-
-    if (!title || !fileName || !storageKey) {
-      res.status(400).json({ error: "title, fileName, and storageKey are required" });
-      return;
-    }
+    const { title, description, fileName, fileSize, mimeType, category, storageKey, entityLinks } = body;
 
     const ALLOWED_ENTITY_TYPES = ["employee", "client", "project", "invoice", "vehicle"];
     if (entityLinks && Array.isArray(entityLinks)) {
@@ -169,9 +261,12 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
 // via the regular create flow, not by mutating shared rows.
 router.post("/:id/versions", requirePermission("documents:create"), async (req: Request, res: Response) => {
   try {
+    const parsed_createVersionSchema = createVersionSchema.safeParse(req.body);
+    if (!parsed_createVersionSchema.success) throw new ValidationError(parsed_createVersionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createVersionSchema.data;
     const scope = req.scope!;
     const docId = Number(req.params.id);
-    const { fileName, fileSize, mimeType, storageKey, notes } = req.body;
+    const { fileName, fileSize, mimeType, storageKey, notes } = body;
 
     const [doc] = await rawQuery<any>(
       `SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`,
@@ -217,14 +312,12 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
 
 router.patch("/:id/status", requirePermission("documents:update"), async (req: Request, res: Response) => {
   try {
+    const parsed_updateStatusSchema = updateStatusSchema.safeParse(req.body);
+    if (!parsed_updateStatusSchema.success) throw new ValidationError(parsed_updateStatusSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateStatusSchema.data;
     const scope = req.scope!;
     const docId = Number(req.params.id);
-    const { status } = req.body;
-
-    if (!["draft", "approved", "cancelled"].includes(status)) {
-      res.status(400).json({ error: "حالة غير صالحة" });
-      return;
-    }
+    const { status } = body;
 
     if (status === "approved" && !scope.isOwner && !APPROVE_ROLES.includes(scope.role || "")) {
       res.status(403).json({ error: "ليس لديك صلاحية اعتماد المستندات" });
@@ -264,8 +357,11 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
 
 router.post("/:id/entity-links", requirePermission("documents:update"), async (req: Request, res: Response) => {
   try {
+    const parsed_createEntityLinkSchema = createEntityLinkSchema.safeParse(req.body);
+    if (!parsed_createEntityLinkSchema.success) throw new ValidationError(parsed_createEntityLinkSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createEntityLinkSchema.data;
     const scope = req.scope!;
-    const { entityType, entityId } = req.body;
+    const { entityType, entityId } = body;
     const docId = Number(req.params.id);
 
     const [doc] = await rawQuery<any>(
@@ -312,9 +408,12 @@ router.get("/folders", requirePermission("documents:read"), async (req, res) => 
 
 router.post("/folders", requirePermission("documents:create"), async (req, res) => {
   try {
+    const parsed_createFolderSchema = createFolderSchema.safeParse(req.body);
+    if (!parsed_createFolderSchema.success) throw new ValidationError(parsed_createFolderSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createFolderSchema.data;
     const scope = req.scope!;
-    const { name, parentId, color } = req.body;
-    if (!name || !String(name).trim()) {
+    const { name, parentId, color } = body;
+    if (!String(name).trim()) {
       throw new ValidationError("اسم المجلد مطلوب", {
         field: "name",
         fix: "أدخل اسماً للمجلد",
@@ -362,9 +461,12 @@ router.get("/templates/:id", requirePermission("documents:read"), async (req, re
 
 router.post("/templates", requirePermission("documents:create"), async (req, res) => {
   try {
+    const parsed_createTemplateSchema = createTemplateSchema.safeParse(req.body);
+    if (!parsed_createTemplateSchema.success) throw new ValidationError(parsed_createTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createTemplateSchema.data;
     const scope = req.scope!;
-    const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl } = req.body;
-    if (!name || !String(name).trim()) {
+    const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl } = body;
+    if (!String(name).trim()) {
       throw new ValidationError("اسم القالب مطلوب", {
         field: "name",
         fix: "أدخل اسماً للقالب",
@@ -406,11 +508,13 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
 // DELETE / SELECT-back to the caller's company.
 router.put("/templates/:id", requirePermission("documents:update"), async (req, res) => {
   try {
+    const parsed_updateTemplateSchema = updateTemplateSchema.safeParse(req.body);
+    if (!parsed_updateTemplateSchema.success) throw new ValidationError(parsed_updateTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateTemplateSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
     if (isNaN(id) || id <= 0) { res.status(400).json({ error: "معرف القالب غير صالح" }); return; }
-    const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl, isActive } = req.body;
-    if (!name) { res.status(400).json({ error: "اسم القالب مطلوب" }); return; }
+    const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl, isActive } = body;
     const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
     await rawExecute(
@@ -463,7 +567,10 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
     const [template] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!template) { res.status(404).json({ error: "القالب غير موجود" }); return; }
 
-    const { entityType, entityId, customData } = req.body;
+    const parsed_generateTemplate = generateTemplateSchema.safeParse(req.body);
+    if (!parsed_generateTemplate.success) throw new ValidationError(parsed_generateTemplate.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const generateBody = parsed_generateTemplate.data;
+    const { entityType, entityId, customData } = generateBody;
     let entityData: Record<string, any> = {};
 
     if (entityType === "employee" && entityId) {
@@ -628,9 +735,11 @@ router.get("/:id", requirePermission("documents:read"), async (req, res) => {
 
 router.patch("/:id", requirePermission("documents:update"), async (req, res) => {
   try {
+    const parsed_patchDocumentSchema = patchDocumentSchema.safeParse(req.body);
+    if (!parsed_patchDocumentSchema.success) throw new ValidationError(parsed_patchDocumentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_patchDocumentSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const b = req.body;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }

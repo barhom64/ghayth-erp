@@ -1,5 +1,6 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -13,6 +14,68 @@ import { haversineDistance, movingAverage, selectLeastLoadedResource, loadBalanc
 import { getUsageStats } from "../lib/activityTracker.js";
 import { calculateClientRFM, calculateAllClientsRFM, getClientAnalyticsSummary, getBestContactTime, detectSeasonalPatterns } from "../lib/clientAnalytics.js";
 import { getPersonalizedRecommendations } from "../lib/smartRecommendations.js";
+
+// ── Zod Schemas ──────────────────────────────────────────────────────────────
+
+const aiCategorizeSchema = z.object({
+  message: z.string().min(1),
+  context: z.any().optional(),
+});
+
+const aiDraftReplySchema = z.object({
+  ticketTitle: z.string().min(1),
+  ticketDescription: z.string().min(1),
+  history: z.any().optional(),
+});
+
+const aiTranslateSchema = z.object({
+  text: z.string().min(1),
+  targetLanguage: z.enum(["ar", "en"]),
+});
+
+const aiSummarizeSchema = z.object({
+  content: z.string().min(1),
+  maxLength: z.number().optional(),
+});
+
+const aiEvaluateRulesSchema = z.object({
+  context: z.any(),
+  data: z.any(),
+  rules: z.any().optional(),
+});
+
+const aiForecastSchema = z.object({
+  metricName: z.string().min(1),
+  historicalData: z.any(),
+  forecastPeriods: z.number().optional(),
+});
+
+const haversineSchema = z.object({
+  lat1: z.number(),
+  lon1: z.number(),
+  lat2: z.number(),
+  lon2: z.number(),
+});
+
+const movingAverageSchema = z.object({
+  values: z.array(z.number()),
+  periods: z.number(),
+});
+
+const loadBalanceSchema = z.object({
+  resources: z.array(z.any()),
+  targetLat: z.number().optional(),
+  targetLon: z.number().optional(),
+  maxWorkload: z.number().optional(),
+});
+
+const smartAssignSchema = z.object({
+  taskType: z.string().optional(),
+  targetLat: z.number().optional(),
+  targetLon: z.number().optional(),
+  requiredSpecialty: z.string().optional(),
+  taskTitle: z.string().optional(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -318,9 +381,11 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
 
 router.post("/ai/categorize", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_aiCategorizeSchema = aiCategorizeSchema.safeParse(req.body);
+    if (!parsed_aiCategorizeSchema.success) throw new ValidationError(parsed_aiCategorizeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_aiCategorizeSchema.data;
     const scope = req.scope!;
-    const { message, context } = req.body;
-    if (!message) res.status(400).json({ error: "message مطلوب" }); return;
+    const { message, context } = body;
     const result = await aiEngine.receptionCategorize(message, context);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_categorize", entityId: 0, after: { message: message?.substring(0, 100) } }).catch(console.error);
     res.json(result);
@@ -329,9 +394,11 @@ router.post("/ai/categorize", requirePermission("admin:write"), async (req, res)
 
 router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_aiDraftReplySchema = aiDraftReplySchema.safeParse(req.body);
+    if (!parsed_aiDraftReplySchema.success) throw new ValidationError(parsed_aiDraftReplySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_aiDraftReplySchema.data;
     const scope = req.scope!;
-    const { ticketTitle, ticketDescription, history } = req.body;
-    if (!ticketTitle || !ticketDescription) res.status(400).json({ error: "ticketTitle و ticketDescription مطلوبان" }); return;
+    const { ticketTitle, ticketDescription, history } = body;
     const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_draft_reply", entityId: 0, after: { ticketTitle } }).catch(console.error);
     res.json({ draft });
@@ -340,10 +407,11 @@ router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res
 
 router.post("/ai/translate", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_aiTranslateSchema = aiTranslateSchema.safeParse(req.body);
+    if (!parsed_aiTranslateSchema.success) throw new ValidationError(parsed_aiTranslateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_aiTranslateSchema.data;
     const scope = req.scope!;
-    const { text, targetLanguage } = req.body;
-    if (!text || !targetLanguage) res.status(400).json({ error: "text و targetLanguage مطلوبان" }); return;
-    if (!["ar", "en"].includes(targetLanguage)) res.status(400).json({ error: "targetLanguage يجب أن يكون ar أو en" }); return;
+    const { text, targetLanguage } = body;
     const translated = await aiEngine.translatorTranslate(text, targetLanguage);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_translate", entityId: 0, after: { targetLanguage } }).catch(console.error);
     res.json({ translated, targetLanguage });
@@ -352,9 +420,11 @@ router.post("/ai/translate", requirePermission("admin:write"), async (req, res):
 
 router.post("/ai/summarize", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_aiSummarizeSchema = aiSummarizeSchema.safeParse(req.body);
+    if (!parsed_aiSummarizeSchema.success) throw new ValidationError(parsed_aiSummarizeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_aiSummarizeSchema.data;
     const scope = req.scope!;
-    const { content, maxLength } = req.body;
-    if (!content) res.status(400).json({ error: "content مطلوب" }); return;
+    const { content, maxLength } = body;
     const summary = await aiEngine.summarizerSummarize(content, maxLength);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_summarize", entityId: 0 }).catch(console.error);
     res.json({ summary });
@@ -363,9 +433,11 @@ router.post("/ai/summarize", requirePermission("admin:write"), async (req, res):
 
 router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_aiEvaluateRulesSchema = aiEvaluateRulesSchema.safeParse(req.body);
+    if (!parsed_aiEvaluateRulesSchema.success) throw new ValidationError(parsed_aiEvaluateRulesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_aiEvaluateRulesSchema.data;
     const scope = req.scope!;
-    const { context, data, rules } = req.body;
-    if (!context || !data) res.status(400).json({ error: "context و data مطلوبان" }); return;
+    const { context, data, rules } = body;
     const result = await aiEngine.rulesEngineEvaluate({ context, data, rules });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_evaluate_rules", entityId: 0, after: { context } }).catch(console.error);
     res.json(result);
@@ -374,9 +446,11 @@ router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, 
 
 router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_aiForecastSchema = aiForecastSchema.safeParse(req.body);
+    if (!parsed_aiForecastSchema.success) throw new ValidationError(parsed_aiForecastSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_aiForecastSchema.data;
     const scope = req.scope!;
-    const { metricName, historicalData, forecastPeriods } = req.body;
-    if (!metricName || !historicalData) res.status(400).json({ error: "metricName و historicalData مطلوبان" }); return;
+    const { metricName, historicalData, forecastPeriods } = body;
     const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_forecast", entityId: 0, after: { metricName } }).catch(console.error);
     res.json(result);
@@ -385,28 +459,32 @@ router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): 
 
 router.post("/algorithms/haversine", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const { lat1, lon1, lat2, lon2 } = req.body;
-    if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) {
-      res.status(400).json({ error: "lat1, lon1, lat2, lon2 مطلوبة" }); return;
-    }
-    const distance = haversineDistance(Number(lat1), Number(lon1), Number(lat2), Number(lon2));
+    const parsed_haversineSchema = haversineSchema.safeParse(req.body);
+    if (!parsed_haversineSchema.success) throw new ValidationError(parsed_haversineSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_haversineSchema.data;
+    const { lat1, lon1, lat2, lon2 } = body;
+    const distance = haversineDistance(lat1, lon1, lat2, lon2);
     res.json({ distance, unit: "km" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 router.post("/algorithms/moving-average", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const { values, periods } = req.body;
-    if (!Array.isArray(values) || !periods) res.status(400).json({ error: "values و periods مطلوبان" }); return;
-    const result = movingAverage(values.map(Number), Number(periods));
-    res.json({ result, periods: Number(periods), dataPoints: values.length });
+    const parsed_movingAverageSchema = movingAverageSchema.safeParse(req.body);
+    if (!parsed_movingAverageSchema.success) throw new ValidationError(parsed_movingAverageSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_movingAverageSchema.data;
+    const { values, periods } = body;
+    const result = movingAverage(values, periods);
+    res.json({ result, periods, dataPoints: values.length });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 router.post("/algorithms/load-balance", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const { resources, targetLat, targetLon, maxWorkload } = req.body;
-    if (!Array.isArray(resources)) { res.status(400).json({ error: "resources مطلوبة" }); return; }
+    const parsed_loadBalanceSchema = loadBalanceSchema.safeParse(req.body);
+    if (!parsed_loadBalanceSchema.success) throw new ValidationError(parsed_loadBalanceSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_loadBalanceSchema.data;
+    const { resources, targetLat, targetLon, maxWorkload } = body;
     const selected = selectLeastLoadedResource(resources, { targetLat, targetLon, maxWorkload });
     res.json({ selected });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -485,8 +563,11 @@ router.get("/company-kpis", requireRole("branch_manager", "general_manager", "ow
 
 router.post("/smart-assign", requireRole("branch_manager", "general_manager", "owner", "hr_manager"), async (req, res): Promise<void> => {
   try {
+    const parsed_smartAssignSchema = smartAssignSchema.safeParse(req.body);
+    if (!parsed_smartAssignSchema.success) throw new ValidationError(parsed_smartAssignSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_smartAssignSchema.data;
     const scope = req.scope!;
-    const { taskType, targetLat, targetLon, requiredSpecialty, taskTitle } = req.body;
+    const { taskType, targetLat, targetLon, requiredSpecialty, taskTitle } = body;
 
     const result = await loadBalanceAssign(
       scope.companyId,

@@ -1,9 +1,70 @@
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+
+// ── Zod Schemas ──────────────────────────────────────────────────────────────
+
+const updateAccountingMappingSchema = z.object({
+  debitAccountId: z.number().nullable().optional(),
+  creditAccountId: z.number().nullable().optional(),
+  debitAccountCode: z.string().nullable().optional(),
+  creditAccountCode: z.string().nullable().optional(),
+  operationLabel: z.string().optional(),
+  branchId: z.number().nullable().optional(),
+  activityType: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const batchMappingItemSchema = z.object({
+  operationType: z.string().min(1),
+  operationLabel: z.string().optional(),
+  debitAccountId: z.number().nullable().optional(),
+  creditAccountId: z.number().nullable().optional(),
+  debitAccountCode: z.string().nullable().optional(),
+  creditAccountCode: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const batchAccountingMappingsSchema = z.object({
+  mappings: z.array(batchMappingItemSchema),
+});
+
+const templateLineSchema = z.object({
+  accountId: z.number().nullable().optional(),
+  accountCode: z.string().nullable().optional(),
+  lineType: z.string().min(1),
+  description: z.string().nullable().optional(),
+});
+
+const createJournalTemplateSchema = z.object({
+  name: z.string().min(1),
+  operationType: z.string().min(1),
+  description: z.string().nullable().optional(),
+  branchId: z.number().nullable().optional(),
+  activityType: z.string().nullable().optional(),
+  lines: z.array(templateLineSchema).optional(),
+});
+
+const updateJournalTemplateSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  branchId: z.number().nullable().optional(),
+  activityType: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+  lines: z.array(templateLineSchema).optional(),
+});
+
+const createSubsidiaryAccountSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: z.number(),
+  accountType: z.string().min(1),
+  accountId: z.number(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -106,6 +167,9 @@ router.get("/accounting-mappings/:operationType", requirePermission("finance:rea
 
 router.put("/accounting-mappings/:operationType", requirePermission("finance:write"), async (req, res) => {
   try {
+    const parsed_updateAccountingMappingSchema = updateAccountingMappingSchema.safeParse(req.body);
+    if (!parsed_updateAccountingMappingSchema.success) throw new ValidationError(parsed_updateAccountingMappingSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateAccountingMappingSchema.data;
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
     const { operationType } = req.params;
@@ -113,7 +177,7 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
       debitAccountId, creditAccountId,
       debitAccountCode, creditAccountCode,
       operationLabel, branchId, activityType, notes, isActive,
-    } = req.body as any;
+    } = body;
 
     const existing = await rawQuery<any>(
       `SELECT id FROM accounting_mappings WHERE "companyId" = $1 AND "operationType" = $2`,
@@ -169,15 +233,12 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
 
 router.post("/accounting-mappings/batch", requirePermission("finance:write"), async (req, res) => {
   try {
+    const parsed_batchAccountingMappingsSchema = batchAccountingMappingsSchema.safeParse(req.body);
+    if (!parsed_batchAccountingMappingsSchema.success) throw new ValidationError(parsed_batchAccountingMappingsSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsedBody = parsed_batchAccountingMappingsSchema.data;
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
-    const { mappings } = req.body as any;
-    if (!Array.isArray(mappings)) {
-      throw new ValidationError("mappings يجب أن تكون مصفوفة", {
-        field: "mappings",
-        fix: "أرسل مصفوفة من التوجيهات",
-      });
-    }
+    const { mappings } = parsedBody;
 
     for (const m of mappings) {
       await rawExecute(
@@ -259,16 +320,12 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
 
 router.post("/journal-templates", requirePermission("finance:write"), async (req, res) => {
   try {
+    const parsed_createJournalTemplateSchema = createJournalTemplateSchema.safeParse(req.body);
+    if (!parsed_createJournalTemplateSchema.success) throw new ValidationError(parsed_createJournalTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createJournalTemplateSchema.data;
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
-    const { name, operationType, description, branchId, activityType, lines = [] } = req.body as any;
-
-    if (!name || !operationType) {
-      throw new ValidationError("الاسم ونوع العملية مطلوبان", {
-        field: "name",
-        fix: "أدخل اسم القالب ونوع العملية",
-      });
-    }
+    const { name, operationType, description, branchId, activityType, lines = [] } = body;
 
     const result = await withTransaction(async (client) => {
       const templateRes = await client.query(
@@ -311,10 +368,13 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
 
 router.put("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
   try {
+    const parsed_updateJournalTemplateSchema = updateJournalTemplateSchema.safeParse(req.body);
+    if (!parsed_updateJournalTemplateSchema.success) throw new ValidationError(parsed_updateJournalTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateJournalTemplateSchema.data;
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
     const { id } = req.params;
-    const { name, description, branchId, activityType, isActive, lines } = req.body as any;
+    const { name, description, branchId, activityType, isActive, lines } = body;
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`,
@@ -425,16 +485,12 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermissio
 
 router.post("/subsidiary-accounts", requirePermission("finance:write"), async (req, res) => {
   try {
+    const parsed_createSubsidiaryAccountSchema = createSubsidiaryAccountSchema.safeParse(req.body);
+    if (!parsed_createSubsidiaryAccountSchema.success) throw new ValidationError(parsed_createSubsidiaryAccountSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createSubsidiaryAccountSchema.data;
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
-    const { entityType, entityId, accountType, accountId } = req.body as any;
-
-    if (!entityType || !entityId || !accountType || !accountId) {
-      throw new ValidationError("جميع الحقول مطلوبة", {
-        field: "entityType",
-        fix: "أدخل نوع الكيان، معرفه، نوع الحساب، والحساب",
-      });
-    }
+    const { entityType, entityId, accountType, accountId } = body;
 
     const { insertId } = await rawExecute(
       `INSERT INTO subsidiary_accounts ("companyId","entityType","entityId","accountType","accountId")

@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -150,20 +151,110 @@ router.get("/regulation/:id", requirePermission("hr:read"), async (req, res) => 
   }
 });
 
+const createRegulationSchema = z.object({
+  section: z.enum(["work_time", "work_organization", "conduct"], { message: "القسم غير صحيح" }),
+  articleNumber: z.string().min(1, "رقم المادة مطلوب"),
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional(),
+  penalty1: z.string().optional(),
+  penalty2: z.string().optional(),
+  penalty3: z.string().optional(),
+  penalty4: z.string().optional(),
+  extraDeduction: z.number().optional(),
+  severity: z.enum(["low", "medium", "high"]).optional(),
+  isTermination: z.boolean().optional(),
+  legalReference: z.string().optional(),
+});
+
+const updateRegulationSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  penalty1: z.string().optional(),
+  penalty2: z.string().optional(),
+  penalty3: z.string().optional(),
+  penalty4: z.string().optional(),
+  extraDeduction: z.number().optional(),
+  severity: z.enum(["low", "medium", "high"]).optional(),
+  isTermination: z.boolean().optional(),
+  legalReference: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const incidentTypeEnum = z.enum(["late", "early_leave", "absence", "behavior", "organization", "gps_out_of_range", "custom"], { message: "نوع الواقعة غير صحيح" });
+
+const createMemoSchema = z.object({
+  assignmentId: z.number({ message: "assignmentId مطلوب" }),
+  incidentType: incidentTypeEnum,
+  incidentDate: z.string().min(1, "incidentDate مطلوب"),
+  incidentDurationMinutes: z.number().optional(),
+  absenceDays: z.number().optional(),
+  incidentDescription: z.string().optional(),
+  regulationId: z.number().optional(),
+  disruptsOthers: z.boolean().optional(),
+  witnesses: z.any().optional(),
+  relatedParties: z.any().optional(),
+  reasons: z.any().optional(),
+  manualOverrideAmount: z.number().optional(),
+  manualOverrideReason: z.string().optional(),
+});
+
+const justifyMemoSchema = z.object({
+  justification: z.string().optional(),
+  declined: z.boolean().optional(),
+});
+
+const managerRecommendationSchema = z.object({
+  recommendation: z.enum(["approve_excuse", "reject_excuse"], { message: "التوصية غير صحيحة" }),
+  comment: z.string().optional(),
+});
+
+const gmDecisionSchema = z.object({
+  decision: z.enum(["approved", "rejected", "other"], { message: "القرار غير صحيح" }),
+  comment: z.string().optional(),
+});
+
+const cancelMemoSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const penaltyPreviewSchema = z.object({
+  assignmentId: z.number({ message: "assignmentId مطلوب" }),
+  incidentType: incidentTypeEnum,
+  incidentDate: z.string().min(1, "incidentDate مطلوب"),
+  durationMinutes: z.number().optional(),
+  absenceDays: z.number().optional(),
+  disruptsOthers: z.boolean().optional(),
+  regulationId: z.number().optional(),
+});
+
+const autoDetectionSettingsSchema = z.object({
+  enableLateDetection: z.boolean().optional(),
+  enableEarlyLeaveDetection: z.boolean().optional(),
+  enableAbsenceDetection: z.boolean().optional(),
+  enableGpsDetection: z.boolean().optional(),
+  lateThresholdMinutes: z.number().optional(),
+  earlyLeaveThresholdMinutes: z.number().optional(),
+  gpsRadiusMeters: z.number().optional(),
+  autoCreateMemo: z.boolean().optional(),
+  notifyEmployee: z.boolean().optional(),
+  notifyManager: z.boolean().optional(),
+});
+
+const autoDetectionRunSchema = z.object({
+  date: z.string().optional(),
+});
+
 router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const parsed_createRegulationSchema = createRegulationSchema.safeParse(req.body);
+    if (!parsed_createRegulationSchema.success) throw new ValidationError(parsed_createRegulationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createRegulationSchema.data;
     const {
       section, articleNumber, title, description,
       penalty1, penalty2, penalty3, penalty4,
       extraDeduction, severity, isTermination, legalReference,
-    } = req.body as any;
-    if (!section || !articleNumber || !title) {
-      badRequest(res, "section, articleNumber, title مطلوبة"); return;
-    }
-    if (!["work_time", "work_organization", "conduct"].includes(section)) {
-      badRequest(res, "القسم غير صحيح"); return;
-    }
+    } = body;
     const { insertId } = await rawExecute(
       `INSERT INTO hr_discipline_regulation
          ("companyId", section, "articleNumber", title, description,
@@ -182,7 +273,7 @@ router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId,
       action: "hr.discipline.regulation.create",
       entity: "hr_discipline_regulation", entityId: insertId,
-      after: req.body,
+      after: body,
     });
     res.status(201).json({ id: insertId });
   } catch (err) {
@@ -194,6 +285,9 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
+    const parsed_updateRegulationSchema = updateRegulationSchema.safeParse(req.body);
+    if (!parsed_updateRegulationSchema.success) throw new ValidationError(parsed_updateRegulationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateRegulationSchema.data;
     const allowed = [
       "title", "description", "penalty1", "penalty2", "penalty3", "penalty4",
       "extraDeduction", "severity", "isTermination", "legalReference", "isActive",
@@ -201,8 +295,8 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
     const sets: string[] = [];
     const params: any[] = [];
     for (const k of allowed) {
-      if (k in (req.body ?? {})) {
-        params.push(req.body[k]);
+      if (k in (body ?? {})) {
+        params.push((body as any)[k]);
         sets.push(`"${k}" = $${params.length}`);
       }
     }
@@ -218,7 +312,7 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
       companyId: scope.companyId, userId: scope.userId,
       action: "hr.discipline.regulation.update",
       entity: "hr_discipline_regulation", entityId: id,
-      after: req.body,
+      after: body,
     });
     res.json({ ok: true });
   } catch (err) {
@@ -250,6 +344,9 @@ router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res
 // إعادة استنساخ اللائحة الافتراضية (للشركات التي لم تُبذر)
 router.post("/regulation/reseed", requirePermission("hr:create"), async (req, res) => {
   try {
+    // No body expected — validate to reject unexpected payloads
+    { const _guard = z.object({}).strict().safeParse(req.body ?? {});
+    if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     const [row] = await rawQuery<{ count: string }>(
       `SELECT hr_clone_default_regulation($1) AS count`,
@@ -322,6 +419,9 @@ router.get("/memos/:id", requirePermission("hr:read"), async (req, res) => {
 router.post("/memos", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const parsed_createMemoSchema = createMemoSchema.safeParse(req.body);
+    if (!parsed_createMemoSchema.success) throw new ValidationError(parsed_createMemoSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createMemoSchema.data;
     const {
       assignmentId,
       incidentType,
@@ -336,14 +436,7 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       reasons,
       manualOverrideAmount,
       manualOverrideReason,
-    } = req.body as any;
-
-    if (!assignmentId || !incidentType || !incidentDate) {
-      badRequest(res, "assignmentId, incidentType, incidentDate مطلوبة"); return;
-    }
-    if (!["late", "early_leave", "absence", "behavior", "organization", "gps_out_of_range", "custom"].includes(incidentType)) {
-      badRequest(res, "نوع الواقعة غير صحيح"); return;
-    }
+    } = body;
 
     // جلب بيانات التعيين للتحقق من ملكية الشركة
     const [assignment] = await rawQuery<any>(
@@ -437,7 +530,10 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { justification, declined } = req.body as any;
+    const parsed_justifyMemoSchema = justifyMemoSchema.safeParse(req.body);
+    if (!parsed_justifyMemoSchema.success) throw new ValidationError(parsed_justifyMemoSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_justifyMemoSchema.data;
+    const { justification, declined } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
 
@@ -502,10 +598,10 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { recommendation, comment } = req.body as any;
-    if (!["approve_excuse", "reject_excuse"].includes(recommendation)) {
-      badRequest(res, "التوصية غير صحيحة"); return;
-    }
+    const parsed_managerRecommendationSchema = managerRecommendationSchema.safeParse(req.body);
+    if (!parsed_managerRecommendationSchema.success) throw new ValidationError(parsed_managerRecommendationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_managerRecommendationSchema.data;
+    const { recommendation, comment } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (memo.status !== "pending_manager") {
@@ -524,7 +620,7 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
     await logMemoEvent({
       memoId: id, companyId: scope.companyId, actorId: scope.userId,
       actorRole: "direct_manager", action: "manager_recommended",
-      payload: { recommendation }, note: comment ?? null,
+      payload: { recommendation }, note: comment ?? undefined,
     });
 
     // تنبيه المدير العام
@@ -545,10 +641,10 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { decision, comment } = req.body as any;
-    if (!["approved", "rejected", "other"].includes(decision)) {
-      badRequest(res, "القرار غير صحيح"); return;
-    }
+    const parsed_gmDecisionSchema = gmDecisionSchema.safeParse(req.body);
+    if (!parsed_gmDecisionSchema.success) throw new ValidationError(parsed_gmDecisionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_gmDecisionSchema.data;
+    const { decision, comment } = body;
 
     // Only GM/Owner or users with the approve permission can act
     if (!(scope.role === "general_manager" || scope.role === "owner" || scope.isOwner)) {
@@ -662,7 +758,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
     await logMemoEvent({
       memoId: id, companyId: scope.companyId, actorId: scope.userId,
       actorRole: "gm", action: "gm_decided",
-      payload: { decision }, note: comment ?? null,
+      payload: { decision }, note: comment ?? undefined,
     });
 
     if (decision === "approved") {
@@ -699,7 +795,10 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { reason } = req.body as any;
+    const parsed_cancelMemoSchema = cancelMemoSchema.safeParse(req.body);
+    if (!parsed_cancelMemoSchema.success) throw new ValidationError(parsed_cancelMemoSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_cancelMemoSchema.data;
+    const { reason } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (["approved", "rejected", "cancelled"].includes(memo.status)) {
@@ -720,7 +819,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
     }
     await logMemoEvent({
       memoId: id, companyId: scope.companyId, actorId: scope.userId,
-      actorRole: "hr", action: "cancelled", note: reason ?? null,
+      actorRole: "hr", action: "cancelled", note: reason ?? undefined,
     });
     res.json({ ok: true });
   } catch (err) {
@@ -732,10 +831,10 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
 router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId, incidentType, incidentDate, durationMinutes, absenceDays, disruptsOthers, regulationId } = req.body as any;
-    if (!assignmentId || !incidentType || !incidentDate) {
-      badRequest(res, "assignmentId, incidentType, incidentDate مطلوبة"); return;
-    }
+    const parsed_penaltyPreviewSchema = penaltyPreviewSchema.safeParse(req.body);
+    if (!parsed_penaltyPreviewSchema.success) throw new ValidationError(parsed_penaltyPreviewSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_penaltyPreviewSchema.data;
+    const { assignmentId, incidentType, incidentDate, durationMinutes, absenceDays, disruptsOthers, regulationId } = body;
     const [assignment] = await rawQuery<any>(
       `SELECT id, "employeeId", "companyId" FROM employee_assignments WHERE id = $1`,
       [assignmentId]
@@ -806,7 +905,9 @@ router.put("/auto-detection/settings", requirePermission("hr:update"), async (re
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات الرصد التلقائي");
     }
-    const body = req.body as Partial<AutoDetectionSettings>;
+    const parsed_autoDetectionSettingsSchema = autoDetectionSettingsSchema.safeParse(req.body);
+    if (!parsed_autoDetectionSettingsSchema.success) throw new ValidationError(parsed_autoDetectionSettingsSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body: Partial<AutoDetectionSettings> = parsed_autoDetectionSettingsSchema.data as any;
     await saveAutoDetectionSettings(scope.companyId, body);
 
     await createAuditLog({
@@ -830,7 +931,10 @@ router.post("/auto-detection/run", requirePermission("hr:update"), async (req, r
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتشغيل الرصد التلقائي");
     }
-    const { date } = req.body as { date?: string };
+    const parsed_autoDetectionRunSchema = autoDetectionRunSchema.safeParse(req.body);
+    if (!parsed_autoDetectionRunSchema.success) throw new ValidationError(parsed_autoDetectionRunSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_autoDetectionRunSchema.data;
+    const { date } = body;
     const targetDate = date ?? new Date().toISOString().split("T")[0]!;
 
     const result = await runAutoDetection(scope.companyId, targetDate);

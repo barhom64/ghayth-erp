@@ -1,9 +1,18 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+import { z } from "zod";
+
+/* ── Zod Schemas ────────────────────────────────────────────── */
+
+const preferencesSchema = z.object({
+  channel: z.string().optional(),
+  category: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -84,8 +93,11 @@ router.get("/preferences", requirePermission("notifications:read"), async (req, 
 
 router.post("/preferences", requirePermission("notifications:write"), async (req, res) => {
   try {
+    const parsed_preferencesSchema = preferencesSchema.safeParse(req.body);
+    if (!parsed_preferencesSchema.success) throw new ValidationError(parsed_preferencesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_preferencesSchema.data;
     const scope = req.scope!;
-    const { channel, category, enabled } = req.body;
+    const { channel, category, enabled } = body;
     const { insertId } = await rawExecute(
       `INSERT INTO notification_preferences ("userId","companyId",channel,category,enabled)
        VALUES ($1,$2,$3,$4,$5)

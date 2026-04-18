@@ -1,10 +1,18 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+import { z } from "zod";
+
+const dataRequestSchema = z.object({
+  requestType: z.enum(["access", "rectification", "erasure", "portability", "objection"]),
+  notes: z.string().optional().nullable(),
+  requesterName: z.string().optional().nullable(),
+  requesterEmail: z.string().email().optional().nullable(),
+});
 
 const router = Router();
 
@@ -144,8 +152,11 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
 
 router.post("/data-request", authMiddleware, requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_dataRequestSchema = dataRequestSchema.safeParse(req.body);
+    if (!parsed_dataRequestSchema.success) throw new ValidationError(parsed_dataRequestSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_dataRequestSchema.data;
     const scope = req.scope!;
-    const { requestType, notes, requesterName, requesterEmail } = req.body as any;
+    const { requestType, notes, requesterName, requesterEmail } = body;
 
     const validTypes = ["access", "rectification", "erasure", "portability", "objection"];
     if (!requestType || !validTypes.includes(requestType)) {
