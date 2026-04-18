@@ -143,47 +143,228 @@ async function createDefaultSalaryComponents(client: pg.PoolClient, companyId: n
   }
 }
 
-async function createDefaultChartOfAccounts(client: pg.PoolClient, companyId: number) {
-  const accounts = [
-    { code: "1000", name: "الأصول", nameEn: "Assets", type: "asset", level: 1 },
-    { code: "1100", name: "النقد والبنوك", nameEn: "Cash & Banks", type: "asset", level: 2, parentCode: "1000" },
-    { code: "1110", name: "الصندوق", nameEn: "Cash", type: "asset", level: 3, parentCode: "1100" },
-    { code: "1120", name: "البنك", nameEn: "Bank", type: "asset", level: 3, parentCode: "1100" },
-    { code: "1200", name: "الذمم المدينة", nameEn: "Accounts Receivable", type: "asset", level: 2, parentCode: "1000" },
-    { code: "1300", name: "المخزون", nameEn: "Inventory", type: "asset", level: 2, parentCode: "1000" },
-    { code: "1400", name: "الأصول الثابتة", nameEn: "Fixed Assets", type: "asset", level: 2, parentCode: "1000" },
-    { code: "2000", name: "الالتزامات", nameEn: "Liabilities", type: "liability", level: 1 },
-    { code: "2100", name: "الذمم الدائنة", nameEn: "Accounts Payable", type: "liability", level: 2, parentCode: "2000" },
-    { code: "2200", name: "القروض", nameEn: "Loans", type: "liability", level: 2, parentCode: "2000" },
-    { code: "2300", name: "المستحقات", nameEn: "Accrued Liabilities", type: "liability", level: 2, parentCode: "2000" },
-    { code: "3000", name: "حقوق الملكية", nameEn: "Equity", type: "equity", level: 1 },
-    { code: "3100", name: "رأس المال", nameEn: "Capital", type: "equity", level: 2, parentCode: "3000" },
-    { code: "3200", name: "الأرباح المحتجزة", nameEn: "Retained Earnings", type: "equity", level: 2, parentCode: "3000" },
-    { code: "4000", name: "الإيرادات", nameEn: "Revenue", type: "revenue", level: 1 },
-    { code: "4100", name: "إيرادات المبيعات", nameEn: "Sales Revenue", type: "revenue", level: 2, parentCode: "4000" },
-    { code: "4200", name: "إيرادات الخدمات", nameEn: "Service Revenue", type: "revenue", level: 2, parentCode: "4000" },
-    { code: "4300", name: "إيرادات أخرى", nameEn: "Other Revenue", type: "revenue", level: 2, parentCode: "4000" },
-    { code: "5000", name: "المصروفات", nameEn: "Expenses", type: "expense", level: 1 },
-    { code: "5100", name: "الرواتب والأجور", nameEn: "Salaries & Wages", type: "expense", level: 2, parentCode: "5000" },
-    { code: "5200", name: "الإيجارات", nameEn: "Rent", type: "expense", level: 2, parentCode: "5000" },
-    { code: "5300", name: "المرافق", nameEn: "Utilities", type: "expense", level: 2, parentCode: "5000" },
-    { code: "5400", name: "مصروفات إدارية", nameEn: "Administrative Expenses", type: "expense", level: 2, parentCode: "5000" },
-    { code: "5500", name: "مصروفات تسويق", nameEn: "Marketing Expenses", type: "expense", level: 2, parentCode: "5000" },
-    { code: "5600", name: "استهلاك الأصول", nameEn: "Depreciation", type: "expense", level: 2, parentCode: "5000" },
-    { code: "5700", name: "مصروفات أخرى", nameEn: "Other Expenses", type: "expense", level: 2, parentCode: "5000" },
-    { code: "9999", name: "فروقات التقريب", nameEn: "Rounding Differences", type: "expense", level: 2 },
-  ];
+export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
+  code: string;
+  name: string;
+  nameEn: string;
+  type: "asset" | "liability" | "equity" | "revenue" | "expense";
+  level: number;
+  parentCode?: string;
+  allowPosting?: boolean;
+}> = [
+  // ============ 1xxx الأصول (Assets) ============
+  { code: "1000", name: "الأصول", nameEn: "Assets", type: "asset", level: 1, allowPosting: false },
 
+  // 11xx الأصول المتداولة
+  { code: "1100", name: "الأصول المتداولة", nameEn: "Current Assets", type: "asset", level: 2, parentCode: "1000", allowPosting: false },
+  { code: "1110", name: "النقدية في الصندوق", nameEn: "Cash on Hand", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
+  { code: "1111", name: "الصندوق الرئيسي", nameEn: "Main Cash", type: "asset", level: 4, parentCode: "1110" },
+  { code: "1112", name: "صناديق فرعية", nameEn: "Petty Cash", type: "asset", level: 4, parentCode: "1110" },
+  { code: "1113", name: "العهد النقدية", nameEn: "Cash Custody", type: "asset", level: 4, parentCode: "1110" },
+
+  { code: "1120", name: "البنوك", nameEn: "Banks", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
+  { code: "1121", name: "بنك الراجحي", nameEn: "Al-Rajhi Bank", type: "asset", level: 4, parentCode: "1120" },
+  { code: "1122", name: "البنك الأهلي السعودي", nameEn: "SNB", type: "asset", level: 4, parentCode: "1120" },
+  { code: "1123", name: "بنك الرياض", nameEn: "Riyad Bank", type: "asset", level: 4, parentCode: "1120" },
+  { code: "1124", name: "بنوك أخرى", nameEn: "Other Banks", type: "asset", level: 4, parentCode: "1120" },
+
+  { code: "1130", name: "العملاء (الذمم المدينة)", nameEn: "Accounts Receivable", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
+  { code: "1131", name: "عملاء محليون", nameEn: "Local Customers", type: "asset", level: 4, parentCode: "1130" },
+  { code: "1132", name: "عملاء العقارات (إيجارات)", nameEn: "Tenants Receivable", type: "asset", level: 4, parentCode: "1130" },
+  { code: "1133", name: "عملاء المشاريع", nameEn: "Project Customers", type: "asset", level: 4, parentCode: "1130" },
+  { code: "1134", name: "شيكات تحت التحصيل", nameEn: "Cheques Under Collection", type: "asset", level: 4, parentCode: "1130" },
+  { code: "1135", name: "مخصص الديون المشكوك في تحصيلها", nameEn: "Allowance for Doubtful Debts", type: "asset", level: 4, parentCode: "1130" },
+
+  { code: "1140", name: "الموظفون والسلف", nameEn: "Staff & Advances", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
+  { code: "1141", name: "سلف الموظفين", nameEn: "Employee Advances", type: "asset", level: 4, parentCode: "1140" },
+  { code: "1142", name: "عهد مالية للموظفين", nameEn: "Employee Custody", type: "asset", level: 4, parentCode: "1140" },
+  { code: "1143", name: "قروض موظفين", nameEn: "Employee Loans", type: "asset", level: 4, parentCode: "1140" },
+
+  { code: "1150", name: "المخزون", nameEn: "Inventory", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
+  { code: "1151", name: "مخزون البضائع", nameEn: "Merchandise Inventory", type: "asset", level: 4, parentCode: "1150" },
+  { code: "1152", name: "مخزون قطع الغيار", nameEn: "Spare Parts Inventory", type: "asset", level: 4, parentCode: "1150" },
+  { code: "1153", name: "مخزون مواد التشغيل", nameEn: "Operating Supplies", type: "asset", level: 4, parentCode: "1150" },
+
+  { code: "1160", name: "إيرادات مستحقة", nameEn: "Accrued Revenue", type: "asset", level: 3, parentCode: "1100" },
+  { code: "1170", name: "مصروفات مدفوعة مقدماً", nameEn: "Prepaid Expenses", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
+  { code: "1171", name: "إيجارات مدفوعة مقدماً", nameEn: "Prepaid Rent", type: "asset", level: 4, parentCode: "1170" },
+  { code: "1172", name: "تأمينات مدفوعة مقدماً", nameEn: "Prepaid Insurance", type: "asset", level: 4, parentCode: "1170" },
+  { code: "1173", name: "اشتراكات ورخص مدفوعة مقدماً", nameEn: "Prepaid Subscriptions", type: "asset", level: 4, parentCode: "1170" },
+  { code: "1180", name: "ضريبة قيمة مضافة مدفوعة (مدخلات)", nameEn: "Input VAT", type: "asset", level: 3, parentCode: "1100" },
+
+  // 12xx الأصول غير المتداولة
+  { code: "1200", name: "الأصول غير المتداولة", nameEn: "Non-Current Assets", type: "asset", level: 2, parentCode: "1000", allowPosting: false },
+  { code: "1210", name: "المركبات وأسطول النقل", nameEn: "Vehicles & Fleet", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1211", name: "مجمع إهلاك المركبات", nameEn: "Accum. Depr. – Vehicles", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1220", name: "الأثاث والتجهيزات المكتبية", nameEn: "Furniture & Fixtures", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1221", name: "مجمع إهلاك الأثاث", nameEn: "Accum. Depr. – Furniture", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1230", name: "أجهزة الحاسب الآلي", nameEn: "Computers & IT Equipment", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1231", name: "مجمع إهلاك الحاسبات", nameEn: "Accum. Depr. – Computers", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1240", name: "المباني والعقارات", nameEn: "Buildings & Real Estate", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1241", name: "مجمع إهلاك المباني", nameEn: "Accum. Depr. – Buildings", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1250", name: "تحسينات على مأجور", nameEn: "Leasehold Improvements", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1260", name: "الأصول غير الملموسة (برامج وتراخيص)", nameEn: "Intangible Assets", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1270", name: "أعمال تحت التنفيذ", nameEn: "Capital Work In Progress", type: "asset", level: 3, parentCode: "1200" },
+
+  // ============ 2xxx الالتزامات (Liabilities) ============
+  { code: "2000", name: "الالتزامات", nameEn: "Liabilities", type: "liability", level: 1, allowPosting: false },
+
+  // 21xx الالتزامات المتداولة
+  { code: "2100", name: "الالتزامات المتداولة", nameEn: "Current Liabilities", type: "liability", level: 2, parentCode: "2000", allowPosting: false },
+  { code: "2110", name: "الموردون (الذمم الدائنة)", nameEn: "Accounts Payable", type: "liability", level: 3, parentCode: "2100", allowPosting: false },
+  { code: "2111", name: "موردون محليون", nameEn: "Local Suppliers", type: "liability", level: 4, parentCode: "2110" },
+  { code: "2112", name: "مقاولون من الباطن", nameEn: "Subcontractors Payable", type: "liability", level: 4, parentCode: "2110" },
+  { code: "2113", name: "شيكات صادرة آجلة", nameEn: "Post-dated Cheques Issued", type: "liability", level: 4, parentCode: "2110" },
+
+  { code: "2120", name: "مستحقات الرواتب والأجور", nameEn: "Payroll Payable", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2130", name: "ضرائب ورسوم مستحقة", nameEn: "Taxes Payable", type: "liability", level: 3, parentCode: "2100", allowPosting: false },
+  { code: "2131", name: "ضريبة القيمة المضافة المستحقة (مخرجات)", nameEn: "Output VAT Payable", type: "liability", level: 4, parentCode: "2130" },
+  { code: "2132", name: "ضريبة الاستقطاع", nameEn: "Withholding Tax", type: "liability", level: 4, parentCode: "2130" },
+  { code: "2133", name: "الزكاة المستحقة", nameEn: "Zakat Payable", type: "liability", level: 4, parentCode: "2130" },
+
+  { code: "2140", name: "التأمينات الاجتماعية المستحقة", nameEn: "GOSI Payable", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2150", name: "مصروفات مستحقة الدفع", nameEn: "Accrued Expenses", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2160", name: "إيرادات مقبوضة مقدماً", nameEn: "Unearned Revenue", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2161", name: "إيجارات مقبوضة مقدماً", nameEn: "Unearned Rent", type: "liability", level: 4, parentCode: "2160" },
+  { code: "2170", name: "تأمينات وضمانات من العملاء", nameEn: "Customer Deposits", type: "liability", level: 3, parentCode: "2100" },
+
+  // 22xx الالتزامات طويلة الأجل
+  { code: "2200", name: "الالتزامات طويلة الأجل", nameEn: "Long-Term Liabilities", type: "liability", level: 2, parentCode: "2000", allowPosting: false },
+  { code: "2210", name: "قروض بنكية طويلة الأجل", nameEn: "Long-Term Bank Loans", type: "liability", level: 3, parentCode: "2200" },
+  { code: "2220", name: "مكافأة نهاية الخدمة", nameEn: "End of Service Benefits (EOSB)", type: "liability", level: 3, parentCode: "2200" },
+
+  // ============ 3xxx حقوق الملكية ============
+  { code: "3000", name: "حقوق الملكية", nameEn: "Equity", type: "equity", level: 1, allowPosting: false },
+  { code: "3100", name: "رأس المال", nameEn: "Capital", type: "equity", level: 2, parentCode: "3000" },
+  { code: "3200", name: "الاحتياطي النظامي", nameEn: "Statutory Reserve", type: "equity", level: 2, parentCode: "3000" },
+  { code: "3300", name: "الأرباح المحتجزة", nameEn: "Retained Earnings", type: "equity", level: 2, parentCode: "3000" },
+  { code: "3400", name: "أرباح/خسائر العام الحالي", nameEn: "Current Year P/L", type: "equity", level: 2, parentCode: "3000" },
+  { code: "3500", name: "السحوبات والتوزيعات", nameEn: "Drawings & Distributions", type: "equity", level: 2, parentCode: "3000" },
+
+  // ============ 4xxx الإيرادات ============
+  { code: "4000", name: "الإيرادات", nameEn: "Revenue", type: "revenue", level: 1, allowPosting: false },
+
+  { code: "4100", name: "الإيرادات التشغيلية", nameEn: "Operating Revenue", type: "revenue", level: 2, parentCode: "4000", allowPosting: false },
+  { code: "4110", name: "إيرادات المبيعات", nameEn: "Sales Revenue", type: "revenue", level: 3, parentCode: "4100", allowPosting: false },
+  { code: "4111", name: "مبيعات نقدية", nameEn: "Cash Sales", type: "revenue", level: 4, parentCode: "4110" },
+  { code: "4112", name: "مبيعات آجلة", nameEn: "Credit Sales", type: "revenue", level: 4, parentCode: "4110" },
+  { code: "4113", name: "مردودات ومسموحات المبيعات", nameEn: "Sales Returns & Allowances", type: "revenue", level: 4, parentCode: "4110" },
+
+  { code: "4120", name: "إيرادات الإيجارات", nameEn: "Rental Revenue", type: "revenue", level: 3, parentCode: "4100", allowPosting: false },
+  { code: "4121", name: "إيجارات سكنية", nameEn: "Residential Rent", type: "revenue", level: 4, parentCode: "4120" },
+  { code: "4122", name: "إيجارات تجارية", nameEn: "Commercial Rent", type: "revenue", level: 4, parentCode: "4120" },
+
+  { code: "4130", name: "إيرادات الخدمات", nameEn: "Service Revenue", type: "revenue", level: 3, parentCode: "4100" },
+  { code: "4140", name: "إيرادات المشاريع والمقاولات", nameEn: "Project Revenue", type: "revenue", level: 3, parentCode: "4100" },
+  { code: "4150", name: "إيرادات النقل والأسطول", nameEn: "Fleet/Transport Revenue", type: "revenue", level: 3, parentCode: "4100" },
+
+  { code: "4900", name: "إيرادات أخرى", nameEn: "Other Income", type: "revenue", level: 2, parentCode: "4000", allowPosting: false },
+  { code: "4910", name: "فوائد ومرابحات بنكية", nameEn: "Bank Interest", type: "revenue", level: 3, parentCode: "4900" },
+  { code: "4920", name: "أرباح بيع أصول ثابتة", nameEn: "Gain on Sale of Assets", type: "revenue", level: 3, parentCode: "4900" },
+  { code: "4930", name: "إيرادات متنوعة", nameEn: "Miscellaneous Income", type: "revenue", level: 3, parentCode: "4900" },
+  { code: "4940", name: "تخفيضات وخصومات مكتسبة", nameEn: "Discounts Earned", type: "revenue", level: 3, parentCode: "4900" },
+
+  // ============ 5xxx المصروفات ============
+  { code: "5000", name: "المصروفات", nameEn: "Expenses", type: "expense", level: 1, allowPosting: false },
+
+  // 51xx تكلفة الإيرادات
+  { code: "5100", name: "تكلفة الإيرادات", nameEn: "Cost of Revenue", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5110", name: "تكلفة البضاعة المباعة", nameEn: "COGS", type: "expense", level: 3, parentCode: "5100" },
+  { code: "5120", name: "تكلفة الخدمات", nameEn: "Cost of Services", type: "expense", level: 3, parentCode: "5100" },
+  { code: "5130", name: "تكلفة المشاريع والمقاولات", nameEn: "Project Costs", type: "expense", level: 3, parentCode: "5100" },
+  { code: "5140", name: "تكاليف نقل وشحن", nameEn: "Freight & Shipping", type: "expense", level: 3, parentCode: "5100" },
+
+  // 52xx مصروفات الموظفين
+  { code: "5200", name: "مصروفات الموظفين", nameEn: "Employee Expenses", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5210", name: "الرواتب الأساسية", nameEn: "Basic Salaries", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5220", name: "البدلات (سكن/نقل/طعام)", nameEn: "Allowances", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5230", name: "العمل الإضافي", nameEn: "Overtime", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5240", name: "المكافآت والحوافز", nameEn: "Bonuses & Incentives", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5250", name: "حصة المنشأة في التأمينات (GOSI)", nameEn: "GOSI – Employer Share", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5260", name: "مكافأة نهاية الخدمة (مصروف)", nameEn: "EOSB Expense", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5270", name: "الإجازات وتذاكر السفر", nameEn: "Leave & Air Tickets", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5280", name: "التدريب والتطوير", nameEn: "Training & Development", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5290", name: "مصروفات توظيف ورسوم عمالة", nameEn: "Recruitment & Labor Fees", type: "expense", level: 3, parentCode: "5200" },
+
+  // 53xx مصروفات إدارية وعمومية
+  { code: "5300", name: "المصروفات الإدارية والعمومية", nameEn: "G&A Expenses", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5310", name: "إيجارات المكاتب والمستودعات", nameEn: "Office & Warehouse Rent", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5320", name: "الكهرباء والمياه", nameEn: "Utilities", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5330", name: "الاتصالات والإنترنت", nameEn: "Telecom & Internet", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5340", name: "القرطاسية والمطبوعات", nameEn: "Stationery & Printing", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5350", name: "الصيانة والإصلاحات", nameEn: "Repairs & Maintenance", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5360", name: "الضيافة والمأكولات", nameEn: "Hospitality", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5370", name: "رسوم حكومية وتراخيص", nameEn: "Government Fees & Licenses", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5380", name: "أتعاب مهنية واستشارية", nameEn: "Professional Fees", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5390", name: "مصروفات وعمولات بنكية", nameEn: "Bank Charges", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5395", name: "اشتراكات وعضويات", nameEn: "Subscriptions & Memberships", type: "expense", level: 3, parentCode: "5300" },
+
+  // 54xx مصروفات تسويقية
+  { code: "5400", name: "مصروفات التسويق والمبيعات", nameEn: "Marketing & Sales", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5410", name: "الإعلانات والترويج", nameEn: "Advertising & Promotion", type: "expense", level: 3, parentCode: "5400" },
+  { code: "5420", name: "العروض والمعارض", nameEn: "Exhibitions & Events", type: "expense", level: 3, parentCode: "5400" },
+  { code: "5430", name: "العمولات والوساطة", nameEn: "Commissions & Brokerage", type: "expense", level: 3, parentCode: "5400" },
+
+  // 55xx مصروفات الأسطول
+  { code: "5500", name: "مصروفات الأسطول والمركبات", nameEn: "Fleet Expenses", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5510", name: "الوقود", nameEn: "Fuel", type: "expense", level: 3, parentCode: "5500" },
+  { code: "5520", name: "صيانة وإصلاح المركبات", nameEn: "Vehicle Maintenance", type: "expense", level: 3, parentCode: "5500" },
+  { code: "5530", name: "تأمين المركبات", nameEn: "Vehicle Insurance", type: "expense", level: 3, parentCode: "5500" },
+  { code: "5540", name: "رسوم استمارات وتجديدات", nameEn: "Vehicle Registration & Renewals", type: "expense", level: 3, parentCode: "5500" },
+  { code: "5550", name: "إيجار مركبات", nameEn: "Vehicle Rental", type: "expense", level: 3, parentCode: "5500" },
+  { code: "5560", name: "مخالفات مرورية", nameEn: "Traffic Violations", type: "expense", level: 3, parentCode: "5500" },
+
+  // 56xx مصروفات العقارات
+  { code: "5600", name: "مصروفات العقارات والمباني", nameEn: "Property Expenses", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5610", name: "صيانة المباني والوحدات", nameEn: "Building Maintenance", type: "expense", level: 3, parentCode: "5600" },
+  { code: "5620", name: "خدمات الأمن والنظافة", nameEn: "Security & Cleaning", type: "expense", level: 3, parentCode: "5600" },
+  { code: "5630", name: "أتعاب إدارة عقارات", nameEn: "Property Management Fees", type: "expense", level: 3, parentCode: "5600" },
+  { code: "5640", name: "رسوم بلدية ومنافع", nameEn: "Municipal & Utility Fees", type: "expense", level: 3, parentCode: "5600" },
+
+  // 57xx الإهلاك والاستهلاك
+  { code: "5700", name: "مصروفات الإهلاك والاستهلاك", nameEn: "Depreciation & Amortization", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5710", name: "إهلاك المركبات", nameEn: "Vehicle Depreciation", type: "expense", level: 3, parentCode: "5700" },
+  { code: "5720", name: "إهلاك الأثاث والتجهيزات", nameEn: "Furniture Depreciation", type: "expense", level: 3, parentCode: "5700" },
+  { code: "5730", name: "إهلاك الحاسبات والمعدات", nameEn: "Computer Depreciation", type: "expense", level: 3, parentCode: "5700" },
+  { code: "5740", name: "إهلاك المباني", nameEn: "Building Depreciation", type: "expense", level: 3, parentCode: "5700" },
+  { code: "5750", name: "إطفاء الأصول غير الملموسة", nameEn: "Intangibles Amortization", type: "expense", level: 3, parentCode: "5700" },
+
+  // 58xx مصروفات أخرى ومخصصات
+  { code: "5800", name: "مصروفات أخرى ومخصصات", nameEn: "Other Expenses & Provisions", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5810", name: "خسائر بيع أصول ثابتة", nameEn: "Loss on Sale of Assets", type: "expense", level: 3, parentCode: "5800" },
+  { code: "5820", name: "ديون معدومة", nameEn: "Bad Debts", type: "expense", level: 3, parentCode: "5800" },
+  { code: "5830", name: "مخصصات (ضمانات/التزامات)", nameEn: "Provisions", type: "expense", level: 3, parentCode: "5800" },
+  { code: "5840", name: "زكاة وضرائب الدخل", nameEn: "Zakat & Income Tax", type: "expense", level: 3, parentCode: "5800" },
+
+  // 59xx مصروفات قانونية وتأمينية
+  { code: "5900", name: "مصروفات قانونية وتأمينية", nameEn: "Legal & Insurance", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
+  { code: "5910", name: "رسوم محاكم وتقاضي", nameEn: "Court & Litigation Fees", type: "expense", level: 3, parentCode: "5900" },
+  { code: "5920", name: "أتعاب محاماة", nameEn: "Legal Fees", type: "expense", level: 3, parentCode: "5900" },
+  { code: "5930", name: "تأمين عام (مباني/مسؤولية)", nameEn: "General Insurance", type: "expense", level: 3, parentCode: "5900" },
+
+  // ============ 9xxx حسابات تسوية ============
+  { code: "9999", name: "فروقات التقريب", nameEn: "Rounding Differences", type: "expense", level: 1 },
+];
+
+async function createDefaultChartOfAccounts(client: pg.PoolClient, companyId: number) {
   const codeToId: Record<string, number> = {};
-  for (const acc of accounts) {
+  for (const acc of DEFAULT_CHART_OF_ACCOUNTS) {
     const parentId = acc.parentCode ? (codeToId[acc.parentCode] ?? null) : null;
+    const allowPosting = acc.allowPosting !== false;
     const res = await exec(
       client,
-      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", level)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT ("companyId", code) DO UPDATE SET name = EXCLUDED.name
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting", "isActive", status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, 'active')
+       ON CONFLICT ("companyId", code) DO UPDATE SET
+         name = EXCLUDED.name,
+         "nameEn" = EXCLUDED."nameEn",
+         type = EXCLUDED.type,
+         "parentId" = EXCLUDED."parentId",
+         "parentCode" = EXCLUDED."parentCode",
+         level = EXCLUDED.level,
+         "allowPosting" = EXCLUDED."allowPosting"
        RETURNING id`,
-      [companyId, acc.code, acc.name, acc.nameEn, acc.type, parentId, acc.level]
+      [companyId, acc.code, acc.name, acc.nameEn, acc.type, parentId, acc.parentCode || null, acc.level, allowPosting]
     );
     codeToId[acc.code] = res.rows[0].id;
   }

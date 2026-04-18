@@ -97,6 +97,7 @@ const allNavSections: NavSection[] = [
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
+        { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
         { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
         { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
@@ -107,6 +108,7 @@ const allNavSections: NavSection[] = [
         { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
         { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
+        { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
       ]},
       { label: "الإجازات", path: "/hr/leaves", icon: Calendar, module: "hr", children: [
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
@@ -124,7 +126,6 @@ const allNavSections: NavSection[] = [
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
         { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
       ]},
-      { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, module: "hr", subKey: "employees" },
       { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
         { label: "المخالفات", path: "/hr/violations", icon: AlertTriangle, subKey: "violations" },
         { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
@@ -177,7 +178,8 @@ const allNavSections: NavSection[] = [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
         { label: "الموردين", path: "/finance/vendors", icon: Users },
       ]},
-      { label: "النقد والذمم", path: "/finance/bank-reconciliation", icon: Building, module: "finance", children: [
+      { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
+        { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
         { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
