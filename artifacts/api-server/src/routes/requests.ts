@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 
@@ -106,7 +107,7 @@ async function logCommunication(companyId: number, direction: string, subject: s
   }
 }
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const isManager = ["owner", "general_manager", "hr_manager", "branch_manager"].includes(scope.role);
@@ -120,7 +121,7 @@ router.get("/", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { typeId, requesterName, title, description, priority, data, attachments } = req.body;
@@ -184,7 +185,7 @@ router.post("/", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
 
-router.get("/catalog", async (req, res) => {
+router.get("/catalog", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const role = scope.role;
@@ -253,7 +254,7 @@ router.get("/catalog", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/types", async (req, res) => {
+router.get("/types", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name`, [scope.companyId]);
@@ -261,7 +262,7 @@ router.get("/types", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/types", async (req, res) => {
+router.post("/types", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, description, category, requiredFields, approvalFlow, isActive } = req.body;
@@ -269,11 +270,12 @@ router.post("/types", async (req, res) => {
       `INSERT INTO request_types (name, description, category, "requiredFields", "approvalFlow", "isActive", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [name, description, category, requiredFields ? JSON.stringify(requiredFields) : '[]', approvalFlow ? JSON.stringify(approvalFlow) : '[]', isActive !== false, scope.companyId]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "request_types", entityId: r.insertId, after: { name, category, isActive: isActive !== false } }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/workflows", async (req, res) => {
+router.get("/workflows", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
@@ -281,7 +283,7 @@ router.get("/workflows", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/workflows", async (req, res) => {
+router.post("/workflows", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, description, steps } = req.body;
@@ -289,11 +291,12 @@ router.post("/workflows", async (req, res) => {
       `INSERT INTO workflows (name, description, steps, "companyId") VALUES ($1,$2,$3,$4)`,
       [name, description, steps ? JSON.stringify(steps) : '[]', scope.companyId]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflows", entityId: r.insertId, after: { name, description } }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/stats", async (req, res) => {
+router.get("/stats", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -310,7 +313,7 @@ router.get("/stats", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
@@ -319,7 +322,7 @@ router.get("/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -400,7 +403,7 @@ router.patch("/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/:id/approve", async (req, res) => {
+router.post("/:id/approve", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -458,7 +461,7 @@ router.post("/:id/approve", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/:id/reject", async (req, res) => {
+router.post("/:id/reject", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -516,7 +519,7 @@ router.post("/:id/reject", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/:id/return", async (req, res) => {
+router.post("/:id/return", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -574,7 +577,7 @@ router.post("/:id/return", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/:id/actions", async (req, res) => {
+router.get("/:id/actions", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -586,7 +589,7 @@ router.get("/:id/actions", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -635,7 +638,7 @@ router.delete("/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/:id/convert", async (req, res) => {
+router.post("/:id/convert", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -728,6 +731,8 @@ router.post("/:id/convert", async (req, res) => {
       `تم تحويل الطلب رقم ${id} إلى ${targetType} (معرف: ${createdId})`,
       'request', id
     );
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "requests", entityId: id, after: { status: "closed", convertedTo: createdId, convertedType: targetType } }).catch(console.error);
 
     res.json({
       success: true,

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
@@ -8,7 +9,7 @@ import { createAuditLog } from "../lib/businessHelpers.js";
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/postings", async (req, res) => {
+router.get("/postings", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM job_postings WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
@@ -16,7 +17,7 @@ router.get("/postings", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.post("/postings", async (req, res) => {
+router.post("/postings", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = req.body;
@@ -45,7 +46,7 @@ router.post("/postings", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
 
-router.get("/postings/:id", async (req, res) => {
+router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
@@ -54,7 +55,7 @@ router.get("/postings/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.patch("/postings/:id", async (req, res) => {
+router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -76,12 +77,13 @@ router.patch("/postings/:id", async (req, res) => {
     const result = await rawExecute(`UPDATE job_postings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
 // Close a job posting with cascade to open applications + candidate notifications.
-router.post("/postings/:id/close", async (req, res) => {
+router.post("/postings/:id/close", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -116,6 +118,7 @@ router.post("/postings/:id/close", async (req, res) => {
         );
       },
     });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "closed", closedReason: reason } }).catch(console.error);
     res.json({ ...updated, event: "recruitment.job.closed" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -125,7 +128,7 @@ router.post("/postings/:id/close", async (req, res) => {
 });
 
 // Reopen a previously closed job posting.
-router.post("/postings/:id/reopen", async (req, res) => {
+router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -142,6 +145,7 @@ router.post("/postings/:id/reopen", async (req, res) => {
         closedReason: null,
       },
     });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "open", reopened: true } }).catch(console.error);
     res.json({ ...updated, event: "recruitment.job.reopened" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -150,17 +154,19 @@ router.post("/postings/:id/reopen", async (req, res) => {
   }
 });
 
-router.delete("/postings/:id", async (req, res) => {
+router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const result = await rawExecute(`DELETE FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
+    const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!before) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
+    await rawExecute(`DELETE FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف الإعلان الوظيفي بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.get("/applications", async (req, res) => {
+router.get("/applications", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { postingId } = req.query;
@@ -172,7 +178,7 @@ router.get("/applications", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.post("/applications", async (req, res) => {
+router.post("/applications", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = req.body;
@@ -206,7 +212,7 @@ router.post("/applications", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
 
-router.get("/applications/:id", async (req, res) => {
+router.get("/applications/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
@@ -215,7 +221,7 @@ router.get("/applications/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.patch("/applications/:id", async (req, res) => {
+router.patch("/applications/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -232,22 +238,24 @@ router.patch("/applications/:id", async (req, res) => {
     params.push(id);
     await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1`, [id]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_applications", entityId: id, after: b }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.delete("/applications/:id", async (req, res) => {
+router.delete("/applications/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
+    const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
+    if (!before) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
     await rawExecute(`DELETE FROM job_applications WHERE id=$1`, [id]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف طلب التوظيف بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.get("/stats", async (req, res) => {
+router.get("/stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
