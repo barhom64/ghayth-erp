@@ -116,7 +116,7 @@ invoicesRouter.get("/invoices", async (req, res) => {
 
     const countParams = params.slice(0, params.length - 2);
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM invoices i WHERE ${where} AND i."deletedAt" IS NULL`,
+      `SELECT COUNT(*) AS total FROM invoices i WHERE ${where}`,
       countParams
     );
 
@@ -334,7 +334,7 @@ invoicesRouter.post("/invoices", async (req, res) => {
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "invoices", entityId: insertId, after: { ref, total, vatAmount, clientId: clientId ?? null } }).catch(console.error);
 
-    const [invoice] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1`, [insertId]);
+    const [invoice] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."deletedAt" IS NULL`, [insertId]);
     res.status(201).json({ ...invoice, lines: validatedLines });
   } catch (err) {
     handleRouteError(err, res, "Create invoice error:");
@@ -784,11 +784,11 @@ invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
 
     const [invoice] = await rawQuery<any>(
       `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
-              "paidAmount", "vatRate", "deletedAt"
-         FROM invoices WHERE id = $1 AND "companyId" = $2`,
+              "paidAmount", "vatRate"
+         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!invoice || invoice.deletedAt) {
+    if (!invoice) {
       throw new NotFoundError("الفاتورة غير موجودة");
     }
     const creditAmount = Math.round(Number(amount) * 100) / 100;
@@ -937,11 +937,11 @@ invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
     }
 
     const [invoice] = await rawQuery<any>(
-      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate", "deletedAt"
-         FROM invoices WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate"
+         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!invoice || invoice.deletedAt) {
+    if (!invoice) {
       throw new NotFoundError("الفاتورة غير موجودة");
     }
 
@@ -1650,7 +1650,8 @@ invoicesRouter.post("/dunning/send", async (req, res) => {
          FROM invoices i
          LEFT JOIN clients c ON c.id = i."clientId"
          WHERE i.id=$1 AND i."companyId"=$2
-           AND i.status NOT IN ('paid','cancelled')`,
+           AND i.status NOT IN ('paid','cancelled')
+           AND i."deletedAt" IS NULL`,
         [Number(invId), scope.companyId]
       );
       if (!inv) { results.push({ invoiceId: invId, status: "skipped", reason: "not_found_or_paid" }); continue; }
