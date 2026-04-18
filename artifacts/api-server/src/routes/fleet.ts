@@ -669,6 +669,23 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet trips error:"); }
 });
 
+router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const tripId = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT t.*, v."plateNumber", d.name AS "driverName"
+       FROM fleet_trips t
+       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
+       LEFT JOIN fleet_drivers d ON d.id = t."driverId"
+       WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`,
+      [tripId, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الرحلة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get trip error:"); }
+});
+
 router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2166,9 +2183,9 @@ router.get("/stats", requirePermission("fleet:read"), async (req, res) => {
     const scope = req.scope!;
     const cid = scope.companyId;
     const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [trips] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1`, [cid]);
-    const [fuel] = await rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1`, [cid]);
-    const [insurance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1`, [cid]);
+    const [trips] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [fuel] = await rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [insurance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [drivers] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]);
@@ -2588,7 +2605,7 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
     const [vehicle] = await rawQuery<any>(
       `SELECT v.*, d.name AS "driverName"
        FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id=v."assignedDriverId"
-       WHERE v.id=$1 AND v."companyId"=$2`,
+       WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
       [vehicleId, scope.companyId]
     );
     if (!vehicle) throw new NotFoundError("المركبة غير موجودة");

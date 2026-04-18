@@ -811,7 +811,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // round-trip on every PATCH that only touches unrelated fields.
     if (email !== undefined && email && email !== before.email) {
       const [clash] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE email = $1 AND id <> $2 LIMIT 1`,
+        `SELECT id FROM employees WHERE email = $1 AND id <> $2 AND "deletedAt" IS NULL LIMIT 1`,
         [email, Number(id)]
       );
       if (clash) {
@@ -826,7 +826,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // Pre-check: changing nationalId to one already registered.
     if (nationalId !== undefined && nationalId && nationalId !== before.nationalId) {
       const [clash] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE "nationalId" = $1 AND id <> $2 LIMIT 1`,
+        `SELECT id FROM employees WHERE "nationalId" = $1 AND id <> $2 AND "deletedAt" IS NULL LIMIT 1`,
         [nationalId, Number(id)]
       );
       if (clash) {
@@ -843,7 +843,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // always carry "managerId".
     if (bodyManagerId !== undefined && bodyManagerId) {
       const [mgr] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 LIMIT 1`,
+        `SELECT id FROM employees WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(bodyManagerId)]
       );
       if (!mgr) {
@@ -964,7 +964,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
          FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
          LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
-        WHERE e.id = $1`,
+        WHERE e.id = $1 AND e."deletedAt" IS NULL`,
       [Number(id)]
     );
 
@@ -1032,7 +1032,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
     const [employee] = await rawQuery<any>(
       `SELECT e.id, ea.id AS "assignmentId" FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-       WHERE e.id = $1 AND ea."companyId" = $2`,
+       WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!employee) throw new NotFoundError("الموظف غير موجود");
@@ -1135,7 +1135,7 @@ router.post("/obligations/seed", requirePermission("hr:update"), async (req, res
       `SELECT e.id, e.name, e."iqamaExpiry", e."passportExpiry", e."workPermitExpiry", e."visaExpiry"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
-       WHERE ea."companyId"=$1 AND e.status='active'
+       WHERE ea."companyId"=$1 AND e.status='active' AND e."deletedAt" IS NULL
          AND (e."iqamaExpiry" IS NOT NULL OR e."passportExpiry" IS NOT NULL
               OR e."workPermitExpiry" IS NOT NULL OR e."visaExpiry" IS NOT NULL)`,
       [scope.companyId]

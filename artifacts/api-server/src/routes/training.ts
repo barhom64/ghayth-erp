@@ -11,7 +11,7 @@ router.use(authMiddleware);
 router.get("/programs", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM training_programs WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM training_programs WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "training"); }
 });
@@ -48,7 +48,7 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
 router.get("/programs/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }
@@ -58,7 +58,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
     const b = req.body;
     const sets: string[] = [];
@@ -75,7 +75,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "training_programs", entityId: id,
@@ -89,7 +89,7 @@ router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!program) throw new NotFoundError("البرنامج التدريبي غير موجود");
     await rawExecute(`UPDATE training_programs SET status='approved' WHERE id=$1`, [id]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'approved',$2,$3,$4)`, [id, req.body?.notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
@@ -104,7 +104,7 @@ router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req,
     const id = Number(req.params.id);
     const { notes } = req.body as any;
     if (!notes || !String(notes).trim()) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
-    const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!program) throw new NotFoundError("البرنامج التدريبي غير موجود");
     await rawExecute(`UPDATE training_programs SET status='rejected' WHERE id=$1`, [id]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'rejected',$2,$3,$4)`, [id, notes, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
@@ -117,7 +117,7 @@ router.delete("/programs/:id", requirePermission("hr:delete"), async (req, res) 
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
     await rawExecute(`DELETE FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
@@ -157,7 +157,7 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
         fix: "اختر موظفاً من القائمة أو أدخل اسمه",
       });
     }
-    const [prog] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2`, [programId, scope.companyId]);
+    const [prog] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [programId, scope.companyId]);
     if (!prog) throw new NotFoundError("البرنامج التدريبي غير موجود");
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
