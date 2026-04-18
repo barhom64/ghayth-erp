@@ -77,7 +77,19 @@ export default function TasksCreate() {
       return;
     }
     const payload: any = { ...form, assignedTo: user?.name || "" };
-    if (!payload.linkedEntityType) { delete payload.linkedEntityType; delete payload.linkedEntityId; }
+    if (!payload.linkedEntityType) {
+      delete payload.linkedEntityType;
+      delete payload.linkedEntityId;
+    } else if (payload.linkedEntityId) {
+      payload.linkedEntityId = Number(payload.linkedEntityId);
+      if (!Number.isFinite(payload.linkedEntityId) || payload.linkedEntityId <= 0) {
+        toast({ variant: "destructive", title: "يرجى اختيار الكيان المرتبط" });
+        return;
+      }
+    } else {
+      toast({ variant: "destructive", title: "يرجى اختيار الكيان المرتبط أو إزالة نوع الربط" });
+      return;
+    }
     try {
       await createMut.mutateAsync(payload);
       clearDraft();
