@@ -26,6 +26,7 @@ import {
   Autocomplete,
   type AutocompleteOption,
 } from "@/components/ui/autocomplete";
+import { Checkbox } from "@/components/ui/checkbox";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
@@ -657,15 +658,13 @@ function DisruptsOthersCheckbox() {
   return (
     <div className="flex flex-col justify-end">
       <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={checked}
-          onChange={(e) =>
-            setValue("disruptsOthers", e.target.checked, {
+          onCheckedChange={(v) =>
+            setValue("disruptsOthers", v === true, {
               shouldValidate: true,
             })
           }
-          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
         <div>
           <span className="text-sm font-medium">هل عطّل عمالاً آخرين؟</span>
@@ -1071,17 +1070,16 @@ function StepPenalty({
             {!resolution.warningOnly && (
               <div className="mt-4 pt-3 border-t border-gray-100">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={showManualOverride}
-                    onChange={(e) => {
-                      setShowManualOverride(e.target.checked);
-                      if (!e.target.checked) {
+                    onCheckedChange={(v) => {
+                      const checked = v === true;
+                      setShowManualOverride(checked);
+                      if (!checked) {
                         setValue("manualOverrideAmount", undefined);
                         setValue("manualOverrideReason", "");
                       }
                     }}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600"
                   />
                   <span className="text-sm text-gray-700">
                     تعديل يدوي للمبلغ

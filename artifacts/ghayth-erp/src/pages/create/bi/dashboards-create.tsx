@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function DashboardsCreate() {
   const [, setLocation] = useLocation();
@@ -32,7 +33,7 @@ export default function DashboardsCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -42,12 +43,10 @@ export default function DashboardsCreate() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><Label>اسم اللوحة</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="اسم لوحة المعلومات" /></div>
           <div className="flex items-center gap-2 pt-6">
-            <input
-              type="checkbox"
+            <Checkbox
               id="isDefault"
               checked={form.isDefault}
-              onChange={(e) => setForm((f) => ({ ...f, isDefault: e.target.checked }))}
-              className="h-4 w-4 rounded border"
+              onCheckedChange={(v) => setForm((f) => ({ ...f, isDefault: v === true }))}
             />
             <Label htmlFor="isDefault">لوحة افتراضية</Label>
           </div>

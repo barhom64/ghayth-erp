@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -452,8 +453,8 @@ export default function VouchersCreate() {
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-sm text-muted-foreground">البيان</h3>
           <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={form.autoDescription}
-              onChange={(e) => setField("autoDescription", e.target.checked)} />
+            <Checkbox checked={form.autoDescription}
+              onCheckedChange={(v) => setField("autoDescription", v === true)} />
             بيان تلقائي
           </label>
         </div>

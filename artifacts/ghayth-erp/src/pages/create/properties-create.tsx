@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
@@ -281,7 +282,7 @@ export default function PropertiesCreate() {
             </Select>
           </div>
           <div className="flex items-end gap-2 pb-1">
-            <input type="checkbox" id="hasKitchen" checked={form.hasKitchen} onChange={e => { setIsDirty(true); setForm(prev => ({ ...prev, hasKitchen: e.target.checked })); }} className="h-4 w-4" />
+            <Checkbox id="hasKitchen" checked={form.hasKitchen} onCheckedChange={(v) => { setIsDirty(true); setForm(prev => ({ ...prev, hasKitchen: v === true })); }} />
             <Label htmlFor="hasKitchen">مطبخ مجهز</Label>
           </div>
           <div>

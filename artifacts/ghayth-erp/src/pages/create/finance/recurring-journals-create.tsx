@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
@@ -136,7 +137,7 @@ export default function RecurringJournalsCreatePage() {
         </div>
         <div className="flex items-end">
           <label className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+            <Checkbox checked={active} onCheckedChange={(v) => setActive(v === true)} />
             نشط — يُنفَّذ تلقائياً عند حلول موعد الاستحقاق
           </label>
         </div>

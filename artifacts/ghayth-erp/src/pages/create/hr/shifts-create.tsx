@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
@@ -205,7 +206,7 @@ export default function ShiftsCreate() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" id="isDefault" checked={form.isDefault} onChange={(e) => setForm((f) => ({ ...f, isDefault: e.target.checked }))} />
+                <Checkbox id="isDefault" checked={form.isDefault} onCheckedChange={(v) => setForm((f) => ({ ...f, isDefault: v === true }))} />
                 <Label htmlFor="isDefault" className="text-sm cursor-pointer">وردية افتراضية</Label>
               </div>
             </div>

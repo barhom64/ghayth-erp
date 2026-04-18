@@ -63,7 +63,7 @@ export default function LegalCasesCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

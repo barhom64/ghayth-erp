@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function RequestsTypeCreate() {
   const [, setLocation] = useLocation();
@@ -38,7 +39,7 @@ export default function RequestsTypeCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-4">
@@ -58,12 +59,10 @@ export default function RequestsTypeCreate() {
             </Select>
           </div>
           <div className="flex items-center gap-2 pt-6">
-            <input
-              type="checkbox"
+            <Checkbox
               id="isActive"
               checked={form.isActive}
-              onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-              className="h-4 w-4 rounded border"
+              onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v === true }))}
             />
             <Label htmlFor="isActive">نشط</Label>
           </div>

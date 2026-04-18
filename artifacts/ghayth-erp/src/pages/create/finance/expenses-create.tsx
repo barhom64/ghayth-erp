@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
@@ -332,7 +333,7 @@ export default function ExpensesCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div data-form>
@@ -545,8 +546,8 @@ export default function ExpensesCreate() {
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm text-muted-foreground">البيان</h3>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.autoDescription}
-                onChange={(e) => setForm({ ...form, autoDescription: e.target.checked })} />
+              <Checkbox checked={form.autoDescription}
+                onCheckedChange={(v) => setForm({ ...form, autoDescription: v === true })} />
               توليد بيان تلقائي
             </label>
           </div>
@@ -607,8 +608,8 @@ export default function ExpensesCreate() {
               </Select>
             </div>
             <div className="flex items-center gap-3 mt-6">
-              <input type="checkbox" id="isPaid" checked={form.isPaid}
-                onChange={(e) => setForm({ ...form, isPaid: e.target.checked })} />
+              <Checkbox id="isPaid" checked={form.isPaid}
+                onCheckedChange={(v) => setForm({ ...form, isPaid: v === true })} />
               <label htmlFor="isPaid" className="text-sm cursor-pointer">تم الدفع</label>
             </div>
           </div>
@@ -621,11 +622,10 @@ export default function ExpensesCreate() {
               <h3 className="font-semibold text-sm text-blue-700">الربط بنظام حكومي</h3>
             </div>
             <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
+              <Checkbox
                 id="govSyncEnabled"
                 checked={!!form.govSyncEnabled}
-                onChange={(e) => setForm({ ...form, govSyncEnabled: e.target.checked })}
+                onCheckedChange={(v) => setForm({ ...form, govSyncEnabled: v === true })}
               />
               <label htmlFor="govSyncEnabled" className="text-sm cursor-pointer font-medium">
                 ربط هذا المصروف بنظام حكومي خارجي

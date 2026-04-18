@@ -10,6 +10,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Globe } from "lucide-react";
 
 const DRAFT_KEY = "clients_create";
@@ -139,12 +140,10 @@ export default function ClientsCreate() {
 
       <div className="mt-6 border rounded-lg p-4 bg-blue-50/50">
         <div className="flex items-center gap-3">
-          <input
-            type="checkbox"
+          <Checkbox
             id="createPortal"
             checked={createPortalAccount}
-            onChange={(e) => setCreatePortalAccount(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300"
+            onCheckedChange={(v) => setCreatePortalAccount(v === true)}
           />
           <label htmlFor="createPortal" className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
             <Globe className="h-4 w-4 text-blue-600" />

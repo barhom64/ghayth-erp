@@ -12,6 +12,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -121,10 +122,9 @@ export default function OpeningBalancesCreatePage() {
         </div>
         <div className="flex items-end gap-2">
           <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={force}
-              onChange={(e) => setForce(e.target.checked)}
+              onCheckedChange={(v) => setForce(v === true)}
             />
             استبدال أي قيد موجود لنفس الفترة
           </label>
