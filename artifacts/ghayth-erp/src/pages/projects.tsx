@@ -12,7 +12,6 @@ import { FolderKanban, Plus, Activity, CheckCircle, DollarSign, Eye } from "luci
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
 
 const PROJECT_STATUS_OPTIONS = [
@@ -28,7 +27,6 @@ export default function Projects() {
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: stats } = useApiQuery(["projects-stats", scopeQueryString], `/projects/stats/summary${scopeQueryString ? `?${scopeQueryString}` : ""}`);
   const [filters, setFilters] = useFilters();
-  const [previewItem, setPreviewItem] = useState<any>(null);
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const canManage = roleLevel >= 50;
@@ -58,17 +56,8 @@ export default function Projects() {
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "completed", label: "مكتمل" }, { value: "on_hold", label: "متوقف" }, { value: "cancelled", label: "ملغي" }] },
   ];
 
-  const previewFields: PreviewField[] = [
-    { label: "المشروع", key: "name" },
-    { label: "المدير", key: "managerName" },
-    { label: "الميزانية", key: "budget", type: "currency" },
-    { label: "تاريخ البدء", key: "startDate", type: "date" },
-    { label: "تاريخ الانتهاء", key: "endDate", type: "date" },
-    { label: "الحالة", key: "status", type: "status" },
-  ];
-
   const columns: DataTableColumn<any>[] = [
-    { key: "name", header: "المشروع", sortable: true, render: (p) => <span className="font-medium">{p.name}</span> },
+    { key: "name", header: "المشروع", sortable: true, render: (p) => <Link href={`/projects/${p.id}`}><span className="font-medium text-primary hover:underline cursor-pointer">{p.name}</span></Link> },
     { key: "clientName", header: "العميل", sortable: true, render: (p) => p.clientName || "-" },
     { key: "startDate", header: "البدء", sortable: true, render: (p) => formatDateAr(p.startDate) },
     { key: "endDate", header: "الانتهاء", sortable: true, render: (p) => formatDateAr(p.endDate) },
@@ -91,7 +80,9 @@ export default function Projects() {
       header: "الإجراءات",
       render: (p) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(p)}><Eye className="h-4 w-4" /></Button>
+          <Link href={`/projects/${p.id}`}>
+            <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
+          </Link>
           <RowActions
             canEdit={canManage}
             onEdit={() => startEdit(p.id, { name: p.name, budget: p.budget || 0, progress: p.progress || 0, status: p.status || "active" })}
@@ -193,7 +184,6 @@ export default function Projects() {
           />
         </CardContent>
       </Card>
-      <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة المشروع" data={previewItem} fields={previewFields} />
     </PageShell>
   );
 }
