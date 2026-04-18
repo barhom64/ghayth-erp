@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { auditLog } from "../lib/audit.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -118,7 +119,7 @@ router.get("/role-permissions", requirePermission("permissions:read"), async (re
   }
 });
 
-router.post("/role-permissions", requirePermission("permissions:write"), async (req, res) => {
+router.post("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { role, permission } = req.body as { role: string; permission: string };
@@ -137,22 +138,28 @@ router.post("/role-permissions", requirePermission("permissions:write"), async (
 
     invalidatePermissionCache(role, scope.companyId);
     await auditLog(req, "role_permissions", scope.companyId, "create", null, { role, permission, companyId: scope.companyId });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "role_permissions", entityId: scope.companyId, after: { role, permission } }).catch(console.error);
     res.status(201).json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Add role permission error:");
   }
 });
 
-router.delete("/role-permissions", requirePermission("permissions:write"), async (req, res) => {
+router.delete("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { role, permission } = req.body as { role: string; permission: string };
+    const [before] = await rawQuery<any>(
+      `SELECT * FROM role_permissions WHERE role = $1 AND permission = $2 AND "companyId" = $3`,
+      [role, permission, scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM role_permissions WHERE role = $1 AND permission = $2 AND "companyId" = $3`,
       [role, permission, scope.companyId]
     );
     invalidatePermissionCache(role, scope.companyId);
     await auditLog(req, "role_permissions", scope.companyId, "delete", { role, permission }, null);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "role_permissions", entityId: scope.companyId, before: before ?? { role, permission } }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete role permission error:");
@@ -177,7 +184,7 @@ router.get("/user-permissions", requirePermission("permissions:read"), async (re
   }
 });
 
-router.post("/user-permissions", requirePermission("permissions:write"), async (req, res) => {
+router.post("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { userId, permission, type = "grant" } = req.body as {
@@ -199,21 +206,27 @@ router.post("/user-permissions", requirePermission("permissions:write"), async (
     );
 
     await auditLog(req, "permissions", userId, "create", null, { userId, permission, type, companyId: scope.companyId });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "permissions", entityId: userId, after: { userId, permission, type } }).catch(console.error);
     res.status(201).json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Add user permission error:");
   }
 });
 
-router.delete("/user-permissions", requirePermission("permissions:write"), async (req, res) => {
+router.delete("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { userId, permission } = req.body as { userId: number; permission: string };
+    const [before] = await rawQuery<any>(
+      `SELECT * FROM permissions WHERE "userId" = $1 AND permission = $2 AND "companyId" = $3`,
+      [userId, permission, scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM permissions WHERE "userId" = $1 AND permission = $2 AND "companyId" = $3`,
       [userId, permission, scope.companyId]
     );
     await auditLog(req, "permissions", userId, "delete", { userId, permission }, null);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "permissions", entityId: userId, before: before ?? { userId, permission } }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete user permission error:");

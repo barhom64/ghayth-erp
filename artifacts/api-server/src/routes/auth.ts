@@ -5,6 +5,7 @@ import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../li
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { logger } from "../lib/logger.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -100,6 +101,11 @@ router.post("/login", loginLimiter, async (req, res) => {
           logger.error({ err: lockErr, userId: user.id }, "Failed to persist account lockout");
         }
         logger.warn({ userId: user.id }, "Account locked due to too many failed login attempts");
+        createAuditLog({
+          companyId: 0, userId: user.id,
+          action: "login_failed", entity: "users", entityId: user.id,
+          after: { email, reason: "account_locked", attempts },
+        }).catch(console.error);
         res.status(429).json({ error: `تم قفل الحساب لمدة ${LOCKOUT_MINUTES} دقيقة بسبب تكرار محاولات الدخول الفاشلة` });
       } else {
         try {
@@ -110,6 +116,11 @@ router.post("/login", loginLimiter, async (req, res) => {
         } catch (attemptsErr) {
           logger.error({ err: attemptsErr, userId: user.id }, "Failed to increment failed login attempts counter");
         }
+        createAuditLog({
+          companyId: 0, userId: user.id,
+          action: "login_failed", entity: "users", entityId: user.id,
+          after: { email, reason: "invalid_password", attempts },
+        }).catch(console.error);
         res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
       }
       return;
@@ -339,6 +350,10 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     } catch (revokeErr) {
       logger.error({ err: revokeErr, userId: scope.userId }, "Failed to revoke refresh tokens after password change");
     }
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "password_change", entity: "users", entityId: scope.userId,
+    }).catch(console.error);
     res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Change password error:");
