@@ -1,5 +1,7 @@
 import { useRoute, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -38,6 +40,7 @@ export default function LeadDetailPage() {
   const [, params] = useRoute("/crm/leads/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const queryClient = useQueryClient();
 
   const { data: lead, isLoading, isError, refetch } = useApiQuery<any>(
     ["crm-lead", id],
@@ -194,9 +197,32 @@ export default function LeadDetailPage() {
           label: "تحويل",
           icon: CheckCircle2,
           variant: "default",
-          onClick: () => {
-            // TODO: implement lead -> client conversion flow
-            console.log("TODO: convert lead to client", id);
+          onClick: async () => {
+            try {
+              const newClient = await apiFetch<any>("/clients", {
+                method: "POST",
+                body: JSON.stringify({
+                  name: lead?.contactName || lead?.title || "",
+                  email: lead?.email || "",
+                  phone: lead?.phone || "",
+                  company: lead?.clientName || "",
+                }),
+              });
+              await apiFetch(`/crm/opportunities/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: "converted" }),
+              });
+              queryClient.invalidateQueries({ queryKey: ["crm-lead", id] });
+              toast({ title: "تم تحويل العميل المحتمل إلى عميل بنجاح" });
+              const clientId = newClient?.id || newClient?.data?.id;
+              navigate(clientId ? `/clients/${clientId}` : "/clients");
+            } catch (err: any) {
+              toast({
+                variant: "destructive",
+                title: "تعذر تحويل العميل المحتمل",
+                description: err.message || "حدث خطأ أثناء التحويل",
+              });
+            }
           },
         },
         {

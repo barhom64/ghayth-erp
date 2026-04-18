@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -32,6 +34,7 @@ export default function TripDetailPage() {
   const [, params] = useRoute("/fleet/trips/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const queryClient = useQueryClient();
 
   // TODO: prefer dedicated GET /fleet/trips/:id endpoint — currently fetches list and filters
   const { data: tripsResp, isLoading, isError, refetch } = useApiQuery<any>(
@@ -214,9 +217,22 @@ export default function TripDetailPage() {
           label: "إكمال",
           icon: CheckCircle2,
           variant: "default",
-          onClick: () => {
-            // TODO: call POST /fleet/trips/:id/complete
-            console.log("TODO: complete trip", id);
+          onClick: async () => {
+            try {
+              await apiFetch(`/fleet/trips/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: "completed" }),
+              });
+              queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
+              toast({ title: "تم إكمال الرحلة بنجاح" });
+              refetch();
+            } catch (err: any) {
+              toast({
+                variant: "destructive",
+                title: "تعذر إكمال الرحلة",
+                description: err.message || "حدث خطأ",
+              });
+            }
           },
           disabled: trip?.status === "completed" || trip?.status === "cancelled",
         },
@@ -224,10 +240,22 @@ export default function TripDetailPage() {
           label: "إلغاء",
           icon: XCircle,
           variant: "outline",
-          onClick: () => {
-            // TODO: implement trip cancel flow
-            console.log("TODO: cancel trip", id);
-            navigate("/fleet/trips");
+          onClick: async () => {
+            try {
+              await apiFetch(`/fleet/trips/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: "cancelled" }),
+              });
+              queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
+              toast({ title: "تم إلغاء الرحلة" });
+              navigate("/fleet/trips");
+            } catch (err: any) {
+              toast({
+                variant: "destructive",
+                title: "تعذر إلغاء الرحلة",
+                description: err.message || "حدث خطأ",
+              });
+            }
           },
           disabled: trip?.status === "completed" || trip?.status === "cancelled",
         },
