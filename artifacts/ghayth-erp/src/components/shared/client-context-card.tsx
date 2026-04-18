@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ClientContextSection = "invoice" | "opportunity" | "ticket" | "project";
+export type ClientContextSection = "invoice" | "opportunity" | "ticket" | "project" | "contract";
 
 export interface ClientContextCardProps {
   clientId: string | number | null | undefined;

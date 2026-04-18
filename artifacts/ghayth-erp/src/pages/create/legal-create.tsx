@@ -1,17 +1,19 @@
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
-import { useApiMutation, apiFetch } from "@/lib/api";
+import { useApiMutation, useApiQuery, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { DatePicker } from "@/components/ui/date-picker";
+import { ClientContextCard } from "@/components/shared/client-context-card";
 
 export default function LegalCreate() {
   const [, setLocation] = useLocation();
@@ -22,6 +24,8 @@ export default function LegalCreate() {
     startDate: "", endDate: "", notes: "",
   });
   const addContract = useApiMutation("/legal/contracts", "POST", [["legal-contracts"], ["legal-stats"]]);
+  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/crm/clients");
+  const clients = clientsData?.data || [];
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const search = useSearch();
   const copyFromId = new URLSearchParams(search).get("copyFrom");
@@ -112,8 +116,25 @@ export default function LegalCreate() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label>اسم الطرف الآخر</Label><Input className="mt-1" value={form.partyName} onChange={(e) => setForm(f => ({ ...f, partyName: e.target.value }))} placeholder="اسم الطرف" /></div>
+          <div>
+            <Label>الطرف الآخر (عميل)</Label>
+            <Autocomplete
+              className="mt-1"
+              value={form.partyName}
+              onChange={(v) => setForm(f => ({ ...f, partyName: String(v) }))}
+              options={clients.map((c: any) => ({ value: String(c.id), label: c.name, subtitle: c.phone || c.email || "" }))}
+              placeholder="ابحث عن العميل..."
+              emptyMessage="لا يوجد عملاء"
+            />
+          </div>
           <div><Label>بيانات الاتصال</Label><Input className="mt-1" value={form.partyContact} onChange={(e) => setForm(f => ({ ...f, partyContact: e.target.value }))} placeholder="هاتف أو بريد" /></div>
+        </div>
+        {form.partyName && (
+          <div className="md:col-span-2">
+            <ClientContextCard clientId={form.partyName} section="contract" />
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><Label>{`القيمة (${getCurrencySymbol()})`}</Label><Input className="mt-1" type="number" step="0.01" value={form.value} onChange={(e) => setForm(f => ({ ...f, value: e.target.value }))} placeholder="٠" /></div>
           <div>
             <Label>الحالة</Label>

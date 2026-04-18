@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { asList } from "@/lib/api";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { Calendar, Info, Clock, User } from "lucide-react";
 
 const DRAFT_KEY = "hr_leaves_create";
@@ -38,6 +39,8 @@ export default function LeavesCreate() {
 
   const balanceQ = useApiQuery<any>(["leave-balance"], "/hr/leave-balance");
   const balances = balanceQ.data?.data || balanceQ.data?.balances || [];
+  const { data: empData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const employees = empData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
     leaveTypeId: copyLeaveType || "",
@@ -199,7 +202,14 @@ export default function LeavesCreate() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>المكلّف بالعمل أثناء الإجازة</Label>
-              <Input className="mt-1" value={form.reliefOfficer} onChange={(e) => setForm((f) => ({ ...f, reliefOfficer: e.target.value }))} placeholder="اسم الزميل المكلّف..." />
+              <Autocomplete
+                className="mt-1"
+                value={form.reliefOfficer}
+                onChange={(v) => setForm((f) => ({ ...f, reliefOfficer: String(v) }))}
+                options={employees.map((e: any) => ({ value: String(e.id), label: e.name, subtitle: e.jobTitle || e.departmentName || "" }))}
+                placeholder="ابحث عن الزميل المكلّف..."
+                emptyMessage="لا يوجد موظفين"
+              />
               <p className="text-xs text-muted-foreground mt-1">من سيتولى المهام أثناء غيابك</p>
             </div>
             <div>
