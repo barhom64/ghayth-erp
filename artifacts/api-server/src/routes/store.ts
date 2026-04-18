@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -9,6 +10,37 @@ import {
   emitEvent,
   createAuditLog,
 } from "../lib/businessHelpers.js";
+
+const createStoreProductSchema = z.object({
+  name: z.string().min(1, "اسم المنتج مطلوب"),
+  description: z.string().optional().nullable(),
+  sku: z.string().optional().nullable(),
+  price: z.number().min(0, "السعر يجب أن يكون 0 أو أكثر").optional().default(0),
+  costPrice: z.number().min(0, "سعر التكلفة يجب أن يكون 0 أو أكثر").optional().default(0),
+  quantity: z.number().int().min(0).optional().default(0),
+  category: z.string().optional().nullable(),
+  status: z.enum(["active", "inactive", "draft"]).optional().default("active"),
+  imageUrl: z.string().url("رابط الصورة غير صالح").optional().nullable(),
+});
+
+const createStoreOrderSchema = z.object({
+  orderNumber: z.string().optional().nullable(),
+  customerName: z.string().optional().nullable(),
+  customerPhone: z.string().optional().nullable(),
+  status: z.enum(["pending", "processing", "completed", "cancelled"]).optional().default("pending"),
+  totalAmount: z.number().min(0, "المبلغ الإجمالي يجب أن يكون 0 أو أكثر").optional().default(0),
+  items: z.array(z.object({
+    productId: z.number().optional().nullable(),
+    productName: z.string().optional().nullable(),
+    name: z.string().optional().nullable(),
+    quantity: z.number().min(1).optional().default(1),
+    unitPrice: z.number().min(0).optional(),
+    price: z.number().min(0).optional(),
+    notes: z.string().optional().nullable(),
+  })).optional().default([]),
+  notes: z.string().optional().nullable(),
+  branchId: z.number().optional().nullable(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -34,7 +66,12 @@ router.get("/products", requirePermission("store:read"), async (req, res) => {
 router.post("/products", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, description, sku, price, costPrice, quantity, category, status, imageUrl } = req.body;
+    const parsed = createStoreProductSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    const { name, description, sku, price, costPrice, quantity, category, status, imageUrl } = parsed.data;
     const r = await rawExecute(
       `INSERT INTO store_products (name, description, sku, price, "costPrice", quantity, category, status, "imageUrl", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [name, description, sku, price || 0, costPrice || 0, quantity || 0, category, status || "active", imageUrl, scope.companyId]
@@ -114,10 +151,15 @@ router.get("/orders", requirePermission("store:read"), async (req, res) => {
 router.post("/orders", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = req.body;
+    const parsed = createStoreOrderSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = parsed.data;
     const r = await rawExecute(
       `INSERT INTO store_orders ("orderNumber", "customerName", "customerPhone", status, "totalAmount", items, notes, "companyId", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [orderNumber || `ORD-${Date.now()}`, customerName, customerPhone, status || "pending", totalAmount || 0, items ? JSON.stringify(items) : '[]', notes, scope.companyId, branchId || scope.branchId || null]
+      [orderNumber || `ORD-${Date.now()}`, customerName, customerPhone, status, totalAmount, items ? JSON.stringify(items) : '[]', notes, scope.companyId, branchId || scope.branchId || null]
     );
     const orderId = r.insertId;
     if (Array.isArray(items) && items.length > 0) {

@@ -1,11 +1,21 @@
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
+
+const createClientSchema = z.object({
+  name: z.string().min(1, "اسم العميل مطلوب"),
+  phone: z.string().optional().nullable(),
+  email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
+  classification: z.enum(["regular", "vip", "prospect", "wholesale"]).optional().default("regular"),
+  source: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -59,21 +69,19 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const scope = req.scope!;
+    const parsed = createClientSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
+      return;
+    }
     const {
       name,
       phone,
       email,
-      classification = "regular",
+      classification,
       source,
       notes,
-    } = req.body as any;
-
-    if (!name || !String(name).trim()) {
-      throw new ValidationError("اسم العميل مطلوب", {
-        field: "name",
-        fix: "أدخل اسم العميل الكامل",
-      });
-    }
+    } = parsed.data;
 
     const { insertId } = await rawExecute(
       `INSERT INTO clients (name, phone, email, classification, source, notes, "companyId", "isBlacklisted")
