@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -18,13 +19,19 @@ export default function TaxSystemPage() {
   const [submissionPage, setSubmissionPage] = useState(1);
   const [submissionStatus, setSubmissionStatus] = useState("");
 
-  const { data: summary, isLoading: summaryLoading } = useApiQuery<any>(["tax-summary", period], `/finance/tax/summary?period=${period}`);
-  const { data: declarations, isLoading: declLoading } = useApiQuery<any>(["tax-declarations"], "/finance/tax/declarations");
+  const { data: summary, isLoading: summaryLoading, isError: summaryError } = useApiQuery<any>(["tax-summary", period], `/finance/tax/summary?period=${period}`);
+  const { data: declarations, isLoading: declLoading, isError: declError } = useApiQuery<any>(["tax-declarations"], "/finance/tax/declarations");
   const { data: zatcaSettings } = useApiQuery<any>(["zatca-settings-status"], "/finance/zatca/settings");
   const { data: submissionsData, isLoading: submissionsLoading, refetch: refetchSubmissions } = useApiQuery<any>(
     ["zatca-submissions", String(submissionPage), submissionStatus],
     `/finance/zatca/submissions?page=${submissionPage}&limit=20${submissionStatus ? `&status=${submissionStatus}` : ""}`
   );
+
+  const isLoading = summaryLoading || declLoading;
+  const isError = summaryError || declError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const declItems = declarations?.data || [];
 

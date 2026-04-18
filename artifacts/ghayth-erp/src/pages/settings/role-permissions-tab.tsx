@@ -6,13 +6,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Shield, Pencil, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function RolePermissionsTab() {
-  const { data, refetch } = useApiQuery<any>(["role-modules"], "/settings/role-modules");
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["role-modules"], "/settings/role-modules");
   const { toast } = useToast();
   const roles = data?.data || [];
   const [editingRole, setEditingRole] = useState<string | null>(null);
   const [editModules, setEditModules] = useState<string[]>([]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const allModules = [
     { key: "home", label: "الرئيسية" }, { key: "hr", label: "الموارد البشرية" },

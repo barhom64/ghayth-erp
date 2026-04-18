@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function WorkflowDefinitionsTab() {
-  const { data, refetch } = useApiQuery<any>(["workflow-definitions"], "/workflows/definitions");
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["workflow-definitions"], "/workflows/definitions");
   const { data: slaData, refetch: refetchSla } = useApiQuery<any>(["sla-definitions"], "/workflows/sla-definitions");
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -58,6 +59,9 @@ export function WorkflowDefinitionsTab() {
 
   const defs = asList(data?.data ?? data);
   const slas = asList(slaData?.data ?? slaData);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const resetForm = () => {
     setForm({

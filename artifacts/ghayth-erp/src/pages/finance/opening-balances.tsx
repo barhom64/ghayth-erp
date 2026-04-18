@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,9 @@ export default function OpeningBalancesPage() {
     ["opening-balances", scopeQueryString],
     `/finance/opening-balances${scopeSuffix}`
   );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const items: OpeningBalance[] = (data?.data || []).map((r: any) => ({
     ...r,
     totalDebit: Number(r.totalDebit || 0),

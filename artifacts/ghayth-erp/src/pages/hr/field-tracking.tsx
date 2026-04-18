@@ -9,6 +9,7 @@ import "leaflet/dist/leaflet.css";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const defaultCenter: [number, number] = [24.7136, 46.6753];
 
@@ -74,8 +75,11 @@ function AttendanceMap({ items }: { items: any[] }) {
 }
 
 export default function FieldTrackingPage() {
-  const { data } = useApiQuery<any>(["attendance"], "/hr/attendance");
+  const { data, isLoading, isError } = useApiQuery<any>(["attendance"], "/hr/attendance");
   const items = asList(data);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const kpis = [
     { label: "تسجيلات اليوم", value: items.length, icon: Navigation, color: "text-blue-600 bg-blue-50" },

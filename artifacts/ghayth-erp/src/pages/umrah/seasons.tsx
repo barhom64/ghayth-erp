@@ -16,6 +16,9 @@ export default function UmrahSeasons() {
   const [form, setForm] = useState<any>({});
   const { toast } = useToast();
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const save = async () => {
     try {
       await apiFetch("/umrah/seasons", { method: "POST", body: JSON.stringify(form) });

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Pencil, RefreshCw, AlertTriangle } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const SECTION_LABELS: Record<string, string> = {
   work_time: "مخالفات تتعلق بمواعيد العمل",
@@ -42,7 +43,7 @@ interface Article {
 }
 
 export default function DisciplineRegulationPage() {
-  const { data, isLoading } = useApiQuery<{
+  const { data, isLoading, isError } = useApiQuery<{
     data: Article[];
     grouped: Record<string, Article[]>;
     sections: Record<string, string>;
@@ -72,6 +73,9 @@ export default function DisciplineRegulationPage() {
     { successMessage: "تم استنساخ اللائحة الافتراضية" }
   );
   const reseeding = reseedMut.isPending;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const saveEdit = () => {
     if (!editing) return;

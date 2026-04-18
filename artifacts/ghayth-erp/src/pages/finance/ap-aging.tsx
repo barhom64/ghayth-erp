@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,9 @@ export default function ApAgingPage() {
     ["ap-aging", asOfDate],
     `/finance/ap-aging?asOfDate=${asOfDate}`
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const suppliers = (data?.suppliers || []) as any[];
   const summary = data?.summary || {};

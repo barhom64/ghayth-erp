@@ -10,16 +10,23 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function AttendanceReportsPage() {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [filters, setFilters] = useFilters();
-  const { data: statsData } = useApiQuery<any>(["attendance-stats", month], `/hr/attendance-stats?month=${month}`);
-  const { data: monthlyData } = useApiQuery<any>(["monthly-attendance", month], `/hr/monthly-attendance?month=${month}`);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["attendance-stats", month], `/hr/attendance-stats?month=${month}`);
+  const { data: monthlyData, isLoading: monthlyLoading, isError: monthlyError } = useApiQuery<any>(["monthly-attendance", month], `/hr/monthly-attendance?month=${month}`);
   const { data: deductionsData } = useApiQuery<any>(["deductions", month], `/hr/deductions?month=${month}`);
   const stats = statsData || {};
   const monthly: any[] = monthlyData?.data || [];
   const deductions: any[] = deductionsData?.data || [];
+  const isLoading = statsLoading || monthlyLoading;
+  const isError = statsError || monthlyError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const filteredMonthly = applyFilters(monthly, filters, { searchFields: ["employeeName"] });
   const filteredDeductions = applyFilters(deductions, filters, { searchFields: ["employeeName"], statusField: "status" });
 

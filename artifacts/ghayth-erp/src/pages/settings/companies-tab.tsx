@@ -12,7 +12,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 export function CompaniesTab() {
   const { refreshFilters } = useAppContext();
-  const { data, refetch } = useApiQuery<any>(["settings-companies"], "/settings/companies");
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["settings-companies"], "/settings/companies");
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -21,6 +21,9 @@ export function CompaniesTab() {
   const [form, setForm] = useState({ name: "", nameEn: "", taxNumber: "", crNumber: "" });
   const [lastBootstrapOps, setLastBootstrapOps] = useState<string[] | null>(null);
   const items = asList(data);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const resetForm = () => {
     setForm({ name: "", nameEn: "", taxNumber: "", crNumber: "" });

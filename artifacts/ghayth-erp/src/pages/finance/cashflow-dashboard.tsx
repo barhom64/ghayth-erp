@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -39,12 +40,12 @@ export default function CashflowDashboard() {
   const qstr = scopeQueryString ? `?${scopeQueryString}` : "";
   const [period, setPeriod] = useState<"month" | "quarter" | "year">("month");
 
-  const { data: summaryData, isLoading: summaryLoading, refetch: refetchSummary } = useApiQuery<any>(
+  const { data: summaryData, isLoading: summaryLoading, isError: summaryError, refetch: refetchSummary } = useApiQuery<any>(
     ["finance-summary", scopeQueryString, period],
     `/finance/summary?period=${period}${qstr ? "&" + scopeQueryString : ""}`
   );
 
-  const { data: budgetData, isLoading: budgetLoading } = useApiQuery<any>(
+  const { data: budgetData, isLoading: budgetLoading, isError: budgetError } = useApiQuery<any>(
     ["budget-actual", scopeQueryString, period],
     `/finance/budget-vs-actual?period=${period}${qstr ? "&" + scopeQueryString : ""}`
   );
@@ -58,6 +59,12 @@ export default function CashflowDashboard() {
     ["finance-expenses-recent"],
     `/finance/expenses?limit=5${qstr ? "&" + scopeQueryString : ""}`
   );
+
+  const isLoading = summaryLoading || budgetLoading;
+  const isError = summaryError || budgetError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const summary = summaryData?.data || summaryData || {};
   const budget = budgetData?.data || budgetData || {};
