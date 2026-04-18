@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,8 +66,8 @@ export default function ScheduledReportsPage() {
       toast({ title: "تم إنشاء جدولة التقرير" });
       setShowForm(false);
       setForm({ reportType: "trial-balance", title: "", frequency: "weekly", recipients: "", isActive: true });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 
@@ -208,16 +208,16 @@ function ScheduledReportCard({ item }: { item: any }) {
     try {
       await deleteMut.mutateAsync({});
       toast({ title: "تم حذف الجدولة" });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 
   const handleToggle = async (v: boolean) => {
     try {
       await toggleMut.mutateAsync({ isActive: v });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 

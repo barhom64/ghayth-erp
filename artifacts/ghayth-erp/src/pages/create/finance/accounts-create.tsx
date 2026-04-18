@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useApiMutation, useApiQuery, getErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,8 +30,8 @@ export default function AccountsCreate() {
       clearDraft();
       toast({ title: "تم إضافة الحساب" });
       setLocation("/finance/accounts");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 

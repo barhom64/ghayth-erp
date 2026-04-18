@@ -69,7 +69,7 @@ function ContractsTab() {
 
   const filtered = applyFilters(contracts, filters, {
     searchFields: ["title", "partyName", "contractType"],
-    statusField: "",
+    statusField: "status",
     dateField: "",
   });
 
@@ -191,7 +191,7 @@ function CasesTab() {
 
   const filtered = applyFilters(cases, filters, {
     searchFields: ["title", "opposingParty", "caseNumber"],
-    statusField: "",
+    statusField: "status",
   });
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({

@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { getCurrencySymbol, formatDateAr } from "@/lib/formatters";
 import { useRoute, Link, useLocation } from "wouter";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, apiFetch, asList, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { STATUSES } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
@@ -98,8 +98,8 @@ export default function OpportunityDetail() {
       setEditing(false);
       qc.invalidateQueries({ queryKey: ["opportunity-detail", id] });
       qc.invalidateQueries({ queryKey: ["opportunities"] });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 
@@ -108,8 +108,8 @@ export default function OpportunityDetail() {
       await apiFetch(`/crm/opportunities/${id}`, { method: "DELETE" });
       toast({ title: "تم حذف الفرصة" });
       navigate("/crm");
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 

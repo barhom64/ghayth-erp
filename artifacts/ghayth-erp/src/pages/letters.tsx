@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Mail, Send, Inbox, FileText, Search, Plus, FileSignature, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList, getErrorMessage } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
@@ -67,8 +67,8 @@ function HROfficialLettersTab() {
       toast({ title: "تم إنشاء الخطاب" });
       setShowForm(false);
       setForm({ employeeId: "", type: "general", subject: "", content: "" });
-    } catch {
-      toast({ variant: "destructive", title: "حدث خطأ" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
 
