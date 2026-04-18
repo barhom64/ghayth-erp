@@ -13,6 +13,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Star, Target, TrendingUp, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
 interface Competency {
   name: string;
@@ -182,10 +183,8 @@ export default function PerformanceCreate() {
             </div>
           </div>
           {selectedEmployee && (
-            <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground bg-gray-50 rounded-lg p-2">
-              <span>القسم: {selectedEmployee.departmentName || "-"}</span>
-              <span>الفرع: {selectedEmployee.branchName || "-"}</span>
-              <span>المنصب: {selectedEmployee.jobTitle || "-"}</span>
+            <div className="mt-4">
+              <EmployeeContextCard employeeId={selectedEmployee.id} section="violations" />
             </div>
           )}
         </div>

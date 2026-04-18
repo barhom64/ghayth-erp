@@ -15,6 +15,7 @@ import { EXIT_TYPES } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
 import { LogOut, User, Calendar, Info, DollarSign, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
 const DRAFT_KEY = "hr_exit_create";
 
@@ -133,13 +134,6 @@ export default function ExitCreate() {
                 ))}
               </SelectContent>
             </Select>
-            {selectedEmployee && (
-              <div className="text-xs text-gray-500 space-y-0.5">
-                {salary > 0 && <p>الراتب: {formatCurrency(salary)}</p>}
-                {hireDate && <p>تاريخ التعيين: {new Date(hireDate).toLocaleDateString("ar-SA")}</p>}
-                {yearsOfService > 0 && <p>مدة الخدمة: {yearsOfService.toFixed(1)} سنة</p>}
-              </div>
-            )}
           </div>
 
           <div className="space-y-2">
@@ -186,6 +180,11 @@ export default function ExitCreate() {
             />
           </div>
         </div>
+
+        {/* سياق الموظف: سلف نشطة + مخالفات + إجازات مستحقة */}
+        {selectedEmployee && (
+          <EmployeeContextCard employeeId={selectedEmployee.id} section="loans" />
+        )}
 
         {/* تقدير المستحقات */}
         {selectedEmployee && salary > 0 && (
