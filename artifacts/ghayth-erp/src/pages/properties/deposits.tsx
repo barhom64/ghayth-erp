@@ -11,13 +11,14 @@ import { Vault, Plus, RotateCcw, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function DepositsPage() {
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({ contractId: "", amount: "", receivedDate: new Date().toISOString().split("T")[0], notes: "" });
 
-  const { data, refetch } = useApiQuery<any>(
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["deposits", statusFilter],
     `/properties/deposits${statusFilter !== "all" ? `?status=${statusFilter}` : ""}`
   );
@@ -54,6 +55,9 @@ export default function DepositsPage() {
       toast({ title: "تم استرداد الوديعة" });
     } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

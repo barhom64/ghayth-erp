@@ -18,6 +18,7 @@ import {
   Clock, Headphones, FileText, Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -78,9 +79,10 @@ function StatBox({ label, value, sub, icon: Icon, color = "blue", change }: {
 
 function DailyReportTab() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const { data, isLoading } = useApiQuery<any>(["admin-report-daily", date], `/bi/admin-reports/daily?date=${date}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["admin-report-daily", date], `/bi/admin-reports/daily?date=${date}`);
 
-  if (isLoading) return <div className="text-center py-12 text-muted-foreground">جاري التحميل...</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   return (
@@ -163,9 +165,10 @@ function DailyReportTab() {
 }
 
 function WeeklyReportTab() {
-  const { data, isLoading } = useApiQuery<any>(["admin-report-weekly"], "/bi/admin-reports/weekly");
+  const { data, isLoading, isError } = useApiQuery<any>(["admin-report-weekly"], "/bi/admin-reports/weekly");
 
-  if (isLoading) return <div className="text-center py-12 text-muted-foreground">جاري التحميل...</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   const { current, previous, changes, period } = data;
@@ -234,9 +237,10 @@ function WeeklyReportTab() {
 }
 
 function MonthlyReportTab() {
-  const { data, isLoading } = useApiQuery<any>(["admin-report-monthly"], "/bi/admin-reports/monthly");
+  const { data, isLoading, isError } = useApiQuery<any>(["admin-report-monthly"], "/bi/admin-reports/monthly");
 
-  if (isLoading) return <div className="text-center py-12 text-muted-foreground">جاري التحميل...</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   const { current, previous, changes, weeklyTrend, period } = data;

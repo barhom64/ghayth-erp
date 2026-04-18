@@ -6,6 +6,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 import { LayoutDashboard, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function DashboardsTab() {
   const { data: dashResp, isLoading, isError, refetch } = useApiQuery<any>(["bi-dashboards"], "/bi/dashboards");
@@ -16,6 +17,9 @@ export function DashboardsTab() {
   const filtered = applyFilters(items, filters, {
     searchFields: ["title", "description"],
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   return (
     <div className="space-y-4">

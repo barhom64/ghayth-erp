@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function ContractDetailPage() {
   const [, params] = useRoute("/properties/contracts/:id");

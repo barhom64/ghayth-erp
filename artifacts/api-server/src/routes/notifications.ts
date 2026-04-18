@@ -21,7 +21,7 @@ router.get("/", requirePermission("notifications:read"), async (req, res) => {
       [scope.activeAssignmentId]
     );
 
-    res.json(notifications);
+    res.json({ data: notifications, total: notifications.length, page: 1, pageSize: notifications.length });
   } catch (err) {
     handleRouteError(err, res, "List notifications error:");
   }

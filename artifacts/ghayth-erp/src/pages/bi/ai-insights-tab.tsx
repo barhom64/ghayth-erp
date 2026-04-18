@@ -10,11 +10,12 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function AIInsightsTab() {
   const [dismissingId, setDismissingId] = useState<number | null>(null);
   const { toast } = useToast();
-  const { data, isLoading, refetch } = useApiQuery<any>(["bi-ai-insights"], "/bi/ai-insights");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["bi-ai-insights"], "/bi/ai-insights");
   const alerts = (data?.alerts || []) as any[];
   const counts = data?.counts || {};
   const proactive = (data?.proactiveActions || []) as any[];
@@ -36,6 +37,9 @@ export function AIInsightsTab() {
     warning: { label: "مهم", color: "text-amber-700", bg: "bg-amber-50 border-amber-200" },
     info: { label: "معلوماتي", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

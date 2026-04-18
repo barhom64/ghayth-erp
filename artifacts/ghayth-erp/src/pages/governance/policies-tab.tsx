@@ -14,6 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function PoliciesTab() {
   const { data: policiesResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-policies"], "/governance/policies");
@@ -98,6 +99,9 @@ export function PoliciesTab() {
       ),
     },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

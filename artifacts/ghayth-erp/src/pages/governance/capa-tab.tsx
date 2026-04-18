@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function CAPATab() {
   const { data: capaResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-capa"], "/governance/capa");
@@ -64,6 +65,9 @@ export function CAPATab() {
     { label: "تاريخ الاستحقاق", key: "dueDate", type: "date" },
     { label: "الحالة", key: "status", type: "status" },
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">
