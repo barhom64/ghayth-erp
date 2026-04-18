@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ClipboardCheck, Plus, Package, CheckCircle, ChevronDown, ChevronUp, ArrowUp, ArrowDown } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function InventoryCountPage() {
   const [showForm, setShowForm] = useState(false);
@@ -17,7 +18,7 @@ export default function InventoryCountPage() {
   const [physicalCounts, setPhysicalCounts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ countDate: new Date().toISOString().split("T")[0], notes: "", warehouseLocation: "" });
 
-  const { data, refetch } = useApiQuery<any>(["inventory-counts"], "/warehouse/inventory-counts");
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["inventory-counts"], "/warehouse/inventory-counts");
   const counts = asList(data?.data || data);
 
   const { data: products } = useApiQuery<any>(["warehouse-products"], "/warehouse/products?limit=500");
@@ -77,6 +78,9 @@ export default function InventoryCountPage() {
       refetch();
     } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">

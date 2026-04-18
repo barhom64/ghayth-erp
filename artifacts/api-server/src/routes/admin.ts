@@ -1,5 +1,6 @@
 import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -12,6 +13,30 @@ import crypto from "crypto";
 
 const router = Router();
 router.use(authMiddleware);
+
+const createUserSchema = z.object({
+  email: z.string().min(1, "البريد الإلكتروني مطلوب"),
+  role: z.string().optional(),
+  password: z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").optional(),
+  employeeId: z.number().optional(),
+});
+
+const resetPasswordSchema = z.object({
+  newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل"),
+});
+
+const createRoleSchema = z.object({
+  name: z.string().min(1, "اسم الدور مطلوب"),
+  description: z.string().optional(),
+  permissions: z.array(z.string()).optional(),
+});
+
+const createIntegrationSchema = z.object({
+  name: z.string().min(1, "اسم التكامل مطلوب"),
+  type: z.string().min(1, "نوع التكامل مطلوب"),
+  config: z.any().optional(),
+  enabled: z.boolean().optional(),
+});
 
 const resetPasswordLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -77,8 +102,12 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return;
     const scope = req.scope!;
-    const { email, role, password, employeeId } = req.body;
-    if (!email) { res.status(400).json({ error: "البريد الإلكتروني مطلوب" }); return; }
+    const parsed = createUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
+      return;
+    }
+    const { email, role, password, employeeId } = parsed.data;
     if (employeeId) {
       const [empCheck] = await rawQuery(
         `SELECT 1 FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 LIMIT 1`,
@@ -248,8 +277,12 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
       [id, scope.companyId]
     );
     if (!userBelongs) { res.status(403).json({ error: "المستخدم لا ينتمي لشركتك" }); return; }
-    const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) { res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }); return; }
+    const parsed = resetPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
+      return;
+    }
+    const { newPassword } = parsed.data;
     const hashed = await hashPassword(newPassword);
     const result = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, id]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "المستخدم غير موجود" }); return; }
@@ -273,6 +306,15 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return;
     const scope = req.scope!;
+    const parsed = createRoleSchema.safeParse({
+      name: req.body?.label,
+      description: req.body?.description,
+      permissions: req.body?.permissions,
+    });
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
+      return;
+    }
     const { roleKey, label, level, modules, permissions: rolePermissions } = req.body;
     if (!roleKey || !label) { res.status(400).json({ error: "roleKey و label مطلوبان" }); return; }
     if (!/^[a-z_]+$/.test(roleKey)) { res.status(400).json({ error: "roleKey يجب أن يحتوي على أحرف إنجليزية صغيرة وشرطات سفلية فقط" }); return; }
@@ -445,6 +487,11 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
   try {
     if (!await requireAdmin(req, res)) return;
     const scope = req.scope!;
+    const parsed = createIntegrationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
+      return;
+    }
     const { type, name, config, status, maxRetries } = req.body;
     const r = await rawExecute(
       `INSERT INTO integrations ("companyId",type,name,config,status,"maxRetries")

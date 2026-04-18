@@ -11,6 +11,7 @@ import { ShieldAlert, Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const RISK_LEVEL_COLORS: Record<string, string> = {
   low: "bg-green-100 text-green-700",
@@ -35,7 +36,7 @@ export default function RisksPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", probability: "3", impact: "3", mitigationPlan: "" });
 
-  const { data: projects } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
+  const { data: projects, isLoading, isError } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
   const projectList = asList(projects?.data || projects);
 
   const { data, refetch } = useApiQuery<any>(
@@ -69,6 +70,9 @@ export default function RisksPage() {
 
   const criticalCount = risks.filter((r: any) => r.riskLevel === "critical").length;
   const highCount = risks.filter((r: any) => r.riskLevel === "high").length;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

@@ -12,9 +12,71 @@ import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
+import { z } from "zod";
 
 const router = Router();
 router.use(authMiddleware);
+
+const createContractSchema = z.object({
+  title: z.string().min(1, "عنوان العقد مطلوب"),
+  partyName: z.string().min(1, "اسم الطرف الآخر مطلوب"),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().optional(),
+  value: z.number().optional(),
+  ref: z.string().optional(),
+  contractType: z.string().optional(),
+  partyContact: z.string().optional(),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const createCaseSchema = z.object({
+  title: z.string().min(1, "عنوان القضية مطلوب"),
+  caseType: z.string().optional(),
+  priority: z.string().optional(),
+  caseNumber: z.string().optional(),
+  court: z.string().optional(),
+  filingDate: z.string().optional(),
+  opposingParty: z.string().optional(),
+  lawyerName: z.string().optional(),
+  status: z.string().optional(),
+  description: z.string().optional(),
+});
+
+const createSessionSchema = z.object({
+  sessionDate: z.string().min(1, "تاريخ الجلسة مطلوب"),
+  location: z.string().optional(),
+  judge: z.string().optional(),
+  result: z.string().optional(),
+  nextSessionDate: z.string().optional(),
+  notes: z.string().optional(),
+  hoursSpent: z.number().optional(),
+  hourlyRate: z.number().optional(),
+  courtLat: z.number().optional(),
+  courtLon: z.number().optional(),
+  officeLat: z.number().optional(),
+  officeLon: z.number().optional(),
+});
+
+const createCorrespondenceSchema = z.object({
+  direction: z.string().min(1, "اتجاه المراسلة مطلوب"),
+  subject: z.string().min(1, "موضوع المراسلة مطلوب"),
+  parties: z.string().optional(),
+  correspondenceDate: z.string().optional(),
+  documentRef: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const createJudgmentSchema = z.object({
+  judgmentDate: z.string().min(1, "تاريخ الحكم مطلوب"),
+  verdict: z.string().min(1, "الحكم مطلوب"),
+  amount: z.number().optional(),
+  judgmentType: z.string().optional(),
+  paidAmount: z.number().optional(),
+  dueDate: z.string().optional(),
+  notes: z.string().optional(),
+  appealWindowDays: z.number().optional(),
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.6 Legal audit
@@ -58,17 +120,10 @@ router.get("/contracts", async (req, res) => {
 router.post("/contracts", async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createContractSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
-    if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
-      throw new ValidationError("عنوان العقد مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للعقد" });
-    }
-    if (!b.partyName || typeof b.partyName !== "string" || !b.partyName.trim()) {
-      throw new ValidationError("اسم الطرف الآخر مطلوب", { field: "partyName", fix: "أدخل اسم الطرف المتعاقد معه" });
-    }
-    if (!b.startDate) {
-      throw new ValidationError("لا يمكن إنشاء عقد بدون تاريخ بداية", { field: "startDate", fix: "حدد تاريخ بداية العقد" });
-    }
     if (!b.endDate) {
       throw new ValidationError("لا يمكن إنشاء عقد بدون تاريخ نهاية", { field: "endDate", fix: "حدد تاريخ نهاية العقد" });
     }
@@ -432,11 +487,10 @@ router.get("/cases", async (req, res) => {
 router.post("/cases", async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createCaseSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
 
-    if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
-      throw new ValidationError("عنوان القضية مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للقضية" });
-    }
     if (!b.caseType || typeof b.caseType !== "string" || !b.caseType.trim()) {
       throw new ValidationError("نوع القضية مطلوب", { field: "caseType", fix: "اختر نوع القضية (مدنية، تجارية، جنائية، ...)" });
     }
@@ -688,12 +742,11 @@ router.get("/cases/:caseId/sessions", async (req, res) => {
 router.post("/cases/:caseId/sessions", async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = createSessionSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const caseId = Number(req.params.caseId);
 
-    if (!b.sessionDate) {
-      throw new ValidationError("تاريخ الجلسة مطلوب", { field: "sessionDate", fix: "حدد تاريخ الجلسة القضائية" });
-    }
     const sd = new Date(b.sessionDate);
     if (Number.isNaN(sd.getTime())) {
       throw new ValidationError("تاريخ الجلسة غير صالح", { field: "sessionDate", fix: "استخدم تنسيق YYYY-MM-DD" });
@@ -869,7 +922,9 @@ router.post("/cases/:caseId/correspondence", async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
-    const b = req.body;
+    const parsed = createCorrespondenceSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
@@ -896,13 +951,9 @@ router.post("/cases/:caseId/judgments", async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
-    const b = req.body;
-    if (!b.judgmentDate) {
-      throw new ValidationError("تاريخ الحكم مطلوب", { field: "judgmentDate", fix: "حدد تاريخ صدور الحكم" });
-    }
-    if (!b.verdict || typeof b.verdict !== "string" || !b.verdict.trim()) {
-      throw new ValidationError("نص الحكم مطلوب", { field: "verdict", fix: "أدخل نصاً يوضح الحكم" });
-    }
+    const parsed = createJudgmentSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data as any;
     if (b.amount !== undefined && b.amount !== null) {
       const amt = Number(b.amount);
       if (!Number.isFinite(amt) || amt < 0) {

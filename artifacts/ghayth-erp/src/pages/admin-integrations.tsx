@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,7 @@ const CHANNEL_ICONS: Record<string, any> = {
 };
 
 function IntegrationsList() {
-  const { data: intResp, isLoading } = useApiQuery<any>(["admin-integrations"], "/admin/integrations");
+  const { data: intResp, isLoading, isError } = useApiQuery<any>(["admin-integrations"], "/admin/integrations");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", type: "email", config: "{}", status: "inactive" });
   const { toast } = useToast();
@@ -73,6 +74,9 @@ function IntegrationsList() {
     [["admin-integrations"]],
     { successMessage: "تم الحذف" }
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleCreate = () => {
     let parsedConfig = {};

@@ -7,12 +7,13 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahDashboard() {
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const activeSeason = (seasons?.data || []).find((s: any) => s.status === "open");
   const seasonId = activeSeason?.id;
-  const { data: dash, refetch } = useApiQuery<any>(
+  const { data: dash, refetch, isLoading, isError } = useApiQuery<any>(
     ["umrah-dashboard", String(seasonId || "")],
     seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : "/umrah/dashboard"
   );
@@ -34,6 +35,9 @@ export default function UmrahDashboard() {
       refetch();
     } catch { toast({ variant: "destructive", title: "خطأ في محرك الغرامات" }); }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">

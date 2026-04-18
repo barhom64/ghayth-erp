@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,7 +62,7 @@ export default function ViolationsReportPage() {
   if (filters.status) queryParams.set("status", filters.status);
   if (filters.department) queryParams.set("department", filters.department);
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["violations-report", filters.type, filters.priority, filters.status, filters.department],
     `/admin/violations-report?${queryParams.toString()}`
   );
@@ -79,6 +80,9 @@ export default function ViolationsReportPage() {
     { successMessage: "تم الحل" }
   );
   const resolving = resolveMut.isPending ? resolveMut.variables?.id ?? null : null;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleResolve = (id: number) => {
     resolveMut.mutate({ id });

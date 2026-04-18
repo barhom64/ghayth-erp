@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,10 @@ export function SecurityLogTab() {
     ["security-log", reason, from, String(page)],
     `/admin/security-log?${params.toString()}`
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const rows = data?.data || [];
   const total = data?.total || 0;
   const summary = data?.summary || {};
@@ -48,17 +53,7 @@ export function SecurityLogTab() {
         <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
       </div>
 
-      {isError && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4 text-center text-red-700">
-            <AlertTriangle className="h-6 w-6 mx-auto mb-2" />
-            <p className="text-sm">حدث خطأ في تحميل سجل الأمان. يرجى المحاولة مجدداً.</p>
-            <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>إعادة المحاولة</Button>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "إجمالي المحاولات", value: summary.total, color: "text-gray-700 bg-gray-50" },
           { label: "آخر 24 ساعة", value: summary.last24h, color: "text-amber-700 bg-amber-50" },

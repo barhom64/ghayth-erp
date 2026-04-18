@@ -1,5 +1,6 @@
 import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -8,6 +9,24 @@ import { logger } from "../lib/logger.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
+
+const loginSchema = z.object({
+  email: z.string().min(1, "البريد الإلكتروني مطلوب"),
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
+});
+
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1, "رمز التحديث مطلوب"),
+});
+
+const switchAssignmentSchema = z.object({
+  assignmentId: z.number({ required_error: "التعيين مطلوب" }),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
+  newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل"),
+});
 
 const authRouteLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -57,12 +76,12 @@ router.post("/register", registerLimiter, async (_req, res) => {
 
 router.post("/login", loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body as { email: string; password: string };
-
-    if (!email || !password) {
-      res.status(400).json({ error: "البريد الإلكتروني وكلمة المرور مطلوبان" });
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
       return;
     }
+    const { email, password } = parsed.data;
 
     const [user] = await rawQuery<any>(
       `SELECT u.id, u."passwordHash", u."isActive", u."employeeId",
@@ -183,11 +202,12 @@ router.post("/login", loginLimiter, async (req, res) => {
 
 router.post("/refresh", async (req, res) => {
   try {
-    const { refreshToken } = req.body as { refreshToken: string };
-    if (!refreshToken) {
-      res.status(400).json({ error: "refreshToken مطلوب" });
+    const parsed = refreshSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
       return;
     }
+    const { refreshToken } = parsed.data;
 
     const [rt] = await rawQuery<any>(
       `SELECT rt.*, u."isActive", u."employeeId"
@@ -264,11 +284,12 @@ router.post("/logout", authMiddleware, async (req, res) => {
 router.post("/switch-assignment", authMiddleware, async (req, res) => {
   try {
     const scope = req.scope!;
-    const { assignmentId } = req.body as { assignmentId: number };
-    if (!assignmentId) {
-      res.status(400).json({ error: "assignmentId مطلوب" });
+    const parsed = switchAssignmentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
       return;
     }
+    const { assignmentId } = parsed.data;
     if (!scope.allowedAssignments.includes(Number(assignmentId))) {
       res.status(403).json({ error: "غير مسموح بالتبديل إلى هذا التعيين" });
       return;
@@ -327,15 +348,12 @@ router.get("/me", authMiddleware, async (req, res) => {
 router.post("/change-password", authMiddleware, changePasswordLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
-    const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-      res.status(400).json({ error: "كلمة المرور الحالية والجديدة مطلوبتان" });
+    const parsed = changePasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
       return;
     }
-    if (newPassword.length < 6) {
-      res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل" });
-      return;
-    }
+    const { currentPassword, newPassword } = parsed.data;
     const [user] = await rawQuery<any>(`SELECT id, "passwordHash" FROM users WHERE id=$1`, [scope.userId]);
     if (!user) { res.status(404).json({ error: "المستخدم غير موجود" }); return; }
     const valid = await verifyPassword(currentPassword, user.passwordHash);

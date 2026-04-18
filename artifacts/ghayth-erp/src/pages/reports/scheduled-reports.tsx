@@ -13,6 +13,7 @@ import { Plus, Trash2, Clock, Mail, FileSpreadsheet, FileText, Calendar, Send, H
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiMutation as useDeleteMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const REPORT_TYPES = [
   { value: "trial-balance", label: "ميزان المراجعة", format: "جدول بيانات", icon: FileSpreadsheet },
@@ -29,7 +30,7 @@ const FREQUENCY_LABELS: Record<string, string> = {
 };
 
 export default function ScheduledReportsPage() {
-  const { data, isLoading } = useApiQuery<any>(["scheduled-reports"], "/scheduled-reports");
+  const { data, isLoading, isError } = useApiQuery<any>(["scheduled-reports"], "/scheduled-reports");
   const items = data?.data || [];
   const { data: historyData } = useApiQuery<any>(["scheduled-reports-history"], "/scheduled-reports/history");
   const history = historyData?.data || [];
@@ -71,6 +72,9 @@ export default function ScheduledReportsPage() {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">

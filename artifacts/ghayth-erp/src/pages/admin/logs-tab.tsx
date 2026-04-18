@@ -1,9 +1,14 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDateAr } from "@/lib/formatters";
 
 export function LogsTab() {
-  const { data } = useApiQuery<any>(["admin-logs"], "/settings/audit-log");
+  const { data, isLoading, isError } = useApiQuery<any>(["admin-logs"], "/settings/audit-log");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const items = data?.data || [];
   return (
     <div className="space-y-4">

@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Archive, FileText, Calendar, Search, FolderArchive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function DocumentsArchive() {
   const [search, setSearch] = useState("");
-  const { data: docsResp } = useApiQuery<any>(["documents-archive"], "/documents");
+  const { data: docsResp, isLoading, isError } = useApiQuery<any>(["documents-archive"], "/documents");
   const docs = asList<any>(docsResp);
 
   const statCards = [
@@ -20,6 +21,9 @@ export default function DocumentsArchive() {
   ];
 
   const filtered = docs.filter((d: any) => !search || d.title?.includes(search) || d.type?.includes(search));
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">
