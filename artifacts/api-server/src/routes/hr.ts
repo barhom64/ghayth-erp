@@ -1966,7 +1966,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const hrOtRows = await rawQuery<any>(
       `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
        FROM hr_overtime_requests
-       WHERE "companyId" = $1 AND TO_CHAR(date, 'YYYY-MM') = $2 AND status = 'approved'
+       WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved'
        GROUP BY "assignmentId"`,
       [scope.companyId, targetPeriod]
     ).catch(() => [] as any[]);
@@ -2121,7 +2121,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       if (hrOtRows.length > 0) {
         await client.query(
           `UPDATE hr_overtime_requests SET status = 'paid', "updatedAt" = NOW()
-           WHERE "companyId" = $1 AND TO_CHAR(date, 'YYYY-MM') = $2 AND status = 'approved'`,
+           WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved'`,
           [scope.companyId, targetPeriod]
         );
       }
