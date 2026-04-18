@@ -7,6 +7,7 @@ import { MessageSquare, Clock, CheckCircle2, User, Search, Loader2, type LucideI
 import { cn } from "@/lib/utils";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@/components/page-shell";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface Reply {
   id: number;
@@ -50,19 +51,8 @@ export default function SupportReplies() {
     !search || r.ticketTitle.includes(search) || r.reply.includes(search) || (r.agent || "").includes(search) || r.ticketId.includes(search)
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="text-center py-20 text-red-500">حدث خطأ أثناء تحميل البيانات</div>
-    );
-  }
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell

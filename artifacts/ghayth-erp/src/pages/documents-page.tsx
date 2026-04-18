@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -372,7 +373,11 @@ function TemplatesTab() {
 }
 
 export default function DocumentsPage() {
-  const { data: stats } = useApiQuery<any>(["doc-stats"], "/documents/stats");
+  const { data: stats, isLoading, isError } = useApiQuery<any>(["doc-stats"], "/documents/stats");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const s = stats || {};
 
   return (

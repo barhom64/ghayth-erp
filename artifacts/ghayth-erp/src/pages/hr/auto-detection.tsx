@@ -98,6 +98,9 @@ export default function AutoDetectionPage() {
     "/hr/discipline/auto-detection/log?limit=50",
   );
 
+  const isLoading = settingsQuery.isLoading || summaryQuery.isLoading || logQuery.isLoading;
+  const isError = settingsQuery.isError || summaryQuery.isError || logQuery.isError;
+
   // ── التشغيل اليدوي ──
   const runMutation = useApiMutation<any, { date?: string }>(
     "/hr/discipline/auto-detection/run",

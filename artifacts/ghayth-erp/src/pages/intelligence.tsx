@@ -8,6 +8,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, AlertTriangle, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function Intelligence() {
   const { data: overview, isLoading: loadingOverview } = useApiQuery(["intelligence-overview"], "/intelligence/overview");
@@ -37,8 +38,10 @@ export default function Intelligence() {
     { key: "status", header: "الحالة", sortable: true, render: (a) => <PageStatusBadge status={a.status} /> },
   ];
 
+  if (loadingOverview) return <LoadingSpinner />;
+
   return (
-    <PageShell title="لوحة الذكاء" loading={loadingOverview}>
+    <PageShell title="لوحة الذكاء">
       <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
         {loadingOverview ? [...Array(7)].map((_, i) => <Card key={i}><CardContent className="pt-6"><Skeleton className="h-10 w-full" /></CardContent></Card>) : (
           <>

@@ -10,7 +10,11 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 
 export default function PenaltyEscalationPage() {
-  const { data } = useApiQuery<any>(["violations"], "/hr/violations");
+  const { data, isLoading, isError } = useApiQuery<any>(["violations"], "/hr/violations");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const items = (data?.data || []).filter((v: any) => v.status === "active");
 
   const grouped: Record<string, any[]> = items.reduce((acc: Record<string, any[]>, v: any) => {

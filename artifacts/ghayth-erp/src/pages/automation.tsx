@@ -11,6 +11,7 @@ import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const MODULE_LABELS: Record<string, string> = {
   hr: "الموارد البشرية",
@@ -53,6 +54,9 @@ export default function Automation() {
   const autoLogs = asList(autoLogsResp);
   const autoLogsTotal = autoLogsResp?.total || autoLogs.length;
   const { data: autoStats } = useApiQuery<any>(["automation-stats"], "/automation/automation-stats");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filteredJobs = cronJobs.filter((j: any) => !jobSearch || j.name?.includes(jobSearch) || j.description?.includes(jobSearch));
   const filteredLogs = cronLogs.filter((l: any) => !logSearch || l.jobName?.includes(logSearch) || l.result?.includes(logSearch));

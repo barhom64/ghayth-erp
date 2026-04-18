@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
@@ -39,7 +40,7 @@ export default function TrainingDetailPage() {
   const [, params] = useRoute("/hr/training/:id");
   const id = params?.id;
 
-  const { data: program } = useApiQuery<any>(
+  const { data: program, isLoading, isError } = useApiQuery<any>(
     ["training-program", id ?? ""],
     `/training/programs/${id ?? 0}`,
     { enabled: !!id },
@@ -51,6 +52,9 @@ export default function TrainingDetailPage() {
     { enabled: !!id },
   );
   const enrollments = enrollmentsData?.data || [];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   if (!program) {
     return (

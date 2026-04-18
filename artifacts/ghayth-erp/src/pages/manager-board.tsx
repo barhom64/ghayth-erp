@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -52,6 +53,8 @@ export default function ManagerBoard() {
     ["manager-delegations", scopeQueryString],
     `/hr/delegations${scopeSuffix}`
   );
+
+  if (actionLoading) return <LoadingSpinner />;
 
   const pending = actionData || {};
   const leaves = pending.pendingLeaves || [];

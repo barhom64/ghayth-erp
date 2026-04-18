@@ -24,6 +24,7 @@ import { useLocation } from "wouter";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const iconMap: Record<string, any> = {
   Calendar, DollarSign, FileSignature, KeyRound, Wrench,
@@ -530,7 +531,11 @@ function WorkflowsTab() {
 }
 
 export default function RequestsPage() {
-  const { data: stats } = useApiQuery<any>(["req-stats"], "/requests/stats");
+  const { data: stats, isLoading, isError } = useApiQuery<any>(["req-stats"], "/requests/stats");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const s = stats || {};
 
   return (

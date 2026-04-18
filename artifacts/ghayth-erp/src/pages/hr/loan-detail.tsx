@@ -1,5 +1,6 @@
 import { useParams, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,10 +38,13 @@ export default function LoanDetail() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
 
-  const { data, isLoading } = useApiQuery<any>(["hr-loan-detail", id], `/hr/loans/${id}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-loan-detail", id], `/hr/loans/${id}`);
   const loan = data?.data ?? data;
 
-  if (!isLoading && !loan) {
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  if (!loan) {
     return (
       <PageShell title="السلفة غير موجودة" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/loans", label: "سلف الموظفين" }]}>
         <Card>

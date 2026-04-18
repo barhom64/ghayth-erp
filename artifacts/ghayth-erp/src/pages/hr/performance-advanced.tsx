@@ -9,7 +9,11 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function PerformanceAdvancedPage() {
-  const { data } = useApiQuery<any>(["performance"], "/hr/performance");
+  const { data, isLoading, isError } = useApiQuery<any>(["performance"], "/hr/performance");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const items = data?.data || [];
 
   const avgScore = items.length > 0
