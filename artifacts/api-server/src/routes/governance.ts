@@ -201,7 +201,7 @@ router.delete("/policies/:id", requirePermission("governance:write"), async (req
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    const result = await rawExecute(`DELETE FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const result = await rawExecute(`UPDATE governance_policies SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "السياسة غير موجودة" }); return; }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_policies", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف السياسة بنجاح" });

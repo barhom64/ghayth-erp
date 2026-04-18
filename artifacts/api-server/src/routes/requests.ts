@@ -621,7 +621,7 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
       return;
     }
 
-    const result = await rawExecute(`DELETE FROM requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const result = await rawExecute(`UPDATE requests SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
 
     createAuditLog({

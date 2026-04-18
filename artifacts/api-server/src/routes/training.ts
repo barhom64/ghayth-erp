@@ -119,7 +119,7 @@ router.delete("/programs/:id", requirePermission("hr:delete"), async (req, res) 
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
-    await rawExecute(`DELETE FROM training_programs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE training_programs SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "training_programs", entityId: id,
@@ -225,7 +225,7 @@ router.delete("/enrollments/:id", requirePermission("hr:delete"), async (req, re
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT e.id, e."programId" FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "التسجيل غير موجود" }); return; }
-    await rawExecute(`DELETE FROM training_enrollments WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE training_enrollments SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     await rawExecute(`UPDATE training_programs SET enrolled = GREATEST(0, enrolled - 1) WHERE id=$1`, [existing.programId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

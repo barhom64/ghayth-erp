@@ -106,7 +106,7 @@ router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (re
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "الحملة غير موجودة" }); return; }
-    await rawExecute(`DELETE FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE marketing_campaigns SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ message: "تم حذف الحملة بنجاح" });
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });

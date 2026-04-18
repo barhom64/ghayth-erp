@@ -2783,7 +2783,7 @@ router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"),
     }
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    await rawExecute(`DELETE FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "approval_chains", entityId: id,
@@ -3186,7 +3186,7 @@ router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) =>
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`DELETE FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE shifts SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "shifts", entityId: id,
@@ -3582,7 +3582,7 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
     }
 
     const [row] = await rawQuery<any>(
-      `DELETE FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' RETURNING id`,
+      `UPDATE hr_leave_requests SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
     if (!row) {
@@ -3864,7 +3864,7 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
     const id = Number(req.params.id);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
-      `DELETE FROM performance_reviews WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      `UPDATE performance_reviews SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("التقييم غير موجود");
@@ -3945,7 +3945,7 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
     const id = Number(req.params.id);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
-      `DELETE FROM official_letters WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      `UPDATE official_letters SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الخطاب غير موجود");
@@ -5236,7 +5236,7 @@ router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req
     }
     const id = Number(req.params.id);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`DELETE FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE public_holidays SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "public_holidays", entityId: id,
@@ -5731,7 +5731,7 @@ router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`DELETE FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE employee_development_plans SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employee_development_plans", entityId: id,

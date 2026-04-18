@@ -518,9 +518,9 @@ router.delete("/log/:id", requirePermission("communications:write"), async (req,
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [before] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [before] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
-      `DELETE FROM communications_log WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      `UPDATE communications_log SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
     if (!row) { res.status(404).json({ error: "السجل غير موجود" }); return; }

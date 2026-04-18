@@ -151,7 +151,7 @@ accountsRouter.delete("/accounts/:id", async (req, res) => {
     const accountId = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(
-      `SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [accountId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الحساب غير موجود");
@@ -175,7 +175,7 @@ accountsRouter.delete("/accounts/:id", async (req, res) => {
     }
 
     const rows = await rawQuery<any>(
-      `DELETE FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 RETURNING id`,
+      `UPDATE chart_of_accounts SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [accountId, scope.companyId]
     );
     if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
