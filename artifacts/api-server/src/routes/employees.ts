@@ -652,9 +652,10 @@ router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req
     const body = parsed_patchOnboardingTaskSchema.data;
     const scope = req.scope!;
     const { status } = body;
-    const completedAt = status === "completed" ? "NOW()" : "NULL";
     const [row] = await rawQuery<any>(
-      `UPDATE onboarding_tasks SET status = $1, "completedAt" = ${completedAt}, "completedBy" = $2
+      `UPDATE onboarding_tasks SET status = $1,
+       "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
+       "completedBy" = $2
        WHERE id = $3 AND "companyId" = $4 RETURNING *`,
       [status, scope.activeAssignmentId, Number(req.params.id), scope.companyId]
     );

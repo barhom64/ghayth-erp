@@ -95,7 +95,7 @@ export default function HR() {
   const violationsQ = useApiQuery<any>(["violations-stats", scopeQueryString], `/hr/violations-stats?${scopeQueryString || ""}`);
 
   const isLoading = empQ.isLoading || leavesQ.isLoading || payrollQ.isLoading || attendanceQ.isLoading;
-  const isError = empQ.isError && leavesQ.isError && payrollQ.isError && attendanceQ.isError;
+  const isError = empQ.isError || leavesQ.isError || payrollQ.isError || attendanceQ.isError;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;

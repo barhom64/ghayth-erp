@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -215,8 +216,8 @@ router.post("/", async (req, res): Promise<void> => {
       );
       if (proj) {
         const [[taskCount], [phaseCount]] = await Promise.all([
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1`, [entityId]),
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1`, [entityId]),
+          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
+          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
         ]);
         const tasks = Number(taskCount?.c || 0);
         const phases = Number(phaseCount?.c || 0);
@@ -273,8 +274,7 @@ router.post("/", async (req, res): Promise<void> => {
 
     res.json({ impacts });
   } catch (err) {
-    console.error("Impact preview error:", err);
-    res.status(500).json({ error: "خطأ في الخادم" });
+    handleRouteError(err, res, "Impact preview error:");
   }
 });
 

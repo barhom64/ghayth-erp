@@ -160,8 +160,7 @@ function RoutingRulesTab() {
 }
 
 function TemplatesTab() {
-  const { data: templatesData } = useApiQuery(["notif-templates"], "/notification-engine/templates");
-  const templates = asList(templatesData);
+  const { data: templatesData, isLoading, isError } = useApiQuery(["notif-templates"], "/notification-engine/templates");
   const [editId, setEditId] = useState<number | null>(null);
   const [editBody, setEditBody] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -171,6 +170,10 @@ function TemplatesTab() {
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const templates = asList(templatesData);
   const grouped = templates.reduce((acc: Record<string, Array<Record<string, unknown>>>, t: Record<string, unknown>) => {
     const key = t.templateKey as string;
     if (!acc[key]) acc[key] = [];
@@ -345,8 +348,7 @@ function TemplatesTab() {
 }
 
 function FallbackChainsTab() {
-  const { data: chainsData } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
-  const chains = asList(chainsData);
+  const { data: chainsData, isLoading, isError } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -383,6 +385,10 @@ function FallbackChainsTab() {
     { successMessage: "تم الحذف" }
   );
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const chains = asList(chainsData);
   const createChain = () => {
     if (!newName || newSteps.length === 0) return;
     createMut.mutate({ name: newName, description: newDesc, steps: newSteps });
@@ -494,8 +500,7 @@ function FallbackChainsTab() {
 }
 
 function WebhooksTab() {
-  const { data: webhooksData } = useApiQuery(["notif-webhooks"], "/notification-engine/webhooks");
-  const webhooks = asList(webhooksData);
+  const { data: webhooksData, isLoading, isError } = useApiQuery(["notif-webhooks"], "/notification-engine/webhooks");
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -529,6 +534,10 @@ function WebhooksTab() {
     [["notif-webhooks"]]
   );
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const webhooks = asList(webhooksData);
   const createWebhook = () => {
     if (!newName || !newUrl) return;
     const events = newEvents.split(",").map((e) => e.trim()).filter(Boolean);
@@ -636,8 +645,11 @@ function WebhooksTab() {
 
 function DeliveryStatsTab() {
   const [days, setDays] = useState(30);
-  const { data: statsData } = useApiQuery(["notif-delivery-stats", String(days)], `/notification-engine/delivery-stats?days=${days}`);
-  const { data: logData } = useApiQuery(["notif-delivery-log"], "/notification-engine/delivery-log?limit=20");
+  const { data: statsData, isLoading: loadingStats, isError: errorStats } = useApiQuery(["notif-delivery-stats", String(days)], `/notification-engine/delivery-stats?days=${days}`);
+  const { data: logData, isLoading: loadingLog, isError: errorLog } = useApiQuery(["notif-delivery-log"], "/notification-engine/delivery-log?limit=20");
+
+  if (loadingStats || loadingLog) return <LoadingSpinner />;
+  if (errorStats || errorLog) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const stats = statsData?.data as {
     byChannel?: Array<{ channel: string; total: number; delivered: number; failed: number; pending: number }>;
@@ -763,7 +775,7 @@ function DeliveryStatsTab() {
 }
 
 function PreferencesTab() {
-  const { data: prefsData } = useApiQuery(["notif-preferences"], "/notification-engine/preferences");
+  const { data: prefsData, isLoading, isError } = useApiQuery(["notif-preferences"], "/notification-engine/preferences");
   const preferences = asList(prefsData?.data);
   const categories: Array<{ eventCategory: string; description: string | null }> = prefsData?.categories ?? [];
 
@@ -807,6 +819,9 @@ function PreferencesTab() {
       onSuccess: () => setDirty(false),
     }
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const saveAll = () => {
     const prefs = Object.entries(localPrefs).map(([category, channels]) => ({
