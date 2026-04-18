@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 import {
   submitWorkflow,
   approveWorkflow,
@@ -16,7 +18,7 @@ import {
 const router = Router();
 router.use(authMiddleware);
 
-router.post("/submit", async (req, res) => {
+router.post("/submit", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { requestType, refTable, refId, title, data } = req.body;
@@ -35,13 +37,14 @@ router.post("/submit", async (req, res) => {
       submittedByName: scope.userName,
       data,
     });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.id, after: { requestType, title } }).catch(console.error);
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.post("/:id/approve", async (req, res) => {
+router.post("/:id/approve", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await approveWorkflow({
@@ -54,6 +57,7 @@ router.post("/:id/approve", async (req, res) => {
       attachments: req.body.attachments,
       overrideReason: req.body.overrideReason,
     });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "approve" } }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -63,7 +67,7 @@ router.post("/:id/approve", async (req, res) => {
   }
 });
 
-router.post("/:id/reject", async (req, res) => {
+router.post("/:id/reject", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!req.body.notes) {
@@ -79,6 +83,7 @@ router.post("/:id/reject", async (req, res) => {
       notes: req.body.notes,
       overrideReason: req.body.overrideReason,
     });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "reject" } }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -87,7 +92,7 @@ router.post("/:id/reject", async (req, res) => {
   }
 });
 
-router.post("/:id/refer", async (req, res) => {
+router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { referredTo, referredToName, notes, overrideReason } = req.body;
@@ -106,6 +111,7 @@ router.post("/:id/refer", async (req, res) => {
       referredToName,
       overrideReason,
     });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "refer", referredTo } }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -114,7 +120,7 @@ router.post("/:id/refer", async (req, res) => {
   }
 });
 
-router.post("/:id/escalate", async (req, res) => {
+router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await escalateWorkflow({
@@ -126,6 +132,7 @@ router.post("/:id/escalate", async (req, res) => {
       notes: req.body.notes,
       overrideReason: req.body.overrideReason,
     });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "escalate" } }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -134,7 +141,7 @@ router.post("/:id/escalate", async (req, res) => {
   }
 });
 
-router.post("/:id/return", async (req, res) => {
+router.post("/:id/return", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!req.body.notes) {
@@ -150,6 +157,7 @@ router.post("/:id/return", async (req, res) => {
       notes: req.body.notes,
       overrideReason: req.body.overrideReason,
     });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "return" } }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -158,7 +166,7 @@ router.post("/:id/return", async (req, res) => {
   }
 });
 
-router.get("/:id/timeline", async (req, res) => {
+router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await getTimeline(Number(req.params.id), scope.companyId);
@@ -168,7 +176,7 @@ router.get("/:id/timeline", async (req, res) => {
   }
 });
 
-router.get("/timeline/:refTable/:refId", async (req, res) => {
+router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await getTimelineByRef(req.params.refTable, Number(req.params.refId), scope.companyId);
@@ -178,7 +186,7 @@ router.get("/timeline/:refTable/:refId", async (req, res) => {
   }
 });
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, requestType } = req.query as any;
@@ -209,7 +217,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/pending", async (req, res) => {
+router.get("/pending", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -234,7 +242,7 @@ router.get("/pending", async (req, res) => {
   }
 });
 
-router.get("/definitions", async (req, res) => {
+router.get("/definitions", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const defs = await rawQuery<any>(
@@ -250,7 +258,7 @@ router.get("/definitions", async (req, res) => {
   }
 });
 
-router.get("/definitions/:id", async (req, res) => {
+router.get("/definitions/:id", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [def] = await rawQuery<any>(
@@ -268,7 +276,7 @@ router.get("/definitions/:id", async (req, res) => {
   }
 });
 
-router.post("/definitions", async (req, res) => {
+router.post("/definitions", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { requestType, requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, steps } = req.body;
@@ -291,13 +299,14 @@ router.post("/definitions", async (req, res) => {
         );
       }
     }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch(console.error);
     res.status(201).json({ id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.put("/definitions/:id", async (req, res) => {
+router.put("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -326,23 +335,27 @@ router.put("/definitions/:id", async (req, res) => {
 
     const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
     const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`, [id]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch(console.error);
     res.json({ ...def, steps: updatedSteps });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.delete("/definitions/:id", async (req, res) => {
+router.delete("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [Number(req.params.id), scope.companyId]);
+    const id = Number(req.params.id);
+    const [before] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch(console.error);
     res.json({ message: "تم الحذف" });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.get("/sla-definitions", async (req, res) => {
+router.get("/sla-definitions", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -355,7 +368,7 @@ router.get("/sla-definitions", async (req, res) => {
   }
 });
 
-router.post("/sla-definitions", async (req, res) => {
+router.post("/sla-definitions", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { requestType, warningHours, deadlineHours, escalationHours, autoApproveOnTimeout, escalateTo } = req.body;
@@ -368,13 +381,14 @@ router.post("/sla-definitions", async (req, res) => {
        "escalateTo" = EXCLUDED."escalateTo"`,
       [scope.companyId, requestType, warningHours ?? 24, deadlineHours ?? 48, escalationHours ?? 72, autoApproveOnTimeout ?? false, escalateTo ?? "hr_manager"]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch(console.error);
     res.status(201).json({ id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.get("/stats", async (req, res) => {
+router.get("/stats", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1`, [scope.companyId]);

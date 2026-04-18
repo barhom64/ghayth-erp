@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { getDeliveryStats } from "../lib/notificationEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -35,7 +37,7 @@ router.get("/preferences", async (req: Request, res: Response): Promise<any> => 
   }
 });
 
-router.put("/preferences", async (req: Request, res: Response): Promise<any> => {
+router.put("/preferences", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope;
     if (!scope) return res.status(401).json({ error: "Unauthorized" });
@@ -81,6 +83,12 @@ router.put("/preferences", async (req: Request, res: Response): Promise<any> => 
       );
     }
 
+    createAuditLog({
+      companyId, userId: scope.userId, action: "update_notification_preferences",
+      entity: "notification_preferences", entityId: 0,
+      after: { preferences },
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -88,7 +96,7 @@ router.put("/preferences", async (req: Request, res: Response): Promise<any> => 
   }
 });
 
-router.get("/routing-rules", requireMinLevel(70), async (req: Request, res: Response) => {
+router.get("/routing-rules", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -106,7 +114,7 @@ router.get("/routing-rules", requireMinLevel(70), async (req: Request, res: Resp
   }
 });
 
-router.post("/routing-rules", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
+router.post("/routing-rules", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { eventCategory, channels, priority, description, fallbackChainId, isActive } = req.body;
@@ -130,6 +138,12 @@ router.post("/routing-rules", requireMinLevel(70), async (req: Request, res: Res
        description ?? null, fallbackChainId ?? null, isActive ?? true, scope.activeAssignmentId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_routing_rule",
+      entity: "notification_routing_rules", entityId: rows[0]?.id ?? 0,
+      after: { eventCategory, channels, priority, description, fallbackChainId, isActive },
+    }).catch(console.error);
+
     res.json({ data: rows[0] });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -137,7 +151,7 @@ router.post("/routing-rules", requireMinLevel(70), async (req: Request, res: Res
   }
 });
 
-router.put("/routing-rules/:id", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
+router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { channels, priority, description, fallbackChainId, isActive } = req.body;
@@ -156,6 +170,12 @@ router.put("/routing-rules/:id", requireMinLevel(70), async (req: Request, res: 
        description ?? null, fallbackChainId ?? null, isActive ?? null, scope.companyId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_routing_rule",
+      entity: "notification_routing_rules", entityId: Number(req.params.id),
+      after: { channels, priority, description, fallbackChainId, isActive },
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -163,13 +183,24 @@ router.put("/routing-rules/:id", requireMinLevel(70), async (req: Request, res: 
   }
 });
 
-router.delete("/routing-rules/:id", requireMinLevel(70), async (req: Request, res: Response) => {
+router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM notification_routing_rules WHERE id = $1 AND "companyId" = $2`,
+      [req.params.id, scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM notification_routing_rules WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_routing_rule",
+      entity: "notification_routing_rules", entityId: Number(req.params.id),
+      before,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -177,7 +208,7 @@ router.delete("/routing-rules/:id", requireMinLevel(70), async (req: Request, re
   }
 });
 
-router.get("/templates", requireMinLevel(70), async (req: Request, res: Response) => {
+router.get("/templates", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -195,7 +226,7 @@ router.get("/templates", requireMinLevel(70), async (req: Request, res: Response
   }
 });
 
-router.post("/templates", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
+router.post("/templates", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { templateKey, channel, titleTemplate, bodyTemplate, variables, language, isActive } = req.body;
@@ -220,6 +251,12 @@ router.post("/templates", requireMinLevel(70), async (req: Request, res: Respons
        scope.activeAssignmentId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_notification_template",
+      entity: "notification_templates", entityId: rows[0]?.id ?? 0,
+      after: { templateKey, channel, titleTemplate, bodyTemplate, language, isActive },
+    }).catch(console.error);
+
     res.json({ data: rows[0] });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -227,7 +264,7 @@ router.post("/templates", requireMinLevel(70), async (req: Request, res: Respons
   }
 });
 
-router.put("/templates/:id", requireMinLevel(70), async (req: Request, res: Response) => {
+router.put("/templates/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const { titleTemplate, bodyTemplate, variables, isActive } = req.body;
@@ -244,6 +281,12 @@ router.put("/templates/:id", requireMinLevel(70), async (req: Request, res: Resp
        variables ? JSON.stringify(variables) : null, isActive ?? null, scope.companyId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_notification_template",
+      entity: "notification_templates", entityId: Number(req.params.id),
+      after: { titleTemplate, bodyTemplate, isActive },
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -251,13 +294,24 @@ router.put("/templates/:id", requireMinLevel(70), async (req: Request, res: Resp
   }
 });
 
-router.delete("/templates/:id", requireMinLevel(70), async (req: Request, res: Response) => {
+router.delete("/templates/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM notification_templates WHERE id = $1 AND "companyId" = $2`,
+      [req.params.id, scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM notification_templates WHERE id = $1 AND "companyId" = $2 AND "isDefault" = false`,
       [req.params.id, scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_notification_template",
+      entity: "notification_templates", entityId: Number(req.params.id),
+      before,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -265,7 +319,7 @@ router.delete("/templates/:id", requireMinLevel(70), async (req: Request, res: R
   }
 });
 
-router.get("/fallback-chains", requireMinLevel(70), async (req: Request, res: Response) => {
+router.get("/fallback-chains", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -282,7 +336,7 @@ router.get("/fallback-chains", requireMinLevel(70), async (req: Request, res: Re
   }
 });
 
-router.post("/fallback-chains", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
+router.post("/fallback-chains", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { name, description, steps, isActive } = req.body;
@@ -296,6 +350,12 @@ router.post("/fallback-chains", requireMinLevel(70), async (req: Request, res: R
       [scope.companyId, name, description ?? null, JSON.stringify(steps), isActive ?? true, scope.activeAssignmentId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_fallback_chain",
+      entity: "notification_fallback_chains", entityId: rows[0]?.id ?? 0,
+      after: { name, description, steps, isActive },
+    }).catch(console.error);
+
     res.json({ data: rows[0] });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -303,7 +363,7 @@ router.post("/fallback-chains", requireMinLevel(70), async (req: Request, res: R
   }
 });
 
-router.put("/fallback-chains/:id", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
+router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { name, description, steps, isActive } = req.body;
@@ -321,6 +381,12 @@ router.put("/fallback-chains/:id", requireMinLevel(70), async (req: Request, res
        steps ? JSON.stringify(steps) : null, isActive ?? null, scope.companyId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_fallback_chain",
+      entity: "notification_fallback_chains", entityId: Number(req.params.id),
+      after: { name, description, steps, isActive },
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -328,13 +394,24 @@ router.put("/fallback-chains/:id", requireMinLevel(70), async (req: Request, res
   }
 });
 
-router.delete("/fallback-chains/:id", requireMinLevel(70), async (req: Request, res: Response) => {
+router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM notification_fallback_chains WHERE id = $1 AND "companyId" = $2`,
+      [req.params.id, scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM notification_fallback_chains WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_fallback_chain",
+      entity: "notification_fallback_chains", entityId: Number(req.params.id),
+      before,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -342,7 +419,7 @@ router.delete("/fallback-chains/:id", requireMinLevel(70), async (req: Request, 
   }
 });
 
-router.get("/webhooks", requireMinLevel(70), async (req: Request, res: Response) => {
+router.get("/webhooks", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -361,7 +438,7 @@ router.get("/webhooks", requireMinLevel(70), async (req: Request, res: Response)
   }
 });
 
-router.post("/webhooks", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
+router.post("/webhooks", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { name, url, secret, events, headers, isActive } = req.body;
@@ -381,6 +458,12 @@ router.post("/webhooks", requireMinLevel(70), async (req: Request, res: Response
        isActive ?? true, scope.activeAssignmentId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_webhook",
+      entity: "notification_webhooks", entityId: rows[0]?.id ?? 0,
+      after: { name, url, events, isActive },
+    }).catch(console.error);
+
     res.json({ data: rows[0] });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -388,7 +471,7 @@ router.post("/webhooks", requireMinLevel(70), async (req: Request, res: Response
   }
 });
 
-router.put("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Response): Promise<any> => {
+router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope!;
     const { name, url, secret, events, headers, isActive } = req.body;
@@ -421,6 +504,12 @@ router.put("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Respo
            isActive ?? null, scope.companyId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_webhook",
+      entity: "notification_webhooks", entityId: Number(req.params.id),
+      after: { name, url, events, isActive },
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -428,13 +517,24 @@ router.put("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Respo
   }
 });
 
-router.delete("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Response) => {
+router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM notification_webhooks WHERE id = $1 AND "companyId" = $2`,
+      [req.params.id, scope.companyId]
+    );
     await rawExecute(
       `DELETE FROM notification_webhooks WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
     );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_webhook",
+      entity: "notification_webhooks", entityId: Number(req.params.id),
+      before,
+    }).catch(console.error);
+
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -442,7 +542,7 @@ router.delete("/webhooks/:id", requireMinLevel(70), async (req: Request, res: Re
   }
 });
 
-router.get("/delivery-stats", requireMinLevel(70), async (req: Request, res: Response) => {
+router.get("/delivery-stats", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const days = parseInt(req.query.days as string) || 30;
@@ -454,7 +554,7 @@ router.get("/delivery-stats", requireMinLevel(70), async (req: Request, res: Res
   }
 });
 
-router.get("/delivery-log", requireMinLevel(70), async (req: Request, res: Response) => {
+router.get("/delivery-log", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const page = parseInt(req.query.page as string) || 1;

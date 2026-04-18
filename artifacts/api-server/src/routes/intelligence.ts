@@ -2,8 +2,10 @@ import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireRole } from "../middlewares/roleGuard.js";
 import { aiEngine } from "../lib/aiEngine.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 import { calculateEmployeeKPIs, getCompanyKPIs } from "../lib/kpiEngine.js";
 import { buildAllSchedules, buildEmployeeSchedule } from "../lib/scheduleBuilder.js";
 import { runSmartAlerts } from "../lib/smartAlerts.js";
@@ -15,7 +17,7 @@ import { getPersonalizedRecommendations } from "../lib/smartRecommendations.js";
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/alerts", async (req, res): Promise<void> => {
+router.get("/alerts", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { severity, isRead } = req.query as any;
@@ -28,15 +30,16 @@ router.get("/alerts", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Alerts error:"); }
 });
 
-router.post("/alerts/scan", async (req, res): Promise<void> => {
+router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const result = await runSmartAlerts(scope.companyId);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_alerts", entityId: 0, after: { fired: result.fired } }).catch(console.error);
     res.json({ message: `تم فحص التنبيهات الذكية`, fired: result.fired, details: result.details });
   } catch (err) { handleRouteError(err, res, "Alert scan error:"); }
 });
 
-router.patch("/alerts/:id/read", async (req, res): Promise<void> => {
+router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -44,11 +47,12 @@ router.patch("/alerts/:id/read", async (req, res): Promise<void> => {
       `UPDATE smart_alerts SET "isRead"=true WHERE id=$1 AND "companyId"=$2`,
       [Number(id), scope.companyId]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: Number(id), after: { isRead: true } }).catch(console.error);
     res.json({ message: "تم تعليم التنبيه كمقروء" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/kpis", async (req, res): Promise<void> => {
+router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { employeeId, metricName } = req.query as any;
@@ -61,7 +65,7 @@ router.get("/kpis", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "KPIs error:"); }
 });
 
-router.get("/kpis/employee/:employeeId", async (req, res): Promise<void> => {
+router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.params;
@@ -71,7 +75,7 @@ router.get("/kpis/employee/:employeeId", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Employee KPI error:"); }
 });
 
-router.get("/daily-schedule", async (req, res): Promise<void> => {
+router.get("/daily-schedule", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -81,7 +85,7 @@ router.get("/daily-schedule", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "Daily schedule error:"); }
 });
 
-router.get("/daily-schedule/employee/:employeeId", async (req, res): Promise<void> => {
+router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.params;
@@ -91,7 +95,7 @@ router.get("/daily-schedule/employee/:employeeId", async (req, res): Promise<voi
   } catch (err) { handleRouteError(err, res, "Employee schedule error:"); }
 });
 
-router.get("/overview", async (req, res): Promise<void> => {
+router.get("/overview", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -312,62 +316,74 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
   } catch (err) { handleRouteError(err, res, "Smart suggestions"); }
 });
 
-router.post("/ai/categorize", async (req, res): Promise<void> => {
+router.post("/ai/categorize", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { message, context } = req.body;
     if (!message) res.status(400).json({ error: "message مطلوب" }); return;
     const result = await aiEngine.receptionCategorize(message, context);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_categorize", entityId: 0, after: { message: message?.substring(0, 100) } }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI categorize error:"); }
 });
 
-router.post("/ai/draft-reply", async (req, res): Promise<void> => {
+router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { ticketTitle, ticketDescription, history } = req.body;
     if (!ticketTitle || !ticketDescription) res.status(400).json({ error: "ticketTitle و ticketDescription مطلوبان" }); return;
     const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_draft_reply", entityId: 0, after: { ticketTitle } }).catch(console.error);
     res.json({ draft });
   } catch (err) { handleRouteError(err, res, "AI draft reply error:"); }
 });
 
-router.post("/ai/translate", async (req, res): Promise<void> => {
+router.post("/ai/translate", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { text, targetLanguage } = req.body;
     if (!text || !targetLanguage) res.status(400).json({ error: "text و targetLanguage مطلوبان" }); return;
     if (!["ar", "en"].includes(targetLanguage)) res.status(400).json({ error: "targetLanguage يجب أن يكون ar أو en" }); return;
     const translated = await aiEngine.translatorTranslate(text, targetLanguage);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_translate", entityId: 0, after: { targetLanguage } }).catch(console.error);
     res.json({ translated, targetLanguage });
   } catch (err) { handleRouteError(err, res, "AI translate error:"); }
 });
 
-router.post("/ai/summarize", async (req, res): Promise<void> => {
+router.post("/ai/summarize", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { content, maxLength } = req.body;
     if (!content) res.status(400).json({ error: "content مطلوب" }); return;
     const summary = await aiEngine.summarizerSummarize(content, maxLength);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_summarize", entityId: 0 }).catch(console.error);
     res.json({ summary });
   } catch (err) { handleRouteError(err, res, "AI summarize error:"); }
 });
 
-router.post("/ai/evaluate-rules", async (req, res): Promise<void> => {
+router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { context, data, rules } = req.body;
     if (!context || !data) res.status(400).json({ error: "context و data مطلوبان" }); return;
     const result = await aiEngine.rulesEngineEvaluate({ context, data, rules });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_evaluate_rules", entityId: 0, after: { context } }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI rules engine error:"); }
 });
 
-router.post("/ai/forecast", async (req, res): Promise<void> => {
+router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { metricName, historicalData, forecastPeriods } = req.body;
     if (!metricName || !historicalData) res.status(400).json({ error: "metricName و historicalData مطلوبان" }); return;
     const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_forecast", entityId: 0, after: { metricName } }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI forecast error:"); }
 });
 
-router.post("/algorithms/haversine", async (req, res): Promise<void> => {
+router.post("/algorithms/haversine", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const { lat1, lon1, lat2, lon2 } = req.body;
     if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) {
@@ -378,7 +394,7 @@ router.post("/algorithms/haversine", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/algorithms/moving-average", async (req, res): Promise<void> => {
+router.post("/algorithms/moving-average", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const { values, periods } = req.body;
     if (!Array.isArray(values) || !periods) res.status(400).json({ error: "values و periods مطلوبان" }); return;
@@ -387,7 +403,7 @@ router.post("/algorithms/moving-average", async (req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/algorithms/load-balance", async (req, res): Promise<void> => {
+router.post("/algorithms/load-balance", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const { resources, targetLat, targetLon, maxWorkload } = req.body;
     if (!Array.isArray(resources)) { res.status(400).json({ error: "resources مطلوبة" }); return; }
@@ -445,7 +461,7 @@ router.get("/seasonal-patterns", requireRole("branch_manager", "general_manager"
 
 // ── Smart Recommendations ─────────────────────────────────────────────────────
 
-router.get("/recommendations", async (req, res): Promise<void> => {
+router.get("/recommendations", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const recs = await getPersonalizedRecommendations(
@@ -492,6 +508,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
        FROM employees e WHERE e.id=$2`,
       [scope.companyId, result.employeeId]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_assign", entityId: result.assignmentId, after: { employeeId: result.employeeId, taskType: taskType ?? "general" } }).catch(console.error);
     res.json({
       recommended: {
         employeeId: result.employeeId,

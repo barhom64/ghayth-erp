@@ -11,6 +11,7 @@ import {
   type SettingScope,
 } from "../lib/settings.js";
 import { auditLog } from "../lib/audit.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
 import { eventBus } from "../lib/eventBus.js";
@@ -95,7 +96,11 @@ router.put("/", requirePermission("settings:write"), async (req, res) => {
     }
 
     await upsertSetting(requestedScope, scopeId, key, value);
-    await auditLog(req, "settings", `${requestedScope}:${key}`, "update", null, { scope: requestedScope, scopeId, key, value });
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_setting",
+      entity: "settings", entityId: scopeId ?? 0,
+      after: { scope: requestedScope, scopeId, key, value },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Upsert setting error:");
@@ -126,7 +131,11 @@ router.delete("/", requirePermission("settings:write"), async (req, res) => {
     }
 
     await deleteSetting(requestedScope, scopeId, key);
-    await auditLog(req, "settings", `${requestedScope}:${key}`, "delete", { key }, null);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_setting",
+      entity: "settings", entityId: scopeId ?? 0,
+      before: { scope: requestedScope, scopeId, key },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete setting error:");
@@ -196,6 +205,12 @@ router.put("/general", requirePermission("settings:write"), async (req, res) => 
     if (hasTimezoneChange) {
       reloadCronScheduler().catch((err) => console.error("[SETTINGS] Failed to reload cron after timezone change:", err));
     }
+    const scope = req.scope!;
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_general_settings",
+      entity: "system_settings", entityId: 0,
+      after: { keys: Object.keys(entries) },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -269,6 +284,11 @@ router.post("/branches", requirePermission("settings:write"), async (req, res) =
       `INSERT INTO branches (name, "nameEn", "companyId", city, phone, "logoUrl", address, "taxNumber", "crNumber", email, website, "footerText") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [name, nameEn || null, targetCompanyId, city || null, phone || null, logoUrl || null, address || null, taxNumber || null, crNumber || null, email || null, website || null, footerText || null]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_branch",
+      entity: "branches", entityId: r.insertId,
+      after: { name, nameEn, city, phone, companyId: targetCompanyId },
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId, companyId: targetCompanyId, ...req.body });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -297,6 +317,11 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
     params.push(id);
     await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_branch",
+      entity: "branches", entityId: id,
+      before: existing, after: req.body,
+    }).catch(console.error);
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -331,7 +356,13 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
       return;
     }
 
+    const [beforeBranch] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
     await rawExecute(`DELETE FROM branches WHERE id=$1 AND "companyId"=$2 RETURNING id`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_branch",
+      entity: "branches", entityId: branchId,
+      before: beforeBranch,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -343,7 +374,13 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
       res.status(400).json({ error: "اسم القسم مطلوب" });
       return;
     }
+    const scope = req.scope!;
     const r = await rawExecute(`INSERT INTO departments (name, "nameEn", manager) VALUES ($1,$2,$3)`, [name, nameEn || null, manager || null]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_department",
+      entity: "departments", entityId: r.insertId,
+      after: { name, nameEn, manager },
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId, ...req.body });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -356,7 +393,13 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
       res.status(400).json({ error: "اسم القسم مطلوب" });
       return;
     }
+    const scope = req.scope!;
     await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 RETURNING id`, [name, nameEn || null, manager || null, id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_department",
+      entity: "departments", entityId: Number(id),
+      after: { name, nameEn, manager },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -372,7 +415,14 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
       res.status(400).json({ error: "لا يمكن حذف القسم لأن هناك موظفين مرتبطين به" });
       return;
     }
+    const scope = req.scope!;
+    const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1`, [id]);
     await rawExecute(`DELETE FROM departments WHERE id=$1`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_department",
+      entity: "departments", entityId: Number(id),
+      before: beforeDept,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -410,6 +460,12 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
       return;
     }
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_company",
+      entity: "companies", entityId: companyId,
+      after: { name, nameEn, taxNumber, crNumber, branchId },
+    }).catch(console.error);
+
     res.status(201).json({
       id: companyId,
       defaultBranchId: branchId,
@@ -440,7 +496,13 @@ router.put("/companies/:id", requirePermission("settings:write"), async (req, re
       res.status(400).json({ error: "اسم الشركة مطلوب" });
       return;
     }
+    const scope = req.scope!;
     await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "taxNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_company",
+      entity: "companies", entityId: Number(id),
+      after: { name, nameEn, taxNumber, crNumber },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -448,7 +510,14 @@ router.put("/companies/:id", requirePermission("settings:write"), async (req, re
 router.delete("/companies/:id", requirePermission("settings:write"), async (req, res) => {
   try {
     const { id } = req.params;
+    const scope = req.scope!;
+    const [beforeCompany] = await rawQuery(`SELECT * FROM companies WHERE id=$1`, [id]);
     await rawExecute(`DELETE FROM companies WHERE id=$1 RETURNING id`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete_company",
+      entity: "companies", entityId: Number(id),
+      before: beforeCompany,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -488,6 +557,12 @@ router.put("/system-controls", requirePermission("settings:write"), async (req, 
         await rawExecute(`INSERT INTO settings (scope, "scopeId", key, value) VALUES ('system', 0, $1, $2)`, [key, jsonVal]);
       }
     }
+    const scope = req.scope!;
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_system_controls",
+      entity: "settings", entityId: 0,
+      after: { keys: Object.keys(entries) },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -525,6 +600,11 @@ router.put("/role-modules/:roleKey", requirePermission("settings:write"), async 
       `UPDATE user_roles SET modules=$1 WHERE "roleKey"=$2 AND "companyId"=$3`,
       [JSON.stringify(modules), roleKey, scope.companyId]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_role_modules",
+      entity: "user_roles", entityId: 0,
+      after: { roleKey, modules },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -548,6 +628,11 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
       `INSERT INTO approval_chains ("companyId", "chainType", "name", "minAmount", "maxAmount", "isActive") VALUES ($1,$2,$3,$4,$5,$6)`,
       [scope.companyId, chainType, name || chainType, minAmount || 0, maxAmount || null, isActive !== false]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "create_approval_config",
+      entity: "approval_chains", entityId: r.insertId,
+      after: { chainType, name, minAmount, maxAmount, isActive },
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -628,7 +713,11 @@ router.put("/channels", requirePermission("settings:write"), async (req, res) =>
       }
     }
 
-    await auditLog(req, "settings", "channels", "update", null, { keys: Object.keys(entries) });
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update_channels",
+      entity: "settings", entityId: 0,
+      after: { keys: Object.keys(entries) },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
