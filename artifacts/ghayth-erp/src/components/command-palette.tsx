@@ -9,6 +9,76 @@ import {
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 
+function normalizeArabic(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, "")
+    .replace(/[إأآا]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[\u200C\u200D\u200E\u200F]/g, "")
+    .replace(/^ال/, "")
+    .trim();
+}
+
+const ARABIC_ALIASES: Record<string, string[]> = {
+  "فاتوره": ["فواتير", "فاتور"],
+  "فواتير": ["فاتوره", "فاتور"],
+  "موظف": ["موظفين", "موظفون", "موظفه"],
+  "موظفين": ["موظف", "موظفه"],
+  "عميل": ["عملاء", "عميله"],
+  "عملاء": ["عميل"],
+  "مورد": ["موردين", "موردون"],
+  "موردين": ["مورد"],
+  "مستاجر": ["مستاجرين", "مستاجرون"],
+  "مستاجرين": ["مستاجر"],
+  "مالك": ["ملاك", "مالكه"],
+  "ملاك": ["مالك"],
+  "سياره": ["سيارات", "مركبه", "مركبات"],
+  "مركبه": ["مركبات", "سياره", "سيارات"],
+  "مركبات": ["مركبه", "سياره", "سيارات"],
+  "مشروع": ["مشاريع"],
+  "مشاريع": ["مشروع"],
+  "مهمه": ["مهام"],
+  "مهام": ["مهمه"],
+  "اجازه": ["اجازات", "غياب"],
+  "اجازات": ["اجازه"],
+  "راتب": ["رواتب", "مسير"],
+  "رواتب": ["راتب", "مسير"],
+  "حساب": ["حسابات", "محاسبه"],
+  "حسابات": ["حساب", "محاسبه"],
+  "قيد": ["قيود", "يوميه"],
+  "قيود": ["قيد", "يوميه"],
+  "وحده": ["وحدات", "شقه", "شقق"],
+  "وحدات": ["وحده", "شقه", "شقق"],
+  "عقد": ["عقود"],
+  "عقود": ["عقد"],
+  "تذكره": ["تذاكر", "بطاقه"],
+  "تذاكر": ["تذكره"],
+  "صياده": ["صيانه", "اصلاح"],
+  "صيانه": ["اصلاح"],
+  "مخالفه": ["مخالفات", "عقوبه", "عقوبات"],
+  "مخالفات": ["مخالفه", "عقوبه", "عقوبات"],
+  "عذر": ["اعذار", "عذور", "استئذان"],
+  "اعذار": ["عذر", "استئذان"],
+  "حضور": ["انصراف", "دوام"],
+  "انصراف": ["حضور", "دوام"],
+  "بحث": ["search", "find"],
+};
+
+function expandQueryAliases(normalizedQuery: string): string[] {
+  const terms = new Set<string>([normalizedQuery]);
+  for (const [key, aliases] of Object.entries(ARABIC_ALIASES)) {
+    if (normalizedQuery.includes(key) || aliases.some(a => normalizedQuery.includes(a))) {
+      terms.add(key);
+      aliases.forEach(a => terms.add(a));
+    }
+  }
+  return Array.from(terms);
+}
+
 interface CommandItem {
   id: string;
   label: string;
@@ -152,13 +222,16 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
     if (!query.trim()) {
       return [...quickActions, ...shortcuts, ...pageItems];
     }
-    const q = query.toLowerCase().trim();
+    const q = normalizeArabic(query);
     const source = activeFilter === "shortcuts" ? shortcuts : staticItems;
+    const expanded = expandQueryAliases(q);
     return source.filter(item => {
-      if (item.label.toLowerCase().includes(q)) return true;
-      if (item.subtitle?.toLowerCase().includes(q)) return true;
-      if (item.keywords?.some(k => k.toLowerCase().includes(q))) return true;
-      return false;
+      const haystack = [
+        item.label,
+        item.subtitle || "",
+        ...(item.keywords || []),
+      ].map(normalizeArabic).join(" | ");
+      return expanded.some(term => haystack.includes(term));
     });
   }, [query, staticItems, quickActions, shortcuts, pageItems, activeFilter]);
 
