@@ -704,8 +704,6 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
 
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, {
       companyColumn: 'lr."companyId"',
-      branchColumn: 'lr."branchId"',
-      enforceBranchScope: true,
     });
     let finalWhere = where;
     let paramIdx = nextParamIndex;
