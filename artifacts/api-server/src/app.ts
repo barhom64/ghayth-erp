@@ -2,6 +2,7 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
+import { randomUUID } from "node:crypto";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 import { eventBusMiddleware } from "./middlewares/eventBusMiddleware.js";
@@ -107,11 +108,27 @@ app.get("/api/health", async (_req, res) => {
 
 app.use("/api", router);
 
-app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-  logger.error({ err }, "Unhandled error reached central middleware");
+// Catch-all for unknown /api/* routes. Must come after the router so real
+// handlers win, but before the error handler so 404s don't fall through to
+// Express's default HTML response (which breaks JSON clients).
+app.use("/api", (req: Request, res: Response) => {
+  res.status(404).json({
+    error: "المسار غير موجود",
+    path: req.originalUrl,
+    method: req.method,
+  });
+});
+
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  const requestId = randomUUID();
+  logger.error({ err, requestId, path: req.originalUrl, method: req.method }, "Unhandled error reached central middleware");
   if (res.headersSent) return next(err);
   const { status, message } = classifyDbError(err);
-  res.status(status).json({ error: message });
+  const body: Record<string, unknown> = { error: message, requestId };
+  if (process.env.NODE_ENV !== "production") {
+    body.detail = err?.message ?? String(err);
+  }
+  res.status(status).json(body);
 });
 
 export default app;
