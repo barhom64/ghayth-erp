@@ -2782,7 +2782,13 @@ router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"),
       throw new ForbiddenError("غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام");
     }
     const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     await rawExecute(`DELETE FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "approval_chains", entityId: id,
+      before: existing ?? { id },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -2923,6 +2929,12 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       }
     }
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "approval_requests", entityId: Number(req.params.id),
+      before: { status: request.status, refType: request.refType, refId: request.refId },
+      after: { status: result.status, approved: !!approved, reason: reason ?? null },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: `approval.${result.status}`, entity: "approval_requests",
@@ -2975,6 +2987,11 @@ router.put("/attendance-policy", requirePermission("hr:update"), async (req, res
         b.penaltyLevel3Label ?? "خصم يوم", b.penaltyLevel4Label ?? "خصم يومين",
         b.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي"]
     );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "attendance_policies", entityId: scope.companyId,
+      after: { lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3079,9 +3096,16 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_violations", entityId: id,
+      before: beforeRow ?? {},
+      after: updated ?? {},
+    }).catch(console.error);
     res.json(updated || { message: "تم التحديث" });
   } catch (err) { handleRouteError(err, res, "Patch violation error:"); }
 });
@@ -3143,9 +3167,16 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "shifts", entityId: id,
+      before: beforeRow ?? {},
+      after: row ?? {},
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch shift error:"); }
 });
@@ -3153,7 +3184,14 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
 router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    await rawExecute(`DELETE FROM shifts WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = Number(req.params.id);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`DELETE FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "shifts", entityId: id,
+      before: beforeRow ?? { id },
+    }).catch(console.error);
     res.json({ message: "تم حذف الوردية" });
   } catch (err) { handleRouteError(err, res, "Delete shift error:"); }
 });
@@ -3400,6 +3438,11 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     if (!row) {
       throw new NotFoundError("طلب الإجازة غير موجود");
     }
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_leave_requests", entityId: Number(req.params.id),
+      after: { status: status ?? undefined, reason: reason ?? undefined },
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3491,6 +3534,12 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
     // Cancel return-to-work obligation
     await cancelObligation(scope.companyId, "hr_leave_request", id);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_leave_requests", entityId: id,
+      before: { status: request.status, employeeId: request.employeeId, days: request.days },
+      after: { status: "cancelled", reason: b.reason },
+    }).catch(console.error);
     await emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
