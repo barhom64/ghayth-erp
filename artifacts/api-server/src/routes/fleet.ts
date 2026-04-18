@@ -1521,8 +1521,14 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       const [v] = await rawQuery<any>(`SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2`, [vehiclePlate, scope.companyId]);
       if (v) resolvedVehicleId = v.id;
     }
-    const liters = Number(b.liters) || 0;
+    if (!resolvedVehicleId) {
+      throw new ValidationError("المركبة مطلوبة", {
+        field: "vehicleId",
+        fix: "اختر مركبة من القائمة أو أدخل رقم اللوحة",
+      });
+    }
 
+    const liters = Number(b.liters) || 0;
     if (liters <= 0) {
       throw new ValidationError("كمية الوقود يجب أن تكون أكبر من صفر", {
         field: "liters",
@@ -1530,20 +1536,41 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       });
     }
 
-    if (resolvedVehicleId) {
-      const [veh] = await rawQuery<any>(
-        `SELECT "fuelCapacity" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2`,
-        [resolvedVehicleId, scope.companyId]
+    // FK pre-check: the vehicle must exist in the caller's company. Without
+    // this, bogus vehicleId would fail inside the INSERT as an opaque
+    // 23503 with no field tag.
+    const [veh] = await rawQuery<any>(
+      `SELECT id, "fuelCapacity" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [resolvedVehicleId, scope.companyId]
+    );
+    if (!veh) {
+      throw new ValidationError(`المركبة رقم ${resolvedVehicleId} غير موجودة`, {
+        field: "vehicleId",
+        fix: "اختر مركبة مسجلة في النظام",
+      });
+    }
+    const tankCapacity = Number(veh.fuelCapacity ?? 0);
+    if (tankCapacity > 0 && liters > tankCapacity) {
+      throw new ValidationError(
+        `لا يمكن تسجيل وقود يتجاوز سعة الخزان (${tankCapacity} لتر). الكمية المدخلة: ${liters} لتر`,
+        {
+          field: "liters",
+          fix: `أدخل كمية لا تتجاوز سعة خزان المركبة (${tankCapacity} لتر)`,
+        },
       );
-      const tankCapacity = Number(veh?.fuelCapacity ?? 0);
-      if (tankCapacity > 0 && liters > tankCapacity) {
-        throw new ValidationError(
-          `لا يمكن تسجيل وقود يتجاوز سعة الخزان (${tankCapacity} لتر). الكمية المدخلة: ${liters} لتر`,
-          {
-            field: "liters",
-            fix: `أدخل كمية لا تتجاوز سعة خزان المركبة (${tankCapacity} لتر)`,
-          },
-        );
+    }
+
+    // driverId is optional; if provided, FK-check it inside scope.
+    if (b.driverId) {
+      const [drv] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [Number(b.driverId), scope.companyId]
+      );
+      if (!drv) {
+        throw new ValidationError(`السائق رقم ${b.driverId} غير موجود`, {
+          field: "driverId",
+          fix: "اختر سائقاً مسجلاً أو اتركه فارغاً",
+        });
       }
     }
 
