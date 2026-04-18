@@ -13,6 +13,7 @@ import { getCurrencySymbol } from "@/lib/formatters";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
+import { ClientContextCard } from "@/components/shared/client-context-card";
 
 const DRAFT_KEY = "projects_create";
 const INITIAL = { name: "", clientId: "", managerId: "", status: "planning", budget: "", startDate: "", endDate: "", description: "" };
@@ -80,6 +81,11 @@ export default function ProjectsCreate() {
               placeholder="ابحث عن عميل..."
               emptyMessage="لا يوجد عملاء"
             />
+            {form.clientId && (
+              <div className="mt-3">
+                <ClientContextCard clientId={form.clientId} section="project" />
+              </div>
+            )}
           </div>
           <div>
             <Label>مدير المشروع</Label>

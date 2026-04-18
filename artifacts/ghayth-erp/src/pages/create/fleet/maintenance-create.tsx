@@ -11,6 +11,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 
 const DRAFT_KEY = "fleet_maintenance_create";
 const INITIAL = {
@@ -68,7 +69,7 @@ export default function MaintenanceCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
+        <div className="md:col-span-3">
           <Label>المركبة <span className="text-red-500">*</span></Label>
           <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
             <SelectTrigger className="mt-1">
@@ -80,6 +81,11 @@ export default function MaintenanceCreate() {
               ))}
             </SelectContent>
           </Select>
+          {form.vehicleId && (
+            <div className="mt-3">
+              <VehicleContextCard vehicleId={form.vehicleId} section="maintenance" />
+            </div>
+          )}
         </div>
         <div>
           <Label>نوع الصيانة</Label>

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { ProductContextCard } from "@/components/shared/product-context-card";
 
 const DRAFT_KEY = "warehouse_movements_create";
 const INITIAL = { productId: "", type: "in", quantity: "", unitCost: "", reference: "", notes: "" };
@@ -59,7 +60,7 @@ export default function MovementsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+        <div className="md:col-span-2">
           <Label>المنتج</Label>
           <Select value={form.productId} onValueChange={(v) => setForm((f) => ({ ...f, productId: v }))}>
             <SelectTrigger className="mt-1">
@@ -71,6 +72,14 @@ export default function MovementsCreate() {
               ))}
             </SelectContent>
           </Select>
+          {form.productId && (
+            <div className="mt-3">
+              <ProductContextCard
+                productId={form.productId}
+                section={form.type === "out" ? "out" : "in"}
+              />
+            </div>
+          )}
         </div>
         <div>
           <Label>النوع</Label>

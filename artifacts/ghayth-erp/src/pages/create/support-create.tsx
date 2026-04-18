@@ -11,6 +11,7 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { ClientContextCard } from "@/components/shared/client-context-card";
 
 const DRAFT_KEY = "support_create";
 const INITIAL = { title: "", clientId: "", assigneeId: "", category: "", priority: "medium", status: "open", description: "" };
@@ -78,6 +79,11 @@ export default function SupportCreate() {
                 {clients.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            {form.clientId && (
+              <div className="mt-3">
+                <ClientContextCard clientId={form.clientId} section="ticket" />
+              </div>
+            )}
           </div>
           <div>
             <Label>المسؤول عن التذكرة</Label>
