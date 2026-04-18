@@ -113,6 +113,10 @@ export default function VouchersCreate() {
   };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", INITIAL_FORM);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const operationTypes = form.type === "receipt" ? OPERATION_TYPES_RECEIPT : OPERATION_TYPES_PAYMENT;
 
@@ -146,16 +150,21 @@ export default function VouchersCreate() {
   };
 
   const handleSubmit = async () => {
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.type) localErrors.type = "يرجى اختيار نوع السند";
     if (!form.amount) {
-      toast({ variant: "destructive", title: "المبلغ مطلوب" });
-      return;
+      localErrors.amount = "المبلغ مطلوب";
+    } else if (Number(form.amount) <= 0) {
+      localErrors.amount = "المبلغ يجب أن يكون أكبر من صفر";
     }
-    if (!form.branchId) {
-      toast({ variant: "destructive", title: "الفرع مطلوب" });
-      return;
-    }
-    if (!form.accountCode) {
-      toast({ variant: "destructive", title: "الحساب المحاسبي مطلوب" });
+    if (!form.accountCode) localErrors.accountCode = "الحساب المحاسبي مطلوب";
+    if (!form.sourceAccountCode && !form.accountCode) localErrors.sourceAccountCode = "يجب تحديد حساب مدين وحساب دائن";
+    if (!form.branchId) localErrors.branchId = "الفرع مطلوب";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     if (requiresAttachment && !form.attachmentUrl) {
@@ -216,7 +225,7 @@ export default function VouchersCreate() {
         <h3 className="font-semibold text-sm text-muted-foreground">نوع السند</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label>النوع الرئيسي</Label>
+            <Label>النوع الرئيسي <span className="text-red-500">*</span></Label>
             <div className="flex gap-3 mt-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="type" value="receipt" checked={form.type === "receipt"}
@@ -229,6 +238,7 @@ export default function VouchersCreate() {
                 <span className="text-sm">سند صرف</span>
               </label>
             </div>
+            <FieldHint field="type" />
           </div>
           <div>
             <Label>نوع العملية</Label>
@@ -256,8 +266,9 @@ export default function VouchersCreate() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>المبلغ (ريال) <span className="text-red-500">*</span></Label>
-            <Input className="mt-1" type="number" min="0" step="0.01" value={form.amount}
+            <Input className={`mt-1 ${errCls("amount")}`} type="number" min="0" step="0.01" value={form.amount}
               onChange={(e) => setField("amount", e.target.value)} placeholder="0.00" />
+            <FieldHint field="amount" />
           </div>
           <div>
             <Label>ضريبة القيمة المضافة (%)</Label>
@@ -287,7 +298,7 @@ export default function VouchersCreate() {
           <div>
             <Label>الحساب المقابل <span className="text-red-500">*</span></Label>
             <Select value={form.accountCode || "_none"} onValueChange={(v) => setField("accountCode", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger className={`mt-1 ${errCls("accountCode")}`}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">{form.type === "receipt" ? "إيرادات (4000)" : "مصروفات (5000)"}</SelectItem>
                 {targetAccounts.map((a: any) => (
@@ -295,6 +306,7 @@ export default function VouchersCreate() {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint field="accountCode" />
           </div>
           <div>
             <Label>الخزنة / البنك</Label>
@@ -411,12 +423,13 @@ export default function VouchersCreate() {
           <div>
             <Label>الفرع <span className="text-red-500">*</span></Label>
             <Select value={form.branchId || "_none"} onValueChange={(v) => setField("branchId", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger className={`mt-1 ${errCls("branchId")}`}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر الفرع</SelectItem>
                 {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <FieldHint field="branchId" />
           </div>
           <div>
             <Label>القسم / الإدارة</Label>

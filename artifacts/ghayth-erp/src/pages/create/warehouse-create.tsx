@@ -21,10 +21,23 @@ export default function WarehouseCreate() {
   const { data: categoriesRes } = useApiQuery<{ data: any[] }>(["warehouse-categories"], "/warehouse/categories");
   const categories = categoriesRes?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم المنتج" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "يرجى إدخال اسم المنتج";
+    if (form.costPrice && Number(form.costPrice) < 0) localErrors.costPrice = "سعر التكلفة يجب أن يكون صفر أو أكثر";
+    if (form.sellPrice && Number(form.sellPrice) < 0) localErrors.sellPrice = "سعر البيع يجب أن يكون صفر أو أكثر";
+    if (form.minStock && Number(form.minStock) < 0) localErrors.minStock = "الحد الأدنى يجب أن يكون صفر أو أكثر";
+    if (form.currentStock && Number(form.currentStock) < 0) localErrors.currentStock = "المخزون الحالي يجب أن يكون صفر أو أكثر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -60,7 +73,7 @@ export default function WarehouseCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اسم المنتج</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم المنتج" /></div>
+          <div><Label>اسم المنتج <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم المنتج" /><FieldHint field="name" /></div>
           <div><Label>رمز المنتج</Label><Input className="mt-1" value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} placeholder="رمز المنتج" /></div>
           <div>
             <Label>التصنيف</Label>
@@ -85,10 +98,10 @@ export default function WarehouseCreate() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label>سعر التكلفة</Label><Input className="mt-1" type="number" step="0.01" value={form.costPrice} onChange={(e) => setForm((f) => ({ ...f, costPrice: e.target.value }))} placeholder="٠" /></div>
-          <div><Label>سعر البيع</Label><Input className="mt-1" type="number" step="0.01" value={form.sellPrice} onChange={(e) => setForm((f) => ({ ...f, sellPrice: e.target.value }))} placeholder="٠" /></div>
-          <div><Label>المخزون الحالي</Label><Input className="mt-1" type="number" value={form.currentStock} onChange={(e) => setForm((f) => ({ ...f, currentStock: e.target.value }))} placeholder="٠" /></div>
-          <div><Label>الحد الأدنى</Label><Input className="mt-1" type="number" value={form.minStock} onChange={(e) => setForm((f) => ({ ...f, minStock: e.target.value }))} placeholder="٠" /></div>
+          <div><Label>سعر التكلفة</Label><Input className={`mt-1 ${errCls("costPrice")}`} type="number" step="0.01" value={form.costPrice} onChange={(e) => setForm((f) => ({ ...f, costPrice: e.target.value }))} placeholder="٠" /><FieldHint field="costPrice" /></div>
+          <div><Label>سعر البيع</Label><Input className={`mt-1 ${errCls("sellPrice")}`} type="number" step="0.01" value={form.sellPrice} onChange={(e) => setForm((f) => ({ ...f, sellPrice: e.target.value }))} placeholder="٠" /><FieldHint field="sellPrice" /></div>
+          <div><Label>المخزون الحالي</Label><Input className={`mt-1 ${errCls("currentStock")}`} type="number" value={form.currentStock} onChange={(e) => setForm((f) => ({ ...f, currentStock: e.target.value }))} placeholder="٠" /><FieldHint field="currentStock" /></div>
+          <div><Label>الحد الأدنى</Label><Input className={`mt-1 ${errCls("minStock")}`} type="number" value={form.minStock} onChange={(e) => setForm((f) => ({ ...f, minStock: e.target.value }))} placeholder="٠" /><FieldHint field="minStock" /></div>
         </div>
         <div><Label>الموقع في المستودع</Label><Input className="mt-1" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="الموقع في المستودع" /></div>
         <FileDropZone files={attachments} onFilesChange={setAttachments} />

@@ -24,18 +24,30 @@ export default function BudgetCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    if (!form.accountCode) {
-      toast({ variant: "destructive", title: "يرجى اختيار الحساب" });
-      return;
-    }
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.accountCode) localErrors.accountCode = "يرجى اختيار الحساب";
     if (!form.period) {
-      toast({ variant: "destructive", title: "الفترة مطلوبة" });
-      return;
+      localErrors.period = "الفترة مطلوبة";
+    } else {
+      const year = parseInt(form.period.split("-")[0], 10);
+      if (isNaN(year) || year < 2020 || year > 2040) localErrors.period = "السنة يجب أن تكون بين 2020 و 2040";
     }
     if (!form.amount) {
-      toast({ variant: "destructive", title: "المبلغ مطلوب" });
+      localErrors.amount = "المبلغ مطلوب";
+    } else if (Number(form.amount) < 0) {
+      localErrors.amount = "المبلغ يجب أن يكون صفر أو أكثر";
+    }
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -70,9 +82,9 @@ export default function BudgetCreate() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label>الحساب</Label>
+          <Label>الحساب <span className="text-red-500">*</span></Label>
           <Select value={form.accountCode} onValueChange={(v) => setForm((f) => ({ ...f, accountCode: v }))}>
-            <SelectTrigger className="mt-1">
+            <SelectTrigger className={`mt-1 ${errCls("accountCode")}`}>
               <SelectValue placeholder="اختر الحساب" />
             </SelectTrigger>
             <SelectContent>
@@ -81,12 +93,14 @@ export default function BudgetCreate() {
               ))}
             </SelectContent>
           </Select>
+          <FieldHint field="accountCode" />
         </div>
         <div>
-          <Label>الفترة</Label>
-          <Input className="mt-1" type="month" value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} />
+          <Label>الفترة <span className="text-red-500">*</span></Label>
+          <Input className={`mt-1 ${errCls("period")}`} type="month" value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} />
+          <FieldHint field="period" />
         </div>
-        <div><Label>المبلغ المخصص</Label><Input className="mt-1" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} /></div>
+        <div><Label>المبلغ المخصص <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("amount")}`} type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} /><FieldHint field="amount" /></div>
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">

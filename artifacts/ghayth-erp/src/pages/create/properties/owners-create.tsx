@@ -15,6 +15,11 @@ export default function OwnersCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const [form, setForm] = useState<any>({
     ownerType: "individual", name: "", nationalId: "", crNumber: "", phone: "", email: "",
     iban: "", bankName: "", address: "", city: "",
@@ -22,7 +27,17 @@ export default function OwnersCreate() {
   });
 
   const handleSave = async () => {
-    if (!form.name) { toast({ variant: "destructive", title: "اسم المالك مطلوب" }); return; }
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "اسم المالك مطلوب";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
+    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الهاتف يجب أن يكون 9 أرقام على الأقل";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
+      return;
+    }
     setSaving(true);
     try {
       const payload = { ...form, authorizationDate: form.authorizationDate || undefined, authorizationExpiry: form.authorizationExpiry || undefined };
@@ -57,7 +72,8 @@ export default function OwnersCreate() {
             </div>
             <div>
               <Label>الاسم <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={form.ownerType === "company" ? "اسم الشركة" : "الاسم الكامل"} />
+              <Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={form.ownerType === "company" ? "اسم الشركة" : "الاسم الكامل"} />
+              <FieldHint field="name" />
             </div>
             <div>
               <Label>رقم الهوية</Label>
@@ -71,11 +87,13 @@ export default function OwnersCreate() {
             )}
             <div>
               <Label>الهاتف</Label>
-              <Input className="mt-1" dir="ltr" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              <Input className={`mt-1 ${errCls("phone")}`} dir="ltr" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              <FieldHint field="phone" />
             </div>
             <div>
               <Label>البريد الإلكتروني</Label>
-              <Input className="mt-1" type="email" dir="ltr" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              <Input className={`mt-1 ${errCls("email")}`} type="email" dir="ltr" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              <FieldHint field="email" />
             </div>
           </div>
 

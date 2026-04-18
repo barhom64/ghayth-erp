@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -40,6 +42,7 @@ export default function JobDetailPage() {
   const [, params] = useRoute("/hr/recruitment/jobs/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const queryClient = useQueryClient();
 
   const { data: job, isLoading, isError, refetch } = useApiQuery<any>(
     ["recruitment-job", id],
@@ -204,20 +207,44 @@ export default function JobDetailPage() {
               label: "إعادة فتح",
               icon: RotateCcw,
               variant: "default" as const,
-              onClick: () => {
-                // TODO: PATCH /recruitment/postings/:id with status=open
-                console.log("TODO: reopen job posting", id);
-                navigate("/hr/recruitment");
+              onClick: async () => {
+                try {
+                  await apiFetch(`/recruitment/postings/${id}/reopen`, {
+                    method: "POST",
+                    body: JSON.stringify({}),
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["recruitment-job", id] });
+                  toast({ title: "تم إعادة فتح الإعلان الوظيفي" });
+                  refetch();
+                } catch (err: any) {
+                  toast({
+                    variant: "destructive",
+                    title: "تعذر إعادة فتح الإعلان",
+                    description: err.message || "حدث خطأ",
+                  });
+                }
               },
             }
           : {
               label: "إغلاق",
               icon: XCircle,
               variant: "outline" as const,
-              onClick: () => {
-                // TODO: PATCH /recruitment/postings/:id with status=closed
-                console.log("TODO: close job posting", id);
-                navigate("/hr/recruitment");
+              onClick: async () => {
+                try {
+                  await apiFetch(`/recruitment/postings/${id}/close`, {
+                    method: "POST",
+                    body: JSON.stringify({}),
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["recruitment-job", id] });
+                  toast({ title: "تم إغلاق الإعلان الوظيفي" });
+                  refetch();
+                } catch (err: any) {
+                  toast({
+                    variant: "destructive",
+                    title: "تعذر إغلاق الإعلان",
+                    description: err.message || "حدث خطأ",
+                  });
+                }
               },
             },
       ]}

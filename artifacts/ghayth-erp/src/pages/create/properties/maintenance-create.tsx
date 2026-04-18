@@ -8,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 
@@ -18,18 +19,26 @@ export default function PropertyMaintenanceCreate() {
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
   const units = unitsData?.data || [];
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("property_maintenance_create", {
-    unitId: "", category: "", description: "", priority: "medium",
+    unitId: "", category: "", description: "", priority: "medium", cost: "",
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const handleSubmit = async () => {
-    if (!form.unitId) {
-      toast({ variant: "destructive", title: "يرجى اختيار الوحدة" });
-      return;
-    }
-    if (!form.description) {
-      toast({ variant: "destructive", title: "وصف الطلب مطلوب" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.unitId) localErrors.unitId = "يرجى اختيار الوحدة";
+    if (!form.description) localErrors.description = "وصف الطلب مطلوب";
+    if (form.cost && Number(form.cost) < 0) localErrors.cost = "التكلفة يجب أن تكون صفر أو أكثر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -38,6 +47,7 @@ export default function PropertyMaintenanceCreate() {
         category: form.category || undefined,
         description: form.description,
         priority: form.priority,
+        cost: form.cost ? Number(form.cost) : undefined,
       });
       clearDraft();
       toast({ title: "تم إنشاء طلب الصيانة بنجاح" });
@@ -62,7 +72,7 @@ export default function PropertyMaintenanceCreate() {
         <div>
           <Label>الوحدة</Label>
           <Select value={form.unitId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, unitId: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger className={`mt-1 ${errCls("unitId")}`}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر الوحدة</SelectItem>
               {units.map((u: any) => (
@@ -70,6 +80,7 @@ export default function PropertyMaintenanceCreate() {
               ))}
             </SelectContent>
           </Select>
+          <FieldHint field="unitId" />
           {form.unitId && (
             <div className="mt-3">
               <PropertyUnitContextCard unitId={form.unitId} section="maintenance" />
@@ -100,7 +111,16 @@ export default function PropertyMaintenanceCreate() {
             </SelectContent>
           </Select>
         </div>
-        <div className="md:col-span-2"><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} /></div>
+        <div className="md:col-span-2">
+          <Label>الوصف</Label>
+          <Textarea className={`mt-1 ${errCls("description")}`} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} />
+          <FieldHint field="description" />
+        </div>
+        <div>
+          <Label>التكلفة</Label>
+          <Input className={`mt-1 ${errCls("cost")}`} type="number" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))} placeholder="0" />
+          <FieldHint field="cost" />
+        </div>
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">

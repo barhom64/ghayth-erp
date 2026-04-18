@@ -33,10 +33,21 @@ export default function CrmCreate() {
   const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    if (!form.title) {
-      toast({ variant: "destructive", title: "يرجى إدخال عنوان الفرصة" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.title) localErrors.title = "يرجى إدخال عنوان الفرصة";
+    if (form.probability && (Number(form.probability) < 0 || Number(form.probability) > 100)) localErrors.probability = "نسبة الاحتمال يجب أن تكون بين 0 و 100";
+    if (form.value && Number(form.value) < 0) localErrors.value = "القيمة يجب أن تكون 0 أو أكثر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -77,7 +88,7 @@ export default function CrmCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان الفرصة <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="عنوان الفرصة" /></div>
+          <div><Label>عنوان الفرصة <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("title")}`} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="عنوان الفرصة" /><FieldHint field="title" /></div>
           <div>
             <Label>العميل</Label>
             <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
@@ -135,8 +146,8 @@ export default function CrmCreate() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label>{`القيمة المتوقعة (${getCurrencySymbol()})`}</Label><Input className="mt-1" type="number" step="0.01" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))} placeholder="٠" /></div>
-          <div><Label>نسبة الاحتمال (%)</Label><Input className="mt-1" type="number" min="0" max="100" value={form.probability} onChange={(e) => setForm((f) => ({ ...f, probability: e.target.value }))} placeholder="50" /></div>
+          <div><Label>{`القيمة المتوقعة (${getCurrencySymbol()})`}</Label><Input className={`mt-1 ${errCls("value")}`} type="number" step="0.01" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))} placeholder="٠" /><FieldHint field="value" /></div>
+          <div><Label>نسبة الاحتمال (%)</Label><Input className={`mt-1 ${errCls("probability")}`} type="number" min="0" max="100" value={form.probability} onChange={(e) => setForm((f) => ({ ...f, probability: e.target.value }))} placeholder="50" /><FieldHint field="probability" /></div>
           <div><Label>تاريخ الإغلاق المتوقع</Label><div className="mt-1"><DatePicker value={form.expectedCloseDate} onChange={(v) => setForm((f) => ({ ...f, expectedCloseDate: v }))} /></div></div>
           <div><Label>المتابعة القادمة</Label><div className="mt-1"><DatePicker value={form.nextFollowUp} onChange={(v) => setForm((f) => ({ ...f, nextFollowUp: v }))} /></div></div>
         </div>

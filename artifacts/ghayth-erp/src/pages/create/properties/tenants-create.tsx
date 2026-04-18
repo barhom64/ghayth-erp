@@ -17,6 +17,11 @@ export default function TenantsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/tenants", "POST", [["property-tenants-list"]]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -51,8 +56,15 @@ export default function TenantsCreate() {
   const isCompany = form.tenantType === "company";
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم المستأجر" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name.trim()) localErrors.name = "يرجى إدخال اسم المستأجر";
+    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الجوال يجب أن يكون 9 أرقام على الأقل";
+    if (form.nationalId && !/^\d{10}$/.test(form.nationalId.trim())) localErrors.nationalId = "رقم الهوية يجب أن يكون 10 أرقام";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -94,11 +106,13 @@ export default function TenantsCreate() {
               </div>
               <div className="space-y-2">
                 <Label>{isCompany ? "اسم الشركة" : "الاسم الكامل"} <span className="text-red-500">*</span></Label>
-                <Input value={form.name} onChange={e => set("name", e.target.value)} placeholder={isCompany ? "اسم الشركة أو المؤسسة" : "الاسم الرباعي"} />
+                <Input className={errCls("name")} value={form.name} onChange={e => set("name", e.target.value)} placeholder={isCompany ? "اسم الشركة أو المؤسسة" : "الاسم الرباعي"} />
+                <FieldHint field="name" />
               </div>
               <div className="space-y-2">
                 <Label>رقم الجوال</Label>
-                <Input dir="ltr" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="05XXXXXXXX" />
+                <Input className={errCls("phone")} dir="ltr" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="05XXXXXXXX" />
+                <FieldHint field="phone" />
               </div>
               <div className="space-y-2">
                 <Label>البريد الإلكتروني</Label>
@@ -118,7 +132,8 @@ export default function TenantsCreate() {
               </div>
               <div className="space-y-2">
                 <Label>رقم الهوية</Label>
-                <Input dir="ltr" value={form.nationalId} onChange={e => set("nationalId", e.target.value)} placeholder="رقم الهوية أو الإقامة" />
+                <Input className={errCls("nationalId")} dir="ltr" value={form.nationalId} onChange={e => set("nationalId", e.target.value)} placeholder="رقم الهوية أو الإقامة" />
+                <FieldHint field="nationalId" />
               </div>
               <div className="space-y-2">
                 <Label>الجنسية</Label>

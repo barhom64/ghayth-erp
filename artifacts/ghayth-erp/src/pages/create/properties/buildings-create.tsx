@@ -16,6 +16,11 @@ export default function BuildingsCreate() {
   const { data: ownersResp } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const owners = asList(ownersResp);
   const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const [form, setForm] = useState<any>({
     name: "", address: "", city: "", type: "residential", floors: "", description: "",
     deedNumber: "", deedDate: "", buildingPermitNumber: "",
@@ -38,7 +43,16 @@ export default function BuildingsCreate() {
   });
 
   const handleSave = async () => {
-    if (!form.name) { toast({ variant: "destructive", title: "اسم المبنى مطلوب" }); return; }
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "اسم المبنى مطلوب";
+    if (form.floors && Number(form.floors) < 0) localErrors.floors = "عدد الطوابق يجب أن يكون صفر أو أكثر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
+      return;
+    }
     setSaving(true);
     try {
       await apiFetch("/properties/buildings", { method: "POST", body: JSON.stringify(buildPayload()) });
@@ -62,7 +76,8 @@ export default function BuildingsCreate() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>اسم المبنى <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="برج X / مجمع Y" />
+              <Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="برج X / مجمع Y" />
+              <FieldHint field="name" />
             </div>
             <div>
               <Label>نوع المبنى</Label>
@@ -82,7 +97,8 @@ export default function BuildingsCreate() {
             </div>
             <div>
               <Label>عدد الطوابق</Label>
-              <Input className="mt-1" type="number" value={form.floors} onChange={e => setForm({ ...form, floors: e.target.value })} />
+              <Input className={`mt-1 ${errCls("floors")}`} type="number" value={form.floors} onChange={e => setForm({ ...form, floors: e.target.value })} />
+              <FieldHint field="floors" />
             </div>
           </div>
 

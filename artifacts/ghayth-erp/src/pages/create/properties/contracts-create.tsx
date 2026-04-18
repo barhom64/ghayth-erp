@@ -34,6 +34,11 @@ export default function ContractsCreate() {
   const [isDirty, setIsDirty] = useState(false);
   useUnsavedChanges(isDirty);
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const [form, setForm] = useState({
     unitId: "",
     tenantId: "",
@@ -139,24 +144,18 @@ export default function ContractsCreate() {
   }, [form.startDate, form.endDate, form.monthlyRent, form.paymentFrequency, form.paymentDay, form.totalContractValue, form.numberOfInstallments]);
 
   const handleSubmit = async () => {
-    if (!form.unitId) {
-      toast({ variant: "destructive", title: "يرجى اختيار الوحدة" });
-      return;
-    }
-    if (!form.tenantName) {
-      toast({ variant: "destructive", title: "اسم المستأجر مطلوب" });
-      return;
-    }
-    if (!form.startDate || !form.endDate) {
-      toast({ variant: "destructive", title: "تاريخ بدء وانتهاء العقد مطلوبان" });
-      return;
-    }
-    if (form.endDate <= form.startDate) {
-      toast({ variant: "destructive", title: "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء" });
-      return;
-    }
-    if (!form.monthlyRent || Number(form.monthlyRent) <= 0) {
-      toast({ variant: "destructive", title: "الإيجار الشهري مطلوب" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.unitId) localErrors.unitId = "يرجى اختيار الوحدة";
+    if (!form.tenantId && !form.tenantName) localErrors.tenantId = "يرجى اختيار أو إدخال المستأجر";
+    if (!form.startDate) localErrors.startDate = "تاريخ بدء العقد مطلوب";
+    if (!form.endDate) localErrors.endDate = "تاريخ انتهاء العقد مطلوب";
+    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
+    if (!form.monthlyRent || Number(form.monthlyRent) <= 0) localErrors.monthlyRent = "الإيجار الشهري يجب أن يكون أكبر من صفر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -260,12 +259,13 @@ export default function ContractsCreate() {
               </div>
               <div>
                 <Label>الوحدة <span className="text-red-500">*</span></Label>
-                <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.unitId} onChange={e => set("unitId", e.target.value)}>
+                <select className={`w-full border rounded-md p-2 mt-1 text-sm ${errCls("unitId")}`} value={form.unitId} onChange={e => set("unitId", e.target.value)}>
                   <option value="">اختر الوحدة</option>
                   {units.map((u: any) => (
                     <option key={u.id} value={u.id}>{u.unitNumber} - {u.buildingName || ""} ({u.type || ""})</option>
                   ))}
                 </select>
+                <FieldHint field="unitId" />
               </div>
               {form.unitId && (
                 <div className="md:col-span-3">
@@ -298,7 +298,7 @@ export default function ContractsCreate() {
                   <Users2 className="h-4 w-4 text-blue-500" /> اختر من سجل المستأجرين
                 </Label>
                 <Select value={form.tenantId || "manual"} onValueChange={handleTenantSelect}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className={`mt-1 ${errCls("tenantId")}`}>
                     <SelectValue placeholder="— اختر مستأجراً أو أدخل يدوياً —" />
                   </SelectTrigger>
                   <SelectContent>
@@ -315,6 +315,7 @@ export default function ContractsCreate() {
                     <Users2 className="h-3 w-3" /> مرتبط بسجل المستأجر #{selectedTenant.id}
                   </Badge>
                 )}
+                <FieldHint field="tenantId" />
               </div>
               <div>
                 <Label>المالك</Label>
@@ -356,11 +357,13 @@ export default function ContractsCreate() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label>من تاريخ <span className="text-red-500">*</span></Label>
-                <div className="mt-1"><DatePicker value={form.startDate} onChange={v => set("startDate", v)} /></div>
+                <div className={`mt-1 ${errCls("startDate")}`}><DatePicker value={form.startDate} onChange={v => set("startDate", v)} /></div>
+                <FieldHint field="startDate" />
               </div>
               <div>
                 <Label>إلى تاريخ <span className="text-red-500">*</span></Label>
-                <div className="mt-1"><DatePicker value={form.endDate} onChange={v => set("endDate", v)} /></div>
+                <div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={v => set("endDate", v)} /></div>
+                <FieldHint field="endDate" />
               </div>
               <div>
                 <Label>دورة السداد</Label>
@@ -376,7 +379,8 @@ export default function ContractsCreate() {
               </div>
               <div>
                 <Label>الإيجار الشهري ({currency}) <span className="text-red-500">*</span></Label>
-                <Input className="mt-1" type="number" value={form.monthlyRent} onChange={e => set("monthlyRent", e.target.value)} />
+                <Input className={`mt-1 ${errCls("monthlyRent")}`} type="number" value={form.monthlyRent} onChange={e => set("monthlyRent", e.target.value)} />
+                <FieldHint field="monthlyRent" />
               </div>
               <div>
                 <Label>الإيجار السنوي ({currency})</Label>

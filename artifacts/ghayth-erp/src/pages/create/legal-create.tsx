@@ -27,9 +27,13 @@ export default function LegalCreate() {
   const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/crm/clients");
   const clients = clientsData?.data || [];
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const search = useSearch();
   const copyFromId = new URLSearchParams(search).get("copyFrom");
   const [copied, setCopied] = useState(false);
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   useEffect(() => {
     if (copyFromId && !copied) {
@@ -54,12 +58,16 @@ export default function LegalCreate() {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!form.title) {
-      toast({ variant: "destructive", title: "يرجى إدخال عنوان العقد" });
-      return;
-    }
-    if (!form.startDate || !form.endDate) {
-      toast({ variant: "destructive", title: "يرجى تحديد تاريخ البداية والنهاية" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.title) localErrors.title = "يرجى إدخال عنوان العقد";
+    if (!form.startDate) localErrors.startDate = "يرجى تحديد تاريخ البداية";
+    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ النهاية يجب أن يكون بعد تاريخ البداية";
+    if (form.value && Number(form.value) < 0) localErrors.value = "القيمة يجب أن تكون 0 أو أكثر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -99,7 +107,7 @@ export default function LegalCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان العقد <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} placeholder="عنوان العقد" /></div>
+          <div><Label>عنوان العقد <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("title")}`} value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} placeholder="عنوان العقد" /><FieldHint field="title" /></div>
           <div>
             <Label>نوع العقد</Label>
             <Select value={form.contractType || "_none"} onValueChange={(v) => setForm(f => ({ ...f, contractType: v === "_none" ? "" : v }))}>
@@ -135,7 +143,7 @@ export default function LegalCreate() {
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>{`القيمة (${getCurrencySymbol()})`}</Label><Input className="mt-1" type="number" step="0.01" value={form.value} onChange={(e) => setForm(f => ({ ...f, value: e.target.value }))} placeholder="٠" /></div>
+          <div><Label>{`القيمة (${getCurrencySymbol()})`}</Label><Input className={`mt-1 ${errCls("value")}`} type="number" step="0.01" value={form.value} onChange={(e) => setForm(f => ({ ...f, value: e.target.value }))} placeholder="٠" /><FieldHint field="value" /></div>
           <div>
             <Label>الحالة</Label>
             <Select value={form.status} onValueChange={(v) => setForm(f => ({ ...f, status: v }))}>
@@ -147,8 +155,8 @@ export default function LegalCreate() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label>من <span className="text-red-500">*</span></Label><div className="mt-1"><DatePicker value={form.startDate} onChange={(v) => setForm(f => ({ ...f, startDate: v }))} /></div></div>
-          <div><Label>إلى <span className="text-red-500">*</span></Label><div className="mt-1"><DatePicker value={form.endDate} onChange={(v) => setForm(f => ({ ...f, endDate: v }))} /></div></div>
+          <div><Label>من <span className="text-red-500">*</span></Label><div className={`mt-1 ${errCls("startDate")}`}><DatePicker value={form.startDate} onChange={(v) => setForm(f => ({ ...f, startDate: v }))} /></div><FieldHint field="startDate" /></div>
+          <div><Label>إلى <span className="text-red-500">*</span></Label><div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={(v) => setForm(f => ({ ...f, endDate: v }))} /></div><FieldHint field="endDate" /></div>
           <div>
             <Label>تنبيه التجديد</Label>
             <Select value={form.renewalAlert} onValueChange={(v) => setForm(f => ({ ...f, renewalAlert: v }))}>

@@ -38,6 +38,11 @@ export default function ExitCreate() {
     otherDeductions: "0",
   });
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
     [employees, form.assignmentId]
@@ -68,12 +73,19 @@ export default function ExitCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.assignmentId) {
-      toast({ title: "يرجى اختيار الموظف", variant: "destructive" });
-      return;
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
+    if (!form.lastWorkingDay) localErrors.lastWorkingDay = "آخر يوم عمل مطلوب";
+    if (!form.exitType) localErrors.exitType = "نوع نهاية الخدمة مطلوب";
+    if (form.lastWorkingDay) {
+      const today = new Date().toISOString().split("T")[0];
+      if (form.lastWorkingDay < today) localErrors.lastWorkingDay = "آخر يوم عمل يجب أن يكون اليوم أو في المستقبل";
     }
-    if (!form.exitType) {
-      toast({ title: "نوع نهاية الخدمة مطلوب", variant: "destructive" });
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
 
@@ -121,7 +133,7 @@ export default function ExitCreate() {
               value={form.assignmentId}
               onValueChange={(v) => setForm({ ...form, assignmentId: v })}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errCls("assignmentId")}>
                 <SelectValue placeholder="اختر الموظف..." />
               </SelectTrigger>
               <SelectContent>
@@ -135,6 +147,7 @@ export default function ExitCreate() {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint field="assignmentId" />
           </div>
 
           <div className="space-y-2">
@@ -146,7 +159,7 @@ export default function ExitCreate() {
               value={form.exitType}
               onValueChange={(v) => setForm({ ...form, exitType: v })}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errCls("exitType")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -155,6 +168,7 @@ export default function ExitCreate() {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint field="exitType" />
           </div>
         </div>
 
@@ -162,12 +176,15 @@ export default function ExitCreate() {
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-gray-500" />
-              آخر يوم عمل
+              آخر يوم عمل <span className="text-red-500">*</span>
             </Label>
-            <DatePicker
-              value={form.lastWorkingDay}
-              onChange={(v) => setForm({ ...form, lastWorkingDay: v })}
-            />
+            <div className={errCls("lastWorkingDay")}>
+              <DatePicker
+                value={form.lastWorkingDay}
+                onChange={(v) => setForm({ ...form, lastWorkingDay: v })}
+              />
+            </div>
+            <FieldHint field="lastWorkingDay" />
           </div>
 
           <div className="space-y-2">

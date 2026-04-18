@@ -1448,6 +1448,7 @@ export default function ViolationsCreate() {
 
   // Load saved extra draft state (witnesses, reasons, relatedParties, openStep)
   const [draftExtra] = useState(() => loadDraftExtra());
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [witnesses, setWitnesses] = useState<WitnessEntry[]>(draftExtra.witnesses || []);
   const [reasons, setReasons] = useState<string[]>(draftExtra.reasons || []);
@@ -1463,6 +1464,9 @@ export default function ViolationsCreate() {
 
   // Draft defaults
   const draftDefaults = loadDraftDefaults();
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   // Memo creation mutation — successMessage: false so we show the memo number ourselves
   const createMemo = useApiMutation<
@@ -1492,6 +1496,17 @@ export default function ViolationsCreate() {
           </Button>
         }
         onSubmit={async (values) => {
+          setFieldErrors({});
+          const localErrors: Record<string, string> = {};
+          if (!values.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
+          if (!values.incidentType) localErrors.incidentType = "نوع الواقعة مطلوب";
+          if (values.manualOverrideAmount !== undefined && values.manualOverrideAmount < 0) localErrors.manualOverrideAmount = "مبلغ الخصم يجب أن يكون صفر أو أكثر";
+          if (Object.keys(localErrors).length > 0) {
+            setFieldErrors(localErrors);
+            const firstKey = Object.keys(localErrors)[0];
+            toast({ variant: "destructive", title: localErrors[firstKey] });
+            return;
+          }
           const result = await createMemo.mutateAsync({
             assignmentId: Number(values.assignmentId),
             incidentType: values.incidentType,

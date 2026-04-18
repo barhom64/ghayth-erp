@@ -27,18 +27,23 @@ export default function ClientsCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [createPortalAccount, setCreatePortalAccount] = useState(false);
   const [portalPassword, setPortalPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم العميل" });
-      return;
-    }
-    if (createPortalAccount && !form.email) {
-      toast({ variant: "destructive", title: "يرجى إدخال البريد الإلكتروني لإنشاء حساب البوابة" });
-      return;
-    }
-    if (createPortalAccount && portalPassword.length < 6) {
-      toast({ variant: "destructive", title: "كلمة مرور البوابة يجب أن تكون 6 أحرف على الأقل" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "يرجى إدخال اسم العميل";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
+    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الجوال يجب أن يحتوي على 9 أرقام على الأقل";
+    if (createPortalAccount && !form.email) localErrors.email = "يرجى إدخال البريد الإلكتروني لإنشاء حساب البوابة";
+    if (createPortalAccount && portalPassword.length < 6) localErrors.portalPassword = "كلمة مرور البوابة يجب أن تكون 6 أحرف على الأقل";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      const firstKey = Object.keys(localErrors)[0];
+      toast({ variant: "destructive", title: localErrors[firstKey] });
       return;
     }
     try {
@@ -75,7 +80,7 @@ export default function ClientsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="md:col-span-2"><Label>اسم العميل / الشركة <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+        <div className="md:col-span-2"><Label>اسم العميل / الشركة <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /><FieldHint field="name" /></div>
         <div>
           <Label>نوع العميل</Label>
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
@@ -100,8 +105,8 @@ export default function ClientsCreate() {
             </SelectContent>
           </Select>
         </div>
-        <div><Label>رقم الجوال</Label><Input className="mt-1" dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="05xxxxxxxx" /></div>
-        <div><Label>البريد الإلكتروني</Label><Input className="mt-1" type="email" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></div>
+        <div><Label>رقم الجوال</Label><Input className={`mt-1 ${errCls("phone")}`} dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="05xxxxxxxx" /><FieldHint field="phone" /></div>
+        <div><Label>البريد الإلكتروني</Label><Input className={`mt-1 ${errCls("email")}`} type="email" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /><FieldHint field="email" /></div>
         <div><Label>الجنسية</Label><Input className="mt-1" value={form.nationality} onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))} placeholder="سعودي" /></div>
         <div>
           <Label>اللغة المفضلة</Label>
@@ -152,12 +157,13 @@ export default function ClientsCreate() {
             <div>
               <Label>كلمة المرور المؤقتة <span className="text-red-500">*</span></Label>
               <Input
-                className="mt-1"
+                className={`mt-1 ${errCls("portalPassword")}`}
                 type="text"
                 value={portalPassword}
                 onChange={(e) => setPortalPassword(e.target.value)}
                 placeholder="6 أحرف على الأقل"
               />
+              <FieldHint field="portalPassword" />
             </div>
             {!form.email && (
               <p className="text-xs text-amber-600">يرجى إدخال البريد الإلكتروني للعميل في الحقل أعلاه</p>

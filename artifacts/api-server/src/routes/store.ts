@@ -16,7 +16,7 @@ router.use(authMiddleware);
 router.get("/products", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM store_products WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM store_products WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "List store products"); }
 });
@@ -37,7 +37,7 @@ router.post("/products", requirePermission("store:write"), async (req, res) => {
 router.get("/products/:id", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get store product"); }
@@ -47,7 +47,7 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
     const b = req.body;
     const sets: string[] = [];
@@ -64,7 +64,7 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_products", entityId: id, after: b }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update store product"); }
@@ -76,7 +76,7 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
-    await rawExecute(`DELETE FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_products", entityId: id, before: existing }).catch(console.error);
     res.json({ message: "تم حذف المنتج بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete store product"); }
@@ -85,7 +85,7 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
 router.get("/orders", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM store_orders WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM store_orders WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "List store orders"); }
 });
@@ -125,7 +125,7 @@ router.get("/orders/:id", requirePermission("store:read"), async (req, res) => {
               b."footerText" AS "branchFooterText", b.city AS "branchCity"
        FROM store_orders o
        LEFT JOIN branches b ON b.id = o."branchId"
-       WHERE o.id=$1 AND o."companyId"=$2`,
+       WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
     if (!row) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
@@ -175,7 +175,7 @@ router.delete("/orders/:id", requirePermission("store:write"), async (req, res) 
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
-    await rawExecute(`DELETE FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_orders", entityId: id, before: existing }).catch(console.error);
     res.json({ message: "تم حذف الطلب بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete store order"); }
@@ -185,10 +185,10 @@ router.get("/stats", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [products] = await rawQuery(`SELECT COUNT(*) as count FROM store_products WHERE status='active' AND "companyId"=$1`, [cid]);
-    const [orders] = await rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE "companyId"=$1`, [cid]);
-    const [pendingOrders] = await rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE status='pending' AND "companyId"=$1`, [cid]);
-    const [revenue] = await rawQuery(`SELECT COALESCE(SUM("totalAmount"),0) as total FROM store_orders WHERE status='completed' AND "companyId"=$1`, [cid]);
+    const [products] = await rawQuery(`SELECT COUNT(*) as count FROM store_products WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [orders] = await rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [pendingOrders] = await rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE status='pending' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [revenue] = await rawQuery(`SELECT COALESCE(SUM("totalAmount"),0) as total FROM store_orders WHERE status='completed' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     res.json({
       activeProducts: Number(products.count),
       totalOrders: Number(orders.count),

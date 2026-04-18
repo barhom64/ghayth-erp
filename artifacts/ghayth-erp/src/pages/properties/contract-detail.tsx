@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -34,6 +36,7 @@ export default function ContractDetailPage() {
   const [, params] = useRoute("/properties/contracts/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const queryClient = useQueryClient();
 
   // TODO: prefer dedicated GET /properties/contracts/:id endpoint — currently fetches list and filters
   const { data: contractsResp, isLoading, isError, refetch } = useApiQuery<any>(
@@ -253,19 +256,60 @@ export default function ContractDetailPage() {
           label: "تجديد",
           icon: RotateCcw,
           variant: "default",
-          onClick: () => {
-            // TODO: implement contract renewal flow
-            console.log("TODO: renew contract", id);
+          onClick: async () => {
+            try {
+              const oldEnd = contract?.endDate || new Date().toISOString().split("T")[0];
+              const newStart = oldEnd;
+              const endDate = new Date(oldEnd);
+              endDate.setFullYear(endDate.getFullYear() + 1);
+              const newEnd = endDate.toISOString().split("T")[0];
+
+              const { id: _oldId, ...contractData } = contract || {};
+              const newContract = await apiFetch<any>("/properties/contracts", {
+                method: "POST",
+                body: JSON.stringify({
+                  ...contractData,
+                  startDate: newStart,
+                  endDate: newEnd,
+                  status: "active",
+                }),
+              });
+              queryClient.invalidateQueries({ queryKey: ["properties-contract"] });
+              toast({ title: "تم تجديد العقد بنجاح" });
+              const newId = newContract?.id || newContract?.data?.id;
+              navigate(newId ? `/properties/contracts/${newId}` : "/properties/contracts");
+            } catch (err: any) {
+              toast({
+                variant: "destructive",
+                title: "تعذر تجديد العقد",
+                description: err.message || "حدث خطأ أثناء تجديد العقد",
+              });
+            }
           },
         },
         {
           label: "إنهاء",
           icon: XCircle,
           variant: "outline",
-          onClick: () => {
-            // TODO: implement contract termination flow
-            console.log("TODO: terminate contract", id);
-            navigate("/properties/contracts");
+          onClick: async () => {
+            try {
+              await apiFetch(`/properties/contracts/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                  status: "terminated",
+                  terminationDate: new Date().toISOString().split("T")[0],
+                }),
+              });
+              queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
+              toast({ title: "تم إنهاء العقد بنجاح" });
+              navigate("/properties/contracts");
+            } catch (err: any) {
+              toast({
+                variant: "destructive",
+                title: "تعذر إنهاء العقد",
+                description: err.message || "حدث خطأ أثناء إنهاء العقد",
+              });
+            }
           },
         },
       ]}
