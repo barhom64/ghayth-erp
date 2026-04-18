@@ -54,11 +54,15 @@ async function start() {
     logger.warn({ err: bootstrapErr }, "Admin bootstrap skipped or failed");
   }
 
-  try {
-    await seedDemoData();
-    logger.info("Demo data seeding complete");
-  } catch (seedErr) {
-    logger.warn({ err: seedErr }, "Demo data seeding skipped or failed");
+  if (process.env.SEED_DEMO_DATA === "true") {
+    try {
+      await seedDemoData();
+      logger.info("Demo data seeding complete");
+    } catch (seedErr) {
+      logger.warn({ err: seedErr }, "Demo data seeding skipped or failed");
+    }
+  } else {
+    logger.info("Demo data seeding disabled (set SEED_DEMO_DATA=true to enable)");
   }
 
   registerEventListeners();
