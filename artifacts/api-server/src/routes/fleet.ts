@@ -81,7 +81,7 @@ router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND v.status = $${paramIdx}`; params.push(status); paramIdx++; }
-    const rows = await rawQuery<any>(`SELECT v.*, d.name AS "driverName", (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'vehicle' AND gl."entityId" = v.id AND gl."companyId" = v."companyId")::int AS "govLinkCount", (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id AND fi."companyId" = v."companyId") AS "insuranceExpiry" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" WHERE ${where} AND v."deletedAt" IS NULL ORDER BY v.id DESC`, params);
+    const rows = await rawQuery<any>(`SELECT v.*, d.name AS "driverName", (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'vehicle' AND gl."entityId" = v.id AND gl."companyId" = v."companyId")::int AS "govLinkCount", (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id AND fi."companyId" = v."companyId" AND fi."deletedAt" IS NULL) AS "insuranceExpiry" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE ${where} AND v."deletedAt" IS NULL ORDER BY v.id DESC`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Fleet vehicles error:"); }
 });
@@ -206,7 +206,7 @@ router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
        FROM fleet_drivers d
        LEFT JOIN employees e ON e.id = d."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-       WHERE ${where}
+       WHERE ${where} AND d."deletedAt" IS NULL
        ORDER BY d.name`,
       params
     );
@@ -292,28 +292,28 @@ router.get("/vehicles/:id", requirePermission("fleet:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const vehicleId = Number(req.params.id);
-    const [row] = await rawQuery<any>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [vehicleId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [vehicleId, scope.companyId]);
     if (!row) throw new NotFoundError("المركبة غير موجودة");
     const [trips, maintenance, fuelLogs, insurance] = await Promise.all([
       rawQuery<any>(
         `SELECT t.id, t."fromLocation", t."toLocation", t.distance, t.cost, t.status, t."startTime", t."endTime", d.name AS "driverName"
-         FROM fleet_trips t LEFT JOIN fleet_drivers d ON d.id=t."driverId"
-         WHERE t."vehicleId"=$1 AND t."companyId"=$2 ORDER BY t.id DESC LIMIT 20`,
+         FROM fleet_trips t LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL
+         WHERE t."vehicleId"=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 20`,
         [vehicleId, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT id, type, description, cost, "serviceDate", status, "mileageAtService", "nextServiceDate"
-         FROM fleet_maintenance WHERE "vehicleId"=$1 AND "companyId"=$2 ORDER BY id DESC LIMIT 20`,
+         FROM fleet_maintenance WHERE "vehicleId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 20`,
         [vehicleId, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT id, "fuelDate", liters, "costPerLiter", "totalCost", "mileageAtFuel", "stationName"
-         FROM fleet_fuel_logs WHERE "vehicleId"=$1 AND "companyId"=$2 ORDER BY id DESC LIMIT 20`,
+         FROM fleet_fuel_logs WHERE "vehicleId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 20`,
         [vehicleId, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT id, type, provider, "policyNumber", "startDate", "endDate", premium
-         FROM fleet_insurance WHERE "vehicleId"=$1 AND "companyId"=$2 ORDER BY "endDate" DESC LIMIT 5`,
+         FROM fleet_insurance WHERE "vehicleId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "endDate" DESC LIMIT 5`,
         [vehicleId, scope.companyId]
       ),
     ]);
@@ -662,7 +662,7 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT t.*, v."plateNumber", d.name AS "driverName" FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" LEFT JOIN fleet_drivers d ON d.id=t."driverId" WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
+      `SELECT t.*, v."plateNumber", d.name AS "driverName" FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" AND v."deletedAt" IS NULL LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1392,8 +1392,8 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
     const allInsurance = await rawQuery<any>(
       `SELECT v."plateNumber", i."endDate", i.type AS "insuranceType",
               (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
-       FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId"
-       WHERE i."companyId"=$1 AND i."endDate" BETWEEN $2 AND $3`,
+       FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
+       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
       [cid, todayStr, in90Days.toISOString().split('T')[0]]
     );
     for (const r of allInsurance) {
@@ -2373,9 +2373,9 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
     const rows = await rawQuery<any>(
       `SELECT tv.*, v."plateNumber", d.name AS "driverName"
        FROM fleet_traffic_violations tv
-       LEFT JOIN fleet_vehicles v ON v.id=tv."vehicleId"
-       LEFT JOIN fleet_drivers d ON d.id=tv."driverId"
-       WHERE ${conditions.join(" AND ")}
+       LEFT JOIN fleet_vehicles v ON v.id=tv."vehicleId" AND v."deletedAt" IS NULL
+       LEFT JOIN fleet_drivers d ON d.id=tv."driverId" AND d."deletedAt" IS NULL
+       WHERE ${conditions.join(" AND ")} AND tv."deletedAt" IS NULL
        ORDER BY tv."violationDate" DESC`,
       params
     );

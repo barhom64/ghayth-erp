@@ -60,7 +60,7 @@ purchaseRouter.get("/purchase-requests", async (req, res) => {
               s.name AS "supplierName", e.name AS "requestedByName",
               json_agg(pri.*) FILTER (WHERE pri.id IS NOT NULL) AS items
        FROM purchase_requests pr
-       LEFT JOIN suppliers s ON s.id = pr."supplierId"
+       LEFT JOIN suppliers s ON s.id = pr."supplierId" AND s."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea.id = pr."requestedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN purchase_request_items pri ON pri."requestId" = pr.id

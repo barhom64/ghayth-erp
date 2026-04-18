@@ -228,7 +228,7 @@ router.get("/units/:id", requirePermission("property:read"), async (req, res) =>
         [id, scope.companyId]
       ),
       rawQuery<any>(
-        `SELECT rp.*, c."tenantName" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."unitId"=$1 AND c."companyId"=$2 ORDER BY rp."dueDate" DESC LIMIT 20`,
+        `SELECT rp.*, c."tenantName" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" AND c."deletedAt" IS NULL WHERE c."unitId"=$1 AND c."companyId"=$2 ORDER BY rp."dueDate" DESC LIMIT 20`,
         [id, scope.companyId]
       ),
       rawQuery<any>(
@@ -450,7 +450,7 @@ router.get("/contracts", async (req, res) => {
     if (status) { params.push(status); conditions.push(`c.status = $${params.length}`); }
     conditions.push(`c."deletedAt" IS NULL`);
     const rows = await rawQuery<any>(
-      `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE ${conditions.join(" AND ")} ORDER BY c.id DESC`,
+      `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY c.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1155,7 +1155,7 @@ router.get("/payments", async (req, res) => {
     if (status) { params.push(status); conditions.push(`rp.status = $${params.length}`); }
     if (contractId) { params.push(Number(contractId)); conditions.push(`rp."contractId" = $${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" WHERE ${conditions.join(" AND ")} ORDER BY rp."dueDate" DESC`,
+      `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" AND c."deletedAt" IS NULL LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY rp."dueDate" DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
