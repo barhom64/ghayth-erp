@@ -29,7 +29,7 @@ END $$;
 DO $$ BEGIN
   ALTER TABLE invoices
     ADD CONSTRAINT chk_invoices_status
-    CHECK (status IN ('draft','sent','partially_paid','paid','overdue','void'));
+    CHECK (status IN ('draft','pending_approval','approved','sent','partially_paid','paid','overdue','void','rejected','cancelled'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
