@@ -676,22 +676,20 @@ invoicesRouter.delete("/invoices/:id", async (req, res) => {
   }
 });
 
-invoicesRouter.patch("/invoices/:id/approve", async (req, res) => {
+async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
     const { id } = req.params;
-    const { approved, notes } = req.body as any;
+    const { notes } = req.body as any;
     const [inv] = await rawQuery<any>(`SELECT * FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
-    const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
         newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
         { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
       );
     }
-    // State machine check — approval only valid from draft/returned
     const allowedFromApproval = INVOICE_TRANSITIONS[inv.status] ?? [];
     if (!allowedFromApproval.includes(newStatus)) {
       throw new ConflictError(
@@ -702,8 +700,6 @@ invoicesRouter.patch("/invoices/:id/approve", async (req, res) => {
     await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
-    // Audit + event + requester notification — without these, the invoice
-    // state change is invisible to dashboards and the creator never learns.
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: newStatus, entity: "invoices", entityId: Number(id),
@@ -734,9 +730,13 @@ invoicesRouter.patch("/invoices/:id/approve", async (req, res) => {
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
-    handleRouteError(err, res, "Approve invoice error:");
+    handleRouteError(err, res, `Invoice ${newStatus} error:`);
   }
-});
+}
+
+invoicesRouter.patch("/invoices/:id/approve", (req, res) => invoiceApprovalAction(req, res, "approved"));
+invoicesRouter.patch("/invoices/:id/reject", (req, res) => invoiceApprovalAction(req, res, "rejected"));
+invoicesRouter.patch("/invoices/:id/return", (req, res) => invoiceApprovalAction(req, res, "returned"));
 
 invoicesRouter.get("/tax/summary", async (req, res) => {
   try {
