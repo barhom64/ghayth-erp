@@ -21,6 +21,7 @@ import {
   Zap,
   Send,
 } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -381,92 +382,69 @@ export default function InvoiceDetailPage() {
         </Card>
       )}
 
-      {lines.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>بنود الفاتورة</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">#</th>
-                <th className="p-3 text-start">الوصف</th>
-                <th className="p-3 text-start">الكمية</th>
-                <th className="p-3 text-start">سعر الوحدة</th>
-                <th className="p-3 text-start">الإجمالي</th>
-                <th className="p-3 text-start">الضريبة</th>
-                <th className="p-3 text-start">الصافي</th>
-              </tr></thead>
-              <tbody>
-                {lines.map((l: any, i: number) => (
-                  <tr key={i} className="border-b">
-                    <td className="p-3 text-gray-400">{i + 1}</td>
-                    <td className="p-3 font-medium">{l.description || "-"}</td>
-                    <td className="p-3">{l.quantity}</td>
-                    <td className="p-3">{formatCurrency(Number(l.unitPrice))}</td>
-                    <td className="p-3">{formatCurrency(Number(l.lineTotal))}</td>
-                    <td className="p-3 text-gray-500">{formatCurrency(Number(l.vatAmount || 0))}</td>
-                    <td className="p-3 font-bold">{formatCurrency(Number(l.lineGross || l.lineTotal))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader><CardTitle>بنود الفاتورة</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={[
+              { key: "_index", header: "#", render: (_r, i) => <span className="text-gray-400">{i + 1}</span> },
+              { key: "description", header: "الوصف", render: (r) => <span className="font-medium">{r.description || "-"}</span> },
+              { key: "quantity", header: "الكمية", sortable: true },
+              { key: "unitPrice", header: "سعر الوحدة", sortable: true, render: (r) => formatCurrency(Number(r.unitPrice)) },
+              { key: "lineTotal", header: "الإجمالي", sortable: true, render: (r) => formatCurrency(Number(r.lineTotal)) },
+              { key: "vatAmount", header: "الضريبة", sortable: true, render: (r) => <span className="text-gray-500">{formatCurrency(Number(r.vatAmount || 0))}</span> },
+              { key: "lineGross", header: "الصافي", sortable: true, render: (r) => <span className="font-bold">{formatCurrency(Number(r.lineGross || r.lineTotal))}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={lines}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد بنود"
+          />
+        </CardContent>
+      </Card>
 
-      {payments.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>سجل الدفعات</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">المرجع</th>
-                <th className="p-3 text-start">الوصف</th>
-                <th className="p-3 text-start">المبلغ</th>
-                <th className="p-3 text-start">التاريخ</th>
-              </tr></thead>
-              <tbody>
-                {payments.map((p: any) => (
-                  <tr key={p.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-sm text-blue-600">{p.ref}</td>
-                    <td className="p-3">{p.description || "-"}</td>
-                    <td className="p-3 font-bold text-green-600">{formatCurrency(Number(p.amount))}</td>
-                    <td className="p-3 text-gray-500 text-sm">{p.date ? formatDateAr(p.date) : "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader><CardTitle>سجل الدفعات</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={[
+              { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-blue-600">{r.ref}</span> },
+              { key: "description", header: "الوصف", render: (r) => r.description || "-" },
+              { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-bold text-green-600">{formatCurrency(Number(r.amount))}</span> },
+              { key: "date", header: "التاريخ", render: (r) => <span className="text-gray-500 text-sm">{r.date ? formatDateAr(r.date) : "-"}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={payments}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد دفعات"
+          />
+        </CardContent>
+      </Card>
 
-      {journalEntries.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-muted-foreground" />
-              القيود المحاسبية ({journalEntries.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">المرجع</th>
-                <th className="p-3 text-start">الوصف</th>
-                <th className="p-3 text-start">التاريخ</th>
-              </tr></thead>
-              <tbody>
-                {journalEntries.map((je: any) => (
-                  <tr key={je.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-sm text-purple-600">{je.ref}</td>
-                    <td className="p-3">{je.description || "-"}</td>
-                    <td className="p-3 text-gray-500 text-sm">{je.date ? formatDateAr(je.date) : "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-muted-foreground" />
+            القيود المحاسبية ({journalEntries.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={[
+              { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-purple-600">{r.ref}</span> },
+              { key: "description", header: "الوصف", render: (r) => r.description || "-" },
+              { key: "date", header: "التاريخ", render: (r) => <span className="text-gray-500 text-sm">{r.date ? formatDateAr(r.date) : "-"}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={journalEntries}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد قيود محاسبية"
+          />
+        </CardContent>
+      </Card>
 
       {invoice.status === "pending" && (
         <Card>

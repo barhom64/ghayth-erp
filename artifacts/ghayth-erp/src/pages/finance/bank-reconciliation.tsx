@@ -105,8 +105,8 @@ export default function BankReconciliationPage() {
     try {
       await autoMatchMutation.mutateAsync({ batchId: activeBatch, accountCode });
       refetchDetail();
-    } catch (err: any) {
-      console.error(err);
+    } catch {
+      // error handled by mutation hook toast
     } finally {
       setAutoMatching(false);
     }

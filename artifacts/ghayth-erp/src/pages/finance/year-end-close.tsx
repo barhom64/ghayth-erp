@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Archive, TrendingUp, TrendingDown, Calculator, CheckCircle } from "lucide-react";
 
 interface YearEndPreview {
@@ -59,6 +60,29 @@ export default function YearEndClosePage() {
       },
     }
   );
+
+  const closingEntryColumns: DataTableColumn<YearEndPreview["lines"][number]>[] = [
+    {
+      key: "accountCode",
+      header: "الحساب",
+      render: (l) => <span className="font-mono text-xs">{l.accountCode}</span>,
+    },
+    {
+      key: "description",
+      header: "البيان",
+      render: (l) => <span className="text-xs">{l.description || "—"}</span>,
+    },
+    {
+      key: "debit",
+      header: "مدين",
+      render: (l) => <span className="font-mono">{l.debit > 0 ? formatCurrency(l.debit) : ""}</span>,
+    },
+    {
+      key: "credit",
+      header: "دائن",
+      render: (l) => <span className="font-mono">{l.credit > 0 ? formatCurrency(l.credit) : ""}</span>,
+    },
+  ];
 
   const wizardTab = () => (
     <div className="space-y-4">
@@ -184,28 +208,14 @@ export default function YearEndClosePage() {
               <p className="text-sm font-semibold mb-3">
                 قيد إقفال السنة المقترح ({preview.lines.length} بند)
               </p>
-              <div className="rounded-xl border overflow-hidden text-sm">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-right text-xs text-gray-500">الحساب</th>
-                      <th className="px-3 py-2 text-right text-xs text-gray-500">البيان</th>
-                      <th className="px-3 py-2 text-right text-xs text-gray-500">مدين</th>
-                      <th className="px-3 py-2 text-right text-xs text-gray-500">دائن</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.lines.map((l, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-2 font-mono text-xs">{l.accountCode}</td>
-                        <td className="px-3 py-2 text-xs">{l.description || "—"}</td>
-                        <td className="px-3 py-2 font-mono">{l.debit > 0 ? formatCurrency(l.debit) : ""}</td>
-                        <td className="px-3 py-2 font-mono">{l.credit > 0 ? formatCurrency(l.credit) : ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable<YearEndPreview["lines"][number]>
+                columns={closingEntryColumns}
+                data={preview.lines}
+                searchPlaceholder={null}
+                noToolbar
+                pageSize={0}
+                emptyMessage="لا توجد بنود"
+              />
               {closed && preview.ref && (
                 <p className="text-sm text-green-700 mt-3">
                   تم ترحيل القيد: <span className="font-mono">{preview.ref}</span> (#{preview.id})

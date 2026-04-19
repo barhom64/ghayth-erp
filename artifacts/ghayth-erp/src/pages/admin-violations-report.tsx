@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -88,6 +89,84 @@ export default function ViolationsReportPage() {
   const handleResolve = (id: number) => {
     resolveMut.mutate({ id });
   };
+
+  const violationColumns: DataTableColumn<any>[] = [
+    {
+      key: "type",
+      header: "النوع",
+      render: (v) => (
+        <Badge variant="outline" className="text-xs">
+          {TYPE_LABELS[v.type] || v.type}
+        </Badge>
+      ),
+    },
+    {
+      key: "department",
+      header: "القسم",
+      render: (v) => (
+        <span className="text-xs text-gray-600">
+          {DEPARTMENT_LABELS[v.department] || v.department || "-"}
+        </span>
+      ),
+    },
+    {
+      key: "description",
+      header: "الوصف",
+      render: (v) => (
+        <span className="max-w-xs truncate block" title={v.description}>
+          {v.description}
+        </span>
+      ),
+    },
+    {
+      key: "priority",
+      header: "الأولوية",
+      render: (v) => {
+        const pc = PRIORITY_CONFIG[v.priority] || PRIORITY_CONFIG.medium;
+        return (
+          <Badge className={cn("text-xs", pc.bg, pc.color)}>
+            {pc.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (v) =>
+        v.status === "resolved" ? (
+          <Badge className="bg-green-100 text-green-700 text-xs">تم الحل</Badge>
+        ) : (
+          <Badge className="bg-red-100 text-red-700 text-xs">مفتوحة</Badge>
+        ),
+    },
+    {
+      key: "auditDate",
+      header: "التاريخ",
+      render: (v) => (
+        <span className="text-xs text-gray-400">
+          {v.auditDate ? formatDateAr(v.auditDate) : "-"}
+        </span>
+      ),
+    },
+    {
+      key: "action",
+      header: "إجراء",
+      render: (v) =>
+        v.status === "open" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs"
+            disabled={resolving === v.id}
+            onClick={() => handleResolve(v.id)}
+          >
+            <CheckCircle2 className="h-3 w-3 me-1" />
+            تم المعالجة
+          </Button>
+        ) : null,
+    },
+  ];
 
   const summaryCards = [
     { label: "مخالفات اليوم", value: Number(summary.total || 0), icon: ShieldAlert, color: "text-gray-700 bg-gray-100" },
@@ -244,76 +323,16 @@ export default function ViolationsReportPage() {
 
       <Card>
         <CardContent className="p-0">
-          {isLoading ? (
-            <p className="p-8 text-center text-gray-400">جاري التحميل...</p>
-          ) : violations.length === 0 ? (
-            <p className="p-8 text-center text-gray-400">لا توجد مخالفات مطابقة</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="p-3 text-start">النوع</th>
-                    <th className="p-3 text-start">القسم</th>
-                    <th className="p-3 text-start">الوصف</th>
-                    <th className="p-3 text-start">الأولوية</th>
-                    <th className="p-3 text-start">الحالة</th>
-                    <th className="p-3 text-start">التاريخ</th>
-                    <th className="p-3 text-start">إجراء</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {violations.map((v: any) => {
-                    const pc = PRIORITY_CONFIG[v.priority] || PRIORITY_CONFIG.medium;
-                    return (
-                      <tr key={v.id} className="border-b hover:bg-gray-50">
-                        <td className="p-3">
-                          <Badge variant="outline" className="text-xs">
-                            {TYPE_LABELS[v.type] || v.type}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-xs text-gray-600">
-                          {DEPARTMENT_LABELS[v.department] || v.department || "-"}
-                        </td>
-                        <td className="p-3 max-w-xs truncate" title={v.description}>
-                          {v.description}
-                        </td>
-                        <td className="p-3">
-                          <Badge className={cn("text-xs", pc.bg, pc.color)}>
-                            {pc.label}
-                          </Badge>
-                        </td>
-                        <td className="p-3">
-                          {v.status === "resolved" ? (
-                            <Badge className="bg-green-100 text-green-700 text-xs">تم الحل</Badge>
-                          ) : (
-                            <Badge className="bg-red-100 text-red-700 text-xs">مفتوحة</Badge>
-                          )}
-                        </td>
-                        <td className="p-3 text-xs text-gray-400">
-                          {v.auditDate ? formatDateAr(v.auditDate) : "-"}
-                        </td>
-                        <td className="p-3">
-                          {v.status === "open" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs"
-                              disabled={resolving === v.id}
-                              onClick={() => handleResolve(v.id)}
-                            >
-                              <CheckCircle2 className="h-3 w-3 me-1" />
-                              تم المعالجة
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable<any>
+            columns={violationColumns}
+            data={violations}
+            isLoading={isLoading}
+            emptyMessage="لا توجد مخالفات مطابقة"
+            emptyIcon={<ShieldAlert className="h-10 w-10 text-gray-300" />}
+            searchPlaceholder={null}
+            noToolbar
+            pageSize={20}
+          />
         </CardContent>
       </Card>
     </div>

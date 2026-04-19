@@ -1,4 +1,5 @@
 import { useApiQuery, asList } from "@/lib/api";
+import { formatTimeAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -58,7 +59,7 @@ function AttendanceMap({ items }: { items: any[] }) {
           iconSize: [14, 14],
           iconAnchor: [7, 7],
         });
-        const time = a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "";
+        const time = formatTimeAr(a.checkIn);
         L.marker([lat, lng], { icon })
           .bindPopup(`<div style="text-align:right;font-family:inherit"><b>${a.employeeName || "موظف"}</b><br/>التاريخ: ${a.date || ""}<br/>الوقت: ${time}</div>`)
           .addTo(mapInstance.current!);
@@ -110,7 +111,7 @@ export default function FieldTrackingPage() {
         columns={[
           { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
           { key: "date", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.date}</span> },
-          { key: "checkIn", header: "وقت التسجيل", sortable: true, render: (v) => <span className="font-mono">{v.checkIn ? new Date(v.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</span> },
+          { key: "checkIn", header: "وقت التسجيل", sortable: true, render: (v) => <span className="font-mono">{formatTimeAr(v.checkIn)}</span> },
           { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
         ] as DataTableColumn<any>[]}
         data={items}

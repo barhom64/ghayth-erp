@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,11 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   FileText, FolderOpen, FilePlus, X, Upload, Download, History,
-  CheckCircle2, Clock, XCircle, Filter, Search, FileUp, Plus
+  CheckCircle2, Clock, XCircle, Filter, Search, Plus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -296,13 +297,17 @@ function FoldersTab() {
   );
 }
 
+const templateColumns: DataTableColumn<any>[] = [
+  { key: "name", header: "القالب", searchable: true, sortable: true, className: "font-medium" },
+  { key: "category", header: "التصنيف", searchable: true, sortable: true, className: "text-muted-foreground" },
+  { key: "createdAt", header: "التاريخ", sortable: true, render: (t) => formatDateAr(t.createdAt) },
+];
+
 function TemplatesTab() {
   const { data: templatesResp, isLoading } = useApiQuery<any>(["doc-templates"], "/documents/templates");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", category: "" });
   const items = asList(templatesResp);
-  const [tplSearch, setTplSearch] = useState("");
-  const filteredTemplates = items.filter((t: any) => !tplSearch || t.name?.includes(tplSearch) || t.category?.includes(tplSearch));
 
   const createMut = useApiMutation<any, { name: string; description: string; category: string }>(
     "/documents/templates",
@@ -320,11 +325,7 @@ function TemplatesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input className="ps-9" placeholder="بحث بالاسم أو التصنيف..." value={tplSearch} onChange={(e) => setTplSearch(e.target.value)} />
-        </div>
+      <div className="flex items-center gap-4 justify-end">
         <Button size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة قالب</>}
         </Button>
@@ -337,37 +338,14 @@ function TemplatesTab() {
           <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name}>حفظ</Button></div>
         </CardContent></Card>
       )}
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1,2,3].map(i => <Skeleton key={i} className="h-16" />)}
-        </div>
-      ) : filteredTemplates.length === 0 ? (
-        <Card><CardContent className="p-8 text-center">
-          <FilePlus className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-          <p className="text-muted-foreground">لا توجد قوالب</p>
-        </CardContent></Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">القالب</th>
-                <th className="p-3 text-start">التصنيف</th>
-                <th className="p-3 text-start">التاريخ</th>
-              </tr></thead>
-              <tbody>
-                {filteredTemplates.map((t: any) => (
-                  <tr key={t.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{t.name}</td>
-                    <td className="p-3 text-muted-foreground">{t.category || "-"}</td>
-                    <td className="p-3">{formatDateAr(t.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <DataTable
+        columns={templateColumns}
+        data={items}
+        isLoading={isLoading}
+        searchPlaceholder="بحث بالاسم أو التصنيف..."
+        emptyMessage="لا توجد قوالب"
+        emptyIcon={<FilePlus className="h-8 w-8 text-slate-400" />}
+      />
     </div>
   );
 }

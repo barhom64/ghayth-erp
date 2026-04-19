@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useQueryClient } from "@tanstack/react-query";
@@ -370,7 +370,7 @@ export default function DisciplineMemoDetailPage() {
                     </div>
                     {ev.note && <p className="text-sm mt-1">{ev.note}</p>}
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(ev.createdAt).toLocaleString("ar-SA")}
+                      {formatDateAr(ev.createdAt)}
                     </p>
                   </div>
                   {ev.action === "gm_decided" && memo.status === "approved" && (

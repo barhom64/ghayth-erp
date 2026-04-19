@@ -2,19 +2,15 @@ import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   Clock, CheckCircle2, XCircle, AlertCircle, Calendar,
   TrendingUp, DollarSign, AlertTriangle,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-function formatTime(iso: string | null): string {
-  if (!iso) return "—";
-  return formatTimeAr(iso);
-}
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   present: { label: "حاضر", color: "text-green-600 bg-green-50" },
@@ -32,6 +28,47 @@ const severityConfig: Record<string, { label: string; color: string }> = {
   high: { label: "مرتفع", color: "bg-red-100 text-red-700" },
   critical: { label: "حرج", color: "bg-red-200 text-red-800" },
 };
+
+const attendanceColumns: DataTableColumn<any>[] = [
+  { key: "date", header: "التاريخ", sortable: true, searchable: true, render: (r) => formatDateAr(r.date) },
+  { key: "checkIn", header: "الحضور", render: (r) => formatTimeAr(r.checkIn) || "—" },
+  { key: "checkOut", header: "الانصراف", render: (r) => formatTimeAr(r.checkOut) || "—" },
+  {
+    key: "lateMinutes", header: "التأخير", sortable: true,
+    render: (r) => r.lateMinutes > 0
+      ? <span className="text-orange-600 font-medium">{r.lateMinutes} د</span>
+      : <span className="text-gray-400">—</span>,
+  },
+  {
+    key: "overtimeMinutes", header: "وقت إضافي", sortable: true,
+    render: (r) => r.overtimeMinutes > 0
+      ? <span className="text-emerald-600 font-medium">{r.overtimeMinutes} د</span>
+      : <span className="text-gray-400">—</span>,
+  },
+  {
+    key: "totalDeductions", header: "خصم", sortable: true,
+    render: (r) => {
+      const sev = r.violationSeverity && r.violationCount > 0 ? severityConfig[r.violationSeverity] : null;
+      return Number(r.totalDeductions) > 0 ? (
+        <div className="flex items-center gap-1">
+          <span className="text-red-600 font-medium">{formatCurrency(Number(r.totalDeductions))}</span>
+          {sev && (
+            <Badge className={cn("text-[10px] px-1 py-0", sev.color)}>
+              <AlertTriangle className="w-2.5 h-2.5 me-0.5 inline" />{sev.label}
+            </Badge>
+          )}
+        </div>
+      ) : <span className="text-gray-400">—</span>;
+    },
+  },
+  {
+    key: "status", header: "الحالة", searchable: true,
+    render: (r) => {
+      const cfg = statusConfig[r.status] ?? { label: r.status, color: "text-gray-600 bg-gray-50" };
+      return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cfg.color)}>{cfg.label}</span>;
+    },
+  },
+];
 
 export default function MyAttendance() {
   const today = new Date();
@@ -91,84 +128,15 @@ export default function MyAttendance() {
         })}
       </div>
 
-      {records.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-gray-400">
-            <Calendar size={36} className="mx-auto mb-3 opacity-40" />
-            <p>لا توجد سجلات حضور لهذا الشهر</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">تفاصيل الحضور</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">التاريخ</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">الحضور</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">الانصراف</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">التأخير</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">وقت إضافي</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">خصم</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">الحالة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((rec: any, i: number) => {
-                    const cfg = statusConfig[rec.status] ?? { label: rec.status, color: "text-gray-600 bg-gray-50" };
-                    const sev = rec.violationSeverity && rec.violationCount > 0 ? severityConfig[rec.violationSeverity] : null;
-                    return (
-                      <tr key={rec.id ?? i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                        <td className="px-4 py-3 text-gray-700">{formatDateAr(rec.date)}</td>
-                        <td className="px-4 py-3 text-gray-700">{formatTime(rec.checkIn)}</td>
-                        <td className="px-4 py-3 text-gray-700">{formatTime(rec.checkOut)}</td>
-                        <td className="px-4 py-3">
-                          {rec.lateMinutes > 0 ? (
-                            <span className="text-orange-600 font-medium">{rec.lateMinutes} د</span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {rec.overtimeMinutes > 0 ? (
-                            <span className="text-emerald-600 font-medium">{rec.overtimeMinutes} د</span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {Number(rec.totalDeductions) > 0 ? (
-                            <div className="flex items-center gap-1">
-                              <span className="text-red-600 font-medium">{formatCurrency(Number(rec.totalDeductions))}</span>
-                              {sev && (
-                                <Badge className={cn("text-[10px] px-1 py-0", sev.color)}>
-                                  <AlertTriangle className="w-2.5 h-2.5 me-0.5 inline" />
-                                  {sev.label}
-                                </Badge>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cfg.color)}>
-                            {cfg.label}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <DataTable<any>
+        columns={attendanceColumns}
+        data={records}
+        emptyMessage="لا توجد سجلات حضور لهذا الشهر"
+        emptyIcon={<Calendar size={36} className="opacity-40" />}
+        searchPlaceholder="بحث بالتاريخ أو الحالة..."
+        statusOptions={Object.entries(statusConfig).map(([value, { label }]) => ({ value, label }))}
+        pageSize={31}
+      />
     </PageShell>
   );
 }

@@ -33,8 +33,8 @@ export default function InventoryCostingPage() {
     try {
       const res = await roundingSetup.mutateAsync({});
       setSetupResult(res);
-    } catch (err: any) {
-      console.error(err);
+    } catch {
+      // error handled by mutation hook toast
     }
   }
 

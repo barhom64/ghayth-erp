@@ -10,6 +10,7 @@ import {
 import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function PropertiesDashboard() {
   const { scopeQueryString } = useAppContext();
@@ -29,6 +30,72 @@ export default function PropertiesDashboard() {
   const overdueAmount = s.overdueAmount || 0;
   const openMaintenanceTickets = s.openMaintenanceTickets || 0;
   const buildingPerf: any[] = s.buildingPerformance || [];
+
+  const buildingPerfColumns: DataTableColumn<any>[] = [
+    {
+      key: "rank",
+      header: "#",
+      render: (b) => {
+        const idx = buildingPerf.indexOf(b);
+        const isTop = idx === 0 && buildingPerf.length > 1;
+        const isBottom = idx === buildingPerf.length - 1 && buildingPerf.length > 1;
+        return (
+          <span className="text-xs text-gray-400 font-mono">
+            {isTop ? <Trophy className="h-3.5 w-3.5 text-amber-500 inline" /> : isBottom ? <TrendingDown className="h-3.5 w-3.5 text-red-400 inline" /> : idx + 1}
+          </span>
+        );
+      },
+    },
+    {
+      key: "name",
+      header: "المبنى",
+      render: (b) => (
+        <Link href={`/properties/buildings/${b.id}`} className="font-medium hover:text-blue-600 hover:underline">{b.name}</Link>
+      ),
+    },
+    {
+      key: "totalUnits",
+      header: "الوحدات",
+      render: (b) => <span className="font-mono text-sm">{b.totalUnits || 0}</span>,
+    },
+    {
+      key: "rentedUnits",
+      header: "مؤجرة",
+      render: (b) => <span className="font-mono text-sm text-blue-600">{b.rentedUnits || 0}</span>,
+    },
+    {
+      key: "occupancyRate",
+      header: "الإشغال",
+      render: (b) => (
+        <div className="flex items-center gap-2">
+          <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className={cn("h-full rounded-full", b.occupancyRate >= 80 ? "bg-emerald-500" : b.occupancyRate >= 50 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${b.occupancyRate || 0}%` }} />
+          </div>
+          <span className="text-xs font-medium">{b.occupancyRate || 0}%</span>
+        </div>
+      ),
+    },
+    {
+      key: "totalRevenue",
+      header: "الإيرادات",
+      render: (b) => <span className="font-bold text-emerald-600">{formatCurrency(b.totalRevenue || 0)}</span>,
+    },
+    {
+      key: "performance",
+      header: "الأداء",
+      render: (b) => {
+        const idx = buildingPerf.indexOf(b);
+        const isTop = idx === 0 && buildingPerf.length > 1;
+        const isBottom = idx === buildingPerf.length - 1 && buildingPerf.length > 1;
+        return (
+          <>
+            {isTop && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">الأفضل</span>}
+            {isBottom && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">الأدنى</span>}
+          </>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -252,52 +319,19 @@ export default function PropertiesDashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50/50">
-                    <th className="p-3 text-start text-xs text-gray-500">#</th>
-                    <th className="p-3 text-start text-xs text-gray-500">المبنى</th>
-                    <th className="p-3 text-start text-xs text-gray-500">الوحدات</th>
-                    <th className="p-3 text-start text-xs text-gray-500">مؤجرة</th>
-                    <th className="p-3 text-start text-xs text-gray-500">الإشغال</th>
-                    <th className="p-3 text-start text-xs text-gray-500">الإيرادات</th>
-                    <th className="p-3 text-start text-xs text-gray-500">الأداء</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {buildingPerf.map((b: any, idx: number) => {
-                    const isTop = idx === 0 && buildingPerf.length > 1;
-                    const isBottom = idx === buildingPerf.length - 1 && buildingPerf.length > 1;
-                    return (
-                      <tr key={b.id} className={cn("border-b hover:bg-gray-50/50 transition-colors", isTop && "bg-amber-50/30", isBottom && "bg-red-50/20")}>
-                        <td className="p-3 text-xs text-gray-400 font-mono">
-                          {isTop ? <Trophy className="h-3.5 w-3.5 text-amber-500 inline" /> : isBottom ? <TrendingDown className="h-3.5 w-3.5 text-red-400 inline" /> : idx + 1}
-                        </td>
-                        <td className="p-3">
-                          <Link href={`/properties/buildings/${b.id}`} className="font-medium hover:text-blue-600 hover:underline">{b.name}</Link>
-                        </td>
-                        <td className="p-3 font-mono text-sm">{b.totalUnits || 0}</td>
-                        <td className="p-3 font-mono text-sm text-blue-600">{b.rentedUnits || 0}</td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div className={cn("h-full rounded-full", b.occupancyRate >= 80 ? "bg-emerald-500" : b.occupancyRate >= 50 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${b.occupancyRate || 0}%` }} />
-                            </div>
-                            <span className="text-xs font-medium">{b.occupancyRate || 0}%</span>
-                          </div>
-                        </td>
-                        <td className="p-3 font-bold text-emerald-600">{formatCurrency(b.totalRevenue || 0)}</td>
-                        <td className="p-3">
-                          {isTop && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">الأفضل</span>}
-                          {isBottom && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">الأدنى</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<any>
+              columns={buildingPerfColumns}
+              data={buildingPerf}
+              searchPlaceholder={null}
+              noToolbar
+              pageSize={0}
+              rowClassName={(b) => {
+                const idx = buildingPerf.indexOf(b);
+                const isTop = idx === 0 && buildingPerf.length > 1;
+                const isBottom = idx === buildingPerf.length - 1 && buildingPerf.length > 1;
+                return cn(isTop && "bg-amber-50/30", isBottom && "bg-red-50/20");
+              }}
+            />
           </CardContent>
         </Card>
       )}

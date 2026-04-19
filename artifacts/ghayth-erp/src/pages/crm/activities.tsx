@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Phone, Calendar, Search, CheckCircle2, Clock, type LucideIcon } from "lucide-react";
+import { Phone, Calendar, CheckCircle2, Clock, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TYPE_LABELS: Record<string, string> = {
   call: "مكالمة",
@@ -15,21 +15,49 @@ const TYPE_LABELS: Record<string, string> = {
   note: "ملاحظة",
 };
 
-export default function CrmActivities() {
-  const [search, setSearch] = useState("");
-  const { data: oppsResp, isLoading, isError } = useApiQuery<any>(["crm-opportunities"], "/crm/opportunities");
+const columns: DataTableColumn<any>[] = [
+  { key: "description", header: "الوصف", searchable: true, sortable: true, className: "font-medium" },
+  { key: "client", header: "الفرصة", searchable: true, sortable: true, className: "text-gray-500" },
+  { key: "contact", header: "جهة الاتصال", searchable: true, sortable: true, className: "text-gray-500" },
+  {
+    key: "type",
+    header: "النوع",
+    sortable: true,
+    render: (a) => <Badge variant="outline">{TYPE_LABELS[a.type] || a.type}</Badge>,
+  },
+  {
+    key: "scheduledAt",
+    header: "التاريخ",
+    sortable: true,
+    className: "text-gray-500",
+    render: (a) => (a.scheduledAt ? formatDateAr(a.scheduledAt) : "-"),
+  },
+  {
+    key: "completedAt",
+    header: "الحالة",
+    render: (a) => (
+      <Badge className={a.completedAt ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>
+        {a.completedAt ? "مكتمل" : "مجدول"}
+      </Badge>
+    ),
+  },
+];
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+export default function CrmActivities() {
+  const { data: oppsResp, isLoading, isError } = useApiQuery<any>(["crm-opportunities"], "/crm/opportunities");
 
   const opportunities = asList<any>(oppsResp);
 
-  const allActivities = opportunities.flatMap((opp: any) =>
-    (opp.activities || []).map((a: any) => ({
-      ...a,
-      client: opp.title || opp.contactName || "-",
-      contact: opp.contactName || "-",
-    }))
+  const allActivities = useMemo(
+    () =>
+      opportunities.flatMap((opp: any) =>
+        (opp.activities || []).map((a: any) => ({
+          ...a,
+          client: opp.title || opp.contactName || "-",
+          contact: opp.contactName || "-",
+        }))
+      ),
+    [opportunities]
   );
 
   const statCards = [
@@ -38,11 +66,6 @@ export default function CrmActivities() {
     { label: "مجدولة", value: allActivities.filter((a: any) => !a.completedAt).length, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
     { label: "مكتملة", value: allActivities.filter((a: any) => a.completedAt).length, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },
   ];
-
-  const filtered = allActivities.filter((a: any) => {
-    if (search && !a.client?.includes(search) && !a.description?.includes(search) && !a.contact?.includes(search)) return false;
-    return true;
-  });
 
   return (
     <div className="space-y-6">
@@ -64,42 +87,15 @@ export default function CrmActivities() {
         })}
       </div>
 
-      <div className="relative">
-        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <Input placeholder="بحث في الأنشطة..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">الوصف</th>
-              <th className="p-3 text-start">الفرصة</th>
-              <th className="p-3 text-start">جهة الاتصال</th>
-              <th className="p-3 text-start">النوع</th>
-              <th className="p-3 text-start">التاريخ</th>
-              <th className="p-3 text-start">الحالة</th>
-            </tr></thead>
-            <tbody>
-              {filtered.map((a: any) => (
-                <tr key={a.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium">{a.description || "-"}</td>
-                  <td className="p-3 text-gray-500">{a.client}</td>
-                  <td className="p-3 text-gray-500">{a.contact}</td>
-                  <td className="p-3"><Badge variant="outline">{TYPE_LABELS[a.type] || a.type}</Badge></td>
-                  <td className="p-3 text-gray-500">{a.scheduledAt ? formatDateAr(a.scheduledAt) : "-"}</td>
-                  <td className="p-3">
-                    <Badge className={a.completedAt ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>
-                      {a.completedAt ? "مكتمل" : "مجدول"}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد أنشطة</td></tr>}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={allActivities}
+        isLoading={isLoading}
+        isError={isError}
+        onRetry={() => window.location.reload()}
+        searchPlaceholder="بحث في الأنشطة..."
+        emptyMessage="لا توجد أنشطة"
+      />
     </div>
   );
 }

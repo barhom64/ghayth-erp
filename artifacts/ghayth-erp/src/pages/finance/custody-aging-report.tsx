@@ -5,10 +5,10 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, AlertTriangle, DollarSign, Users, KeyRound, ChevronDown, ChevronRight } from "lucide-react";
 import { formatCurrency, formatNumber , formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function CustodyAgingReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["custody-aging-report"], "/finance/custodies/report");
@@ -106,53 +106,38 @@ export default function CustodyAgingReportPage() {
 
                   {isExpanded && emp.custodies && (
                     <div className="border-t">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50 border-b">
-                            <th className="p-3 text-right text-xs text-gray-500">المرجع</th>
-                            <th className="p-3 text-right text-xs text-gray-500">الوصف</th>
-                            <th className="p-3 text-right text-xs text-gray-500">المبلغ</th>
-                            <th className="p-3 text-right text-xs text-gray-500">المسوّى</th>
-                            <th className="p-3 text-right text-xs text-gray-500">المتبقي</th>
-                            <th className="p-3 text-right text-xs text-gray-500">التاريخ</th>
-                            <th className="p-3 text-right text-xs text-gray-500">تاريخ الإرجاع</th>
-                            <th className="p-3 text-right text-xs text-gray-500">أيام التأخير</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {emp.custodies.map((c: any) => (
-                            <tr key={c.id} className={`border-b hover:bg-gray-50 ${c.isOverdue ? "bg-red-50/30" : ""}`}>
-                              <td className="p-3">
-                                <Link href={`/finance/custodies/${c.id}`}>
-                                  <span className="font-mono text-blue-600 text-xs hover:underline cursor-pointer">{c.ref}</span>
-                                </Link>
-                              </td>
-                              <td className="p-3 text-gray-600">
-                                {c.description || "-"}
-                                {c.purpose && <div className="text-xs text-gray-400">{c.purpose}</div>}
-                              </td>
-                              <td className="p-3 font-semibold">{formatCurrency(c.amount)}</td>
-                              <td className="p-3 text-green-600">{formatCurrency(c.settledAmount)}</td>
-                              <td className="p-3 font-semibold text-orange-600">{formatCurrency(c.remainingAmount)}</td>
-                              <td className="p-3 text-gray-500 text-xs">{c.date ? formatDateAr(c.date) : "-"}</td>
-                              <td className="p-3 text-xs">
-                                {c.expectedReturnDate ? (
-                                  <span className={c.isOverdue ? "text-red-600 font-semibold" : "text-gray-500"}>
-                                    {formatDateAr(c.expectedReturnDate)}
-                                  </span>
-                                ) : "-"}
-                              </td>
-                              <td className="p-3">
-                                {c.daysOverdue > 0 ? (
-                                  <Badge className="bg-red-100 text-red-700 text-xs">{c.daysOverdue} يوم</Badge>
-                                ) : (
-                                  <span className="text-gray-400">-</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <DataTable<any>
+                        columns={[
+                          { key: "ref", header: "المرجع", render: (c) => (
+                            <Link href={`/finance/custodies/${c.id}`}>
+                              <span className="font-mono text-blue-600 text-xs hover:underline cursor-pointer">{c.ref}</span>
+                            </Link>
+                          )},
+                          { key: "description", header: "الوصف", render: (c) => (
+                            <div className="text-gray-600">
+                              {c.description || "-"}
+                              {c.purpose && <div className="text-xs text-gray-400">{c.purpose}</div>}
+                            </div>
+                          )},
+                          { key: "amount", header: "المبلغ", render: (c) => <span className="font-semibold">{formatCurrency(c.amount)}</span> },
+                          { key: "settledAmount", header: "المسوّى", render: (c) => <span className="text-green-600">{formatCurrency(c.settledAmount)}</span> },
+                          { key: "remainingAmount", header: "المتبقي", render: (c) => <span className="font-semibold text-orange-600">{formatCurrency(c.remainingAmount)}</span> },
+                          { key: "date", header: "التاريخ", render: (c) => <span className="text-gray-500 text-xs">{c.date ? formatDateAr(c.date) : "-"}</span> },
+                          { key: "expectedReturnDate", header: "تاريخ الإرجاع", render: (c) => c.expectedReturnDate ? (
+                            <span className={c.isOverdue ? "text-red-600 font-semibold" : "text-gray-500"}>
+                              {formatDateAr(c.expectedReturnDate)}
+                            </span>
+                          ) : "-" },
+                          { key: "daysOverdue", header: "أيام التأخير", render: (c) => c.daysOverdue > 0 ? (
+                            <Badge className="bg-red-100 text-red-700 text-xs">{c.daysOverdue} يوم</Badge>
+                          ) : <span className="text-gray-400">-</span> },
+                        ]}
+                        data={emp.custodies}
+                        rowClassName={(c) => c.isOverdue ? "bg-red-50/30" : ""}
+                        noToolbar
+                        pageSize={0}
+                        searchPlaceholder={null}
+                      />
                     </div>
                   )}
                 </CardContent>

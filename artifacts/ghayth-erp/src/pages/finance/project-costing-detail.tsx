@@ -7,6 +7,7 @@ import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-det
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   FolderOpen,
@@ -77,30 +78,20 @@ export default function ProjectCostingDetailPage() {
         <div className="pt-4 border-t">
           <p className="text-sm font-semibold mb-2">القيود المحاسبية المرتبطة بالمشروع</p>
           <div className="rounded-xl border overflow-hidden text-sm">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">المرجع</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">البيان</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">التاريخ</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">المبلغ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingCosts ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-gray-400">جاري التحميل...</td></tr>
-                ) : costDetails.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-gray-400">لا توجد تكاليف مسجلة لهذا المشروع بعد</td></tr>
-                ) : costDetails.map((c: any) => (
-                  <tr key={c.id} className="border-t hover:bg-gray-50">
-                    <td className="px-3 py-2 font-mono text-xs">{c.ref}</td>
-                    <td className="px-3 py-2">{c.description}</td>
-                    <td className="px-3 py-2 text-gray-500">{c.date ? formatDateAr(c.date) : "—"}</td>
-                    <td className="px-3 py-2 font-semibold">{formatCurrency(Number(c.amount) || 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable<any>
+              columns={[
+                { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs">{r.ref}</span> },
+                { key: "description", header: "البيان" },
+                { key: "date", header: "التاريخ", render: (r) => <span className="text-gray-500">{r.date ? formatDateAr(r.date) : "—"}</span> },
+                { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.amount) || 0)}</span> },
+              ] satisfies DataTableColumn<any>[]}
+              data={costDetails}
+              isLoading={loadingCosts}
+              pageSize={0}
+              noToolbar
+              searchPlaceholder={null}
+              emptyMessage="لا توجد تكاليف مسجلة لهذا المشروع بعد"
+            />
           </div>
         </div>
       </CardContent>

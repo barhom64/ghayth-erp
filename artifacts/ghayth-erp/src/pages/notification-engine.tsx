@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Route, Bell, Mail, MessageSquare, Smartphone, Globe, Zap, Plus, Save,
   Trash2, RefreshCw, ArrowRight, AlertCircle, CheckCircle, XCircle,
@@ -662,6 +663,53 @@ function DeliveryStatsTab() {
 
   const logs = logData?.data as Array<Record<string, unknown>> | undefined;
 
+  const deliveryLogColumns: DataTableColumn<Record<string, unknown>>[] = [
+    {
+      key: "channel",
+      header: "القناة",
+      render: (log) => <ChannelBadge channel={log.channel as string} />,
+    },
+    {
+      key: "recipient",
+      header: "المستلم",
+      ltr: true,
+      render: (log) => (
+        <span className="font-mono text-xs">{(log.recipient as string)?.substring(0, 30)}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (log) => (
+        <Badge variant={
+          (log.status === "delivered" || log.status === "sent") ? "default" :
+          log.status === "failed" ? "destructive" : "secondary"
+        } className="text-xs">
+          {log.status === "delivered" ? "وصل" :
+           log.status === "sent" ? "أُرسل" :
+           log.status === "failed" ? "فشل" :
+           log.status === "queued" ? "انتظار" :
+           log.status === "fallback_triggered" ? "تصعيد" :
+           log.status as string}
+        </Badge>
+      ),
+    },
+    {
+      key: "templateKey",
+      header: "القالب",
+      render: (log) => <span className="text-xs">{(log.templateKey as string) ?? "-"}</span>,
+    },
+    {
+      key: "createdAt",
+      header: "الوقت",
+      render: (log) => (
+        <span className="text-xs text-muted-foreground">
+          {formatDateAr(log.createdAt as string)}
+        </span>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -730,45 +778,15 @@ function DeliveryStatsTab() {
       {logs && logs.length > 0 && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">آخر عمليات التوصيل</CardTitle></CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    <th className="text-right p-2">القناة</th>
-                    <th className="text-right p-2">المستلم</th>
-                    <th className="text-right p-2">الحالة</th>
-                    <th className="text-right p-2">القالب</th>
-                    <th className="text-right p-2">الوقت</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log) => (
-                    <tr key={log.id as number} className="border-b">
-                      <td className="p-2"><ChannelBadge channel={log.channel as string} /></td>
-                      <td className="p-2 font-mono text-xs" dir="ltr">{(log.recipient as string)?.substring(0, 30)}</td>
-                      <td className="p-2">
-                        <Badge variant={
-                          (log.status === "delivered" || log.status === "sent") ? "default" :
-                          log.status === "failed" ? "destructive" : "secondary"
-                        } className="text-xs">
-                          {log.status === "delivered" ? "وصل" :
-                           log.status === "sent" ? "أُرسل" :
-                           log.status === "failed" ? "فشل" :
-                           log.status === "queued" ? "انتظار" :
-                           log.status === "fallback_triggered" ? "تصعيد" :
-                           log.status as string}
-                        </Badge>
-                      </td>
-                      <td className="p-2 text-xs">{(log.templateKey as string) ?? "-"}</td>
-                      <td className="p-2 text-xs text-muted-foreground">
-                        {formatDateAr(log.createdAt as string)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <CardContent className="p-0">
+            <DataTable<Record<string, unknown>>
+              columns={deliveryLogColumns}
+              data={logs}
+              searchPlaceholder={null}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد سجلات"
+            />
           </CardContent>
         </Card>
       )}
@@ -841,6 +859,33 @@ function PreferencesTab() {
     { key: "push", label: "فوري" },
   ];
 
+  const preferencesColumns: DataTableColumn<{ category: string; channels: Record<string, boolean> }>[] = [
+    {
+      key: "category",
+      header: "نوع الحدث",
+      render: (row) => {
+        const catInfo = categories.find((c) => c.eventCategory === row.category);
+        return (
+          <div>
+            <div className="font-medium">{row.category}</div>
+            {catInfo?.description && <div className="text-xs text-muted-foreground">{catInfo.description}</div>}
+          </div>
+        );
+      },
+    },
+    ...channelCols.map((ch) => ({
+      key: ch.key,
+      header: ch.label,
+      align: "center" as const,
+      render: (row: { category: string; channels: Record<string, boolean> }) => (
+        <Switch
+          checked={row.channels[ch.key] ?? false}
+          onCheckedChange={() => toggle(row.category, ch.key)}
+        />
+      ),
+    })),
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -855,39 +900,15 @@ function PreferencesTab() {
 
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-right p-3 font-medium">نوع الحدث</th>
-                  {channelCols.map((ch) => (
-                    <th key={ch.key} className="text-center p-3 font-medium">{ch.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(localPrefs).sort(([a], [b]) => a.localeCompare(b)).map(([category, channels]) => {
-                  const catInfo = categories.find((c) => c.eventCategory === category);
-                  return (
-                    <tr key={category} className="border-b hover:bg-muted/30">
-                      <td className="p-3">
-                        <div className="font-medium">{category}</div>
-                        {catInfo?.description && <div className="text-xs text-muted-foreground">{catInfo.description}</div>}
-                      </td>
-                      {channelCols.map((ch) => (
-                        <td key={ch.key} className="text-center p-3">
-                          <Switch
-                            checked={channels[ch.key] ?? false}
-                            onCheckedChange={() => toggle(category, ch.key)}
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<{ category: string; channels: Record<string, boolean> }>
+            columns={preferencesColumns}
+            data={Object.entries(localPrefs).sort(([a], [b]) => a.localeCompare(b)).map(([category, channels]) => ({ category, channels }))}
+            rowKey={(row) => row.category}
+            searchPlaceholder={null}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا توجد تفضيلات"
+          />
         </CardContent>
       </Card>
     </div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,8 +119,7 @@ function getModuleColor(mod: string) {
 }
 
 function formatDate(d: string) {
-  if (!d) return "";
-  return new Date(d).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" });
+  return formatDateAr(d);
 }
 
 function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: () => void; onDelete: () => void }) {

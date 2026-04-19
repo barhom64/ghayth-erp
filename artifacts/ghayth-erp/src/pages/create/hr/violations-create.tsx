@@ -55,7 +55,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCurrencySymbol, formatCurrency , todayLocal } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -311,9 +311,7 @@ function DraftManager({
   if (!visible) return null;
 
   const extra = loadDraftExtra();
-  const savedAt = extra.savedAt
-    ? new Date(extra.savedAt).toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" })
-    : null;
+  const savedAt = extra.savedAt ? formatDateAr(extra.savedAt) : null;
 
   return (
     <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-sm text-amber-700">
@@ -769,9 +767,7 @@ function StepEmployee({
                   {priorMemos.length} مخالفة سابقة
                 </span>
                 {" — آخرها: "}
-                {priorMemos[0]?.createdAt
-                  ? new Date(priorMemos[0].createdAt).toLocaleDateString("ar-SA")
-                  : "—"}
+                {formatDateAr(priorMemos[0]?.createdAt)}
               </div>
             ) : (
               <div className="text-xs text-green-600">

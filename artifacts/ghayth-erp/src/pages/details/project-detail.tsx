@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo, CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle, BookOpen, CheckSquare, FileText, Clock } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
@@ -20,6 +19,7 @@ import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const PROJECT_TABS = [
   { key: "overview", label: "نظرة عامة", icon: FolderKanban },
@@ -290,39 +290,29 @@ export default function ProjectDetail() {
             {tasks.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد مهام</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-start">المهمة</th>
-                  <th className="p-3 text-start">المسؤول</th>
-                  <th className="p-3 text-start">الأولوية</th>
-                  <th className="p-3 text-start">الحالة</th>
-                  <th className="p-3 text-start">تاريخ الاستحقاق</th>
-                  <th className="p-3 text-start">إجراء</th>
-                </tr></thead>
-                <tbody>
-                  {tasks.map((t: any) => (
-                    <tr key={t.id} className="border-b hover:bg-gray-50">
-                      <td className="p-3 font-medium">{t.title}</td>
-                      <td className="p-3 text-gray-500">{t.assigneeName || "-"}</td>
-                      <td className="p-3"><Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge></td>
-                      <td className="p-3"><Badge className={taskStatusColors[t.status] || "bg-gray-100 text-gray-700"}>{taskStatusLabels[t.status] || t.status}</Badge></td>
-                      <td className="p-3 text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</td>
-                      <td className="p-3">
-                        {t.status !== "done" && (
-                          <Select value={t.status} onValueChange={(v) => updateTaskStatus(t.id, v)}>
-                            <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="todo">للتنفيذ</SelectItem>
-                              <SelectItem value="in_progress">جاري</SelectItem>
-                              <SelectItem value="done">مكتمل</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable<any>
+                columns={[
+                  { key: "title", header: "المهمة", render: (t) => <span className="font-medium">{t.title}</span> },
+                  { key: "assigneeName", header: "المسؤول", render: (t) => <span className="text-gray-500">{t.assigneeName || "-"}</span> },
+                  { key: "priority", header: "الأولوية", render: (t) => <Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge> },
+                  { key: "status", header: "الحالة", render: (t) => <Badge className={taskStatusColors[t.status] || "bg-gray-100 text-gray-700"}>{taskStatusLabels[t.status] || t.status}</Badge> },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", render: (t) => <span className="text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</span> },
+                  { key: "action", header: "إجراء", render: (t) => t.status !== "done" ? (
+                    <Select value={t.status} onValueChange={(v) => updateTaskStatus(t.id, v)}>
+                      <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todo">للتنفيذ</SelectItem>
+                        <SelectItem value="in_progress">جاري</SelectItem>
+                        <SelectItem value="done">مكتمل</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : null },
+                ]}
+                data={tasks}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { roleKeyColors } from "@/contexts/app-context";
 import { MODULE_LABELS, PredefinedRole, UserRoleRow } from "./shared";
 
 export function RoleAssignmentTab() {
+  const { toast } = useToast();
   const { data: usersData, isLoading: isLoading1, isError: isError1 } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: predefinedData, isLoading: isLoading2, isError: isError2 } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -41,14 +43,14 @@ export function RoleAssignmentTab() {
         body: JSON.stringify({ userId: selectedUserId, roleKey }),
       });
       loadUserRoles(selectedUserId);
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) { toast({ title: "خطأ", description: getErrorMessage(e), variant: "destructive" }); }
   };
 
   const removeRole = async (id: number) => {
     try {
       await apiFetch(`/admin/user-roles/${id}`, { method: "DELETE" });
       if (selectedUserId) loadUserRoles(selectedUserId);
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) { toast({ title: "خطأ", description: getErrorMessage(e), variant: "destructive" }); }
   };
 
   const assignedKeys = (userRoles || []).map(r => r.roleKey);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 export function WorkflowDefinitionsTab() {
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["workflow-definitions"], "/workflows/definitions");
@@ -18,6 +20,7 @@ export function WorkflowDefinitionsTab() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showSlaForm, setShowSlaForm] = useState(false);
+  const [deletingDef, setDeletingDef] = useState<{ id: number; name: string } | null>(null);
 
   const REQUEST_TYPES = [
     { value: "leave", label: "إجازة" },
@@ -61,6 +64,39 @@ export function WorkflowDefinitionsTab() {
 
   const defs = asList(data?.data ?? data);
   const slas = asList(slaData?.data ?? slaData);
+
+  const slaColumns = useMemo<DataTableColumn<any>[]>(() => [
+    {
+      key: "requestType",
+      header: "النوع",
+      render: (s: any) => REQUEST_TYPES.find(t => t.value === s.requestType)?.label || s.requestType,
+    },
+    {
+      key: "warningHours",
+      header: "تنبيه",
+      render: (s: any) => `${s.warningHours}س`,
+    },
+    {
+      key: "deadlineHours",
+      header: "مهلة",
+      render: (s: any) => `${s.deadlineHours}س`,
+    },
+    {
+      key: "escalationHours",
+      header: "تصعيد",
+      render: (s: any) => `${s.escalationHours}س`,
+    },
+    {
+      key: "escalateTo",
+      header: "تصعيد إلى",
+      render: (s: any) => ROLES.find(r => r.value === s.escalateTo)?.label || s.escalateTo,
+    },
+    {
+      key: "autoApproveOnTimeout",
+      header: "تلقائي",
+      render: (s: any) => s.autoApproveOnTimeout ? "نعم" : "لا",
+    },
+  ], []);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -118,15 +154,9 @@ export function WorkflowDefinitionsTab() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا التعريف؟")) return;
-    try {
-      await apiFetch(`/workflows/definitions/${id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      refetch();
-    } catch (e: any) {
-      toast({ variant: "destructive", title: e.message || "خطأ" });
-    }
+  const handleDeleteDone = () => {
+    setDeletingDef(null);
+    refetch();
   };
 
   const handleSaveSla = async () => {
@@ -209,22 +239,14 @@ export function WorkflowDefinitionsTab() {
             <Button size="sm" onClick={handleSaveSla}><Save className="h-4 w-4 me-1" />حفظ إعدادات مستوى الخدمة</Button>
 
             {slas.length > 0 && (
-              <div className="border rounded-lg overflow-hidden mt-4">
-                <table className="w-full text-sm">
-                  <thead><tr className="bg-gray-50 border-b"><th className="p-2 text-start">النوع</th><th className="p-2 text-start">تنبيه</th><th className="p-2 text-start">مهلة</th><th className="p-2 text-start">تصعيد</th><th className="p-2 text-start">تصعيد إلى</th><th className="p-2 text-start">تلقائي</th></tr></thead>
-                  <tbody>
-                    {slas.map((s: any) => (
-                      <tr key={s.id} className="border-b">
-                        <td className="p-2">{REQUEST_TYPES.find(t => t.value === s.requestType)?.label || s.requestType}</td>
-                        <td className="p-2">{s.warningHours}س</td>
-                        <td className="p-2">{s.deadlineHours}س</td>
-                        <td className="p-2">{s.escalationHours}س</td>
-                        <td className="p-2">{ROLES.find(r => r.value === s.escalateTo)?.label || s.escalateTo}</td>
-                        <td className="p-2">{s.autoApproveOnTimeout ? "نعم" : "لا"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mt-4">
+                <DataTable
+                  columns={slaColumns}
+                  data={slas}
+                  pageSize={0}
+                  noToolbar
+                  searchPlaceholder={null}
+                />
               </div>
             )}
           </CardContent>
@@ -319,7 +341,7 @@ export function WorkflowDefinitionsTab() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(def)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDelete(def.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => setDeletingDef({ id: def.id, name: def.requestTypeLabel })}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
               {def.description && <p className="text-sm text-gray-500 mb-2">{def.description}</p>}
@@ -339,6 +361,19 @@ export function WorkflowDefinitionsTab() {
           </CardContent></Card>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={deletingDef !== null}
+        onOpenChange={(v) => !v && setDeletingDef(null)}
+        entity={{
+          type: "workflow-definition",
+          id: deletingDef?.id ?? 0,
+          name: deletingDef?.name ?? "",
+        }}
+        deletePath={`/workflows/definitions/${deletingDef?.id}`}
+        invalidateKeys={[["workflow-definitions"]]}
+        onDeleted={handleDeleteDone}
+      />
     </div>
   );
 }

@@ -30,11 +30,12 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Activity },
@@ -628,8 +629,8 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                       <PageStatusBadge status={a.status} domain="attendance" />
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span>دخول: {a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</span>
-                      <span>خروج: {a.checkOut ? new Date(a.checkOut).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</span>
+                      <span>دخول: {formatTimeAr(a.checkIn)}</span>
+                      <span>خروج: {formatTimeAr(a.checkOut)}</span>
                       {a.lateMinutes > 0 && (
                         <Badge variant="destructive" className="text-[10px]">تأخر {a.lateMinutes} د</Badge>
                       )}
@@ -692,34 +693,21 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             {payroll.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">لا يوجد سجل رواتب</p>
             ) : (
-              <div className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="p-3 text-start">الفترة</th>
-                      <th className="p-3 text-start">الأساسي</th>
-                      <th className="p-3 text-start">الإجمالي</th>
-                      <th className="p-3 text-start">التأمينات</th>
-                      <th className="p-3 text-start">خصم التأخر</th>
-                      <th className="p-3 text-start">الصافي</th>
-                      <th className="p-3 text-start">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payroll.map((p: any) => (
-                      <tr key={p.id} className="border-b hover:bg-gray-50">
-                        <td className="p-3 font-mono">{p.period}</td>
-                        <td className="p-3">{formatCurrency(Number(p.basic || 0))}</td>
-                        <td className="p-3">{formatCurrency(Number(p.grossSalary || 0))}</td>
-                        <td className="p-3 text-orange-600">{formatCurrency(Number(p.gosi || 0))}</td>
-                        <td className="p-3 text-red-600">{formatCurrency(Number(p.lateDeduction || 0))}</td>
-                        <td className="p-3 font-bold text-green-700">{formatCurrency(Number(p.netSalary || 0))}</td>
-                        <td className="p-3"><PageStatusBadge status={p.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable<any>
+                columns={[
+                  { key: "period", header: "الفترة", render: (p) => <span className="font-mono">{p.period}</span> },
+                  { key: "basic", header: "الأساسي", render: (p) => formatCurrency(Number(p.basic || 0)) },
+                  { key: "grossSalary", header: "الإجمالي", render: (p) => formatCurrency(Number(p.grossSalary || 0)) },
+                  { key: "gosi", header: "التأمينات", render: (p) => <span className="text-orange-600">{formatCurrency(Number(p.gosi || 0))}</span> },
+                  { key: "lateDeduction", header: "خصم التأخر", render: (p) => <span className="text-red-600">{formatCurrency(Number(p.lateDeduction || 0))}</span> },
+                  { key: "netSalary", header: "الصافي", render: (p) => <span className="font-bold text-green-700">{formatCurrency(Number(p.netSalary || 0))}</span> },
+                  { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+                ]}
+                data={payroll}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>
@@ -820,33 +808,22 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">رقم السلفة</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">النوع</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">المبلغ</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">المتبقي</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loans.map((ln: any) => {
+                <DataTable<any>
+                  columns={[
+                    { key: "loanNumber", header: "رقم السلفة", render: (ln) => <span className="font-mono text-xs text-blue-700">{ln.loanNumber}</span> },
+                    { key: "loanType", header: "النوع", render: (ln) => {
                       const loanTypes: Record<string, string> = { salary_advance: "سلفة راتب", personal: "شخصية", emergency: "طارئة" };
-                      return (
-                        <tr key={ln.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                          <td className="px-4 py-2 font-mono text-xs text-blue-700">{ln.loanNumber}</td>
-                          <td className="px-4 py-2">{loanTypes[ln.loanType] || ln.loanType}</td>
-                          <td className="px-4 py-2 font-semibold">{formatCurrency(Number(ln.amount))}</td>
-                          <td className="px-4 py-2 text-red-600">{formatCurrency(Number(ln.remainingAmount || 0))}</td>
-                          <td className="px-4 py-2">
-                            <PageStatusBadge status={ln.status} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      return loanTypes[ln.loanType] || ln.loanType;
+                    }},
+                    { key: "amount", header: "المبلغ", render: (ln) => <span className="font-semibold">{formatCurrency(Number(ln.amount))}</span> },
+                    { key: "remainingAmount", header: "المتبقي", render: (ln) => <span className="text-red-600">{formatCurrency(Number(ln.remainingAmount || 0))}</span> },
+                    { key: "status", header: "الحالة", render: (ln) => <PageStatusBadge status={ln.status} /> },
+                  ]}
+                  data={loans}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               </CardContent>
             </Card>
           )}
@@ -861,30 +838,19 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">رقم الطلب</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">التاريخ</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">الساعات</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">المبلغ</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overtime.map((ot: any) => (
-                        <tr key={ot.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                          <td className="px-4 py-2 font-mono text-xs text-purple-700">{ot.requestNumber}</td>
-                          <td className="px-4 py-2 text-gray-600">{ot.overtimeDate ? new Date(ot.overtimeDate).toLocaleDateString("ar-SA") : "—"}</td>
-                          <td className="px-4 py-2">{Number(ot.hours).toFixed(1)} ساعة</td>
-                          <td className="px-4 py-2 font-semibold text-green-700">{formatCurrency(Number(ot.totalAmount || 0))}</td>
-                          <td className="px-4 py-2">
-                            <PageStatusBadge status={ot.status} />
-                          </td>
-                        </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable<any>
+                  columns={[
+                    { key: "requestNumber", header: "رقم الطلب", render: (ot) => <span className="font-mono text-xs text-purple-700">{ot.requestNumber}</span> },
+                    { key: "overtimeDate", header: "التاريخ", render: (ot) => <span className="text-gray-600">{formatDateAr(ot.overtimeDate)}</span> },
+                    { key: "hours", header: "الساعات", render: (ot) => `${Number(ot.hours).toFixed(1)} ساعة` },
+                    { key: "totalAmount", header: "المبلغ", render: (ot) => <span className="font-semibold text-green-700">{formatCurrency(Number(ot.totalAmount || 0))}</span> },
+                    { key: "status", header: "الحالة", render: (ot) => <PageStatusBadge status={ot.status} /> },
+                  ]}
+                  data={overtime}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               </CardContent>
             </Card>
           )}

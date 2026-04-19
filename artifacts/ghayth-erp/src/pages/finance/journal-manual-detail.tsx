@@ -7,6 +7,7 @@ import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline, ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   FileText,
@@ -175,35 +176,30 @@ export default function JournalManualDetailPage() {
         <div className="pt-4 border-t">
           <p className="text-sm font-semibold mb-2">بنود القيد</p>
           <div className="rounded-xl border overflow-hidden text-sm">
-            <table className="w-full">
-              <thead className="bg-muted/40">
-                <tr>
-                  <th className="px-3 py-2 text-right text-xs text-muted-foreground">الحساب</th>
-                  <th className="px-3 py-2 text-right text-xs text-muted-foreground">البيان</th>
-                  <th className="px-3 py-2 text-right text-xs text-muted-foreground">مدين</th>
-                  <th className="px-3 py-2 text-right text-xs text-muted-foreground">دائن</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground">لا توجد بنود</td></tr>
-                ) : lines.map((l: any, i: number) => (
-                  <tr key={i} className="border-t">
-                    <td className="px-3 py-2 font-mono text-xs">{l.accountCode}</td>
-                    <td className="px-3 py-2">{l.description}</td>
-                    <td className="px-3 py-2 font-mono">{l.debit > 0 ? formatCurrency(l.debit) : ""}</td>
-                    <td className="px-3 py-2 font-mono">{l.credit > 0 ? formatCurrency(l.credit) : ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-muted/40 font-semibold">
-                <tr>
-                  <td colSpan={2} className="px-3 py-2 text-muted-foreground">المجموع</td>
-                  <td className="px-3 py-2">{formatCurrency(totalDebit)}</td>
-                  <td className="px-3 py-2">{formatCurrency(totalCredit)}</td>
-                </tr>
-              </tfoot>
-            </table>
+            <DataTable<any>
+              columns={[
+                { key: "accountCode", header: "الحساب", render: (r) => <span className="font-mono text-xs">{r.accountCode}</span> },
+                { key: "description", header: "البيان" },
+                { key: "debit", header: "مدين", sortable: true, render: (r) => <span className="font-mono">{r.debit > 0 ? formatCurrency(r.debit) : ""}</span> },
+                { key: "credit", header: "دائن", sortable: true, render: (r) => <span className="font-mono">{r.credit > 0 ? formatCurrency(r.credit) : ""}</span> },
+              ] satisfies DataTableColumn<any>[]}
+              data={lines}
+              pageSize={0}
+              noToolbar
+              searchPlaceholder={null}
+              emptyMessage="لا توجد بنود"
+              caption={
+                lines.length > 0 ? (
+                  <div className="flex justify-between bg-muted/40 font-semibold px-3 py-2 text-sm">
+                    <span className="text-muted-foreground">المجموع</span>
+                    <div className="flex gap-8">
+                      <span>{formatCurrency(totalDebit)}</span>
+                      <span>{formatCurrency(totalCredit)}</span>
+                    </div>
+                  </div>
+                ) : null
+              }
+            />
           </div>
         </div>
       </CardContent>

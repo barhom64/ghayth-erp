@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   Activity, CalendarClock, History, MessageCircle, ListChecks, FileText, Calendar, Hash,
@@ -63,35 +64,30 @@ export default function RecurringJournalDetailPage() {
       <CardContent className="p-6">
         <p className="text-sm font-semibold mb-3">قالب بنود القيد</p>
         <div className="rounded-xl border overflow-hidden text-sm">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2 text-right text-xs text-gray-500">الحساب</th>
-                <th className="px-3 py-2 text-right text-xs text-gray-500">البيان</th>
-                <th className="px-3 py-2 text-right text-xs text-gray-500">مدين</th>
-                <th className="px-3 py-2 text-right text-xs text-gray-500">دائن</th>
-              </tr>
-            </thead>
-            <tbody>
-              {templateLines.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-6 text-gray-400">لا توجد بنود في القالب</td></tr>
-              ) : templateLines.map((l: any, i: number) => (
-                <tr key={i} className="border-t">
-                  <td className="px-3 py-2 font-mono text-xs">{l.accountCode}</td>
-                  <td className="px-3 py-2">{l.description || "—"}</td>
-                  <td className="px-3 py-2 font-mono">{Number(l.debit) > 0 ? formatCurrency(Number(l.debit)) : ""}</td>
-                  <td className="px-3 py-2 font-mono">{Number(l.credit) > 0 ? formatCurrency(Number(l.credit)) : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-gray-50 font-semibold">
-              <tr>
-                <td colSpan={2} className="px-3 py-2 text-gray-500">المجموع</td>
-                <td className="px-3 py-2">{formatCurrency(totalDebit)}</td>
-                <td className="px-3 py-2">{formatCurrency(totalCredit)}</td>
-              </tr>
-            </tfoot>
-          </table>
+          <DataTable<any>
+            columns={[
+              { key: "accountCode", header: "الحساب", render: (r) => <span className="font-mono text-xs">{r.accountCode}</span> },
+              { key: "description", header: "البيان", render: (r) => r.description || "—" },
+              { key: "debit", header: "مدين", sortable: true, render: (r) => <span className="font-mono">{Number(r.debit) > 0 ? formatCurrency(Number(r.debit)) : ""}</span> },
+              { key: "credit", header: "دائن", sortable: true, render: (r) => <span className="font-mono">{Number(r.credit) > 0 ? formatCurrency(Number(r.credit)) : ""}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={templateLines}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد بنود في القالب"
+            caption={
+              templateLines.length > 0 ? (
+                <div className="flex justify-between bg-gray-50 font-semibold px-3 py-2 text-sm">
+                  <span className="text-gray-500">المجموع</span>
+                  <div className="flex gap-8">
+                    <span>{formatCurrency(totalDebit)}</span>
+                    <span>{formatCurrency(totalCredit)}</span>
+                  </div>
+                </div>
+              ) : null
+            }
+          />
         </div>
       </CardContent>
     </Card>
@@ -101,36 +97,21 @@ export default function RecurringJournalDetailPage() {
     <Card className="border-0 shadow-sm">
       <CardContent className="p-6">
         <p className="text-sm font-semibold mb-3">سجل التنفيذات السابقة</p>
-        {!rj?.history || rj.history.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">لا توجد تنفيذات سابقة</p>
-        ) : (
-          <div className="rounded-xl border overflow-hidden text-sm">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">تاريخ التنفيذ</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">القيد الناتج</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">الحالة</th>
-                  <th className="px-3 py-2 text-right text-xs text-gray-500">الطريقة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rj.history.map((h: any) => (
-                  <tr key={h.id} className="border-t">
-                    <td className="px-3 py-2">{h.runDate ? formatDateAr(h.runDate) : "—"}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{h.journalRef || `#${h.journalEntryId}` || "—"}</td>
-                    <td className="px-3 py-2">
-                      {h.status === "success"
-                        ? <Badge className="bg-green-100 text-green-700">نجاح</Badge>
-                        : <Badge className="bg-red-100 text-red-700">فشل</Badge>}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-gray-500">{h.triggeredBy === "manual" ? "يدوي" : "تلقائي"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="rounded-xl border overflow-hidden text-sm">
+          <DataTable<any>
+            columns={[
+              { key: "runDate", header: "تاريخ التنفيذ", render: (r) => r.runDate ? formatDateAr(r.runDate) : "—" },
+              { key: "journalRef", header: "القيد الناتج", render: (r) => <span className="font-mono text-xs">{r.journalRef || `#${r.journalEntryId}` || "—"}</span> },
+              { key: "status", header: "الحالة", render: (r) => r.status === "success" ? <Badge className="bg-green-100 text-green-700">نجاح</Badge> : <Badge className="bg-red-100 text-red-700">فشل</Badge> },
+              { key: "triggeredBy", header: "الطريقة", render: (r) => <span className="text-xs text-gray-500">{r.triggeredBy === "manual" ? "يدوي" : "تلقائي"}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={rj?.history ?? []}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد تنفيذات سابقة"
+          />
+        </div>
       </CardContent>
     </Card>
   );

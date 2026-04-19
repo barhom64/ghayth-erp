@@ -14,7 +14,7 @@ import { Clock, Plus, CheckCircle, XCircle, AlertCircle, Users, ChevronDown, Che
 import { ExportButton } from "@/components/shared/export-buttons";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatTimeAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -168,7 +168,7 @@ export default function AttendancePage() {
       sortable: true,
       render: (a) => (
         <span className="text-green-600 font-mono">
-          {a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}
+          {formatTimeAr(a.checkIn)}
         </span>
       ),
     },
@@ -178,7 +178,7 @@ export default function AttendancePage() {
       sortable: true,
       render: (a) => (
         <span className="text-red-600 font-mono">
-          {a.checkOut ? new Date(a.checkOut).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}
+          {formatTimeAr(a.checkOut)}
         </span>
       ),
     },

@@ -5,9 +5,9 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { formatDateAr } from "@/lib/formatters";
 import {
-  Users, CheckCircle, XCircle, Clock, AlertTriangle, ChevronLeft,
-  Briefcase, Calendar, DollarSign, FileText, Check, X as XIcon, CornerUpLeft,
-  TrendingUp, ListChecks, UserCheck, Loader2, ArrowUpRight, Bell, UserCog,
+  CheckCircle, Clock, AlertTriangle, ChevronLeft,
+  Briefcase, Calendar, Check, X as XIcon,
+  ListChecks, UserCheck, Loader2, ArrowUpRight, Bell, UserCog,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -132,6 +133,68 @@ export default function ManagerBoard() {
   const tasksDone = tasks.filter((t: any) => t.status === "completed").length;
   const tasksInProg = tasks.filter((t: any) => t.status === "in_progress").length;
   const tasksPct = tasks.length > 0 ? Math.round((tasksDone / tasks.length) * 100) : 0;
+
+  const pendingColumns: DataTableColumn<any>[] = [
+    {
+      key: "_type",
+      header: "النوع",
+      render: (item) => {
+        const isUrgent = item.priority === "high" || item.priority === "urgent";
+        return (
+          <>
+            <Badge className={cn("text-[10px]",
+              item._type === "leave" ? "bg-blue-100 text-blue-700" :
+              item._type === "advance" ? "bg-green-100 text-green-700" :
+              item._type === "letter" ? "bg-purple-100 text-purple-700" :
+              "bg-gray-100 text-gray-700"
+            )}>
+              {item._label}
+            </Badge>
+            {isUrgent && <Badge className="text-[10px] ms-1 bg-red-100 text-red-700">عاجل</Badge>}
+          </>
+        );
+      },
+    },
+    {
+      key: "employeeName",
+      header: "الموظف",
+      render: (item) => (
+        <span className="font-medium text-sm">{item.employeeName || item.requestedBy || "—"}</span>
+      ),
+    },
+    {
+      key: "reason",
+      header: "التفاصيل",
+      render: (item) => (
+        <span className="text-gray-500 text-xs">{item.reason || item.leaveTypeName || item.description || "—"}</span>
+      ),
+    },
+    {
+      key: "createdAt",
+      header: "وقت الطلب",
+      render: (item) => (
+        <span className="text-xs text-gray-400">{item.createdAt ? formatTimeAgo(item.createdAt) : "—"}</span>
+      ),
+    },
+    {
+      key: "action",
+      header: "إجراء",
+      render: (item) => {
+        const key = `${item._type}-${item.id}`;
+        const isProcessing = processingIds.has(key);
+        return (
+          <div className="flex gap-1">
+            <Button size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs" onClick={() => doApprove(item)}>
+              {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+            </Button>
+            <Button size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50" onClick={() => doReject(item)}>
+              <XIcon className="h-3 w-3" />
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <PageShell
@@ -326,63 +389,21 @@ export default function ManagerBoard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {actionLoading ? (
-            <p className="text-sm text-gray-400 text-center py-6">جاري التحميل...</p>
-          ) : allPending.length === 0 ? (
-            <div className="text-center py-8">
-              <CheckCircle className="w-10 h-10 text-green-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">لا توجد طلبات معلقة</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="p-3 text-start">النوع</th>
-                    <th className="p-3 text-start">الموظف</th>
-                    <th className="p-3 text-start">التفاصيل</th>
-                    <th className="p-3 text-start">وقت الطلب</th>
-                    <th className="p-3 text-start">إجراء</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allPending.map((item: any) => {
-                    const key = `${item._type}-${item.id}`;
-                    const isProcessing = processingIds.has(key);
-                    const isUrgent = item.priority === "high" || item.priority === "urgent";
-                    return (
-                      <tr key={key} className={cn("border-b hover:bg-gray-50", isUrgent && "bg-red-50/30")}>
-                        <td className="p-3">
-                          <Badge className={cn("text-[10px]",
-                            item._type === "leave" ? "bg-blue-100 text-blue-700" :
-                            item._type === "advance" ? "bg-green-100 text-green-700" :
-                            item._type === "letter" ? "bg-purple-100 text-purple-700" :
-                            "bg-gray-100 text-gray-700"
-                          )}>
-                            {item._label}
-                          </Badge>
-                          {isUrgent && <Badge className="text-[10px] ms-1 bg-red-100 text-red-700">عاجل</Badge>}
-                        </td>
-                        <td className="p-3 font-medium text-sm">{item.employeeName || item.requestedBy || "—"}</td>
-                        <td className="p-3 text-gray-500 text-xs">{item.reason || item.leaveTypeName || item.description || "—"}</td>
-                        <td className="p-3 text-xs text-gray-400">{item.createdAt ? formatTimeAgo(item.createdAt) : "—"}</td>
-                        <td className="p-3">
-                          <div className="flex gap-1">
-                            <Button size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs" onClick={() => doApprove(item)}>
-                              {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                            </Button>
-                            <Button size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50" onClick={() => doReject(item)}>
-                              <XIcon className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable<any>
+            columns={pendingColumns}
+            data={allPending}
+            rowKey={(item) => `${item._type}-${item.id}`}
+            isLoading={actionLoading}
+            emptyMessage="لا توجد طلبات معلقة"
+            emptyIcon={<CheckCircle className="w-10 h-10 text-green-300" />}
+            searchPlaceholder={null}
+            noToolbar
+            pageSize={20}
+            rowClassName={(item) => {
+              const isUrgent = item.priority === "high" || item.priority === "urgent";
+              return isUrgent ? "bg-red-50/30" : undefined;
+            }}
+          />
         </CardContent>
       </Card>
 

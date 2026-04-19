@@ -271,7 +271,7 @@ export default function Tasks() {
                         <td className="p-3"><PageStatusBadge status={task.status} /></td>
                         <td className="p-3 text-muted-foreground">
                           {task.scheduledStart
-                            ? new Date(task.scheduledStart).toLocaleString("ar-SA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                            ? formatDateAr(task.scheduledStart)
                             : task.scheduledDate
                             ? formatDateAr(task.scheduledDate)
                             : "-"

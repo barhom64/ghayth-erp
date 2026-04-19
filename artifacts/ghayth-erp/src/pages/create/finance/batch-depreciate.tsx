@@ -16,8 +16,8 @@ export default function BatchDepreciatePage() {
     try {
       const res = await batchDepMutation.mutateAsync({ period: depPeriod });
       setBatchResult(res);
-    } catch (err: any) {
-      console.error(err);
+    } catch {
+      // error handled by mutation hook toast
     }
   }
 

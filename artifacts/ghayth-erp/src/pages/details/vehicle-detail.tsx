@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ArrowRight, Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, CheckCircle, XCircle, Info, Banknote, FileText, Clock } from "lucide-react";
@@ -22,6 +21,7 @@ import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
@@ -455,24 +455,18 @@ export default function VehicleDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-orange-50">
-                    <th className="p-2 text-right text-xs">النوع</th>
-                    <th className="p-2 text-right text-xs">التاريخ</th>
-                    <th className="p-2 text-right text-xs">التكلفة</th>
-                    <th className="p-2 text-right text-xs">الحالة</th>
-                  </tr></thead>
-                  <tbody>
-                    {maintenance.filter((m: any) => m.status === "pending" || m.status === "in_progress").slice(0, 5).map((m: any) => (
-                      <tr key={m.id} className="border-b">
-                        <td className="p-2 text-xs">{m.type || m.description || "-"}</td>
-                        <td className="p-2 text-xs">{formatDateAr(m.scheduledDate || m.createdAt)}</td>
-                        <td className="p-2 text-xs font-bold">{formatCurrency(Number(m.cost || 0))}</td>
-                        <td className="p-2"><PageStatusBadge status={m.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable<any>
+                  columns={[
+                    { key: "type", header: "النوع", render: (m) => m.type || m.description || "-" },
+                    { key: "scheduledDate", header: "التاريخ", render: (m) => formatDateAr(m.scheduledDate || m.createdAt) },
+                    { key: "cost", header: "التكلفة", render: (m) => <span className="font-bold">{formatCurrency(Number(m.cost || 0))}</span> },
+                    { key: "status", header: "الحالة", render: (m) => <PageStatusBadge status={m.status} /> },
+                  ]}
+                  data={maintenance.filter((m: any) => m.status === "pending" || m.status === "in_progress").slice(0, 5)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               </CardContent>
             </Card>
           )}
@@ -612,30 +606,20 @@ export default function VehicleDetail() {
             {trips.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">لا توجد رحلات</p>
             ) : (
-              <div className="p-0">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-gray-50">
-                    <th className="p-3 text-start">من</th>
-                    <th className="p-3 text-start">إلى</th>
-                    <th className="p-3 text-start">المسافة</th>
-                    <th className="p-3 text-start">التكلفة</th>
-                    <th className="p-3 text-start">السائق</th>
-                    <th className="p-3 text-start">الحالة</th>
-                  </tr></thead>
-                  <tbody>
-                    {trips.map((t: any) => (
-                      <tr key={t.id} className="border-b hover:bg-gray-50">
-                        <td className="p-3">{t.fromLocation || "-"}</td>
-                        <td className="p-3">{t.toLocation || "-"}</td>
-                        <td className="p-3 font-mono" dir="ltr">{Number(t.distance || 0).toFixed(1)} km</td>
-                        <td className="p-3">{formatCurrency(Number(t.cost || 0))}</td>
-                        <td className="p-3 text-gray-500">{t.driverName || "-"}</td>
-                        <td className="p-3"><PageStatusBadge status={t.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable<any>
+                columns={[
+                  { key: "fromLocation", header: "من", render: (t) => t.fromLocation || "-" },
+                  { key: "toLocation", header: "إلى", render: (t) => t.toLocation || "-" },
+                  { key: "distance", header: "المسافة", ltr: true, render: (t) => <span className="font-mono">{Number(t.distance || 0).toFixed(1)} km</span> },
+                  { key: "cost", header: "التكلفة", render: (t) => formatCurrency(Number(t.cost || 0)) },
+                  { key: "driverName", header: "السائق", render: (t) => <span className="text-gray-500">{t.driverName || "-"}</span> },
+                  { key: "status", header: "الحالة", render: (t) => <PageStatusBadge status={t.status} /> },
+                ]}
+                data={trips}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>
@@ -648,28 +632,20 @@ export default function VehicleDetail() {
             {maintenance.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد سجلات صيانة</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-start">النوع</th>
-                  <th className="p-3 text-start">الوصف</th>
-                  <th className="p-3 text-start">التاريخ</th>
-                  <th className="p-3 text-start">التكلفة</th>
-                  <th className="p-3 text-start">العداد</th>
-                  <th className="p-3 text-start">الحالة</th>
-                </tr></thead>
-                <tbody>
-                  {maintenance.map((m: any) => (
-                    <tr key={m.id} className="border-b hover:bg-gray-50">
-                      <td className="p-3 font-medium">{maintenanceTypeLabel(m.type)}</td>
-                      <td className="p-3 text-gray-500">{m.description || "-"}</td>
-                      <td className="p-3 text-gray-500">{m.serviceDate ? formatDateAr(m.serviceDate) : "-"}</td>
-                      <td className="p-3">{Number(m.cost) > 0 ? `${formatCurrency(Number(m.cost))}` : "-"}</td>
-                      <td className="p-3 font-mono" dir="ltr">{m.mileageAtService ? `${Number(m.mileageAtService).toLocaleString()} km` : "-"}</td>
-                      <td className="p-3"><PageStatusBadge status={m.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable<any>
+                columns={[
+                  { key: "type", header: "النوع", render: (m) => <span className="font-medium">{maintenanceTypeLabel(m.type)}</span> },
+                  { key: "description", header: "الوصف", render: (m) => <span className="text-gray-500">{m.description || "-"}</span> },
+                  { key: "serviceDate", header: "التاريخ", render: (m) => <span className="text-gray-500">{m.serviceDate ? formatDateAr(m.serviceDate) : "-"}</span> },
+                  { key: "cost", header: "التكلفة", render: (m) => Number(m.cost) > 0 ? formatCurrency(Number(m.cost)) : "-" },
+                  { key: "mileageAtService", header: "العداد", ltr: true, render: (m) => <span className="font-mono">{m.mileageAtService ? `${Number(m.mileageAtService).toLocaleString()} km` : "-"}</span> },
+                  { key: "status", header: "الحالة", render: (m) => <PageStatusBadge status={m.status} /> },
+                ]}
+                data={maintenance}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>
@@ -682,26 +658,19 @@ export default function VehicleDetail() {
             {fuelLogs.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد سجلات وقود</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-start">التاريخ</th>
-                  <th className="p-3 text-start">الكمية</th>
-                  <th className="p-3 text-start">التكلفة</th>
-                  <th className="p-3 text-start">العداد</th>
-                  <th className="p-3 text-start">المحطة</th>
-                </tr></thead>
-                <tbody>
-                  {fuelLogs.map((f: any) => (
-                    <tr key={f.id} className="border-b hover:bg-gray-50">
-                      <td className="p-3 text-gray-500">{f.fuelDate ? formatDateAr(f.fuelDate) : "-"}</td>
-                      <td className="p-3">{Number(f.liters || 0).toFixed(1)} لتر</td>
-                      <td className="p-3">{formatCurrency(Number(f.totalCost || 0))}</td>
-                      <td className="p-3 font-mono" dir="ltr">{f.mileageAtFuel ? `${Number(f.mileageAtFuel).toLocaleString()} km` : "-"}</td>
-                      <td className="p-3 text-gray-500">{f.stationName || "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable<any>
+                columns={[
+                  { key: "fuelDate", header: "التاريخ", render: (f) => <span className="text-gray-500">{f.fuelDate ? formatDateAr(f.fuelDate) : "-"}</span> },
+                  { key: "liters", header: "الكمية", render: (f) => `${Number(f.liters || 0).toFixed(1)} لتر` },
+                  { key: "totalCost", header: "التكلفة", render: (f) => formatCurrency(Number(f.totalCost || 0)) },
+                  { key: "mileageAtFuel", header: "العداد", ltr: true, render: (f) => <span className="font-mono">{f.mileageAtFuel ? `${Number(f.mileageAtFuel).toLocaleString()} km` : "-"}</span> },
+                  { key: "stationName", header: "المحطة", render: (f) => <span className="text-gray-500">{f.stationName || "-"}</span> },
+                ]}
+                data={fuelLogs}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>

@@ -1,25 +1,62 @@
-import { useState } from "react";
 import { formatDateAr } from "@/lib/formatters";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Mail, Send, Inbox, FileText, Search, Plus } from "lucide-react";
+import { Mail, Send, Inbox, FileText, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
   inbound: { label: "وارد", color: "bg-blue-100 text-blue-700" },
   outbound: { label: "صادر", color: "bg-green-100 text-green-700" },
 };
 
+const letterColumns: DataTableColumn<any>[] = [
+  {
+    key: "subject",
+    header: "الموضوع",
+    sortable: true,
+    searchable: true,
+    render: (l) => <span className="font-medium">{l.subject || "-"}</span>,
+  },
+  {
+    key: "direction",
+    header: "الاتجاه",
+    sortable: true,
+    render: (l) => (
+      <Badge className={DIRECTION_MAP[l.direction]?.color}>
+        {DIRECTION_MAP[l.direction]?.label || l.direction}
+      </Badge>
+    ),
+  },
+  {
+    key: "toNumber",
+    header: "المرسل/المستلم",
+    searchable: true,
+    render: (l) => <span className="text-gray-500">{l.toNumber || l.fromNumber || "-"}</span>,
+  },
+  {
+    key: "createdAt",
+    header: "التاريخ",
+    sortable: true,
+    render: (l) => <span className="text-gray-500">{l.createdAt ? formatDateAr(l.createdAt) : "-"}</span>,
+  },
+  {
+    key: "status",
+    header: "الحالة",
+    render: (l) => <PageStatusBadge status={l.status} />,
+  },
+];
+
+const directionStatusOptions = [
+  { value: "inbound", label: "واردة" },
+  { value: "outbound", label: "صادرة" },
+];
+
 export default function CommunicationsLetters() {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
   const { data: logResp, isLoading, isError } = useApiQuery<any>(["comm-log-letters"], "/communications/log?channel=email");
   const letters = asList<any>(logResp);
 
@@ -32,15 +69,6 @@ export default function CommunicationsLetters() {
     { label: "واردة", value: incoming, icon: Inbox, color: "text-purple-600 bg-purple-50" },
     { label: "في الانتظار", value: letters.filter((l: any) => l.status === "queued").length, icon: FileText, color: "text-yellow-600 bg-yellow-50" },
   ];
-
-  const filtered = letters.filter((l: any) => {
-    if (filter !== "all" && l.direction !== filter) return false;
-    if (search && !l.subject?.includes(search) && !l.toNumber?.includes(search)) return false;
-    return true;
-  });
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6">
@@ -64,48 +92,18 @@ export default function CommunicationsLetters() {
         ))}
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input placeholder="بحث في المراسلات..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
-        </div>
-        <Select value={filter} onValueChange={(v) => setFilter(v)}>
-          <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">الكل</SelectItem>
-            <SelectItem value="inbound">واردة</SelectItem>
-            <SelectItem value="outbound">صادرة</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-start">الموضوع</th>
-              <th className="p-3 text-start">الاتجاه</th>
-              <th className="p-3 text-start">المرسل/المستلم</th>
-              <th className="p-3 text-start">التاريخ</th>
-              <th className="p-3 text-start">الحالة</th>
-            </tr></thead>
-            <tbody>
-              {filtered.map((l: any) => (
-                <tr key={l.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium">{l.subject || "-"}</td>
-                  <td className="p-3"><Badge className={DIRECTION_MAP[l.direction]?.color}>{DIRECTION_MAP[l.direction]?.label || l.direction}</Badge></td>
-                  <td className="p-3 text-gray-500">{l.toNumber || l.fromNumber || "-"}</td>
-                  <td className="p-3 text-gray-500">{l.createdAt ? formatDateAr(l.createdAt) : "-"}</td>
-                  <td className="p-3">
-                    <PageStatusBadge status={l.status} />
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">لا توجد مراسلات</td></tr>}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={letterColumns}
+        data={letters}
+        isLoading={isLoading}
+        isError={isError}
+        onRetry={() => window.location.reload()}
+        searchPlaceholder="بحث في المراسلات..."
+        statusOptions={directionStatusOptions}
+        statusField="direction"
+        emptyMessage="لا توجد مراسلات"
+        pageSize={20}
+      />
     </div>
   );
 }
