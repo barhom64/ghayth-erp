@@ -207,8 +207,8 @@ export default function PurchaseOrderDetailPage() {
                   <td>{i + 1}</td>
                   <td>{l.description || l.name || "-"}</td>
                   <td>{l.quantity || 1}</td>
-                  <td>{Number(l.unitPrice || 0).toLocaleString()} ﷼</td>
-                  <td style={{ fontWeight: "bold" }}>{Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)).toLocaleString()} ﷼</td>
+                  <td>{formatCurrency(Number(l.unitPrice || 0))}</td>
+                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)))}</td>
                 </tr>
               ))}
             </tbody>
@@ -219,7 +219,7 @@ export default function PurchaseOrderDetailPage() {
           <tbody>
             <tr>
               <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(po.totalAmount || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(po.totalAmount || 0))}</td>
             </tr>
           </tbody>
         </table>
@@ -252,14 +252,14 @@ export default function PurchaseOrderDetailPage() {
               <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
               <tbody>
                 {lines.map((l: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{l.description || l.name || "-"}</td><td>{l.quantity || 1}</td><td>{Number(l.unitPrice || 0).toLocaleString()} ﷼</td><td style={{ fontWeight: "bold" }}>{Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)).toLocaleString()} ﷼</td></tr>
+                  <tr key={i}><td>{i + 1}</td><td>{l.description || l.name || "-"}</td><td>{l.quantity || 1}</td><td>{formatCurrency(Number(l.unitPrice || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)))}</td></tr>
                 ))}
               </tbody>
             </table>
           )}
           <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
             <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(po.totalAmount || 0).toLocaleString()} ﷼</td></tr>
+              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(po.totalAmount || 0))}</td></tr>
             </tbody>
           </table>
           {po.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {po.notes}</p>}

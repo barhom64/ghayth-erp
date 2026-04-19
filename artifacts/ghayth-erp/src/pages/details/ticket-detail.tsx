@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { formatDateAr, formatTimeAr } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -135,7 +136,7 @@ export default function TicketDetail() {
                     <span className="text-sm font-medium flex items-center gap-1">
                       <User className="w-3 h-3" /> {r.authorName || "مجهول"}
                     </span>
-                    <span className="text-xs text-gray-500">{r.createdAt ? new Date(r.createdAt).toLocaleString("ar-SA") : "-"}</span>
+                    <span className="text-xs text-gray-500">{r.createdAt ? `${formatDateAr(r.createdAt)} ${formatTimeAr(r.createdAt)}` : "-"}</span>
                   </div>
                   <p className="text-sm text-gray-700">{r.message}</p>
                 </div>
@@ -178,8 +179,8 @@ export default function TicketDetail() {
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الأولوية</span><Badge className={priorityMap[ticket.priority]?.color || "bg-gray-100 text-gray-700"}>{priorityMap[ticket.priority]?.label || ticket.priority}</Badge></div>
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الفئة</span><span>{ticket.category || "-"}</span></div>
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">العميل</span><span>{ticket.clientName || "-"}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-gray-500">تاريخ الإنشاء</span><span className="text-xs">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleString("ar-SA") : "-"}</span></div>
-              <div className="flex justify-between py-2"><span className="text-gray-500">آخر تحديث</span><span className="text-xs">{ticket.updatedAt ? new Date(ticket.updatedAt).toLocaleString("ar-SA") : "-"}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-gray-500">تاريخ الإنشاء</span><span className="text-xs">{ticket.createdAt ? `${formatDateAr(ticket.createdAt)} ${formatTimeAr(ticket.createdAt)}` : "-"}</span></div>
+              <div className="flex justify-between py-2"><span className="text-gray-500">آخر تحديث</span><span className="text-xs">{ticket.updatedAt ? `${formatDateAr(ticket.updatedAt)} ${formatTimeAr(ticket.updatedAt)}` : "-"}</span></div>
               {ticket.isSlaBreached && (
                 <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs text-center">
                   تم تجاوز اتفاقية مستوى الخدمة

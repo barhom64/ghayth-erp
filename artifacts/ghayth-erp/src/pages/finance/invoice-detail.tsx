@@ -567,10 +567,10 @@ export default function InvoiceDetailPage() {
                   <td>{i + 1}</td>
                   <td>{l.description || "-"}</td>
                   <td>{l.quantity}</td>
-                  <td>{Number(l.unitPrice).toLocaleString()} ﷼</td>
-                  <td>{Number(l.lineTotal).toLocaleString()} ﷼</td>
-                  <td>{Number(l.vatAmount || 0).toLocaleString()} ﷼</td>
-                  <td style={{ fontWeight: "bold" }}>{Number(l.lineGross || l.lineTotal).toLocaleString()} ﷼</td>
+                  <td>{formatCurrency(Number(l.unitPrice))}</td>
+                  <td>{formatCurrency(Number(l.lineTotal))}</td>
+                  <td>{formatCurrency(Number(l.vatAmount || 0))}</td>
+                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineGross || l.lineTotal))}</td>
                 </tr>
               ))}
             </tbody>
@@ -581,23 +581,23 @@ export default function InvoiceDetailPage() {
           <tbody>
             <tr>
               <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(invoice.subtotal || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.subtotal || 0))}</td>
             </tr>
             <tr>
               <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(invoice.vatAmount || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.vatAmount || 0))}</td>
             </tr>
             <tr style={{ borderTop: "2px solid #333" }}>
               <td className="label" style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{Number(invoice.total).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(Number(invoice.total))}</td>
             </tr>
             <tr>
               <td className="label" style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{Number(invoice.paidAmount || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{formatCurrency(Number(invoice.paidAmount || 0))}</td>
             </tr>
             <tr>
               <td className="label" style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{remaining.toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{formatCurrency(remaining)}</td>
             </tr>
           </tbody>
         </table>
@@ -644,18 +644,18 @@ export default function InvoiceDetailPage() {
               <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th>الضريبة</th><th>الصافي</th></tr></thead>
               <tbody>
                 {lines.map((l: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{l.description || "-"}</td><td>{l.quantity}</td><td>{Number(l.unitPrice).toLocaleString()} ﷼</td><td>{Number(l.lineTotal).toLocaleString()} ﷼</td><td>{Number(l.vatAmount || 0).toLocaleString()} ﷼</td><td style={{ fontWeight: "bold" }}>{Number(l.lineGross || l.lineTotal).toLocaleString()} ﷼</td></tr>
+                  <tr key={i}><td>{i + 1}</td><td>{l.description || "-"}</td><td>{l.quantity}</td><td>{formatCurrency(Number(l.unitPrice))}</td><td>{formatCurrency(Number(l.lineTotal))}</td><td>{formatCurrency(Number(l.vatAmount || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineGross || l.lineTotal))}</td></tr>
                 ))}
               </tbody>
             </table>
           )}
           <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
             <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(invoice.subtotal || 0).toLocaleString()} ﷼</td></tr>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(invoice.vatAmount || 0).toLocaleString()} ﷼</td></tr>
-              <tr style={{ borderTop: "2px solid #333" }}><td style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{Number(invoice.total).toLocaleString()} ﷼</td></tr>
-              <tr><td style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{Number(invoice.paidAmount || 0).toLocaleString()} ﷼</td></tr>
-              <tr><td style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{remaining.toLocaleString()} ﷼</td></tr>
+              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.subtotal || 0))}</td></tr>
+              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.vatAmount || 0))}</td></tr>
+              <tr style={{ borderTop: "2px solid #333" }}><td style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(Number(invoice.total))}</td></tr>
+              <tr><td style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{formatCurrency(Number(invoice.paidAmount || 0))}</td></tr>
+              <tr><td style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{formatCurrency(remaining)}</td></tr>
             </tbody>
           </table>
           {invoice.zatcaQrCode && (

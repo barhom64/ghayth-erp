@@ -25,11 +25,11 @@ function PayrollLines({ runId }: { runId: number }) {
     <DataTable
       columns={[
         { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
-        { key: "basic", header: "الأساسي", sortable: true, render: (v) => <span>{Number(v.basic).toLocaleString("ar-SA")}</span> },
-        { key: "grossSalary", header: "الإجمالي", sortable: true, render: (v) => <span>{Number(v.grossSalary).toLocaleString("ar-SA")}</span> },
-        { key: "gosi", header: "التأمينات", sortable: true, render: (v) => <span className="text-orange-600">{Number(v.gosi).toLocaleString("ar-SA")}</span> },
-        { key: "lateDeduction", header: "الخصومات", sortable: true, render: (v) => <span className="text-red-600">{Number(v.lateDeduction).toLocaleString("ar-SA")}</span> },
-        { key: "netSalary", header: "الصافي", sortable: true, render: (v) => <span className="font-bold text-green-700">{Number(v.netSalary).toLocaleString("ar-SA")}</span> },
+        { key: "basic", header: "الأساسي", sortable: true, render: (v) => <span>{formatCurrency(Number(v.basic))}</span> },
+        { key: "grossSalary", header: "الإجمالي", sortable: true, render: (v) => <span>{formatCurrency(Number(v.grossSalary))}</span> },
+        { key: "gosi", header: "التأمينات", sortable: true, render: (v) => <span className="text-orange-600">{formatCurrency(Number(v.gosi))}</span> },
+        { key: "lateDeduction", header: "الخصومات", sortable: true, render: (v) => <span className="text-red-600">{formatCurrency(Number(v.lateDeduction))}</span> },
+        { key: "netSalary", header: "الصافي", sortable: true, render: (v) => <span className="font-bold text-green-700">{formatCurrency(Number(v.netSalary))}</span> },
       ] as DataTableColumn<any>[]}
       data={lines}
       noToolbar

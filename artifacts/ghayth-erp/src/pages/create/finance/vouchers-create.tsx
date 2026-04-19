@@ -12,6 +12,7 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
+import { formatCurrency } from "@/lib/formatters";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -52,7 +53,7 @@ const HIGH_VALUE_THRESHOLD = 5000;
 function generateDescription(params: { type: string; operationType: string; payee?: string; amount?: number }): string {
   const { type, operationType, payee, amount } = params;
   const payeeLabel = payee ? ` / ${payee}` : "";
-  const amountLabel = amount ? ` / ${Number(amount).toLocaleString("ar-SA")} ريال` : "";
+  const amountLabel = amount ? ` / ${formatCurrency(Number(amount))}` : "";
   const opMap: Record<string, string> = {
     rent: `تحصيل إيجار${payeeLabel}${amountLabel}`,
     invoice_payment: `سداد فاتورة عميل${payeeLabel}${amountLabel}`,
@@ -268,8 +269,8 @@ export default function VouchersCreate() {
           <FormFieldWrapper label="الإجمالي">
             <div className="p-2 bg-muted rounded-md text-sm font-medium">
               {vatAmount > 0
-                ? `${totalWithVat.toLocaleString("ar-SA")} ريال (ضريبة: ${vatAmount.toLocaleString("ar-SA")})`
-                : `${Number(form.amount || 0).toLocaleString("ar-SA")} ريال`}
+                ? `${formatCurrency(totalWithVat)} (ضريبة: ${formatCurrency(vatAmount)})`
+                : formatCurrency(Number(form.amount || 0))}
             </div>
           </FormFieldWrapper>
         </div>
@@ -428,7 +429,7 @@ export default function VouchersCreate() {
             <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
             <p className="text-sm text-red-700">
               {Number(form.amount) >= HIGH_VALUE_THRESHOLD && form.type === "payment"
-                ? `سندات الصرف بمبلغ ${HIGH_VALUE_THRESHOLD.toLocaleString()} ريال أو أكثر تستوجب إرفاق إشعار التحويل أو وصل الاستلام.`
+                ? `سندات الصرف بمبلغ ${formatCurrency(HIGH_VALUE_THRESHOLD)} أو أكثر تستوجب إرفاق إشعار التحويل أو وصل الاستلام.`
                 : "هذا النوع من السندات يستوجب إرفاق مستند داعم."}
             </p>
           </div>

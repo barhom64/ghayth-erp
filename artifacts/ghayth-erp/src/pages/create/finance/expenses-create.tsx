@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { formatCurrency } from "@/lib/formatters";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect } from "@/components/shared/entity-selects";
@@ -96,7 +97,7 @@ function generateAutoDescription(params: {
   const { operationType, relatedEntityName, period, amount, expenseType } = params;
   const periodLabel = period ? ` / شهر ${period}` : "";
   const entityLabel = relatedEntityName ? ` / ${relatedEntityName}` : "";
-  const amountLabel = amount ? ` / ${Number(amount).toLocaleString("ar-SA")} ريال` : "";
+  const amountLabel = amount ? ` / ${formatCurrency(Number(amount))}` : "";
 
   const typeMap: Record<string, string> = {
     salary: `صرف راتب${entityLabel}${periodLabel}`,
@@ -416,8 +417,8 @@ export default function ExpensesCreate() {
             <FormFieldWrapper label="الإجمالي مع الضريبة">
               <div className="p-2 bg-muted rounded-md text-sm font-medium">
                 {vatAmount > 0
-                  ? `${totalWithVat.toLocaleString("ar-SA")} ريال (ضريبة: ${vatAmount.toLocaleString("ar-SA")})`
-                  : `${Number(form.amount || 0).toLocaleString("ar-SA")} ريال`}
+                  ? `${formatCurrency(totalWithVat)} (ضريبة: ${formatCurrency(vatAmount)})`
+                  : formatCurrency(Number(form.amount || 0))}
               </div>
             </FormFieldWrapper>
           </div>
@@ -686,14 +687,14 @@ export default function ExpensesCreate() {
                 {journalPreviewLines.map((line, idx) => (
                   <tr key={idx} className="border-b">
                     <td className="p-2 font-mono text-xs">{line.account}</td>
-                    <td className="p-2 text-red-600">{line.debit > 0 ? line.debit.toLocaleString("ar-SA") : ""}</td>
-                    <td className="p-2 text-green-600">{line.credit > 0 ? line.credit.toLocaleString("ar-SA") : ""}</td>
+                    <td className="p-2 text-red-600">{line.debit > 0 ? formatCurrency(line.debit) : ""}</td>
+                    <td className="p-2 text-green-600">{line.credit > 0 ? formatCurrency(line.credit) : ""}</td>
                   </tr>
                 ))}
                 <tr className="bg-gray-50 font-semibold">
                   <td className="p-2">الإجمالي</td>
-                  <td className="p-2 text-red-600">{journalPreviewLines.reduce((s, l) => s + l.debit, 0).toLocaleString("ar-SA")}</td>
-                  <td className="p-2 text-green-600">{journalPreviewLines.reduce((s, l) => s + l.credit, 0).toLocaleString("ar-SA")}</td>
+                  <td className="p-2 text-red-600">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.debit, 0))}</td>
+                  <td className="p-2 text-green-600">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.credit, 0))}</td>
                 </tr>
               </tbody>
             </table>

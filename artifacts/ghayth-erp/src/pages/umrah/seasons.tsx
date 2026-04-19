@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,7 @@ export default function UmrahSeasons() {
                 <div>
                   <h3 className="font-bold text-lg">{s.title}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {new Date(s.startDate).toLocaleDateString("ar-SA")} — {new Date(s.endDate).toLocaleDateString("ar-SA")}
+                    {formatDateAr(s.startDate)} — {formatDateAr(s.endDate)}
                   </p>
                 </div>
               </div>

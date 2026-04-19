@@ -1,3 +1,5 @@
+import { formatTimeAr } from "@/lib/formatters";
+
 export function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
   const diff = now - new Date(timestamp).getTime();
@@ -12,8 +14,7 @@ export function formatTimeAgo(timestamp: string): string {
 
 export function formatTime(iso: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+  return formatTimeAr(iso);
 }
 
 

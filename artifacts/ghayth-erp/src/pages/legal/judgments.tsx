@@ -3,7 +3,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -24,12 +24,12 @@ interface Judgment {
 const columns: DataTableColumn<Judgment>[] = [
   { key: "caseTitle", header: "القضية", sortable: true, searchable: true },
   { key: "caseNumber", header: "رقم القضية" },
-  { key: "judgmentDate", header: "تاريخ الحكم", sortable: true, render: (r) => r.judgmentDate ? new Date(r.judgmentDate).toLocaleDateString("ar-SA") : "-" },
+  { key: "judgmentDate", header: "تاريخ الحكم", sortable: true, render: (r) => formatDateAr(r.judgmentDate) },
   { key: "judgmentType", header: "نوع الحكم" },
   { key: "verdict", header: "الحكم / القرار", searchable: true },
   { key: "amount", header: "المبلغ", render: (r) => r.amount ? formatCurrency(Number(r.amount)) : "-" },
   { key: "paidAmount", header: "المدفوع", render: (r) => r.paidAmount ? formatCurrency(Number(r.paidAmount)) : "-" },
-  { key: "dueDate", header: "تاريخ الاستحقاق", render: (r) => r.dueDate ? new Date(r.dueDate).toLocaleDateString("ar-SA") : "-" },
+  { key: "dueDate", header: "تاريخ الاستحقاق", render: (r) => formatDateAr(r.dueDate) },
   {
     key: "riskLevel", header: "مستوى المخاطرة", render: (r) => {
       const v = r.riskLevel;

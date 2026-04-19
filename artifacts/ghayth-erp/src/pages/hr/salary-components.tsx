@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { SALARY_COMPONENT_TYPES, SALARY_CATEGORIES } from "@/lib/hr-type-maps";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,7 +61,7 @@ export default function SalaryComponentsPage() {
       key: "value",
       header: "القيمة",
       sortable: true,
-      render: (c) => <span className="font-medium">{Number(c.value || 0).toLocaleString("ar-SA")} {c.type === "percentage" ? "%" : getCurrencySymbol()}</span>,
+      render: (c) => <span className="font-medium">{c.type === "percentage" ? `${Number(c.value || 0)}%` : formatCurrency(Number(c.value || 0))}</span>,
     },
     { key: "taxable", header: "خاضع للضريبة", sortable: true, render: (c) => c.taxable ? "نعم" : "لا" },
     {
