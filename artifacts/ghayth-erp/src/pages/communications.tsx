@@ -6,6 +6,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity } from "lucide-react";
@@ -213,16 +214,15 @@ function MonitorTab() {
               className="text-xs border rounded px-2 py-1"
             />
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs border rounded px-2 py-1"
-          >
-            <option value="all">كل الحالات</option>
-            <option value="pending">انتظار</option>
-            <option value="sent">مُرسل</option>
-            <option value="failed">فشل</option>
-          </select>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
+            <SelectTrigger className="text-xs h-8 w-[120px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل الحالات</SelectItem>
+              <SelectItem value="pending">انتظار</SelectItem>
+              <SelectItem value="sent">مُرسل</SelectItem>
+              <SelectItem value="failed">فشل</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <Activity className="h-4 w-4 me-1" />
             تحديث
@@ -541,12 +541,15 @@ function WhatsAppTab() {
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input className="ps-9" placeholder="بحث بالرقم أو الرسالة..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="border rounded-md px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">جميع الحالات</option>
-            <option value="pending">في الانتظار</option>
-            <option value="sent">مرسل</option>
-            <option value="failed">فاشل</option>
-          </select>
+          <Select value={statusFilter || "_none"} onValueChange={(v) => setStatusFilter(v === "_none" ? "" : v)}>
+            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">جميع الحالات</SelectItem>
+              <SelectItem value="pending">في الانتظار</SelectItem>
+              <SelectItem value="sent">مرسل</SelectItem>
+              <SelectItem value="failed">فاشل</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <DataTable
           columns={columns}
@@ -599,12 +602,15 @@ function SMSTab() {
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input className="ps-9" placeholder="بحث بالرقم أو الرسالة..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="border rounded-md px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">جميع الحالات</option>
-            <option value="pending">في الانتظار</option>
-            <option value="sent">مرسل</option>
-            <option value="failed">فاشل</option>
-          </select>
+          <Select value={statusFilter || "_none"} onValueChange={(v) => setStatusFilter(v === "_none" ? "" : v)}>
+            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">جميع الحالات</SelectItem>
+              <SelectItem value="pending">في الانتظار</SelectItem>
+              <SelectItem value="sent">مرسل</SelectItem>
+              <SelectItem value="failed">فاشل</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <DataTable
           columns={columns}

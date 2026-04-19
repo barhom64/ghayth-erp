@@ -146,7 +146,7 @@ export default function BankReconciliationPage() {
             <div>
               <Label>ملف جدولي</Label>
               <div className="flex gap-2 mt-1">
-                <input ref={fileRef} type="file" accept=".csv" onChange={handleFileImport} className="hidden" />
+                <input ref={fileRef} type="file" accept=".csv" onChange={handleFileImport} className="hidden" /> {/* file input: keep raw */}
                 <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} className="flex-1">
                   <Upload className="h-4 w-4 me-2" />
                   {importing ? "جارٍ الاستيراد..." : "اختر ملف جدولي"}

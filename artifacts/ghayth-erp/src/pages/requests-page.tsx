@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -274,26 +275,24 @@ function RequestsList() {
             className="pe-9 ps-3"
           />
         </div>
-        <select
-          className="border rounded-md px-3 py-2 text-sm bg-white"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-        >
-          <option value="">جميع الحالات</option>
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label} ({statusCounts[o.value] || 0})</option>
-          ))}
-        </select>
-        <select
-          className="border rounded-md px-3 py-2 text-sm bg-white"
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-        >
-          <option value="">جميع الأنواع</option>
-          {[...new Set(allItems.map((r: any) => r.typeName).filter(Boolean))].map((t: any) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
+        <Select value={filterStatus || "_none"} onValueChange={(v) => setFilterStatus(v === "_none" ? "" : v)}>
+          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_none">جميع الحالات</SelectItem>
+            {STATUS_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label} ({statusCounts[o.value] || 0})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterType || "_none"} onValueChange={(v) => setFilterType(v === "_none" ? "" : v)}>
+          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_none">جميع الأنواع</SelectItem>
+            {[...new Set(allItems.map((r: any) => r.typeName).filter(Boolean))].map((t: any) => (
+              <SelectItem key={t} value={t}>{t}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-1">
           <DatePicker
             value={filterDateFrom}
@@ -328,7 +327,7 @@ function RequestsList() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><Label>العنوان</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
             <div><Label>مقدم الطلب</Label><Input value={form.requesterName} onChange={(e) => setForm({ ...form, requesterName: e.target.value })} /></div>
-            <div><Label>الأولوية</Label><select className="w-full border rounded-md p-2" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}><option value="low">منخفض</option><option value="medium">متوسط</option><option value="high">عالي</option><option value="critical">حرج</option></select></div>
+            <div><Label>الأولوية</Label><Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">منخفض</SelectItem><SelectItem value="medium">متوسط</SelectItem><SelectItem value="high">عالي</SelectItem><SelectItem value="critical">حرج</SelectItem></SelectContent></Select></div>
             <div><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           </div>
           <FileDropZone files={attachments} onFilesChange={setAttachments} />

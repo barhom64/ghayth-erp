@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Mail, Send, Inbox, FileText, Search, Plus, FileSignature, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, useApiMutation, asList, getErrorMessage } from "@/lib/api";
@@ -150,12 +152,15 @@ function HROfficialLettersTab() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>النوع</Label>
-                <select className="w-full border rounded-md p-2 mt-1" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                  {Object.entries(HR_TYPE_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(HR_TYPE_MAP).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div><Label>الموضوع</Label><Input className="mt-1" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></div>
-              <div className="md:col-span-2"><Label>المحتوى</Label><textarea className="w-full border rounded-md p-2 mt-1 h-24" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
+              <div className="md:col-span-2"><Label>المحتوى</Label><Textarea className="mt-1 h-24" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
               <div><Button onClick={handleSubmit} disabled={!form.subject || createMut.isPending}>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button></div>
             </div>
           </CardContent>
@@ -262,11 +267,14 @@ function GeneralLettersTab() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input placeholder="بحث في المراسلات..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
         </div>
-        <select className="border rounded-md px-3 py-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">الكل</option>
-          <option value="inbound">واردة</option>
-          <option value="outbound">صادرة</option>
-        </select>
+        <Select value={filter} onValueChange={(v) => setFilter(v)}>
+          <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">الكل</SelectItem>
+            <SelectItem value="inbound">واردة</SelectItem>
+            <SelectItem value="outbound">صادرة</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <DataTable

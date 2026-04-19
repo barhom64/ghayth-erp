@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Shield, AlertTriangle, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -74,10 +75,13 @@ export function SecurityLogTab() {
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[150px]">
               <Label className="text-xs mb-1 block">نوع السبب</Label>
-              <select className="w-full border rounded p-2 text-sm" value={reason} onChange={e => { setReason(e.target.value); setPage(1); }}>
-                <option value="">— الكل —</option>
-                {Object.entries(REASON_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
+              <Select value={reason || "_none"} onValueChange={(v) => { setReason(v === "_none" ? "" : v); setPage(1); }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— الكل —</SelectItem>
+                  {Object.entries(REASON_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex-1 min-w-[150px]">
               <Label className="text-xs mb-1 block">من تاريخ</Label>

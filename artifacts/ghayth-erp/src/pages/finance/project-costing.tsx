@@ -9,6 +9,9 @@ import { formatCurrency } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Project = {
   id: number;
@@ -155,32 +158,38 @@ export default function ProjectCostingPage() {
             <form onSubmit={handleAddCost} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">المشروع *</label>
-                <select className="w-full border rounded-lg px-3 py-2 text-sm" required value={costForm.projectId} onChange={e => setCostForm(f => ({ ...f, projectId: e.target.value }))}>
-                  <option value="">-- اختر المشروع --</option>
-                  {list.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <Select value={costForm.projectId || "_none"} onValueChange={(v) => setCostForm(f => ({ ...f, projectId: v === "_none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">-- اختر المشروع --</SelectItem>
+                    {list.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">المبلغ *</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm" required type="number" min="0.01" step="0.01" value={costForm.amount} onChange={e => setCostForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
+                <Input type="number" min="0.01" step="0.01" value={costForm.amount} onChange={e => setCostForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">التصنيف</label>
-                <select className="w-full border rounded-lg px-3 py-2 text-sm" value={costForm.category} onChange={e => setCostForm(f => ({ ...f, category: e.target.value }))}>
-                  <option value="direct">تكلفة مباشرة</option>
-                  <option value="indirect">تكلفة غير مباشرة</option>
-                  <option value="overhead">تكاليف عامة</option>
-                  <option value="labor">تكاليف عمالة</option>
-                  <option value="materials">مواد</option>
-                </select>
+                <Select value={costForm.category} onValueChange={(v) => setCostForm(f => ({ ...f, category: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="direct">تكلفة مباشرة</SelectItem>
+                    <SelectItem value="indirect">تكلفة غير مباشرة</SelectItem>
+                    <SelectItem value="overhead">تكاليف عامة</SelectItem>
+                    <SelectItem value="labor">تكاليف عمالة</SelectItem>
+                    <SelectItem value="materials">مواد</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">التاريخ</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm" type="date" value={costForm.date} onChange={e => setCostForm(f => ({ ...f, date: e.target.value }))} />
+                <Input type="date" value={costForm.date} onChange={e => setCostForm(f => ({ ...f, date: e.target.value }))} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">البيان</label>
-                <textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={costForm.description} onChange={e => setCostForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف التكلفة" />
+                <Textarea rows={2} value={costForm.description} onChange={e => setCostForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف التكلفة" />
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowAddCost(false)}>إلغاء</Button>

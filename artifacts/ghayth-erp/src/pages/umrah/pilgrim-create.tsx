@@ -5,6 +5,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -94,7 +95,7 @@ export default function PilgrimCreate() {
           <div><Label>تاريخ المغادرة</Label><DatePicker value={form.departureDate || ""} onChange={v => update("departureDate", v)} /></div>
           <div><Label>الفندق</Label><Input value={form.hotelName || ""} onChange={e => update("hotelName", e.target.value)} /></div>
           <div><Label>رقم الغرفة</Label><Input value={form.roomNumber || ""} onChange={e => update("roomNumber", e.target.value)} /></div>
-          <div className="md:col-span-3"><Label>ملاحظات</Label><textarea className="w-full border rounded p-2 text-sm" rows={3} value={form.notes || ""} onChange={e => update("notes", e.target.value)} /></div>
+          <div className="md:col-span-3"><Label>ملاحظات</Label><Textarea rows={3} value={form.notes || ""} onChange={e => update("notes", e.target.value)} /></div>
           <div className="md:col-span-3">
             <FileDropZone files={attachments} onFilesChange={setAttachments} />
           </div>

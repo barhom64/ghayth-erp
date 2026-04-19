@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Mail, Send, Inbox, FileText, Search, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,11 +69,14 @@ export default function CommunicationsLetters() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input placeholder="بحث في المراسلات..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
         </div>
-        <select className="border rounded-md px-3 py-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">الكل</option>
-          <option value="inbound">واردة</option>
-          <option value="outbound">صادرة</option>
-        </select>
+        <Select value={filter} onValueChange={(v) => setFilter(v)}>
+          <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">الكل</SelectItem>
+            <SelectItem value="inbound">واردة</SelectItem>
+            <SelectItem value="outbound">صادرة</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>
