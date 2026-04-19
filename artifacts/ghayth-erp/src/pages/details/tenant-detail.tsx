@@ -41,16 +41,47 @@ export default function TenantDetail() {
     !!id
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const shellBreadcrumbs = [
+    { href: "/properties/dashboard", label: "إدارة الأملاك" },
+    { href: "/properties/tenants", label: "المستأجرون" },
+  ];
 
-  if (!tenant) return (
-    <div className="text-center py-12">
-      <Users2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">المستأجر غير موجود</p>
-      <Link href="/properties/tenants"><Button variant="outline" className="mt-4">العودة للمستأجرين</Button></Link>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <PageShell title="جاري التحميل..." breadcrumbs={shellBreadcrumbs}>
+        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
+      </PageShell>
+    );
+  }
+
+  if (isError) {
+    return (
+      <PageShell title="خطأ" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
+            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات المستأجر.</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
+
+  if (!tenant) {
+    return (
+      <PageShell title="المستأجر غير موجود" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Users2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 mb-1">المستأجر المطلوب غير موجود أو تم حذفه.</p>
+            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة المستأجرين.</p>
+            <Link href="/properties/tenants"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للمستأجرين</Button></Link>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
 
   const contracts = tenant.contracts || [];
   const payments = tenant.payments || [];

@@ -13,6 +13,7 @@ import {
   ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo,
   CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle,
   BookOpen, CheckSquare, FileText, Clock, Plus, Flag,
+  BarChart2, ShieldAlert,
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityDocuments } from "@/components/shared/entity-documents";
@@ -63,6 +64,13 @@ export default function ProjectDetail() {
   const [taskForm, setTaskForm] = useState({ title: "", priority: "medium", dueDate: "" });
 
   const { data: project, isLoading, isError, error } = useApiQuery<any>(["project-detail", id || ""], `/projects/${id}`, !!id);
+  const { data: risksResp } = useApiQuery<any>(["project-risks", id || ""], `/projects/${id}/risks`, !!id);
+  const { data: milestonesResp } = useApiQuery<any>(["project-milestones", id || ""], `/projects/${id}/milestones`, !!id);
+  const risks: any[] = risksResp?.data || risksResp || [];
+  const milestones: any[] = milestonesResp?.data || milestonesResp || [];
+  const openRisks = risks.filter((r: any) => r.status === "open" || r.status === "realized");
+  const criticalRisks = openRisks.filter((r: any) => r.riskLevel === "critical" || r.riskLevel === "high");
+  const upcomingMilestones = milestones.filter((m: any) => m.status !== "completed" && m.status !== "cancelled");
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
@@ -187,6 +195,17 @@ export default function ProjectDetail() {
               <AlertTriangle className="h-3 w-3" /> متأخر
             </Badge>
           )}
+          {criticalRisks.length > 0 && (
+            <Badge className="bg-orange-100 text-orange-700 flex items-center gap-1">
+              <ShieldAlert className="h-3 w-3" /> {criticalRisks.length} مخاطر حرجة
+            </Badge>
+          )}
+          <Link href={`/projects/gantt?projectId=${id}`}>
+            <Button variant="outline" size="sm"><BarChart2 className="h-4 w-4 me-1" />غانت</Button>
+          </Link>
+          <Link href={`/projects/risks?projectId=${id}`}>
+            <Button variant="outline" size="sm"><ShieldAlert className="h-4 w-4 me-1" />المخاطر</Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
           {deleting ? (
             <div className="flex gap-2">
@@ -328,11 +347,17 @@ export default function ProjectDetail() {
             </Card>
           </div>
 
-          {(project.milestones?.length ?? 0) > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><Flag className="w-4 h-4 text-orange-500" /> المعالم الرئيسية</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2"><Flag className="w-4 h-4 text-orange-500" /> المعالم ({milestones.length})</CardTitle>
+                  <Link href={`/projects/gantt?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">غانت</Button></Link>
+                </div>
+              </CardHeader>
               <CardContent className="space-y-2">
-                {project.milestones.map((m: any) => (
+                {upcomingMilestones.length === 0 && <p className="text-center text-gray-400 py-4 text-sm">لا توجد معالم قادمة</p>}
+                {upcomingMilestones.slice(0, 5).map((m: any) => (
                   <div key={m.id} className="flex items-center justify-between p-2 rounded border">
                     <div className="flex items-center gap-2">
                       <Flag className="w-4 h-4 text-orange-400" />
@@ -346,7 +371,35 @@ export default function ProjectDetail() {
                 ))}
               </CardContent>
             </Card>
-          )}
+
+            <Card className={openRisks.length > 0 ? "border-orange-200" : ""}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-orange-500" /> المخاطر ({openRisks.length})
+                    {criticalRisks.length > 0 && (
+                      <Badge className="bg-red-100 text-red-700 text-[10px]">{criticalRisks.length} حرج</Badge>
+                    )}
+                  </CardTitle>
+                  <Link href={`/projects/risks?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">إدارة</Button></Link>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {openRisks.length === 0 && <p className="text-center text-gray-400 py-4 text-sm">لا توجد مخاطر مفتوحة</p>}
+                {openRisks.slice(0, 5).map((r: any) => (
+                  <div key={r.id} className="flex items-center justify-between p-2 rounded border">
+                    <span className="text-sm font-medium truncate flex-1">{r.title}</span>
+                    <Badge className={
+                      r.riskLevel === "critical" ? "bg-red-100 text-red-700" :
+                      r.riskLevel === "high" ? "bg-orange-100 text-orange-700" :
+                      r.riskLevel === "medium" ? "bg-yellow-100 text-yellow-700" :
+                      "bg-green-100 text-green-700"
+                    }>{r.riskLevel === "critical" ? "حرج" : r.riskLevel === "high" ? "عالٍ" : r.riskLevel === "medium" ? "متوسط" : "منخفض"}</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
 

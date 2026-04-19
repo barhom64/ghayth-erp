@@ -13,6 +13,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ClientContextCard } from "@/components/shared/client-context-card";
+import { ManagerWorkloadCard } from "@/components/shared/manager-workload-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "projects_create";
@@ -111,6 +112,11 @@ export default function ProjectsCreate() {
               placeholder="ابحث عن مدير..."
               emptyMessage="لا يوجد موظفين"
             />
+            {form.managerId && (
+              <div className="mt-3">
+                <ManagerWorkloadCard employeeId={form.managerId} />
+              </div>
+            )}
           </FormFieldWrapper>
           <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>

@@ -110,17 +110,47 @@ export default function UnitDetail() {
 
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
-  if (isLoading) return <LoadingSpinner />;
+  const shellBreadcrumbs = [
+    { href: "/properties/dashboard", label: "إدارة الأملاك" },
+    { href: "/properties", label: "الوحدات" },
+  ];
 
-  if (is404 || (!isLoading && !unit)) return (
-    <div className="text-center py-12">
-      <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">الوحدة غير موجودة</p>
-      <Link href="/properties"><Button variant="outline" className="mt-4">العودة للعقارات</Button></Link>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <PageShell title="جاري التحميل..." breadcrumbs={shellBreadcrumbs}>
+        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
+      </PageShell>
+    );
+  }
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (is404 || (!isLoading && !unit)) {
+    return (
+      <PageShell title="الوحدة غير موجودة" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 mb-1">الوحدة المطلوبة غير موجودة أو تم حذفها.</p>
+            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة الوحدات.</p>
+            <Link href="/properties"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للوحدات</Button></Link>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
+
+  if (isError) {
+    return (
+      <PageShell title="خطأ" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
+            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات الوحدة.</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
 
   const contracts: any[] = unit.contracts || [];
   const payments: any[] = unit.payments || [];

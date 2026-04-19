@@ -1066,6 +1066,55 @@ router.get("/stats/overview", requirePermission("projects:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Projects overview error:"); }
 });
 
+router.get("/manager/:employeeId/workload", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employeeId = Number(req.params.employeeId);
+    if (!employeeId) throw new ValidationError("معرّف الموظف مطلوب");
+
+    const [counts] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
+         COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
+         COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping,
+         COALESCE(SUM(budget) FILTER (WHERE status IN ('active','in_progress')),0) as "activeBudget",
+         COALESCE(SUM("spentAmount") FILTER (WHERE status IN ('active','in_progress')),0) as "activeSpent"
+       FROM projects
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2`,
+      [scope.companyId, employeeId]
+    );
+
+    const [taskCounts] = await rawQuery<any>(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled')) as open,
+              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
+       FROM project_tasks pt
+       JOIN projects p ON pt."projectId"=p.id
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+         AND (p."managerId"=$2 OR pt."assigneeId"=$2)`,
+      [scope.companyId, employeeId]
+    );
+
+    const recent = await rawQuery<any>(
+      `SELECT id, name, status, progress, "endDate"
+       FROM projects
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2 AND status IN ('active','in_progress','planning')
+       ORDER BY "updatedAt" DESC LIMIT 5`,
+      [scope.companyId, employeeId]
+    );
+
+    res.json({
+      projects: {
+        active: Number(counts.active), onHold: Number(counts.on_hold),
+        slipping: Number(counts.slipping),
+        activeBudget: Number(counts.activeBudget), activeSpent: Number(counts.activeSpent),
+      },
+      tasks: { total: Number(taskCounts.total), open: Number(taskCounts.open), overdue: Number(taskCounts.overdue) },
+      recent,
+    });
+  } catch (err) { handleRouteError(err, res, "Manager workload error:"); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PROJECT MILESTONES — معالم المشروع
 // ─────────────────────────────────────────────────────────────────────────────

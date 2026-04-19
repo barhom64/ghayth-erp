@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearch } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,9 @@ const RISK_STATUS_LABELS: Record<string, string> = {
 };
 
 export default function RisksPage() {
-  const [projectId, setProjectId] = useState("");
+  const search = useSearch();
+  const urlProjectId = new URLSearchParams(search).get("projectId") || "";
+  const [projectId, setProjectId] = useState(urlProjectId);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", probability: "3", impact: "3", mitigationPlan: "" });
 
