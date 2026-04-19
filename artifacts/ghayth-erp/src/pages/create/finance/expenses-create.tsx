@@ -3,8 +3,7 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
@@ -338,129 +337,112 @@ export default function ExpensesCreate() {
       )}
       <div data-form>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <Label>التاريخ <span className="text-red-500">*</span></Label>
-            <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} /></div>
-          </div>
-          <div>
-            <Label>الفترة المالية</Label>
-            <Input className="mt-1" type="month" value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} />
-          </div>
+          <FormFieldWrapper label="التاريخ" required>
+            <DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+          </FormFieldWrapper>
+          <TextField label="الفترة المالية" type="month" value={form.period} onChange={(v) => setForm({ ...form, period: v })} />
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">تصنيف العملية</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>نوع العملية</Label>
+            <FormFieldWrapper label="نوع العملية">
               <Select value={form.operationType} onValueChange={(v) => setForm({ ...form, operationType: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {OPERATION_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>التصنيف التفصيلي</Label>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="التصنيف التفصيلي">
               <Select value={form.expenseType} onValueChange={(v) => setForm({ ...form, expenseType: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {EXPENSE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>طريقة الدفع</Label>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="طريقة الدفع">
               <Select value={form.paymentMethod} onValueChange={(v) => setForm({ ...form, paymentMethod: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PAYMENT_METHODS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
           </div>
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الحسابات المحاسبية</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>بند المصروفات <span className="text-red-500">*</span></Label>
+            <FormFieldWrapper label="بند المصروفات" required>
               <Autocomplete options={expenseOptions} value={form.accountCode}
                 onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
-                placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} className="mt-1" />
-            </div>
-            <div>
-              <Label>مصدر الصرف (الخزنة / البنك)</Label>
+                placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="مصدر الصرف (الخزنة / البنك)">
               <Autocomplete options={sourceOptions} value={form.sourceAccountCode}
                 onChange={(val) => setForm(prev => ({ ...prev, sourceAccountCode: String(val) }))}
-                placeholder="ابحث عن مصدر صرف..." loading={accountsLoading} className="mt-1" />
-            </div>
+                placeholder="ابحث عن مصدر صرف..." loading={accountsLoading} />
+            </FormFieldWrapper>
           </div>
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">المبالغ</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label>المبلغ (ريال) <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" type="number" min="0" step="0.01" value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" />
-            </div>
-            <div>
-              <Label>نسبة ضريبة القيمة المضافة (%)</Label>
+            <NumberField label="المبلغ (ريال)" required value={form.amount}
+              onChange={(v) => setForm({ ...form, amount: v })} min={0} step={0.01} placeholder="0.00" />
+            <FormFieldWrapper label="نسبة ضريبة القيمة المضافة (%)">
               <Select value={form.vatRate || "_none"} onValueChange={(v) => setForm({ ...form, vatRate: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">بدون ضريبة</SelectItem>
                   <SelectItem value="5">5%</SelectItem>
                   <SelectItem value="15">15%</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>التصنيف الضريبي</Label>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="التصنيف الضريبي">
               <Select value={form.taxCategory || "_none"} onValueChange={(v) => setForm({ ...form, taxCategory: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TAX_CATEGORIES.map(t => <SelectItem key={t.value || "_none"} value={t.value || "_none"}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>الإجمالي مع الضريبة</Label>
-              <div className="mt-1 p-2 bg-muted rounded-md text-sm font-medium">
+            </FormFieldWrapper>
+            <FormFieldWrapper label="الإجمالي مع الضريبة">
+              <div className="p-2 bg-muted rounded-md text-sm font-medium">
                 {vatAmount > 0
                   ? `${totalWithVat.toLocaleString("ar-SA")} ريال (ضريبة: ${vatAmount.toLocaleString("ar-SA")})`
                   : `${Number(form.amount || 0).toLocaleString("ar-SA")} ريال`}
               </div>
-            </div>
+            </FormFieldWrapper>
           </div>
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الجهة المرتبطة ومركز التكلفة</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>الفرع <span className="text-red-500">*</span></Label>
+            <FormFieldWrapper label="الفرع" required>
               <Select value={form.branchId || "_none"} onValueChange={(v) => setForm({ ...form, branchId: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">اختر الفرع</SelectItem>
                   {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>القسم / الإدارة</Label>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="القسم / الإدارة">
               <Select value={form.departmentId || "_none"} onValueChange={(v) => setForm({ ...form, departmentId: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">اختر القسم</SelectItem>
                   {departments.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
             <CostCenterSelect
               value={form.costCenter}
               onChange={(v) => setForm({ ...form, costCenter: v })}
@@ -471,10 +453,9 @@ export default function ExpensesCreate() {
               onChange={(v) => setForm({ ...form, projectId: v })}
               label="المشروع المرتبط"
             />
-            <div>
-              <Label>نوع الجهة المرتبطة</Label>
+            <FormFieldWrapper label="نوع الجهة المرتبطة">
               <Select value={form.relatedEntityType || "_none"} onValueChange={(v) => setForm({ ...form, relatedEntityType: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">بدون ربط</SelectItem>
                   <SelectItem value="employee">موظف</SelectItem>
@@ -485,10 +466,9 @@ export default function ExpensesCreate() {
                   <SelectItem value="legal_case">قضية قانونية</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
             {form.relatedEntityType && (
-              <div>
-                <Label>الجهة المرتبطة</Label>
+              <FormFieldWrapper label="الجهة المرتبطة">
                 <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
                   const val = v === "_none" ? "" : v;
                   const label = val ? getRelatedEntityLabel(form.relatedEntityType, val, {
@@ -501,7 +481,7 @@ export default function ExpensesCreate() {
                   }) : "";
                   setForm({ ...form, relatedEntityId: val, relatedEntityName: label });
                 }}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">— اختر —</SelectItem>
                     {form.relatedEntityType === "employee" && (employeesData?.data || []).map((emp: any) => (
@@ -524,7 +504,7 @@ export default function ExpensesCreate() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </FormFieldWrapper>
             )}
             {form.relatedEntityType && form.relatedEntityId && (
               <div className="md:col-span-3">
@@ -534,11 +514,8 @@ export default function ExpensesCreate() {
                 {form.relatedEntityType === "property" && <PropertyUnitContextCard unitId={form.relatedEntityId} section="payment" />}
               </div>
             )}
-            <div>
-              <Label>رقم المرجع / الفاتورة</Label>
-              <Input className="mt-1" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                placeholder="رقم الفاتورة أو أمر الشراء" />
-            </div>
+            <TextField label="رقم المرجع / الفاتورة" value={form.reference} onChange={(v) => setForm({ ...form, reference: v })}
+              placeholder="رقم الفاتورة أو أمر الشراء" />
           </div>
         </div>
 
@@ -551,11 +528,9 @@ export default function ExpensesCreate() {
               توليد بيان تلقائي
             </label>
           </div>
-          <div>
-            <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder={form.autoDescription ? "سيتم توليده تلقائياً..." : "أدخل وصفاً للمصروف"}
-              disabled={form.autoDescription} />
-          </div>
+          <TextField label="البيان" value={form.description} onChange={(v) => setForm({ ...form, description: v })}
+            placeholder={form.autoDescription ? "سيتم توليده تلقائياً..." : "أدخل وصفاً للمصروف"}
+            disabled={form.autoDescription} />
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
@@ -571,15 +546,11 @@ export default function ExpensesCreate() {
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>رابط المرفق</Label>
-              <Input className="mt-1" value={form.attachmentUrl} onChange={(e) => setForm({ ...form, attachmentUrl: e.target.value })}
-                placeholder="https://... أو مسار الملف" />
-            </div>
-            <div>
-              <Label>نوع المرفق</Label>
+            <TextField label="رابط المرفق" value={form.attachmentUrl} onChange={(v) => setForm({ ...form, attachmentUrl: v })}
+              placeholder="https://... أو مسار الملف" />
+            <FormFieldWrapper label="نوع المرفق">
               <Select value={form.attachmentType} onValueChange={(v) => setForm({ ...form, attachmentType: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="invoice">فاتورة</SelectItem>
                   <SelectItem value="receipt">وصل استلام</SelectItem>
@@ -589,24 +560,23 @@ export default function ExpensesCreate() {
                   <SelectItem value="other">أخرى</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
           </div>
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الحالة</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>الحالة</Label>
+            <FormFieldWrapper label="الحالة">
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">مسودة</SelectItem>
                   <SelectItem value="pending">في انتظار الموافقة</SelectItem>
                   <SelectItem value="posted">مرحّل</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
             <div className="flex items-center gap-3 mt-6">
               <Checkbox id="isPaid" checked={form.isPaid}
                 onCheckedChange={(v) => setForm({ ...form, isPaid: v === true })} />
@@ -633,13 +603,12 @@ export default function ExpensesCreate() {
             </div>
             {form.govSyncEnabled && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>النظام الحكومي</Label>
+                <FormFieldWrapper label="النظام الحكومي">
                   <Select
                     value={form.govIntegrationId || "_none"}
                     onValueChange={(v) => setForm({ ...form, govIntegrationId: v === "_none" ? "" : v })}
                   >
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">— اختر النظام —</SelectItem>
                       {(govIntegrationsData?.data || []).filter((gi: any) => gi.enabled).map((gi: any) => (
@@ -650,29 +619,27 @@ export default function ExpensesCreate() {
                       )}
                     </SelectContent>
                   </Select>
-                </div>
-                <div>
-                  <Label>نوع الكيان المرتبط</Label>
+                </FormFieldWrapper>
+                <FormFieldWrapper label="نوع الكيان المرتبط">
                   <Select
                     value={form.govEntityType || "_none"}
                     onValueChange={(v) => setForm({ ...form, govEntityType: v === "_none" ? "" : v, govEntityId: "" })}
                   >
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">— اختر النوع —</SelectItem>
                       <SelectItem value="employee">موظف (إقامة / تصريح)</SelectItem>
                       <SelectItem value="vehicle">مركبة (استمارة / فحص)</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </FormFieldWrapper>
                 {form.govEntityType === "employee" && (
-                  <div>
-                    <Label>الموظف المرتبط</Label>
+                  <FormFieldWrapper label="الموظف المرتبط">
                     <Select
                       value={form.govEntityId || "_none"}
                       onValueChange={(v) => setForm({ ...form, govEntityId: v === "_none" ? "" : v })}
                     >
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">— اختر الموظف —</SelectItem>
                         {(employeesData?.data || []).map((emp: any) => (
@@ -680,16 +647,15 @@ export default function ExpensesCreate() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </FormFieldWrapper>
                 )}
                 {form.govEntityType === "vehicle" && (
-                  <div>
-                    <Label>المركبة المرتبطة</Label>
+                  <FormFieldWrapper label="المركبة المرتبطة">
                     <Select
                       value={form.govEntityId || "_none"}
                       onValueChange={(v) => setForm({ ...form, govEntityId: v === "_none" ? "" : v })}
                     >
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">— اختر المركبة —</SelectItem>
                         {(vehiclesData?.data || []).map((v: any) => (
@@ -697,7 +663,7 @@ export default function ExpensesCreate() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </FormFieldWrapper>
                 )}
               </div>
             )}
@@ -753,31 +719,26 @@ export default function ExpensesCreate() {
           </div>
           {form.isTaxLinked && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
-            <div>
-              <Label>نوع الفاتورة الضريبية</Label>
+            <FormFieldWrapper label="نوع الفاتورة الضريبية">
               <Select value={form.invoiceTypeCode} onValueChange={(v) => setForm({ ...form, invoiceTypeCode: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {INVOICE_TYPE_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>فئة الضريبة</Label>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="فئة الضريبة">
               <Select value={form.taxCategoryCode} onValueChange={(v) => setForm({ ...form, taxCategoryCode: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TAX_CATEGORY_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
               {(form.taxCategoryCode === "E" || form.taxCategoryCode === "Z") && (
-                <div>
-                  <Label>سبب الإعفاء / النسبة الصفرية</Label>
-                  <Input className="mt-1" value={form.exemptionReason}
-                    onChange={(e) => setForm({ ...form, exemptionReason: e.target.value })}
-                    placeholder="أدخل سبب الإعفاء..." />
-                </div>
+                <TextField label="سبب الإعفاء / النسبة الصفرية" value={form.exemptionReason}
+                  onChange={(v) => setForm({ ...form, exemptionReason: v })}
+                  placeholder="أدخل سبب الإعفاء..." />
               )}
               <div className="md:col-span-3 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-md">
                 <span className="text-green-600 text-xs mt-0.5">✓</span>

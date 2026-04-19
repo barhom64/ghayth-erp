@@ -16,7 +16,7 @@ import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, 
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useAppContext } from "@/contexts/app-context";
-import { fieldErrorClass } from "@/components/shared/form-field-wrapper";
+import { fieldErrorClass, TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const OPERATIONS = [
   { key: "employee", label: "إنشاء سجل الموظف", icon: User },
@@ -223,12 +223,11 @@ export default function EmployeesCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="md:col-span-2"><Label>الاسم الرباعي <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /><FieldHint field="name" /></div>
-        <div><Label>رقم الهوية / الإقامة <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("nationalId")}`} dir="ltr" value={form.nationalId} onChange={(e) => setForm((f) => ({ ...f, nationalId: e.target.value }))} placeholder="مثال: 1234567890" /><FieldHint field="nationalId" /></div>
-        <div>
-          <Label>الجنسية <span className="text-red-500">*</span></Label>
+        <TextField label="الاسم الرباعي" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} className="md:col-span-2" />
+        <TextField label="رقم الهوية / الإقامة" required dir="ltr" value={form.nationalId} onChange={(v) => setForm((f) => ({ ...f, nationalId: v }))} placeholder="مثال: 1234567890" error={fieldErrors.nationalId} />
+        <FormFieldWrapper label="الجنسية" required error={fieldErrors.nationality}>
           <Select value={form.nationality} onValueChange={(v) => setForm((f) => ({ ...f, nationality: v }))}>
-            <SelectTrigger className={`mt-1 ${errCls("nationality")}`}><SelectValue /></SelectTrigger>
+            <SelectTrigger className={fieldErrorClass(fieldErrors.nationality)}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="سعودي">سعودي</SelectItem>
               <SelectItem value="يمني">يمني</SelectItem>
@@ -241,20 +240,19 @@ export default function EmployeesCreate() {
               <SelectItem value="أخرى">أخرى</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>الجنس</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الجنس">
           <Select value={form.gender} onValueChange={(v) => setForm((f) => ({ ...f, gender: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="male">ذكر</SelectItem>
               <SelectItem value="female">أنثى</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>تاريخ الميلاد</Label><div className="mt-1"><DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} /></div></div>
-        <div><Label>رقم الجوال <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("phone")}`} dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /><FieldHint field="phone" /></div>
-        <div><Label>البريد الإلكتروني</Label><Input className={`mt-1 ${errCls("email")}`} type="email" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /><FieldHint field="email" /></div>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تاريخ الميلاد"><DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} /></FormFieldWrapper>
+        <TextField label="رقم الجوال" required dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} error={fieldErrors.phone} />
+        <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} error={fieldErrors.email} />
 
         <div className="md:col-span-2">
           <Label>المدير المباشر <span className="text-red-500">*</span></Label>
@@ -323,10 +321,9 @@ export default function EmployeesCreate() {
           </div>
         </div>
 
-        <div>
-          <Label>المسمى الوظيفي</Label>
+        <FormFieldWrapper label="المسمى الوظيفي" error={fieldErrors.jobTitle}>
           <Select value={form.jobTitle || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, jobTitle: v === "_none" ? "" : v }))}>
-            <SelectTrigger className={`mt-1 ${errCls("jobTitle")}`}><SelectValue placeholder="اختر المسمى الوظيفي" /></SelectTrigger>
+            <SelectTrigger className={fieldErrorClass(fieldErrors.jobTitle)}><SelectValue placeholder="اختر المسمى الوظيفي" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر المسمى الوظيفي</SelectItem>
               {jobTitles.length > 0
@@ -345,12 +342,10 @@ export default function EmployeesCreate() {
               }
             </SelectContent>
           </Select>
-          <FieldHint field="jobTitle" />
-        </div>
-        <div>
-          <Label>القسم</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="القسم" error={fieldErrors.department}>
           <Select value={form.department || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, department: v === "_none" ? "" : v }))}>
-            <SelectTrigger className={`mt-1 ${errCls("department")}`}><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+            <SelectTrigger className={fieldErrorClass(fieldErrors.department)}><SelectValue placeholder="اختر القسم" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر القسم</SelectItem>
               {departments.length > 0
@@ -368,31 +363,27 @@ export default function EmployeesCreate() {
               }
             </SelectContent>
           </Select>
-          <FieldHint field="department" />
-        </div>
-        <div>
-          <Label>الفرع</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفرع">
           <Select value={form.branchId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— اختياري —</SelectItem>
               {branches.map((b: { id: number; name: string }) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>الصلاحية</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الصلاحية">
           <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(ROLES).map(([key, value]) => <SelectItem key={key} value={key}>{value as string}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>نوع العقد</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="نوع العقد" error={fieldErrors.contractType}>
           <Select value={form.contractType} onValueChange={(v) => setForm((f) => ({ ...f, contractType: v }))}>
-            <SelectTrigger className={`mt-1 ${errCls("contractType")}`}><SelectValue /></SelectTrigger>
+            <SelectTrigger className={fieldErrorClass(fieldErrors.contractType)}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="full_time">دوام كامل</SelectItem>
               <SelectItem value="part_time">دوام جزئي</SelectItem>
@@ -400,18 +391,17 @@ export default function EmployeesCreate() {
               <SelectItem value="freelance">عمل حر</SelectItem>
             </SelectContent>
           </Select>
-          <FieldHint field="contractType" />
-        </div>
-        <div><Label>الراتب الأساسي</Label><Input className={`mt-1 ${errCls("salary")}`} type="number" dir="ltr" value={form.salary} onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))} /><FieldHint field="salary" /></div>
-        <div><Label>تاريخ التعيين</Label><div className="mt-1"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></div></div>
+        </FormFieldWrapper>
+        <NumberField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} error={fieldErrors.salary} />
+        <FormFieldWrapper label="تاريخ التعيين"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></FormFieldWrapper>
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
           <h3 className="text-sm font-semibold text-gray-600 mb-3">بيانات الإقامة والجواز</h3>
         </div>
-        <div><Label>رقم الإقامة</Label><Input className="mt-1" dir="ltr" value={form.iqamaNumber} onChange={(e) => setForm((f) => ({ ...f, iqamaNumber: e.target.value }))} /></div>
-        <div><Label>رقم الجواز</Label><Input className="mt-1" dir="ltr" value={form.passportNumber} onChange={(e) => setForm((f) => ({ ...f, passportNumber: e.target.value }))} /></div>
-        <div><Label>تاريخ انتهاء الإقامة</Label><div className="mt-1"><DatePicker value={form.iqamaExpiry} onChange={(v) => setForm((f) => ({ ...f, iqamaExpiry: v }))} /></div></div>
-        <div><Label>تاريخ انتهاء الجواز</Label><div className="mt-1"><DatePicker value={form.passportExpiry} onChange={(v) => setForm((f) => ({ ...f, passportExpiry: v }))} /></div></div>
+        <TextField label="رقم الإقامة" dir="ltr" value={form.iqamaNumber} onChange={(v) => setForm((f) => ({ ...f, iqamaNumber: v }))} />
+        <TextField label="رقم الجواز" dir="ltr" value={form.passportNumber} onChange={(v) => setForm((f) => ({ ...f, passportNumber: v }))} />
+        <FormFieldWrapper label="تاريخ انتهاء الإقامة"><DatePicker value={form.iqamaExpiry} onChange={(v) => setForm((f) => ({ ...f, iqamaExpiry: v }))} /></FormFieldWrapper>
+        <FormFieldWrapper label="تاريخ انتهاء الجواز"><DatePicker value={form.passportExpiry} onChange={(v) => setForm((f) => ({ ...f, passportExpiry: v }))} /></FormFieldWrapper>
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
           <h3 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
@@ -419,12 +409,11 @@ export default function EmployeesCreate() {
             بيانات التأشيرة والتصاريح — الربط الحكومي (مقيم)
           </h3>
         </div>
-        <div><Label>رقم الحدود</Label><Input className="mt-1" dir="ltr" value={form.borderNumber} onChange={(e) => setForm({ ...form, borderNumber: e.target.value })} placeholder="رقم الحدود" /></div>
-        <div><Label>رقم التأشيرة</Label><Input className="mt-1" dir="ltr" value={form.visaNumber} onChange={(e) => setForm({ ...form, visaNumber: e.target.value })} placeholder="رقم التأشيرة" /></div>
-        <div>
-          <Label>نوع التأشيرة</Label>
+        <TextField label="رقم الحدود" dir="ltr" value={form.borderNumber} onChange={(v) => setForm((f) => ({ ...f, borderNumber: v }))} placeholder="رقم الحدود" />
+        <TextField label="رقم التأشيرة" dir="ltr" value={form.visaNumber} onChange={(v) => setForm((f) => ({ ...f, visaNumber: v }))} placeholder="رقم التأشيرة" />
+        <FormFieldWrapper label="نوع التأشيرة">
           <Select value={form.visaType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, visaType: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— اختياري —</SelectItem>
               <SelectItem value="work">عمل</SelectItem>
@@ -434,30 +423,28 @@ export default function EmployeesCreate() {
               <SelectItem value="umrah">عمرة</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>تاريخ انتهاء التأشيرة</Label><div className="mt-1"><DatePicker value={form.visaExpiry} onChange={(v) => setForm({ ...form, visaExpiry: v })} /></div></div>
-        <div><Label>رقم الكفيل / المنشأة</Label><Input className="mt-1" dir="ltr" value={form.sponsorNumber} onChange={(e) => setForm({ ...form, sponsorNumber: e.target.value })} placeholder="رقم المنشأة أو الكفيل" /></div>
-        <div><Label>رقم رخصة العمل</Label><Input className="mt-1" dir="ltr" value={form.workPermitNumber} onChange={(e) => setForm({ ...form, workPermitNumber: e.target.value })} placeholder="رقم رخصة العمل" /></div>
-        <div><Label>تاريخ انتهاء رخصة العمل</Label><div className="mt-1"><DatePicker value={form.workPermitExpiry} onChange={(v) => setForm({ ...form, workPermitExpiry: v })} /></div></div>
-        <div>
-          <Label>حالة الإقامة</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تاريخ انتهاء التأشيرة"><DatePicker value={form.visaExpiry} onChange={(v) => setForm((f) => ({ ...f, visaExpiry: v }))} /></FormFieldWrapper>
+        <TextField label="رقم الكفيل / المنشأة" dir="ltr" value={form.sponsorNumber} onChange={(v) => setForm((f) => ({ ...f, sponsorNumber: v }))} placeholder="رقم المنشأة أو الكفيل" />
+        <TextField label="رقم رخصة العمل" dir="ltr" value={form.workPermitNumber} onChange={(v) => setForm((f) => ({ ...f, workPermitNumber: v }))} placeholder="رقم رخصة العمل" />
+        <FormFieldWrapper label="تاريخ انتهاء رخصة العمل"><DatePicker value={form.workPermitExpiry} onChange={(v) => setForm((f) => ({ ...f, workPermitExpiry: v }))} /></FormFieldWrapper>
+        <FormFieldWrapper label="حالة الإقامة">
           <Select value={form.iqamaStatus} onValueChange={(v) => setForm((f) => ({ ...f, iqamaStatus: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="active">سارية</SelectItem>
               <SelectItem value="expired">منتهية</SelectItem>
               <SelectItem value="renewal_pending">قيد التجديد</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </FormFieldWrapper>
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
           <h3 className="text-sm font-semibold text-gray-600 mb-3">البيانات البنكية</h3>
         </div>
-        <div>
-          <Label>اسم البنك</Label>
+        <FormFieldWrapper label="اسم البنك">
           <Select value={form.bankName || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, bankName: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="اختر البنك" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر البنك" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر البنك</SelectItem>
               <SelectItem value="الراجحي">مصرف الراجحي</SelectItem>
@@ -473,15 +460,15 @@ export default function EmployeesCreate() {
               <SelectItem value="الأول">البنك الأول</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>رقم الحساب</Label><Input className="mt-1" dir="ltr" value={form.bankAccount} onChange={(e) => setForm((f) => ({ ...f, bankAccount: e.target.value }))} /></div>
-        <div><Label>رقم الآيبان</Label><Input className="mt-1" dir="ltr" value={form.iban} onChange={(e) => setForm((f) => ({ ...f, iban: e.target.value }))} placeholder="SA..." /></div>
+        </FormFieldWrapper>
+        <TextField label="رقم الحساب" dir="ltr" value={form.bankAccount} onChange={(v) => setForm((f) => ({ ...f, bankAccount: v }))} />
+        <TextField label="رقم الآيبان" dir="ltr" value={form.iban} onChange={(v) => setForm((f) => ({ ...f, iban: v }))} placeholder="SA..." />
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
           <h3 className="text-sm font-semibold text-gray-600 mb-3">جهة الاتصال في حالة الطوارئ</h3>
         </div>
-        <div><Label>اسم جهة الاتصال</Label><Input className="mt-1" value={form.emergencyContact} onChange={(e) => setForm((f) => ({ ...f, emergencyContact: e.target.value }))} /></div>
-        <div><Label>رقم الطوارئ</Label><Input className="mt-1" dir="ltr" value={form.emergencyPhone} onChange={(e) => setForm((f) => ({ ...f, emergencyPhone: e.target.value }))} /></div>
+        <TextField label="اسم جهة الاتصال" value={form.emergencyContact} onChange={(v) => setForm((f) => ({ ...f, emergencyContact: v }))} />
+        <TextField label="رقم الطوارئ" dir="ltr" value={form.emergencyPhone} onChange={(v) => setForm((f) => ({ ...f, emergencyPhone: v }))} />
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="المرفقات (صور، وثائق)" />
       <div className="flex justify-end gap-3 pt-6">
