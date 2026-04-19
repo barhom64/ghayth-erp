@@ -1,11 +1,9 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -13,7 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useAppContext } from "@/contexts/app-context";
 import { formatCurrency } from "@/lib/formatters";
-import { DollarSign, Users, Building2, AlertCircle, CheckCircle2, Info } from "lucide-react";
+import { DollarSign, Users, Building2, CheckCircle2, Info } from "lucide-react";
+import { TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function PayrollCreate() {
   const [, setLocation] = useLocation();
@@ -42,11 +41,15 @@ export default function PayrollCreate() {
   const { data: branchData, isLoading: loadingBranch, isError: errorBranch } = useApiQuery<any>(["branches"], "/settings/branches");
   const branches = branchData?.data || [];
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   if (loadingEmp || loadingBranch) return <LoadingSpinner />;
   if (errorEmp || errorBranch) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = () => {
+    setFieldErrors({});
     if (!form.month) {
+      setFieldErrors({ month: "الشهر مطلوب" });
       toast({ variant: "destructive", title: "الشهر مطلوب" });
       return;
     }
@@ -61,6 +64,9 @@ export default function PayrollCreate() {
         onSuccess: () => {
           clearDraft();
           setLocation("/hr/payroll");
+        },
+        onError: (err: any) => {
+          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
         },
       },
     );
@@ -128,21 +134,15 @@ export default function PayrollCreate() {
             بيانات المسير
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>الشهر <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} />
-            </div>
-            <div>
-              <Label>مرجع الدفعة</Label>
-              <Input className="mt-1" value={form.reference} onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))} placeholder={`PAY-${form.month?.replace("-", "")}`} />
-              <p className="text-xs text-muted-foreground mt-1">رقم مرجعي للتتبع (اختياري)</p>
-            </div>
-            <div>
-              <Label>النطاق</Label>
+            <FormFieldWrapper label="الشهر" required error={fieldErrors.month}>
+              <Input type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="مرجع الدفعة" hint="رقم مرجعي للتتبع (اختياري)">
+              <Input value={form.reference} onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))} placeholder={`PAY-${form.month?.replace("-", "")}`} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="النطاق" hint="حدد الفرع أو اختر الجميع">
               <Select value={form.scope} onValueChange={(v) => setForm((f) => ({ ...f, scope: v }))}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="اختر النطاق" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر النطاق" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع الموظفين</SelectItem>
                   {branches.map((b: any) => (
@@ -150,15 +150,17 @@ export default function PayrollCreate() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground mt-1">حدد الفرع أو اختر الجميع</p>
-            </div>
+            </FormFieldWrapper>
           </div>
         </div>
 
-        <div>
-          <Label>ملاحظات</Label>
-          <Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية حول هذا المسير..." rows={3} />
-        </div>
+        <TextAreaField
+          label="ملاحظات"
+          value={form.notes}
+          onChange={(v) => setForm((f) => ({ ...f, notes: v }))}
+          placeholder="ملاحظات إضافية حول هذا المسير..."
+          rows={3}
+        />
 
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <div className="flex items-start gap-3">

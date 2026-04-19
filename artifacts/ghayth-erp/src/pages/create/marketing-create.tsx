@@ -2,9 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +9,7 @@ import { getCurrencySymbol } from "@/lib/formatters";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function MarketingCreate() {
   const [, setLocation] = useLocation();
@@ -23,9 +21,6 @@ export default function MarketingCreate() {
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
     setFieldErrors({});
@@ -48,7 +43,8 @@ export default function MarketingCreate() {
       toast({ title: "تم إنشاء الحملة بنجاح" });
       setLocation("/marketing");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الحملة", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الحملة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -64,11 +60,10 @@ export default function MarketingCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><Label>اسم الحملة <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /><FieldHint field="name" /></div>
-        <div>
-          <Label>النوع</Label>
+        <TextField label="اسم الحملة" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} />
+        <FormFieldWrapper label="النوع">
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="digital">إعلان رقمي</SelectItem>
               <SelectItem value="email">بريد إلكتروني</SelectItem>
@@ -78,11 +73,10 @@ export default function MarketingCreate() {
               <SelectItem value="event">فعاليات</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>القناة</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="القناة">
           <Select value={form.channel || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, channel: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر القناة</SelectItem>
               <SelectItem value="google">إعلانات جوجل</SelectItem>
@@ -96,11 +90,10 @@ export default function MarketingCreate() {
               <SelectItem value="other">أخرى</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>الحالة</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الحالة">
           <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="draft">مسودة</SelectItem>
               <SelectItem value="active">نشطة</SelectItem>
@@ -108,12 +101,16 @@ export default function MarketingCreate() {
               <SelectItem value="completed">مكتملة</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>{`الميزانية (${getCurrencySymbol()})`}</Label><Input className={`mt-1 ${errCls("budget")}`} type="number" step="0.01" value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} placeholder="٠" /><FieldHint field="budget" /></div>
-        <div><Label>الجمهور المستهدف</Label><Input className="mt-1" value={form.targetAudience} onChange={(e) => setForm((f) => ({ ...f, targetAudience: e.target.value }))} placeholder="مثال: شباب 18-35" /></div>
-        <div><Label>تاريخ البدء</Label><div className="mt-1"><DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></div></div>
-        <div><Label>تاريخ الانتهاء</Label><div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></div><FieldHint field="endDate" /></div>
-        <div className="md:col-span-2"><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف الحملة التسويقية..." /></div>
+        </FormFieldWrapper>
+        <NumberField label={`الميزانية (${getCurrencySymbol()})`} value={form.budget} onChange={(v) => setForm((f) => ({ ...f, budget: v }))} placeholder="٠" step={0.01} min={0} error={fieldErrors.budget} />
+        <TextField label="الجمهور المستهدف" value={form.targetAudience} onChange={(v) => setForm((f) => ({ ...f, targetAudience: v }))} placeholder="مثال: شباب 18-35" />
+        <FormFieldWrapper label="تاريخ البدء">
+          <DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تاريخ الانتهاء" error={fieldErrors.endDate}>
+          <DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} />
+        </FormFieldWrapper>
+        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف الحملة التسويقية..." className="md:col-span-2" />
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">

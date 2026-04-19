@@ -2,9 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -13,10 +10,11 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { Briefcase, MapPin, Calendar, DollarSign, Users, Clock } from "lucide-react";
+import { Briefcase, MapPin, DollarSign, Users, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { JOB_TYPES, EXPERIENCE_LEVELS, EDUCATION_LEVELS } from "@/lib/hr-type-maps";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_recruitment_create";
 const INITIAL = {
@@ -39,6 +37,7 @@ export default function RecruitmentCreate() {
   const departments = deptData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -52,12 +51,13 @@ export default function RecruitmentCreate() {
     : null;
 
   const handleSubmit = () => {
-    if (!form.title) {
-      toast({ variant: "destructive", title: "المسمى الوظيفي مطلوب" });
-      return;
-    }
-    if (form.salaryMin && form.salaryMax && Number(form.salaryMax) < Number(form.salaryMin)) {
-      toast({ variant: "destructive", title: "الحد الأعلى للراتب يجب أن يكون أكبر من الحد الأدنى" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.title) localErrors.title = "المسمى الوظيفي مطلوب";
+    if (form.salaryMin && form.salaryMax && Number(form.salaryMax) < Number(form.salaryMin)) localErrors.salaryMax = "الحد الأعلى للراتب يجب أن يكون أكبر من الحد الأدنى";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     createMut.mutate(
@@ -72,6 +72,9 @@ export default function RecruitmentCreate() {
         onSuccess: () => {
           clearDraft();
           setLocation("/hr/recruitment");
+        },
+        onError: (err: any) => {
+          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
         },
       },
     );
@@ -112,14 +115,10 @@ export default function RecruitmentCreate() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label>المسمى الوظيفي <span className="text-red-500">*</span></Label>
-            <Input className="mt-1" value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="مثال: مهندس برمجيات" />
-          </div>
-          <div>
-            <Label>القسم</Label>
+          <TextField label="المسمى الوظيفي" required value={form.title} onChange={(v) => set("title", v)} placeholder="مثال: مهندس برمجيات" error={fieldErrors.title} />
+          <FormFieldWrapper label="القسم">
             <Select value={form.department || "_none"} onValueChange={(v) => set("department", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر القسم" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر القسم</SelectItem>
                 {departments.map((d: any) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
@@ -132,35 +131,27 @@ export default function RecruitmentCreate() {
                 </>}
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> الموقع</Label>
-            <Input className="mt-1" value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="المدينة أو الفرع" />
-          </div>
-          <div>
-            <Label>عدد الشواغر</Label>
-            <Input className="mt-1" type="number" min="1" value={form.vacancies} onChange={(e) => set("vacancies", e.target.value)} />
-          </div>
-          <div>
-            <Label>مستوى الخبرة</Label>
+          </FormFieldWrapper>
+          <TextField label="الموقع" value={form.location} onChange={(v) => set("location", v)} placeholder="المدينة أو الفرع" />
+          <NumberField label="عدد الشواغر" value={form.vacancies} onChange={(v) => set("vacancies", v)} min={1} />
+          <FormFieldWrapper label="مستوى الخبرة">
             <Select value={form.experienceLevel || "_none"} onValueChange={(v) => set("experienceLevel", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المستوى" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر المستوى" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر المستوى</SelectItem>
                 {EXPERIENCE_LEVELS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>المؤهل العلمي</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="المؤهل العلمي">
             <Select value={form.education || "_none"} onValueChange={(v) => set("education", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المؤهل" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر المؤهل" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر المؤهل</SelectItem>
                 {EDUCATION_LEVELS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
 
         <div>
@@ -168,14 +159,8 @@ export default function RecruitmentCreate() {
             <DollarSign className="h-4 w-4" /> نطاق الراتب
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div>
-              <Label>الحد الأدنى ({getCurrencySymbol()})</Label>
-              <Input className="mt-1" type="number" value={form.salaryMin} onChange={(e) => set("salaryMin", e.target.value)} placeholder="٠" />
-            </div>
-            <div>
-              <Label>الحد الأعلى ({getCurrencySymbol()})</Label>
-              <Input className="mt-1" type="number" value={form.salaryMax} onChange={(e) => set("salaryMax", e.target.value)} placeholder="٠" />
-            </div>
+            <NumberField label={`الحد الأدنى (${getCurrencySymbol()})`} value={form.salaryMin} onChange={(v) => set("salaryMin", v)} placeholder="٠" min={0} />
+            <NumberField label={`الحد الأعلى (${getCurrencySymbol()})`} value={form.salaryMax} onChange={(v) => set("salaryMax", v)} placeholder="٠" min={0} error={fieldErrors.salaryMax} />
             {salaryRange && (
               <div className="p-3 bg-green-50 rounded-lg border border-green-200 text-center">
                 <p className="text-xs text-green-600">نطاق الراتب</p>
@@ -186,26 +171,16 @@ export default function RecruitmentCreate() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> تاريخ الإغلاق</Label>
-            <div className="mt-1"><DatePicker value={form.closingDate} onChange={(v) => set("closingDate", v)} /></div>
-          </div>
+          <FormFieldWrapper label="تاريخ الإغلاق">
+            <DatePicker value={form.closingDate} onChange={(v) => set("closingDate", v)} />
+          </FormFieldWrapper>
         </div>
 
-        <div>
-          <Label>الوصف الوظيفي</Label>
-          <Textarea className="mt-1 min-h-[100px]" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="وصف تفصيلي للمهام والمسؤوليات..." />
-        </div>
+        <TextAreaField label="الوصف الوظيفي" value={form.description} onChange={(v) => set("description", v)} placeholder="وصف تفصيلي للمهام والمسؤوليات..." rows={4} />
 
-        <div>
-          <Label>المتطلبات والمهارات</Label>
-          <Textarea className="mt-1 min-h-[80px]" value={form.requirements} onChange={(e) => set("requirements", e.target.value)} placeholder="المهارات والخبرات المطلوبة..." />
-        </div>
+        <TextAreaField label="المتطلبات والمهارات" value={form.requirements} onChange={(v) => set("requirements", v)} placeholder="المهارات والخبرات المطلوبة..." rows={3} />
 
-        <div>
-          <Label>المزايا والحوافز</Label>
-          <Textarea className="mt-1" value={form.benefits} onChange={(e) => set("benefits", e.target.value)} placeholder="تأمين طبي، بدل نقل، إجازات..." />
-        </div>
+        <TextAreaField label="المزايا والحوافز" value={form.benefits} onChange={(v) => set("benefits", v)} placeholder="تأمين طبي، بدل نقل، إجازات..." />
 
         {(form.title || form.department || form.type) && (
           <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">

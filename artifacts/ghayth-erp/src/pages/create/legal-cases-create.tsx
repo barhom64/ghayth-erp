@@ -2,9 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -12,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function LegalCasesCreate() {
   const [, setLocation] = useLocation();
@@ -30,9 +28,6 @@ export default function LegalCasesCreate() {
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
     setFieldErrors({});
@@ -54,7 +49,8 @@ export default function LegalCasesCreate() {
       toast({ title: "تمت إضافة القضية بنجاح" });
       setLocation("/legal");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القضية", description: err.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القضية", description: err?.fix ?? err?.message });
     }
   };
 
@@ -71,12 +67,11 @@ export default function LegalCasesCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان القضية <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("title")}`} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /><FieldHint field="title" /></div>
-          <div><Label>رقم القضية</Label><Input className={`mt-1 ${errCls("caseNumber")}`} dir="ltr" value={form.caseNumber} onChange={(e) => setForm((f) => ({ ...f, caseNumber: e.target.value }))} /><FieldHint field="caseNumber" /></div>
-          <div>
-            <Label>نوع القضية</Label>
+          <TextField label="عنوان القضية" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} error={fieldErrors.title} />
+          <TextField label="رقم القضية" dir="ltr" value={form.caseNumber} onChange={(v) => setForm((f) => ({ ...f, caseNumber: v }))} error={fieldErrors.caseNumber} />
+          <FormFieldWrapper label="نوع القضية">
             <Select value={form.caseType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, caseType: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر النوع</SelectItem>
                 <SelectItem value="labor">عمالية</SelectItem>
@@ -87,11 +82,10 @@ export default function LegalCasesCreate() {
                 <SelectItem value="other">أخرى</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الأولوية</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الأولوية">
             <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="low">منخفضة</SelectItem>
                 <SelectItem value="medium">متوسطة</SelectItem>
@@ -99,11 +93,10 @@ export default function LegalCasesCreate() {
                 <SelectItem value="urgent">عاجلة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الحالة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="open">مفتوحة</SelectItem>
                 <SelectItem value="in_progress">جارية</SelectItem>
@@ -115,13 +108,12 @@ export default function LegalCasesCreate() {
                 <SelectItem value="settled">تسوية</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>المحكمة</Label><Input className="mt-1" value={form.court} onChange={(e) => setForm((f) => ({ ...f, court: e.target.value }))} placeholder="اسم المحكمة" /></div>
-          <div><Label>الخصم</Label><Input className="mt-1" value={form.opposingParty} onChange={(e) => setForm((f) => ({ ...f, opposingParty: e.target.value }))} placeholder="اسم الخصم" /></div>
-          <div>
-            <Label>المحامي المسؤول</Label>
+          </FormFieldWrapper>
+          <TextField label="المحكمة" value={form.court} onChange={(v) => setForm((f) => ({ ...f, court: v }))} placeholder="اسم المحكمة" />
+          <TextField label="الخصم" value={form.opposingParty} onChange={(v) => setForm((f) => ({ ...f, opposingParty: v }))} placeholder="اسم الخصم" />
+          <FormFieldWrapper label="المحامي المسؤول">
             <Select value={form.lawyerName || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, lawyerName: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">— اختر من الموظفين أو أدخل يدوياً —</SelectItem>
                 {employees.map((emp: any) => (
@@ -129,11 +121,13 @@ export default function LegalCasesCreate() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>تاريخ الإيداع</Label><div className="mt-1"><DatePicker value={form.filingDate} onChange={(v) => setForm((f) => ({ ...f, filingDate: v }))} /></div></div>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="تاريخ الإيداع">
+            <DatePicker value={form.filingDate} onChange={(v) => setForm((f) => ({ ...f, filingDate: v }))} />
+          </FormFieldWrapper>
         </div>
-        <div><Label>وصف القضية</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="تفاصيل القضية..." /></div>
-        <div><Label>ملاحظات</Label><Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية..." /></div>
+        <TextAreaField label="وصف القضية" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="تفاصيل القضية..." />
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات القضية" />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/legal")}>إلغاء</Button>

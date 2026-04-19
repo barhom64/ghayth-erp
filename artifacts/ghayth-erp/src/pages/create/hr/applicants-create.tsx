@@ -2,9 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
@@ -12,9 +9,9 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { User, Mail, Phone, Briefcase, GraduationCap, Link as LinkIcon, Star } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { User, Briefcase, GraduationCap } from "lucide-react";
 import { APPLICANT_SOURCES, EDUCATION_LEVELS } from "@/lib/hr-type-maps";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_applicants_create";
 const INITIAL = {
@@ -36,6 +33,7 @@ export default function ApplicantsCreate() {
   const jobs = jobsData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -47,12 +45,14 @@ export default function ApplicantsCreate() {
   const selectedJob = jobs.find((j: any) => String(j.id) === form.postingId);
 
   const handleSubmit = () => {
-    if (!form.postingId) {
-      toast({ variant: "destructive", title: "يرجى اختيار الوظيفة" });
-      return;
-    }
-    if (!form.applicantName) {
-      toast({ variant: "destructive", title: "اسم المتقدم مطلوب" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.postingId) localErrors.postingId = "يرجى اختيار الوظيفة";
+    if (!form.applicantName) localErrors.applicantName = "اسم المتقدم مطلوب";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     createMut.mutate(
@@ -75,6 +75,9 @@ export default function ApplicantsCreate() {
           clearDraft();
           setLocation("/hr/recruitment");
         },
+        onError: (err: any) => {
+          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        },
       },
     );
   };
@@ -93,10 +96,9 @@ export default function ApplicantsCreate() {
 
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> الوظيفة <span className="text-red-500">*</span></Label>
+          <FormFieldWrapper label="الوظيفة" required error={fieldErrors.postingId}>
             <Select value={form.postingId || "_none"} onValueChange={(v) => set("postingId", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الوظيفة" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر الوظيفة" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر الوظيفة</SelectItem>
                 {jobs.map((job: any) => (
@@ -104,7 +106,7 @@ export default function ApplicantsCreate() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
           {selectedJob && (
             <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
               <p className="text-sm font-medium text-blue-700">{selectedJob.title}</p>
@@ -118,18 +120,9 @@ export default function ApplicantsCreate() {
             <User className="h-4 w-4" /> بيانات المتقدم
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>الاسم الكامل <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" value={form.applicantName} onChange={(e) => set("applicantName", e.target.value)} placeholder="الاسم الرباعي" />
-            </div>
-            <div>
-              <Label className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> البريد الإلكتروني</Label>
-              <Input className="mt-1" type="email" dir="ltr" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="email@example.com" />
-            </div>
-            <div>
-              <Label className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> الهاتف</Label>
-              <Input className="mt-1" dir="ltr" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+966 5xx xxx xxx" />
-            </div>
+            <TextField label="الاسم الكامل" required value={form.applicantName} onChange={(v) => set("applicantName", v)} placeholder="الاسم الرباعي" error={fieldErrors.applicantName} />
+            <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => set("email", v)} placeholder="email@example.com" error={fieldErrors.email} />
+            <TextField label="الهاتف" dir="ltr" value={form.phone} onChange={(v) => set("phone", v)} placeholder="+966 5xx xxx xxx" />
           </div>
         </div>
 
@@ -138,54 +131,34 @@ export default function ApplicantsCreate() {
             <GraduationCap className="h-4 w-4" /> المؤهلات والخبرة
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>المؤهل العلمي</Label>
+            <FormFieldWrapper label="المؤهل العلمي">
               <Select value={form.education || "_none"} onValueChange={(v) => set("education", v === "_none" ? "" : v)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المؤهل" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر المؤهل" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">اختر المؤهل</SelectItem>
                   {EDUCATION_LEVELS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>سنوات الخبرة</Label>
-              <Input className="mt-1" value={form.experience} onChange={(e) => set("experience", e.target.value)} placeholder="مثال: 5 سنوات" />
-            </div>
-            <div>
-              <Label>الشركة الحالية</Label>
-              <Input className="mt-1" value={form.currentCompany} onChange={(e) => set("currentCompany", e.target.value)} placeholder="اسم جهة العمل الحالية" />
-            </div>
-            <div>
-              <Label>الراتب المتوقع</Label>
-              <Input className="mt-1" type="number" value={form.expectedSalary} onChange={(e) => set("expectedSalary", e.target.value)} placeholder="٠" />
-            </div>
-            <div>
-              <Label>مصدر التقديم</Label>
+            </FormFieldWrapper>
+            <TextField label="سنوات الخبرة" value={form.experience} onChange={(v) => set("experience", v)} placeholder="مثال: 5 سنوات" />
+            <TextField label="الشركة الحالية" value={form.currentCompany} onChange={(v) => set("currentCompany", v)} placeholder="اسم جهة العمل الحالية" />
+            <NumberField label="الراتب المتوقع" value={form.expectedSalary} onChange={(v) => set("expectedSalary", v)} placeholder="٠" min={0} />
+            <FormFieldWrapper label="مصدر التقديم">
               <Select value={form.source || "_none"} onValueChange={(v) => set("source", v === "_none" ? "" : v)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">اختر المصدر</SelectItem>
                   {APPLICANT_SOURCES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="flex items-center gap-1"><Star className="h-3.5 w-3.5" /> التقييم المبدئي (1-5)</Label>
-              <Input className="mt-1" type="number" min="1" max="5" value={form.rating} onChange={(e) => set("rating", e.target.value)} placeholder="—" />
-            </div>
+            </FormFieldWrapper>
+            <NumberField label="التقييم المبدئي (1-5)" value={form.rating} onChange={(v) => set("rating", v)} placeholder="—" min={1} max={5} />
           </div>
         </div>
 
-        <div>
-          <Label className="flex items-center gap-1"><LinkIcon className="h-3.5 w-3.5" /> رابط السيرة الذاتية</Label>
-          <Input className="mt-1" dir="ltr" value={form.resumeUrl} onChange={(e) => set("resumeUrl", e.target.value)} placeholder="https://..." />
-        </div>
+        <TextField label="رابط السيرة الذاتية" dir="ltr" value={form.resumeUrl} onChange={(v) => set("resumeUrl", v)} placeholder="https://..." />
 
-        <div>
-          <Label>ملاحظات إضافية</Label>
-          <Textarea className="mt-1 min-h-[80px]" value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="الخبرات، المؤهلات الإضافية، نقاط القوة..." />
-        </div>
+        <TextAreaField label="ملاحظات إضافية" value={form.notes} onChange={(v) => set("notes", v)} placeholder="الخبرات، المؤهلات الإضافية، نقاط القوة..." rows={3} />
 
         {form.applicantName && (
           <div className="p-4 bg-green-50 rounded-xl border border-green-200">
