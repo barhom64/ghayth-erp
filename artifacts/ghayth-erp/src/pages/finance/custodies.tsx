@@ -339,7 +339,7 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
   const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const sourceAccounts = (accountsData?.data || []).filter(
-    (a: any) => a.type === "asset" || a.code?.startsWith("1"),
+    (a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"),
   );
   const employees = employeesData?.data || [];
   const [form, setForm] = useState({

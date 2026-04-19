@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField } from "@/components/shared/form-field-wrapper";
+import { roundMoney } from "@/lib/formatters";
 
 interface JournalLine {
   accountCode: string;
@@ -59,8 +60,8 @@ export default function JournalCreate() {
   const addLine = () => setLines([...lines, { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" }]);
   const removeLine = (idx: number) => { if (lines.length > 2) setLines(lines.filter((_, i) => i !== idx)); };
 
-  const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
+  const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
   const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01;
 
   const handleSubmit = async () => {

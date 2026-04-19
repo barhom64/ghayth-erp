@@ -17,6 +17,7 @@ import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { roundMoney } from "@/lib/formatters";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
 
@@ -71,7 +72,7 @@ export default function PurchaseOrdersCreate() {
     setItems(updated);
   };
 
-  const totalAmount = items.reduce((sum, i) => sum + Number(i.quantity || 0) * Number(i.unitPrice || 0), 0);
+  const totalAmount = roundMoney(items.reduce((sum, i) => sum + roundMoney(Number(i.quantity || 0) * Number(i.unitPrice || 0)), 0));
 
   const handleSubmit = async () => {
     const validItems = items.filter((i) => Number(i.unitPrice) > 0 && i.productId);

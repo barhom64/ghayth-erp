@@ -1,6 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -69,7 +69,7 @@ export default function IntercompanyConsolidationCreatePage() {
                             <td className="px-3 py-2 font-medium">{c.companyName}</td>
                             <td className="px-3 py-2 text-green-700">{formatCurrency(c.revenue)}</td>
                             <td className="px-3 py-2 text-red-600">{formatCurrency(c.expenses)}</td>
-                            <td className={`px-3 py-2 font-semibold ${c.revenue - c.expenses >= 0 ? "text-green-700" : "text-red-600"}`}>{formatCurrency(c.revenue - c.expenses)}</td>
+                            <td className={`px-3 py-2 font-semibold ${roundMoney(c.revenue) - roundMoney(c.expenses) >= 0 ? "text-green-700" : "text-red-600"}`}>{formatCurrency(roundMoney(roundMoney(c.revenue) - roundMoney(c.expenses)))}</td>
                           </tr>
                         ))}
                       </tbody>

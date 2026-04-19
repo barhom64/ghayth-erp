@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface TemplateLine {
@@ -41,8 +41,8 @@ export default function RecurringJournalsCreatePage() {
   const [active, setActive] = useState(true);
   const [lines, setLines] = useState<TemplateLine[]>([emptyLine(), emptyLine()]);
 
-  const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
+  const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
   const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01;
 
   const createMut = useApiMutation<unknown, any>(

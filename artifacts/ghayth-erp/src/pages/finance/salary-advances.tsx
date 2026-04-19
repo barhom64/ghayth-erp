@@ -218,7 +218,7 @@ function CreateAdvanceForm({ onDone }: { onDone: () => void }) {
     "/finance/accounts",
   );
   const sourceAccounts = (accountsData?.data || []).filter(
-    (a: any) => a.type === "asset" || a.code?.startsWith("1"),
+    (a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"),
   );
   const [form, setForm] = useState({
     employeeName: "",
