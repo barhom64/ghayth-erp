@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, X, CheckCircle, KeySquare, Eye, EyeOff, ToggleLeft, ToggleRight } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -101,16 +102,22 @@ export function UsersTab() {
             </div>
             <div>
               <Label>الدور الوظيفي</Label>
-              <select className="w-full border rounded-md p-2 mt-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>ربط بموظف (اختياري)</Label>
-              <select className="w-full border rounded-md p-2 mt-1" value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
-                <option value="">— بدون ربط —</option>
-                {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} ({e.empNumber})</option>)}
-              </select>
+              <Select value={form.employeeId || "_none"} onValueChange={(v) => setForm({ ...form, employeeId: v === "_none" ? "" : v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— بدون ربط —</SelectItem>
+                  {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.empNumber})</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>كلمة المرور (اختياري - ستُنشأ تلقائياً)</Label>

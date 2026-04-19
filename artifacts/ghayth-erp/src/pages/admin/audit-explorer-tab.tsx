@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollText, Search, ChevronDown, ChevronUp, FileSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -129,19 +130,25 @@ export function AuditExplorerTab() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
               <Label className="text-xs mb-1 block">نوع الكيان</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={entityFilter} onChange={(e) => { setEntityFilter(e.target.value); setPage(1); }}>
-                <option value="">الكل</option>
-                {entityTypes.map(e => <option key={e} value={e}>{ENTITY_LABELS[e] || e}</option>)}
-              </select>
+              <Select value={entityFilter || "_none"} onValueChange={(v) => { setEntityFilter(v === "_none" ? "" : v); setPage(1); }}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">الكل</SelectItem>
+                  {entityTypes.map(e => <SelectItem key={e} value={e}>{ENTITY_LABELS[e] || e}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs mb-1 block">نوع الإجراء</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}>
-                <option value="">الكل</option>
-                <option value="create">إنشاء</option>
-                <option value="update">تعديل</option>
-                <option value="delete">حذف</option>
-              </select>
+              <Select value={actionFilter || "_none"} onValueChange={(v) => { setActionFilter(v === "_none" ? "" : v); setPage(1); }}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">الكل</SelectItem>
+                  <SelectItem value="create">إنشاء</SelectItem>
+                  <SelectItem value="update">تعديل</SelectItem>
+                  <SelectItem value="delete">حذف</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs mb-1 block">من تاريخ</Label>

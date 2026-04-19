@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -179,18 +180,24 @@ export function WorkflowDefinitionsTab() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label>نوع الطلب</Label>
-                <select className="w-full border rounded-md p-2" value={slaForm.requestType} onChange={(e) => setSlaForm({ ...slaForm, requestType: e.target.value })}>
-                  {REQUEST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
+                <Select value={slaForm.requestType} onValueChange={(v) => setSlaForm({ ...slaForm, requestType: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {REQUEST_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div><Label>تنبيه بعد (ساعة)</Label><Input type="number" value={slaForm.warningHours} onChange={(e) => setSlaForm({ ...slaForm, warningHours: Number(e.target.value) })} /></div>
               <div><Label>المهلة القصوى (ساعة)</Label><Input type="number" value={slaForm.deadlineHours} onChange={(e) => setSlaForm({ ...slaForm, deadlineHours: Number(e.target.value) })} /></div>
               <div><Label>تصعيد بعد (ساعة)</Label><Input type="number" value={slaForm.escalationHours} onChange={(e) => setSlaForm({ ...slaForm, escalationHours: Number(e.target.value) })} /></div>
               <div>
                 <Label>تصعيد إلى</Label>
-                <select className="w-full border rounded-md p-2" value={slaForm.escalateTo} onChange={(e) => setSlaForm({ ...slaForm, escalateTo: e.target.value })}>
-                  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
+                <Select value={slaForm.escalateTo} onValueChange={(v) => setSlaForm({ ...slaForm, escalateTo: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex items-end gap-2 pb-1">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -230,15 +237,18 @@ export function WorkflowDefinitionsTab() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>نوع الطلب</Label>
-                <select className="w-full border rounded-md p-2" value={form.requestType}
-                  onChange={(e) => {
-                    const t = REQUEST_TYPES.find(r => r.value === e.target.value);
-                    setForm({ ...form, requestType: e.target.value, requestTypeLabel: t?.label || e.target.value });
+                <Select value={form.requestType}
+                  onValueChange={(v) => {
+                    const t = REQUEST_TYPES.find(r => r.value === v);
+                    setForm({ ...form, requestType: v, requestTypeLabel: t?.label || v });
                   }}
                   disabled={!!editingId}
                 >
-                  {REQUEST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {REQUEST_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div><Label>العنوان</Label><Input value={form.requestTypeLabel} onChange={(e) => setForm({ ...form, requestTypeLabel: e.target.value })} /></div>
               <div className="md:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
@@ -266,9 +276,12 @@ export function WorkflowDefinitionsTab() {
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold shrink-0">{idx + 1}</div>
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2">
                       <Input placeholder="اسم الخطوة" value={step.stepName} onChange={(e) => updateStep(idx, "stepName", e.target.value)} />
-                      <select className="border rounded-md p-2" value={step.requiredRole} onChange={(e) => updateStep(idx, "requiredRole", e.target.value)}>
-                        {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                      </select>
+                      <Select value={step.requiredRole} onValueChange={(v) => updateStep(idx, "requiredRole", v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                       <Input type="number" placeholder="مهلة (ساعة)" value={step.slaHours} onChange={(e) => updateStep(idx, "slaHours", Number(e.target.value))} />
                       <label className="flex items-center gap-1 text-xs cursor-pointer">
                         <Checkbox checked={step.autoApproveOnTimeout} onCheckedChange={(v) => updateStep(idx, "autoApproveOnTimeout", v === true)} />
