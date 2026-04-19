@@ -8,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { User, Briefcase, GraduationCap } from "lucide-react";
 import { APPLICANT_SOURCES, EDUCATION_LEVELS } from "@/lib/hr-type-maps";
@@ -33,7 +34,7 @@ export default function ApplicantsCreate() {
   const jobs = jobsData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -45,14 +46,15 @@ export default function ApplicantsCreate() {
   const selectedJob = jobs.find((j: any) => String(j.id) === form.postingId);
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.postingId) localErrors.postingId = "يرجى اختيار الوظيفة";
-    if (!form.applicantName) localErrors.applicantName = "اسم المتقدم مطلوب";
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      postingId: form.postingId ? null : "يرجى اختيار الوظيفة",
+      applicantName: form.applicantName ? null : "اسم المتقدم مطلوب",
+      email: form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
+        ? "صيغة البريد الإلكتروني غير صحيحة"
+        : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -76,7 +78,7 @@ export default function ApplicantsCreate() {
           setLocation("/hr/recruitment");
         },
         onError: (err: any) => {
-          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+          setApiError(err);
         },
       },
     );

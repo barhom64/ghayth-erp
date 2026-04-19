@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -116,7 +117,7 @@ export default function VouchersCreate() {
   };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", INITIAL_FORM);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const operationTypes = form.type === "receipt" ? OPERATION_TYPES_RECEIPT : OPERATION_TYPES_PAYMENT;
 
@@ -153,21 +154,15 @@ export default function VouchersCreate() {
   };
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.type) localErrors.type = "يرجى اختيار نوع السند";
-    if (!form.amount) {
-      localErrors.amount = "المبلغ مطلوب";
-    } else if (Number(form.amount) <= 0) {
-      localErrors.amount = "المبلغ يجب أن يكون أكبر من صفر";
-    }
-    if (!form.accountCode) localErrors.accountCode = "الحساب المحاسبي مطلوب";
-    if (!form.sourceAccountCode && !form.accountCode) localErrors.sourceAccountCode = "يجب تحديد حساب مدين وحساب دائن";
-    if (!form.branchId) localErrors.branchId = "الفرع مطلوب";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      type: form.type ? null : "يرجى اختيار نوع السند",
+      amount: !form.amount ? "المبلغ مطلوب" : Number(form.amount) <= 0 ? "المبلغ يجب أن يكون أكبر من صفر" : null,
+      accountCode: form.accountCode ? null : "الحساب المحاسبي مطلوب",
+      sourceAccountCode: !form.sourceAccountCode && !form.accountCode ? "يجب تحديد حساب مدين وحساب دائن" : null,
+      branchId: form.branchId ? null : "الفرع مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     if (requiresAttachment && !form.attachmentUrl) {
@@ -203,7 +198,7 @@ export default function VouchersCreate() {
       toast({ title: "تم إنشاء السند بنجاح" });
       setLocation("/finance/vouchers");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "خطأ في الحفظ", description: err?.fix ?? err?.message ?? "حدث خطأ أثناء إنشاء السند" });
     }
   };

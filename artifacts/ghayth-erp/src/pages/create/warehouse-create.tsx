@@ -7,6 +7,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -21,23 +22,21 @@ export default function WarehouseCreate() {
   const { data: categoriesRes, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-categories"], "/warehouse/categories");
   const categories = categoriesRes?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name) localErrors.name = "يرجى إدخال اسم المنتج";
-    if (form.costPrice && Number(form.costPrice) < 0) localErrors.costPrice = "سعر التكلفة يجب أن يكون صفر أو أكثر";
-    if (form.sellPrice && Number(form.sellPrice) < 0) localErrors.sellPrice = "سعر البيع يجب أن يكون صفر أو أكثر";
-    if (form.minStock && Number(form.minStock) < 0) localErrors.minStock = "الحد الأدنى يجب أن يكون صفر أو أكثر";
-    if (form.currentStock && Number(form.currentStock) < 0) localErrors.currentStock = "المخزون الحالي يجب أن يكون صفر أو أكثر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم المنتج",
+      costPrice: form.costPrice && Number(form.costPrice) < 0 ? "سعر التكلفة يجب أن يكون صفر أو أكثر" : null,
+      sellPrice: form.sellPrice && Number(form.sellPrice) < 0 ? "سعر البيع يجب أن يكون صفر أو أكثر" : null,
+      minStock: form.minStock && Number(form.minStock) < 0 ? "الحد الأدنى يجب أن يكون صفر أو أكثر" : null,
+      currentStock: form.currentStock && Number(form.currentStock) < 0 ? "المخزون الحالي يجب أن يكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -56,7 +55,7 @@ export default function WarehouseCreate() {
       toast({ title: "تمت إضافة المنتج بنجاح" });
       setLocation("/warehouse");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المنتج", description: err?.fix ?? err?.message });
     }
   };

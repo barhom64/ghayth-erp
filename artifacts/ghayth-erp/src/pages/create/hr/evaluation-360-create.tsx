@@ -10,6 +10,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -35,7 +36,7 @@ export default function Evaluation360Create() {
 
   const [participants, setParticipants] = useState<{ evaluatorId: string; evaluatorRole: "manager" | "peer"; name: string }[]>([]);
   const [addingParticipant, setAddingParticipant] = useState({ evaluatorId: "", evaluatorRole: "peer" as "manager" | "peer" });
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -55,13 +56,12 @@ export default function Evaluation360Create() {
   const removeParticipant = (id: string) => setParticipants(participants.filter(p => p.evaluatorId !== id));
 
   const handleSave = () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.employeeId) localErrors.employeeId = "الموظف مطلوب";
-    if (!form.period) localErrors.period = "الفترة مطلوبة";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      employeeId: form.employeeId ? null : "الموظف مطلوب",
+      period: form.period ? null : "الفترة مطلوبة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -80,7 +80,7 @@ export default function Evaluation360Create() {
           setLocation("/hr/evaluation-360");
         },
         onError: (err: any) => {
-          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+          setApiError(err);
         },
       },
     );

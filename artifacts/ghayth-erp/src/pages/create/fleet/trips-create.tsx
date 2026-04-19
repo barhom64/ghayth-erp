@@ -8,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -32,22 +33,21 @@ export default function TripsCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (loadingV || loadingD || loadingC) return <LoadingSpinner />;
   if (errorV || errorD || errorC) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.vehicleId) localErrors.vehicleId = "يرجى اختيار المركبة";
-    if (!form.driverId) localErrors.driverId = "يرجى اختيار السائق";
-    if (!form.fromLocation) localErrors.fromLocation = "نقطة الانطلاق مطلوبة";
-    if (!form.toLocation) localErrors.toLocation = "نقطة الوصول مطلوبة";
-    if (form.startTime && form.endTime && form.endTime <= form.startTime) localErrors.endTime = "وقت الوصول يجب أن يكون بعد وقت الانطلاق";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      vehicleId: form.vehicleId ? null : "يرجى اختيار المركبة",
+      driverId: form.driverId ? null : "يرجى اختيار السائق",
+      fromLocation: form.fromLocation ? null : "نقطة الانطلاق مطلوبة",
+      toLocation: form.toLocation ? null : "نقطة الوصول مطلوبة",
+      endTime: form.startTime && form.endTime && form.endTime <= form.startTime ? "وقت الوصول يجب أن يكون بعد وقت الانطلاق" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -68,7 +68,7 @@ export default function TripsCreate() {
       toast({ title: "تم إنشاء الرحلة بنجاح" });
       setLocation("/fleet/trips");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الرحلة", description: err?.fix ?? err?.message });
     }
   };

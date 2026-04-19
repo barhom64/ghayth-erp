@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -23,7 +24,7 @@ export default function AccountsEdit() {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", code: "", type: "" });
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { data, isLoading, isError } = useApiQuery<any>(["accounts"], "/finance/accounts");
   const items = data?.data || [];
@@ -36,10 +37,11 @@ export default function AccountsEdit() {
   }, [account]);
 
   const handleSave = async () => {
-    setFieldErrors({});
-    if (!form.name) {
-      setFieldErrors({ name: "اسم الحساب مطلوب" });
-      toast({ variant: "destructive", title: "اسم الحساب مطلوب" });
+    const firstError = validate({
+      name: form.name ? null : "اسم الحساب مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     setSaving(true);
@@ -49,7 +51,7 @@ export default function AccountsEdit() {
       qc.invalidateQueries({ queryKey: ["accounts"] });
       setLocation("/finance/accounts");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء التحديث", description: err?.fix ?? err?.message });
     }
     finally { setSaving(false); }

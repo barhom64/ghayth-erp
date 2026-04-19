@@ -9,6 +9,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Briefcase, MapPin, DollarSign, Users, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,7 @@ export default function RecruitmentCreate() {
   const departments = deptData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -51,13 +52,14 @@ export default function RecruitmentCreate() {
     : null;
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.title) localErrors.title = "المسمى الوظيفي مطلوب";
-    if (form.salaryMin && form.salaryMax && Number(form.salaryMax) < Number(form.salaryMin)) localErrors.salaryMax = "الحد الأعلى للراتب يجب أن يكون أكبر من الحد الأدنى";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      title: form.title ? null : "المسمى الوظيفي مطلوب",
+      salaryMax: form.salaryMin && form.salaryMax && Number(form.salaryMax) < Number(form.salaryMin)
+        ? "الحد الأعلى للراتب يجب أن يكون أكبر من الحد الأدنى"
+        : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -74,7 +76,7 @@ export default function RecruitmentCreate() {
           setLocation("/hr/recruitment");
         },
         onError: (err: any) => {
-          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+          setApiError(err);
         },
       },
     );

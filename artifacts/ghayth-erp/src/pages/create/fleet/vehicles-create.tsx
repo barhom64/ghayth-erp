@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -24,18 +25,16 @@ export default function VehiclesCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const addVehicle = useApiMutation("/fleet/vehicles", "POST", [["fleet-vehicles"], ["fleet-stats"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.plateNumber.trim()) localErrors.plateNumber = "يرجى إدخال رقم اللوحة";
-    if (!form.make.trim()) localErrors.make = "الشركة المصنعة مطلوبة";
-    if (!form.model.trim()) localErrors.model = "الموديل مطلوب";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      plateNumber: form.plateNumber.trim() ? null : "يرجى إدخال رقم اللوحة",
+      make: form.make.trim() ? null : "الشركة المصنعة مطلوبة",
+      model: form.model.trim() ? null : "الموديل مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -63,7 +62,7 @@ export default function VehiclesCreate() {
       toast({ title: "تمت إضافة المركبة بنجاح" });
       setLocation("/fleet");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المركبة", description: err?.fix ?? err?.message });
     }
   };

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -19,19 +20,17 @@ export default function VendorsCreate() {
   const createMut = useApiMutation("/finance/vendors/create", "POST", [["vendors"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name) localErrors.name = "اسم المورد مطلوب";
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
-    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الهاتف يجب أن يكون 9 أرقام على الأقل";
-    if (form.taxNumber && !/^\d{15}$/.test(form.taxNumber.replace(/\s/g, ""))) localErrors.taxNumber = "الرقم الضريبي يجب أن يكون 15 رقماً";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name ? null : "اسم المورد مطلوب",
+      email: form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? "صيغة البريد الإلكتروني غير صحيحة" : null,
+      phone: form.phone && form.phone.replace(/\D/g, "").length < 9 ? "رقم الهاتف يجب أن يكون 9 أرقام على الأقل" : null,
+      taxNumber: form.taxNumber && !/^\d{15}$/.test(form.taxNumber.replace(/\s/g, "")) ? "الرقم الضريبي يجب أن يكون 15 رقماً" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -40,7 +39,7 @@ export default function VendorsCreate() {
       toast({ title: "تم إضافة المورد بنجاح" });
       setLocation("/finance/vendors");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المورد", description: err?.fix ?? err?.message });
     }
   };

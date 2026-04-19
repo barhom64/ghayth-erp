@@ -6,6 +6,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Crown, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -13,7 +14,7 @@ export default function OwnersCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const [form, setForm] = useState<any>({
     ownerType: "individual", name: "", nationalId: "", crNumber: "", phone: "", email: "",

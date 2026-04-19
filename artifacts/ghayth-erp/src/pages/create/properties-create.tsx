@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function PropertiesCreate() {
@@ -27,7 +28,7 @@ export default function PropertiesCreate() {
   const { data: ownersResp, isLoading: loadingO, isError: errorO } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const owners = asList(ownersResp);
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const [form, setForm] = useState({
     unitNumber: "",
@@ -87,16 +88,14 @@ export default function PropertiesCreate() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.unitNumber) localErrors.unitNumber = "يرجى إدخال رقم الوحدة";
-    if (form.area && Number(form.area) <= 0) localErrors.area = "المساحة يجب أن تكون أكبر من صفر";
-    if (form.monthlyRent && Number(form.monthlyRent) < 0) localErrors.monthlyRent = "الإيجار الشهري يجب أن يكون صفر أو أكثر";
-    if (form.floor && Number(form.floor) < 0) localErrors.floor = "الطابق يجب أن يكون صفر أو أكثر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      unitNumber: form.unitNumber ? null : "يرجى إدخال رقم الوحدة",
+      area: form.area && Number(form.area) <= 0 ? "المساحة يجب أن تكون أكبر من صفر" : null,
+      monthlyRent: form.monthlyRent && Number(form.monthlyRent) < 0 ? "الإيجار الشهري يجب أن يكون صفر أو أكثر" : null,
+      floor: form.floor && Number(form.floor) < 0 ? "الطابق يجب أن يكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     addUnit.mutate({
@@ -126,7 +125,7 @@ export default function PropertiesCreate() {
     }, {
       onSuccess: () => { toast({ title: "تمت إضافة الوحدة بنجاح" }); setIsDirty(false); setLocation("/properties"); },
       onError: (err: any) => {
-        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الوحدة", description: err?.fix ?? err?.message });
       },
     });

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -10,6 +9,7 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { LogOut } from "lucide-react";
 import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -37,18 +37,17 @@ export default function ExcuseCreate() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    if (!form.excuseDate) {
-      setFieldErrors({ excuseDate: "تاريخ الاستئذان مطلوب" });
-      toast({ variant: "destructive", title: "تاريخ الاستئذان مطلوب" });
-      return;
-    }
-    if (form.startTime && form.endTime && form.endTime <= form.startTime) {
-      setFieldErrors({ endTime: "وقت الانتهاء يجب أن يكون بعد وقت البدء" });
-      toast({ variant: "destructive", title: "وقت الانتهاء يجب أن يكون بعد وقت البدء" });
+    const firstError = validate({
+      excuseDate: form.excuseDate ? null : "تاريخ الاستئذان مطلوب",
+      endTime: form.startTime && form.endTime && form.endTime <= form.startTime
+        ? "وقت الانتهاء يجب أن يكون بعد وقت البدء"
+        : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -67,7 +66,7 @@ export default function ExcuseCreate() {
           setLocation("/hr/excuse-requests");
         },
         onError: (err: any) => {
-          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+          setApiError(err);
         },
       },
     );

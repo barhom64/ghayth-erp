@@ -8,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -26,22 +27,24 @@ export default function InsuranceCreate() {
   const vehicles = vehiclesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.vehicleId) localErrors.vehicleId = "يرجى اختيار المركبة";
-    if (!form.provider.trim()) localErrors.provider = "شركة التأمين مطلوبة";
-    if (!form.startDate) localErrors.startDate = "تاريخ البدء مطلوب";
-    if (!form.endDate) localErrors.endDate = "تاريخ الانتهاء مطلوب";
-    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      vehicleId: form.vehicleId ? null : "يرجى اختيار المركبة",
+      provider: form.provider.trim() ? null : "شركة التأمين مطلوبة",
+      startDate: form.startDate ? null : "تاريخ البدء مطلوب",
+      endDate: !form.endDate
+        ? "تاريخ الانتهاء مطلوب"
+        : form.startDate && form.endDate <= form.startDate
+          ? "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء"
+          : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -61,7 +64,7 @@ export default function InsuranceCreate() {
       toast({ title: "تم إضافة التأمين بنجاح" });
       setLocation("/fleet/insurance");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التأمين", description: err?.fix ?? err?.message });
     }
   };

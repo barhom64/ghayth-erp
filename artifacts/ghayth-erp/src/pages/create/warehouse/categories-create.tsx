@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "warehouse_categories_create";
@@ -15,13 +15,14 @@ export default function CategoriesCreate() {
   const { toast } = useToast();
   const addCategory = useApiMutation("/warehouse/categories", "POST", [["warehouse-categories"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    if (!form.name) {
-      setFieldErrors({ name: "يرجى إدخال اسم التصنيف" });
-      toast({ variant: "destructive", title: "يرجى إدخال اسم التصنيف" });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم التصنيف",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -30,7 +31,7 @@ export default function CategoriesCreate() {
       toast({ title: "تمت إضافة التصنيف بنجاح" });
       setLocation("/warehouse");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التصنيف", description: err?.fix ?? err?.message });
     }
   };

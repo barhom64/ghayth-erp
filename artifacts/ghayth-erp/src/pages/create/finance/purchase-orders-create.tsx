@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
@@ -39,7 +40,7 @@ export default function PurchaseOrdersCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [items, setItems] = useState([{ productId: "", quantity: "1", unitPrice: "" }]);
   const [copied, setCopied] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   useEffect(() => {
     if (copySource && !copied) {
@@ -73,15 +74,14 @@ export default function PurchaseOrdersCreate() {
   const totalAmount = items.reduce((sum, i) => sum + Number(i.quantity || 0) * Number(i.unitPrice || 0), 0);
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.supplierId) localErrors.supplierId = "المورد مطلوب";
-    if (!form.branchId) localErrors.branchId = "الفرع مطلوب";
     const validItems = items.filter((i) => Number(i.unitPrice) > 0 && i.productId);
-    if (validItems.length === 0) localErrors.items = "يرجى إضافة بند واحد على الأقل";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      supplierId: form.supplierId ? null : "المورد مطلوب",
+      branchId: form.branchId ? null : "الفرع مطلوب",
+      items: validItems.length === 0 ? "يرجى إضافة بند واحد على الأقل" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -104,7 +104,7 @@ export default function PurchaseOrdersCreate() {
       toast({ title: "تم إنشاء طلب الشراء بنجاح" });
       setLocation("/finance/purchase-orders");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء طلب الشراء", description: err?.fix ?? err?.message });
     }
   };

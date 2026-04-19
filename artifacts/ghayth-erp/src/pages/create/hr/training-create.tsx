@@ -9,6 +9,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { BookOpen, Clock, Users, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,7 @@ export default function TrainingCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const set = (key: string, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -46,15 +47,17 @@ export default function TrainingCreate() {
     : null;
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.title) localErrors.title = "عنوان البرنامج مطلوب";
-    if (form.maxParticipants && Number(form.maxParticipants) <= 0) localErrors.maxParticipants = "السعة القصوى يجب أن تكون أكبر من صفر";
-    if (form.startDate && form.endDate && form.endDate < form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      title: form.title ? null : "عنوان البرنامج مطلوب",
+      maxParticipants: form.maxParticipants && Number(form.maxParticipants) <= 0
+        ? "السعة القصوى يجب أن تكون أكبر من صفر"
+        : null,
+      endDate: form.startDate && form.endDate && form.endDate < form.startDate
+        ? "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء"
+        : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -83,7 +86,7 @@ export default function TrainingCreate() {
           setLocation("/hr/training");
         },
         onError: (err: any) => {
-          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+          setApiError(err);
         },
       },
     );

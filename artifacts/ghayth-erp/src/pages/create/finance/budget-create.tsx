@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -25,29 +26,26 @@ export default function BudgetCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.accountCode) localErrors.accountCode = "يرجى اختيار الحساب";
+    let periodError: string | null = null;
     if (!form.period) {
-      localErrors.period = "الفترة مطلوبة";
+      periodError = "الفترة مطلوبة";
     } else {
       const year = parseInt(form.period.split("-")[0], 10);
-      if (isNaN(year) || year < 2020 || year > 2040) localErrors.period = "السنة يجب أن تكون بين 2020 و 2040";
+      if (isNaN(year) || year < 2020 || year > 2040) periodError = "السنة يجب أن تكون بين 2020 و 2040";
     }
-    if (!form.amount) {
-      localErrors.amount = "المبلغ مطلوب";
-    } else if (Number(form.amount) < 0) {
-      localErrors.amount = "المبلغ يجب أن يكون صفر أو أكثر";
-    }
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      accountCode: form.accountCode ? null : "يرجى اختيار الحساب",
+      period: periodError,
+      amount: !form.amount ? "المبلغ مطلوب" : Number(form.amount) < 0 ? "المبلغ يجب أن يكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -61,7 +59,7 @@ export default function BudgetCreate() {
       toast({ title: "تم إضافة بند الميزانية بنجاح" });
       setLocation("/finance/budget");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة بند الميزانية", description: err?.fix ?? err?.message });
     }
   };

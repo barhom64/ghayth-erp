@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAppContext } from "@/contexts/app-context";
 import { formatCurrency } from "@/lib/formatters";
 import { DollarSign, Users, Building2, CheckCircle2, Info } from "lucide-react";
@@ -41,16 +41,17 @@ export default function PayrollCreate() {
   const { data: branchData, isLoading: loadingBranch, isError: errorBranch } = useApiQuery<any>(["branches"], "/settings/branches");
   const branches = branchData?.data || [];
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (loadingEmp || loadingBranch) return <LoadingSpinner />;
   if (errorEmp || errorBranch) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    if (!form.month) {
-      setFieldErrors({ month: "الشهر مطلوب" });
-      toast({ variant: "destructive", title: "الشهر مطلوب" });
+    const firstError = validate({
+      month: form.month ? null : "الشهر مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -66,7 +67,7 @@ export default function PayrollCreate() {
           setLocation("/hr/payroll");
         },
         onError: (err: any) => {
-          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+          setApiError(err);
         },
       },
     );

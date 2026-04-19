@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency } from "@/lib/formatters";
 import { LOAN_TYPES } from "@/lib/hr-type-maps";
 import { Banknote, Info, Calculator, AlertTriangle } from "lucide-react";
@@ -37,7 +38,7 @@ export default function LoansCreate() {
     reason: "",
   });
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
   if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -56,15 +57,13 @@ export default function LoansCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
-    if (!form.amount || amount <= 0) localErrors.amount = "يرجى إدخال مبلغ صحيح أكبر من صفر";
-    if (form.installmentCount && installmentCount <= 0) localErrors.installmentCount = "عدد الأقساط يجب أن يكون أكبر من صفر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      amount: !form.amount || amount <= 0 ? "يرجى إدخال مبلغ صحيح أكبر من صفر" : null,
+      installmentCount: form.installmentCount && installmentCount <= 0 ? "عدد الأقساط يجب أن يكون أكبر من صفر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     if (exceedsMax) {
@@ -84,7 +83,7 @@ export default function LoansCreate() {
       clearDraft();
       setLocation("/hr/loans");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
     }
   };
 

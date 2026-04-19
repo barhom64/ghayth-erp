@@ -8,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Star, Target, TrendingUp, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -94,16 +95,15 @@ export default function PerformanceCreate() {
   };
 
   const selectedEmployee = employees.find((e: any) => String(e.assignmentId || e.id) === form.assignmentId);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
-    if (!form.period) localErrors.period = "الفترة مطلوبة";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      period: form.period ? null : "الفترة مطلوبة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     const finalScore = form.overallScore || Math.round(avgScore * 10) / 10;
@@ -128,7 +128,7 @@ export default function PerformanceCreate() {
           setLocation("/hr/performance");
         },
         onError: (err: any) => {
-          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+          setApiError(err);
         },
       },
     );

@@ -8,6 +8,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -22,20 +23,19 @@ export default function FleetAlertsCreate() {
   const vehicles = vehiclesData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.vehicleId) localErrors.vehicleId = "يرجى اختيار المركبة";
-    if (!form.type) localErrors.type = "نوع التنبيه مطلوب";
-    if (!form.description.trim()) localErrors.description = "وصف التنبيه مطلوب";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      vehicleId: form.vehicleId ? null : "يرجى اختيار المركبة",
+      type: form.type ? null : "نوع التنبيه مطلوب",
+      description: form.description.trim() ? null : "وصف التنبيه مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -50,7 +50,7 @@ export default function FleetAlertsCreate() {
       toast({ title: "تم إنشاء التنبيه بنجاح" });
       setLocation("/fleet/alerts");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التنبيه", description: err?.fix ?? err?.message });
     }
   };

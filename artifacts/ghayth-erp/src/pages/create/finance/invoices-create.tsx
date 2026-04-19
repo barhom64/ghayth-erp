@@ -11,6 +11,7 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
@@ -83,7 +84,7 @@ export default function InvoicesCreate() {
   const [lines, setLines] = useState([{ description: "", quantity: "1", unitPrice: "" }]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [copied, setCopied] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
 
   useEffect(() => {
@@ -123,16 +124,14 @@ export default function InvoicesCreate() {
   const total = subtotal + vatAmount;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.clientId) localErrors.clientId = "يرجى اختيار العميل";
-    if (!form.dueDate && !form.paymentTermsDays) localErrors.dueDate = "حدد شروط الدفع أو تاريخ الاستحقاق";
-    if (lines.length === 0 || !lines[0].unitPrice) localErrors.lines = "يرجى إضافة بند واحد على الأقل بسعر";
-    if (total <= 0) localErrors.totalAmount = "إجمالي الفاتورة يجب أن يكون أكبر من صفر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      clientId: form.clientId ? null : "يرجى اختيار العميل",
+      dueDate: !form.dueDate && !form.paymentTermsDays ? "حدد شروط الدفع أو تاريخ الاستحقاق" : null,
+      lines: lines.length === 0 || !lines[0].unitPrice ? "يرجى إضافة بند واحد على الأقل بسعر" : null,
+      totalAmount: total <= 0 ? "إجمالي الفاتورة يجب أن يكون أكبر من صفر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     if (!form.branchId) {
@@ -167,7 +166,7 @@ export default function InvoicesCreate() {
       clearDraft();
       setLocation("/finance/invoices");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الفاتورة", description: err?.fix ?? err?.message });
     }
   };

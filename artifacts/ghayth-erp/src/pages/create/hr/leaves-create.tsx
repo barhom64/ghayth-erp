@@ -12,6 +12,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { asList } from "@/lib/api";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { Calendar, Info, Clock, User } from "lucide-react";

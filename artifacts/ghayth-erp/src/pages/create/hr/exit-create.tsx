@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency } from "@/lib/formatters";
 import { EXIT_TYPES } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -36,7 +37,7 @@ export default function ExitCreate() {
     otherDeductions: "0",
   });
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
   if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -71,19 +72,18 @@ export default function ExitCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
-    if (!form.lastWorkingDay) localErrors.lastWorkingDay = "آخر يوم عمل مطلوب";
-    if (!form.exitType) localErrors.exitType = "نوع نهاية الخدمة مطلوب";
-    if (form.lastWorkingDay) {
-      const today = new Date().toISOString().split("T")[0];
-      if (form.lastWorkingDay < today) localErrors.lastWorkingDay = "آخر يوم عمل يجب أن يكون اليوم أو في المستقبل";
-    }
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const today = new Date().toISOString().split("T")[0];
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      exitType: form.exitType ? null : "نوع نهاية الخدمة مطلوب",
+      lastWorkingDay: !form.lastWorkingDay
+        ? "آخر يوم عمل مطلوب"
+        : form.lastWorkingDay < today
+          ? "آخر يوم عمل يجب أن يكون اليوم أو في المستقبل"
+          : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
 
@@ -98,7 +98,7 @@ export default function ExitCreate() {
       clearDraft();
       setLocation("/hr/exit");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
     }
   };
 
