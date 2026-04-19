@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Headphones, User, MessageSquare, Send, Trash2, Clock, FileText } from "lucide-react";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
@@ -164,12 +165,15 @@ export default function TicketDetail() {
             <CardHeader><CardTitle className="text-base">معلومات التذكرة</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الحالة</span>
-                <select value={ticket.status} onChange={(e) => handleStatusChange(e.target.value)} className="border rounded px-2 py-1 text-xs">
-                  <option value="open">مفتوحة</option>
-                  <option value="in_progress">قيد المعالجة</option>
-                  <option value="resolved">تم الحل</option>
-                  <option value="closed">مغلقة</option>
-                </select>
+                <Select value={ticket.status} onValueChange={(v) => handleStatusChange(v)}>
+                  <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">مفتوحة</SelectItem>
+                    <SelectItem value="in_progress">قيد المعالجة</SelectItem>
+                    <SelectItem value="resolved">تم الحل</SelectItem>
+                    <SelectItem value="closed">مغلقة</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الأولوية</span><Badge className={priorityMap[ticket.priority]?.color || "bg-gray-100 text-gray-700"}>{priorityMap[ticket.priority]?.label || ticket.priority}</Badge></div>
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الفئة</span><span>{ticket.category || "-"}</span></div>

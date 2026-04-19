@@ -29,6 +29,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
@@ -538,14 +539,17 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">نوع التأشيرة</p>
-                      <select className="w-full border rounded-md px-3 py-2 text-sm" value={govForm.visaType} onChange={e => setGovForm(f => ({ ...f, visaType: e.target.value }))}>
-                        <option value="">—</option>
-                        <option value="work">عمل</option>
-                        <option value="visit">زيارة</option>
-                        <option value="transit">مرور</option>
-                        <option value="hajj">حج</option>
-                        <option value="umrah">عمرة</option>
-                      </select>
+                      <Select value={govForm.visaType || "_none"} onValueChange={(v) => setGovForm(f => ({ ...f, visaType: v === "_none" ? "" : v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">—</SelectItem>
+                          <SelectItem value="work">عمل</SelectItem>
+                          <SelectItem value="visit">زيارة</SelectItem>
+                          <SelectItem value="transit">مرور</SelectItem>
+                          <SelectItem value="hajj">حج</SelectItem>
+                          <SelectItem value="umrah">عمرة</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">انتهاء التأشيرة</p>
@@ -565,12 +569,15 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">حالة الإقامة</p>
-                      <select className="w-full border rounded-md px-3 py-2 text-sm" value={govForm.iqamaStatus} onChange={e => setGovForm(f => ({ ...f, iqamaStatus: e.target.value }))}>
-                        <option value="active">سارية</option>
-                        <option value="expired">منتهية</option>
-                        <option value="renewal_pending">قيد التجديد</option>
-                        <option value="cancelled">ملغاة</option>
-                      </select>
+                      <Select value={govForm.iqamaStatus} onValueChange={(v) => setGovForm(f => ({ ...f, iqamaStatus: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">سارية</SelectItem>
+                          <SelectItem value="expired">منتهية</SelectItem>
+                          <SelectItem value="renewal_pending">قيد التجديد</SelectItem>
+                          <SelectItem value="cancelled">ملغاة</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="flex gap-2 justify-end">

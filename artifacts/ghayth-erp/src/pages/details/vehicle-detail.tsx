@@ -196,11 +196,14 @@ export default function VehicleDetail() {
               </div>
               <div>
                 <label className="text-sm font-medium">الحالة</label>
-                <select value={editForm.status} onChange={e => setEditForm(f => ({...f, status: e.target.value}))} className="w-full border rounded-md p-2 mt-1">
-                  <option value="available">متاحة</option>
-                  <option value="in_use">قيد الاستخدام</option>
-                  <option value="maintenance">في الصيانة</option>
-                </select>
+                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({...f, status: v}))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="available">متاحة</SelectItem>
+                    <SelectItem value="in_use">قيد الاستخدام</SelectItem>
+                    <SelectItem value="maintenance">في الصيانة</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">اللون</label>
@@ -224,14 +227,17 @@ export default function VehicleDetail() {
                 </div>
                 <div>
                   <label className="text-sm font-medium">نوع اللوحة</label>
-                  <select value={editForm.plateType} onChange={e => setEditForm(f => ({...f, plateType: e.target.value}))} className="w-full border rounded-md p-2 mt-1">
-                    <option value="">اختر</option>
-                    <option value="private">خاصة</option>
-                    <option value="commercial">تجارية</option>
-                    <option value="government">حكومية</option>
-                    <option value="diplomatic">دبلوماسية</option>
-                    <option value="motorcycle">دراجة نارية</option>
-                  </select>
+                  <Select value={editForm.plateType || "_none"} onValueChange={(v) => setEditForm(f => ({...f, plateType: v === "_none" ? "" : v}))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">اختر</SelectItem>
+                      <SelectItem value="private">خاصة</SelectItem>
+                      <SelectItem value="commercial">تجارية</SelectItem>
+                      <SelectItem value="government">حكومية</SelectItem>
+                      <SelectItem value="diplomatic">دبلوماسية</SelectItem>
+                      <SelectItem value="motorcycle">دراجة نارية</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="text-sm font-medium">رقم التسلسل</label>

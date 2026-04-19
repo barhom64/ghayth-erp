@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
@@ -103,6 +104,7 @@ export default function InvoiceDetailPage() {
   );
   const [showPayment, setShowPayment] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const printContainerRef = useRef<HTMLDivElement>(null);
 
   // R.4 iter 4 — both mutations now flow through useApiMutation so
@@ -151,9 +153,8 @@ export default function InvoiceDetailPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const amount = parseFloat(fd.get("amount") as string);
-    const method = fd.get("method") as string;
-    if (!amount || !method) return;
-    paymentMut.mutate({ amount, method });
+    if (!amount || !paymentMethod) return;
+    paymentMut.mutate({ amount, method: paymentMethod });
   };
 
   const handleZatcaSubmit = () => {
@@ -359,12 +360,15 @@ export default function InvoiceDetailPage() {
               </div>
               <div className="w-48">
                 <label className="text-sm font-medium">طريقة الدفع</label>
-                <select name="method" className="w-full border rounded-md p-2 mt-1" defaultValue="bank_transfer">
-                  <option value="bank_transfer">حوالة بنكية</option>
-                  <option value="cash">نقداً</option>
-                  <option value="card">بطاقة</option>
-                  <option value="cheque">شيك</option>
-                </select>
+                <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank_transfer">حوالة بنكية</SelectItem>
+                    <SelectItem value="cash">نقداً</SelectItem>
+                    <SelectItem value="card">بطاقة</SelectItem>
+                    <SelectItem value="cheque">شيك</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="submit" disabled={paymentMut.isPending}>
                 {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}

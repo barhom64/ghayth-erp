@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo, CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle, BookOpen, CheckSquare, FileText, Clock } from "lucide-react";
@@ -182,9 +183,12 @@ export default function ProjectDetail() {
               </div>
               <div>
                 <label className="text-sm font-medium">الحالة</label>
-                <select value={editForm.status} onChange={e => setEditForm(f => ({...f, status: e.target.value}))} className="w-full border rounded-md p-2 mt-1">
-                  {Object.entries(statusLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({...f, status: v}))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(statusLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">{`الميزانية (${getCurrencySymbol()})`}</label>
@@ -312,15 +316,14 @@ export default function ProjectDetail() {
                       <td className="p-3 text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</td>
                       <td className="p-3">
                         {t.status !== "done" && (
-                          <select
-                            value={t.status}
-                            onChange={e => updateTaskStatus(t.id, e.target.value)}
-                            className="border rounded px-2 py-1 text-xs"
-                          >
-                            <option value="todo">للتنفيذ</option>
-                            <option value="in_progress">جاري</option>
-                            <option value="done">مكتمل</option>
-                          </select>
+                          <Select value={t.status} onValueChange={(v) => updateTaskStatus(t.id, v)}>
+                            <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="todo">للتنفيذ</SelectItem>
+                              <SelectItem value="in_progress">جاري</SelectItem>
+                              <SelectItem value="done">مكتمل</SelectItem>
+                            </SelectContent>
+                          </Select>
                         )}
                       </td>
                     </tr>
