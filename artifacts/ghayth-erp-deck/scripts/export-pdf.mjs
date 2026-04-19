@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as wait } from "node:timers/promises";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -10,7 +10,20 @@ const PORT = 4321;
 const BASE = "/ghayth-erp-deck/";
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const OUT = resolve(process.cwd(), "..", "..", "deliverables", "Ghayth-ERP-Presentation.pdf");
-const CHROMIUM = process.env.CHROMIUM_PATH || "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium";
+
+function detectChromium() {
+  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
+  for (const bin of ["chromium", "chromium-browser", "google-chrome", "chrome"]) {
+    const r = spawnSync("which", [bin], { encoding: "utf8" });
+    if (r.status === 0) {
+      const p = r.stdout.trim();
+      if (p) return p;
+    }
+  }
+  throw new Error("Chromium not found. Install chromium or set CHROMIUM_PATH.");
+}
+const CHROMIUM = detectChromium();
+console.log(`Using chromium: ${CHROMIUM}`);
 
 async function main() {
   await mkdir(dirname(OUT), { recursive: true });

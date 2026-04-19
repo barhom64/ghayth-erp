@@ -8,7 +8,8 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "validate-slides": "pnpm exec tsx scripts/validate-slides.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "export-pdf": "PORT=4321 BASE_PATH=/ghayth-erp-deck/ pnpm run build && PORT=4321 BASE_PATH=/ghayth-erp-deck/ node scripts/export-pdf.mjs"
   },
   "devDependencies": {
     "@replit/vite-plugin-cartographer": "catalog:",
