@@ -8,6 +8,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -23,7 +24,7 @@ export default function DriversCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -39,21 +40,15 @@ export default function DriversCreate() {
     }
   };
 
-  const validate = (): boolean => {
-    const errs: Record<string, string> = {};
-    if (!form.name.trim()) errs.name = "اسم السائق مطلوب";
-    if (!form.phone.trim()) errs.phone = "رقم الهاتف مطلوب";
-    if (!form.licenseNumber.trim()) errs.licenseNumber = "رقم الرخصة مطلوب";
-    if (form.licenseExpiry) {
-      const expiry = new Date(form.licenseExpiry);
-      if (expiry < new Date()) errs.licenseExpiry = "تاريخ انتهاء الرخصة يجب أن يكون في المستقبل";
-    }
-    setFieldErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
   const handleSubmit = async () => {
-    if (!validate()) {
+    const expiryInPast = form.licenseExpiry && new Date(form.licenseExpiry) < new Date();
+    const firstError = validate({
+      name: form.name.trim() ? null : "اسم السائق مطلوب",
+      phone: form.phone.trim() ? null : "رقم الهاتف مطلوب",
+      licenseNumber: form.licenseNumber.trim() ? null : "رقم الرخصة مطلوب",
+      licenseExpiry: expiryInPast ? "تاريخ انتهاء الرخصة يجب أن يكون في المستقبل" : null,
+    });
+    if (firstError) {
       toast({ variant: "destructive", title: "الرجاء تصحيح الأخطاء في النموذج" });
       return;
     }
@@ -66,8 +61,7 @@ export default function DriversCreate() {
       toast({ title: "تم إضافة السائق بنجاح" });
       setLocation("/fleet/drivers");
     } catch (err: any) {
-      const apiField = err?.field;
-      if (apiField) setFieldErrors((prev) => ({ ...prev, [apiField]: err?.message ?? "خطأ في الحقل" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السائق", description: err?.fix ?? err?.message });
     }
   };

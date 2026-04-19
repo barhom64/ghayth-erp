@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency } from "@/lib/formatters";
 import { OVERTIME_MULTIPLIERS } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -39,7 +40,7 @@ export default function OvertimeCreate() {
     reason: "",
   });
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
   if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -77,18 +78,19 @@ export default function OvertimeCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
-    if (!form.overtimeDate) localErrors.overtimeDate = "تاريخ الوقت الإضافي مطلوب";
-    if (!form.startTime) localErrors.startTime = "وقت البدء مطلوب";
-    if (!form.endTime) localErrors.endTime = "وقت الانتهاء مطلوب";
-    if (hours <= 0) localErrors.hours = "عدد الساعات يجب أن يكون أكبر من صفر";
-    if (hours > 12) localErrors.hours = "لا يمكن تسجيل أكثر من 12 ساعة في اليوم";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      overtimeDate: form.overtimeDate ? null : "تاريخ الوقت الإضافي مطلوب",
+      startTime: form.startTime ? null : "وقت البدء مطلوب",
+      endTime: form.endTime ? null : "وقت الانتهاء مطلوب",
+      hours: hours <= 0
+        ? "عدد الساعات يجب أن يكون أكبر من صفر"
+        : hours > 12
+          ? "لا يمكن تسجيل أكثر من 12 ساعة في اليوم"
+          : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
 
@@ -105,7 +107,7 @@ export default function OvertimeCreate() {
       clearDraft();
       setLocation("/hr/overtime");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
     }
   };
 

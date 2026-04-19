@@ -10,6 +10,7 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Badge } from "@/components/ui/badge";
 import { Link2 } from "lucide-react";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
@@ -75,13 +76,14 @@ export default function TasksCreate() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    if (!form.title.trim()) {
-      setFieldErrors({ title: "يرجى إدخال عنوان المهمة" });
-      toast({ variant: "destructive", title: "يرجى إدخال عنوان المهمة" });
+    const firstError = validate({
+      title: form.title.trim() ? null : "يرجى إدخال عنوان المهمة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     const payload: any = { ...form, assignedTo: user?.name || "" };
@@ -97,7 +99,7 @@ export default function TasksCreate() {
       toast({ title: "تم إنشاء المهمة بنجاح" });
       setLocation("/tasks");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء المهمة", description: err?.fix ?? err?.message });
     }
   };
