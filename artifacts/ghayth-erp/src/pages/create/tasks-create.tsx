@@ -62,10 +62,10 @@ export default function TasksCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("tasks_create", getInitial());
 
-  const { data: entityResults } = useApiQuery<any>(
+  const { data: entityResults, isLoading: entityLoading } = useApiQuery<any>(
     ["entity-search", form.linkedEntityType, entitySearch],
     `/tasks/entity-search?type=${form.linkedEntityType}&q=${encodeURIComponent(entitySearch)}`,
-    !!form.linkedEntityType && entitySearch.length > 0
+    !!form.linkedEntityType
   );
   const entityOptions: AutocompleteOption[] = (Array.isArray(entityResults) ? entityResults : []).map((item: any) => ({
     value: String(item.id),
@@ -90,8 +90,15 @@ export default function TasksCreate() {
     if (!payload.linkedEntityType) {
       delete payload.linkedEntityType;
       delete payload.linkedEntityId;
+    } else if (payload.linkedEntityId) {
+      payload.linkedEntityId = Number(payload.linkedEntityId);
+      if (!Number.isFinite(payload.linkedEntityId) || payload.linkedEntityId <= 0) {
+        toast({ variant: "destructive", title: "يرجى اختيار الكيان المرتبط" });
+        return;
+      }
     } else {
-      payload.linkedEntityId = payload.linkedEntityId ? Number(payload.linkedEntityId) : undefined;
+      toast({ variant: "destructive", title: "يرجى اختيار الكيان المرتبط أو إزالة نوع الربط" });
+      return;
     }
     try {
       await createMut.mutateAsync(payload);
@@ -180,8 +187,9 @@ export default function TasksCreate() {
                   value={form.linkedEntityId}
                   onChange={(val) => setForm((f) => ({ ...f, linkedEntityId: String(val || "") }))}
                   placeholder="ابحث عن الكيان..."
-                  loading={false}
-                  emptyMessage="لا توجد نتائج"
+                  loading={entityLoading}
+                  emptyMessage={entityLoading ? "جاري التحميل..." : "لا توجد نتائج — تأكد من إضافة كيانات من هذا النوع أولاً"}
+                  className="mt-1"
                 />
               </FormFieldWrapper>
             )}
