@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useFormContext } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1438,7 +1439,7 @@ export default function ViolationsCreate() {
 
   // Load saved extra draft state (witnesses, reasons, relatedParties, openStep)
   const [draftExtra] = useState(() => loadDraftExtra());
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate } = useFieldErrors();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [witnesses, setWitnesses] = useState<WitnessEntry[]>(draftExtra.witnesses || []);
   const [reasons, setReasons] = useState<string[]>(draftExtra.reasons || []);
@@ -1483,15 +1484,15 @@ export default function ViolationsCreate() {
           </Button>
         }
         onSubmit={async (values) => {
-          setFieldErrors({});
-          const localErrors: Record<string, string> = {};
-          if (!values.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
-          if (!values.incidentType) localErrors.incidentType = "نوع الواقعة مطلوب";
-          if (values.manualOverrideAmount !== undefined && values.manualOverrideAmount < 0) localErrors.manualOverrideAmount = "مبلغ الخصم يجب أن يكون صفر أو أكثر";
-          if (Object.keys(localErrors).length > 0) {
-            setFieldErrors(localErrors);
-            const firstKey = Object.keys(localErrors)[0];
-            toast({ variant: "destructive", title: localErrors[firstKey] });
+          const firstError = validate({
+            assignmentId: values.assignmentId ? null : "يرجى اختيار الموظف",
+            incidentType: values.incidentType ? null : "نوع الواقعة مطلوب",
+            manualOverrideAmount: values.manualOverrideAmount !== undefined && values.manualOverrideAmount < 0
+              ? "مبلغ الخصم يجب أن يكون صفر أو أكثر"
+              : null,
+          });
+          if (firstError) {
+            toast({ variant: "destructive", title: firstError });
             return;
           }
           const result = await createMemo.mutateAsync({
