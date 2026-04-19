@@ -255,7 +255,8 @@ export default function AutoDetectionPage() {
       subtitle="محرك المراقبة الآلي — يفحص الحضور يومياً ويُصدر المخالفات والمحاضر تلقائياً"
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/violations", label: "المخالفات" },
+        { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        { label: "الرصد التلقائي" },
       ]}
       actions={
         <div className="flex items-center gap-2">

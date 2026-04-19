@@ -15,7 +15,7 @@ import {
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
-  Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer,
+  Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -144,11 +144,10 @@ const allNavSections: NavSection[] = [
         { label: "التدريب المتقدم", path: "/hr/training/advanced", icon: BarChart3, subKey: "training" },
       ]},
       { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
-        { label: "المخالفات", path: "/hr/violations", icon: AlertTriangle, subKey: "violations" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
-        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
+        { label: "نظرة عامة", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
+        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
-        { label: "محاضر الاستفسار", path: "/hr/discipline/memos", icon: FileText, subKey: "violations" },
+        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
       ]},
       { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, module: "hr", subKey: "employees" },

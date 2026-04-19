@@ -30,6 +30,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   AlertTriangle,
@@ -780,8 +781,15 @@ function StepEmployee({
 
       {/* Employee context card */}
       {assignmentId && selectedEmp && (
-        <div className="mt-3">
+        <div className="mt-3 space-y-3">
           <EmployeeContextCard employeeId={selectedEmp.id} section="violations" />
+          <EmployeeDisciplineSummary
+            employeeId={selectedEmp.id}
+            employeeName={selectedEmp.name}
+            title="ملف الانضباط — لقطة مباشرة"
+            hideCreateButton
+            compact
+          />
         </div>
       )}
     </div>

@@ -368,10 +368,12 @@ router.get("/memos", requirePermission("hr:read"), async (req, res) => {
     const scope = req.scope!;
     const status = (req.query.status as string) || null;
     const assignmentId = req.query.assignmentId ? Number(req.query.assignmentId) : null;
+    const employeeId = req.query.employeeId ? Number(req.query.employeeId) : null;
     const params: any[] = [scope.companyId];
     let where = `m."companyId" = $1 AND m."deletedAt" IS NULL`;
     if (status) { params.push(status); where += ` AND m.status = $${params.length}`; }
     if (assignmentId) { params.push(assignmentId); where += ` AND m."assignmentId" = $${params.length}`; }
+    if (employeeId) { params.push(employeeId); where += ` AND m."employeeId" = $${params.length}`; }
     const regulationIdFilter = req.query.regulationId ? Number(req.query.regulationId) : null;
     if (regulationIdFilter) { params.push(regulationIdFilter); where += ` AND m."regulationId" = $${params.length}`; }
     const rows = await rawQuery<any>(
@@ -860,6 +862,45 @@ router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) =
 });
 
 // Stats
+// ─── Per-employee violations snapshot — used by employee-detail and create form ───
+router.get("/employee/:employeeId/summary", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employeeId = Number(req.params.employeeId);
+    if (!Number.isFinite(employeeId)) {
+      res.status(400).json({ error: "معرف الموظف غير صالح" });
+      return;
+    }
+    const yearStart = `${new Date().getFullYear()}-01-01`;
+    const [stats] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status NOT IN ('cancelled','rejected'))                    AS "totalActive",
+         COUNT(*) FILTER (WHERE status IN ('pending_employee','pending_manager','pending_gm','draft')) AS pending,
+         COUNT(*) FILTER (WHERE status = 'approved')                                       AS approved,
+         COUNT(*) FILTER (WHERE "createdAt" >= $2::date)                                   AS "ytdCount",
+         COALESCE(SUM("appliedDeductionAmount" + "appliedExtraDeduction") FILTER (WHERE status='approved' AND "createdAt" >= $2::date), 0) AS "ytdDeductions",
+         COALESCE(MAX("occurrenceCount") FILTER (WHERE "createdAt" >= $2::date), 0)         AS "currentEscalation",
+         COUNT(*) FILTER (WHERE "terminationDecided" = TRUE)                                AS terminations
+       FROM hr_inquiry_memos
+       WHERE "companyId" = $1 AND "employeeId" = $3 AND "deletedAt" IS NULL`,
+      [scope.companyId, yearStart, employeeId]
+    );
+    const recent = await rawQuery<any>(
+      `SELECT id, "memoNumber", "incidentType", "incidentDate", status,
+              "appliedPenaltyLabel", "appliedDeductionAmount", "appliedExtraDeduction",
+              "occurrenceCount", "createdAt"
+         FROM hr_inquiry_memos
+        WHERE "companyId" = $1 AND "employeeId" = $2 AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC
+        LIMIT 5`,
+      [scope.companyId, employeeId]
+    );
+    res.json({ stats: stats ?? {}, recent });
+  } catch (err) {
+    handleRouteError(err, res, "Employee discipline summary error:");
+  }
+});
+
 router.get("/stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;

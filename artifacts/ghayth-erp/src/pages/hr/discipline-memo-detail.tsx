@@ -67,9 +67,58 @@ export default function DisciplineMemoDetailPage() {
     }
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-  if (!data?.memo) return <div className="p-6">المحضر غير موجود</div>;
+  if (isLoading) {
+    return (
+      <PageShell
+        title="جارٍ تحميل المحضر..."
+        loading
+        breadcrumbs={[
+          { href: "/hr", label: "الموارد البشرية" },
+          { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        ]}
+      >
+        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
+      </PageShell>
+    );
+  }
+  if (isError) {
+    return (
+      <PageShell
+        title="تعذّر تحميل المحضر"
+        breadcrumbs={[
+          { href: "/hr", label: "الموارد البشرية" },
+          { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        ]}
+      >
+        <ErrorState onRetry={() => window.location.reload()} />
+      </PageShell>
+    );
+  }
+  if (!data?.memo) {
+    return (
+      <PageShell
+        title="المحضر غير موجود"
+        breadcrumbs={[
+          { href: "/hr", label: "الموارد البشرية" },
+          { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        ]}
+      >
+        <Card>
+          <CardContent className="py-12 text-center text-gray-500">
+            <Ban size={36} className="mx-auto mb-3 opacity-40" />
+            <p className="font-medium mb-1">لا يوجد محضر بهذا الرقم</p>
+            <p className="text-sm mb-4">قد يكون المحضر محذوفًا أو غير متاح لصلاحياتك.</p>
+            <Link href="/hr/violations">
+              <Button variant="outline">
+                <ArrowRight className="h-4 w-4 me-1" />
+                العودة إلى قائمة المخالفات
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
 
   const memo = data.memo;
   const events = data.events ?? [];
@@ -84,12 +133,13 @@ export default function DisciplineMemoDetailPage() {
       loading={isLoading}
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/discipline-memos", label: "المخالفات" },
+        { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        { label: memo.memoNumber || `محضر #${memo.id}` },
       ]}
       actions={
         <div className="flex items-center gap-2">
           <PageStatusBadge status={memo.status} domain="memo" className="text-sm px-3 py-1" />
-          <Link href="/hr/discipline/memos">
+          <Link href="/hr/violations">
             <Button variant="ghost" size="sm">
               <ArrowRight className="h-4 w-4 me-1" />
               العودة

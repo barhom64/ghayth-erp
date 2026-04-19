@@ -36,6 +36,7 @@ import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Activity },
@@ -714,21 +715,26 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
       )}
 
       {activeTab === "violations" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-              المخالفات والإجراءات التأديبية ({violations.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {violations.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">لا توجد مخالفات</p>
-            ) : (
-              <ViolationTimeline violations={violations} />
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <EmployeeDisciplineSummary
+            employeeId={employee.id}
+            employeeName={employee.name}
+            title="ملف انضباط الموظف"
+          />
+          {violations.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                  السجل التفصيلي ({violations.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ViolationTimeline violations={violations} />
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {activeTab === "tasks" && (

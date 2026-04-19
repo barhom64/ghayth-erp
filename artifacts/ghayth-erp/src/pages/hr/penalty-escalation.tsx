@@ -42,7 +42,11 @@ export default function PenaltyEscalationPage() {
     <PageShell
       title="تصعيد الجزاءات"
       subtitle="نظام التصعيد التلقائي للمخالفات المتكررة"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تصعيد الجزاءات" }]}
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        { label: "تصعيد الجزاءات" },
+      ]}
     >
       <KpiGrid items={kpis} />
 

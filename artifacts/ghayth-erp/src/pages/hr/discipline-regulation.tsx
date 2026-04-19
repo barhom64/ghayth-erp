@@ -148,7 +148,11 @@ export default function DisciplineRegulationPage() {
     <PageShell
       title="لائحة الانضباط الوظيفي"
       subtitle={`الكتالوج الحي للمخالفات والجزاءات — سارية من ${data?.effectiveFrom ?? "2024-10-01"} (${total} مادة)`}
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "لائحة الانضباط الوظيفي" }]}
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        { label: "لائحة الانضباط الوظيفي" },
+      ]}
       loading={isLoading}
       actions={
         <Button variant="outline" onClick={reseedDefaults} disabled={reseeding}>
