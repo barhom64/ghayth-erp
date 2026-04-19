@@ -17,6 +17,7 @@ import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const OPERATION_TYPES_RECEIPT = [
   { value: "receipt", label: "قبض إيراد عام" },
@@ -117,9 +118,6 @@ export default function VouchersCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
-
   const operationTypes = form.type === "receipt" ? OPERATION_TYPES_RECEIPT : OPERATION_TYPES_PAYMENT;
 
   useEffect(() => {
@@ -205,7 +203,8 @@ export default function VouchersCreate() {
       toast({ title: "تم إنشاء السند بنجاح" });
       setLocation("/finance/vouchers");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "خطأ في الحفظ", description: err?.message || "حدث خطأ أثناء إنشاء السند" });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "خطأ في الحفظ", description: err?.fix ?? err?.message ?? "حدث خطأ أثناء إنشاء السند" });
     }
   };
 
@@ -220,85 +219,72 @@ export default function VouchersCreate() {
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <AutoField label="رقم السند" value={autoNumberRef.current} />
-        <div>
-          <Label>التاريخ <span className="text-red-500">*</span></Label>
-          <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setField("date", v)} /></div>
-        </div>
+        <FormFieldWrapper label="التاريخ" required>
+          <DatePicker value={form.date} onChange={(v) => setField("date", v)} />
+        </FormFieldWrapper>
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">نوع السند</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label>النوع الرئيسي <span className="text-red-500">*</span></Label>
+          <FormFieldWrapper label="النوع الرئيسي" required error={fieldErrors.type}>
             <Select value={form.type} onValueChange={(v) => setField("type", v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="receipt">سند قبض</SelectItem>
                 <SelectItem value="payment">سند صرف</SelectItem>
               </SelectContent>
             </Select>
-            <FieldHint field="type" />
-          </div>
-          <div>
-            <Label>نوع العملية</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="نوع العملية">
             <Select value={form.operationType} onValueChange={(v) => setField("operationType", v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {operationTypes.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>طريقة الدفع / القبض</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="طريقة الدفع / القبض">
             <Select value={form.method} onValueChange={(v) => setField("method", v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {PAYMENT_METHODS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">المبالغ</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label>المبلغ (ريال) <span className="text-red-500">*</span></Label>
-            <Input className={`mt-1 ${errCls("amount")}`} type="number" min="0" step="0.01" value={form.amount}
-              onChange={(e) => setField("amount", e.target.value)} placeholder="0.00" />
-            <FieldHint field="amount" />
-          </div>
-          <div>
-            <Label>ضريبة القيمة المضافة (%)</Label>
+          <NumberField label="المبلغ (ريال)" required value={form.amount} onChange={(v) => setField("amount", v)} placeholder="0.00" step={0.01} min={0} error={fieldErrors.amount} />
+          <FormFieldWrapper label="ضريبة القيمة المضافة (%)">
             <Select value={form.vatRate || "_none"} onValueChange={(v) => setField("vatRate", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">بدون ضريبة</SelectItem>
                 <SelectItem value="5">5%</SelectItem>
                 <SelectItem value="15">15%</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الإجمالي</Label>
-            <div className="mt-1 p-2 bg-muted rounded-md text-sm font-medium">
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الإجمالي">
+            <div className="p-2 bg-muted rounded-md text-sm font-medium">
               {vatAmount > 0
                 ? `${totalWithVat.toLocaleString("ar-SA")} ريال (ضريبة: ${vatAmount.toLocaleString("ar-SA")})`
                 : `${Number(form.amount || 0).toLocaleString("ar-SA")} ريال`}
             </div>
-          </div>
+          </FormFieldWrapper>
         </div>
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الحسابات</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>الحساب المقابل <span className="text-red-500">*</span></Label>
+          <FormFieldWrapper label="الحساب المقابل" required error={fieldErrors.accountCode}>
             <Select value={form.accountCode || "_none"} onValueChange={(v) => setField("accountCode", v === "_none" ? "" : v)}>
-              <SelectTrigger className={`mt-1 ${errCls("accountCode")}`}><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">{form.type === "receipt" ? "إيرادات (4000)" : "مصروفات (5000)"}</SelectItem>
                 {targetAccounts.map((a: any) => (
@@ -306,12 +292,10 @@ export default function VouchersCreate() {
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint field="accountCode" />
-          </div>
-          <div>
-            <Label>الخزنة / البنك</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الخزنة / البنك">
             <Select value={form.sourceAccountCode || "_none"} onValueChange={(v) => setField("sourceAccountCode", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">الخزنة النقدية (1100)</SelectItem>
                 {sourceAccounts.map((a: any) => (
@@ -319,22 +303,17 @@ export default function VouchersCreate() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الطرف الآخر والمرجع</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label>{form.type === "receipt" ? "اسم الدافع" : "اسم المستفيد"}</Label>
-            <Input className="mt-1" value={form.payee} onChange={(e) => setField("payee", e.target.value)}
-              placeholder="الاسم" />
-          </div>
-          <div>
-            <Label>نوع الجهة</Label>
+          <TextField label={form.type === "receipt" ? "اسم الدافع" : "اسم المستفيد"} value={form.payee} onChange={(v) => setField("payee", v)} placeholder="الاسم" />
+          <FormFieldWrapper label="نوع الجهة">
             <Select value={form.relatedEntityType || "_none"} onValueChange={(v) => setField("relatedEntityType", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">بدون ربط</SelectItem>
                 <SelectItem value="employee">موظف</SelectItem>
@@ -344,10 +323,9 @@ export default function VouchersCreate() {
                 <SelectItem value="property">عقار</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
           {form.relatedEntityType && (
-            <div>
-              <Label>الجهة المرتبطة</Label>
+            <FormFieldWrapper label="الجهة المرتبطة">
               <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
                 const val = v === "_none" ? "" : v;
                 let label = "";
@@ -371,7 +349,7 @@ export default function VouchersCreate() {
                 }
                 setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
               }}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="— اختر —" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="— اختر —" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">— اختر —</SelectItem>
                   {form.relatedEntityType === "employee" && (employeesData?.data || []).map((emp: any) => (
@@ -391,7 +369,7 @@ export default function VouchersCreate() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
           )}
           {form.relatedEntityType && form.relatedEntityId && (
             <div className="md:col-span-3">
@@ -401,46 +379,31 @@ export default function VouchersCreate() {
               {form.relatedEntityType === "property" && <PropertyUnitContextCard unitId={form.relatedEntityId} section="payment" />}
             </div>
           )}
-          <div>
-            <Label>رقم المرجع</Label>
-            <Input className="mt-1" value={form.reference} onChange={(e) => setField("reference", e.target.value)}
-              placeholder="رقم الفاتورة / العقد / الشيك" />
-          </div>
+          <TextField label="رقم المرجع" value={form.reference} onChange={(v) => setField("reference", v)} placeholder="رقم الفاتورة / العقد / الشيك" />
           {form.operationType === "invoice_payment" && (
-            <div>
-              <Label>رقم الفاتورة</Label>
-              <Input className="mt-1" type="number" value={form.invoiceId}
-                onChange={(e) => setField("invoiceId", e.target.value)} placeholder="رقم الفاتورة" />
-            </div>
+            <NumberField label="رقم الفاتورة" value={form.invoiceId} onChange={(v) => setField("invoiceId", v)} placeholder="رقم الفاتورة" />
           )}
           {form.operationType === "rent" && (
-            <div>
-              <Label>رقم العقد</Label>
-              <Input className="mt-1" type="number" value={form.contractId}
-                onChange={(e) => setField("contractId", e.target.value)} placeholder="رقم العقد" />
-            </div>
+            <NumberField label="رقم العقد" value={form.contractId} onChange={(v) => setField("contractId", v)} placeholder="رقم العقد" />
           )}
-          <div>
-            <Label>الفرع <span className="text-red-500">*</span></Label>
+          <FormFieldWrapper label="الفرع" required error={fieldErrors.branchId}>
             <Select value={form.branchId || "_none"} onValueChange={(v) => setField("branchId", v === "_none" ? "" : v)}>
-              <SelectTrigger className={`mt-1 ${errCls("branchId")}`}><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر الفرع</SelectItem>
                 {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <FieldHint field="branchId" />
-          </div>
-          <div>
-            <Label>القسم / الإدارة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="القسم / الإدارة">
             <Select value={form.departmentId || "_none"} onValueChange={(v) => setField("departmentId", v === "_none" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر القسم</SelectItem>
                 {departments.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
       </div>
 
@@ -475,15 +438,10 @@ export default function VouchersCreate() {
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>رابط المرفق</Label>
-            <Input className="mt-1" value={form.attachmentUrl} onChange={(e) => setField("attachmentUrl", e.target.value)}
-              placeholder="https://... أو مسار الملف" />
-          </div>
-          <div>
-            <Label>نوع المرفق</Label>
+          <TextField label="رابط المرفق" value={form.attachmentUrl} onChange={(v) => setField("attachmentUrl", v)} placeholder="https://... أو مسار الملف" />
+          <FormFieldWrapper label="نوع المرفق">
             <Select value={form.attachmentType} onValueChange={(v) => setField("attachmentType", v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="receipt">وصل استلام</SelectItem>
                 <SelectItem value="invoice">فاتورة</SelectItem>
@@ -494,7 +452,7 @@ export default function VouchersCreate() {
                 <SelectItem value="other">أخرى</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
       </div>
 

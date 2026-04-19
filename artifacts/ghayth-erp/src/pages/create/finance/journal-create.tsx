@@ -13,6 +13,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField } from "@/components/shared/form-field-wrapper";
 
 interface JournalLine {
   accountCode: string;
@@ -90,7 +91,7 @@ export default function JournalCreate() {
       toast({ title: "تم إضافة القيد بنجاح" });
       setLocation("/finance/journal");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القيد", description: err?.message });
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القيد", description: err?.fix ?? err?.message });
     }
   };
 
@@ -105,7 +106,7 @@ export default function JournalCreate() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم القيد" value={autoNumberRef.current} />
         <CreationDateField />
-        <div className="md:col-span-2"><Label>الوصف</Label><Input className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></div>
+        <TextField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} className="md:col-span-2" />
       </div>
 
       <Card className="mb-4">

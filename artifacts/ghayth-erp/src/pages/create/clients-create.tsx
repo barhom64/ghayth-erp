@@ -4,7 +4,6 @@ import { useApiMutation, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +11,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Globe } from "lucide-react";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "clients_create";
 const INITIAL = {
@@ -29,9 +29,6 @@ export default function ClientsCreate() {
   const [createPortalAccount, setCreatePortalAccount] = useState(false);
   const [portalPassword, setPortalPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
     setFieldErrors({});
@@ -81,22 +78,20 @@ export default function ClientsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="md:col-span-2"><Label>اسم العميل / الشركة <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /><FieldHint field="name" /></div>
-        <div>
-          <Label>نوع العميل</Label>
+        <TextField label="اسم العميل / الشركة" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} className="md:col-span-2" />
+        <FormFieldWrapper label="نوع العميل">
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="individual">فرد</SelectItem>
               <SelectItem value="company">شركة</SelectItem>
               <SelectItem value="government">جهة حكومية</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>التصنيف</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="التصنيف">
           <Select value={form.classification || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, classification: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">بدون تصنيف</SelectItem>
               <SelectItem value="vip">كبار العملاء</SelectItem>
@@ -105,24 +100,22 @@ export default function ClientsCreate() {
               <SelectItem value="inactive">غير نشط</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>رقم الجوال</Label><Input className={`mt-1 ${errCls("phone")}`} dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="05xxxxxxxx" /><FieldHint field="phone" /></div>
-        <div><Label>البريد الإلكتروني</Label><Input className={`mt-1 ${errCls("email")}`} type="email" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /><FieldHint field="email" /></div>
-        <div><Label>الجنسية</Label><Input className="mt-1" value={form.nationality} onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))} placeholder="سعودي" /></div>
-        <div>
-          <Label>اللغة المفضلة</Label>
+        </FormFieldWrapper>
+        <TextField label="رقم الجوال" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} placeholder="05xxxxxxxx" error={fieldErrors.phone} />
+        <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} error={fieldErrors.email} />
+        <TextField label="الجنسية" value={form.nationality} onChange={(v) => setForm((f) => ({ ...f, nationality: v }))} placeholder="سعودي" />
+        <FormFieldWrapper label="اللغة المفضلة">
           <Select value={form.language} onValueChange={(v) => setForm((f) => ({ ...f, language: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ar">العربية</SelectItem>
               <SelectItem value="en">الإنجليزية</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div className="md:col-span-2">
-          <Label>مصدر العميل</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="مصدر العميل" className="md:col-span-2">
           <Select value={form.source || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, source: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر المصدر</SelectItem>
               <SelectItem value="website">الموقع الإلكتروني</SelectItem>
@@ -133,8 +126,8 @@ export default function ClientsCreate() {
               <SelectItem value="other">أخرى</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div className="md:col-span-2"><Label>ملاحظات</Label><Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية..." /></div>
+        </FormFieldWrapper>
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." className="md:col-span-2" />
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات العميل" />
 
@@ -153,17 +146,14 @@ export default function ClientsCreate() {
         {createPortalAccount && (
           <div className="mt-3 space-y-2">
             <p className="text-xs text-muted-foreground">سيتم إنشاء حساب بوابة للعميل باستخدام بريده الإلكتروني أعلاه. سيُطلب منه تغيير كلمة المرور عند أول دخول.</p>
-            <div>
-              <Label>كلمة المرور المؤقتة <span className="text-red-500">*</span></Label>
-              <Input
-                className={`mt-1 ${errCls("portalPassword")}`}
-                type="text"
-                value={portalPassword}
-                onChange={(e) => setPortalPassword(e.target.value)}
-                placeholder="6 أحرف على الأقل"
-              />
-              <FieldHint field="portalPassword" />
-            </div>
+            <TextField
+              label="كلمة المرور المؤقتة"
+              required
+              value={portalPassword}
+              onChange={setPortalPassword}
+              placeholder="6 أحرف على الأقل"
+              error={fieldErrors.portalPassword}
+            />
             {!form.email && (
               <p className="text-xs text-amber-600">يرجى إدخال البريد الإلكتروني للعميل في الحقل أعلاه</p>
             )}

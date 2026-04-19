@@ -3,15 +3,12 @@ import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { MapPin, Clock, LogIn, LogOut, CheckCircle, Loader2 } from "lucide-react";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 type ActivityType = "check_in" | "check_out";
 
@@ -136,15 +133,9 @@ export default function AttendanceCreate() {
             الموقع الجغرافي
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div>
-              <Label>خط العرض</Label>
-              <Input className="mt-1 font-mono text-sm" type="number" step="any" value={form.lat} onChange={(e) => setForm((f) => ({ ...f, lat: e.target.value }))} placeholder="24.713600" />
-            </div>
-            <div>
-              <Label>خط الطول</Label>
-              <Input className="mt-1 font-mono text-sm" type="number" step="any" value={form.lon} onChange={(e) => setForm((f) => ({ ...f, lon: e.target.value }))} placeholder="46.675300" />
-            </div>
-            <div>
+            <NumberField label="خط العرض" value={form.lat} onChange={(v) => setForm((f) => ({ ...f, lat: v }))} step={0.000001} placeholder="24.713600" className="[&_input]:font-mono" />
+            <NumberField label="خط الطول" value={form.lon} onChange={(v) => setForm((f) => ({ ...f, lon: v }))} step={0.000001} placeholder="46.675300" className="[&_input]:font-mono" />
+            <FormFieldWrapper label="&nbsp;">
               <Button type="button" variant="outline" onClick={handleGetLocation} disabled={locationLoading} className="w-full">
                 {locationLoading ? (
                   <><Loader2 className="w-4 h-4 me-2 animate-spin" />جاري التحديد...</>
@@ -154,7 +145,7 @@ export default function AttendanceCreate() {
                   <><MapPin className="w-4 h-4 me-2" />تحديد الموقع تلقائياً</>
                 )}
               </Button>
-            </div>
+            </FormFieldWrapper>
           </div>
           {locationStatus === "success" && form.lat && form.lon && (
             <div className="mt-2 flex items-center gap-2">
@@ -166,10 +157,13 @@ export default function AttendanceCreate() {
           )}
         </div>
 
-        <div>
-          <Label>ملاحظات</Label>
-          <Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية (سبب التأخير، مهمة خارجية، إلخ)..." rows={3} />
-        </div>
+        <TextAreaField
+          label="ملاحظات"
+          value={form.notes}
+          onChange={(v) => setForm((f) => ({ ...f, notes: v }))}
+          placeholder="ملاحظات إضافية (سبب التأخير، مهمة خارجية، إلخ)..."
+          rows={3}
+        />
       </div>
 
       <div className="flex justify-end gap-3 pt-6">

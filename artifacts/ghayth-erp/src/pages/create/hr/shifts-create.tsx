@@ -11,8 +11,9 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { Clock, Sun, Moon, Coffee, AlertCircle } from "lucide-react";
+import { Sun, Moon, Coffee, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 // Keys are the numeric Day.getDay() values (0=Sun .. 6=Sat) because
 // the backend parses shift.days with `split(",").map(Number)` at
@@ -122,38 +123,23 @@ export default function ShiftsCreate() {
             معلومات الوردية
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>اسم الوردية <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="وردية صباحية" />
-            </div>
-            <div>
-              <Label>وقت البدء <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
-            </div>
-            <div>
-              <Label>وقت الانتهاء <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" type="time" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} />
-            </div>
+            <TextField label="اسم الوردية" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="وردية صباحية" />
+            <FormFieldWrapper label="وقت البدء" required>
+              <Input type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="وقت الانتهاء" required>
+              <Input type="time" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} />
+            </FormFieldWrapper>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label className="flex items-center gap-1"><Coffee className="w-3.5 h-3.5" /> مدة الاستراحة (دقيقة)</Label>
-            <Input className="mt-1" type="number" min="0" max="120" value={form.breakMinutes} onChange={(e) => setForm((f) => ({ ...f, breakMinutes: Number(e.target.value) }))} />
-          </div>
-          <div>
-            <Label className="flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> فترة السماح (دقيقة)</Label>
-            <Input className="mt-1" type="number" min="0" max="60" value={form.gracePeriod} onChange={(e) => setForm((f) => ({ ...f, gracePeriod: Number(e.target.value) }))} />
-            <p className="text-xs text-muted-foreground mt-1">الوقت المسموح به للتأخر قبل احتساب مخالفة</p>
-          </div>
+          <NumberField label="مدة الاستراحة (دقيقة)" value={form.breakMinutes} onChange={(v) => setForm((f) => ({ ...f, breakMinutes: Number(v) || 0 }))} min={0} max={120} />
+          <NumberField label="فترة السماح (دقيقة)" value={form.gracePeriod} onChange={(v) => setForm((f) => ({ ...f, gracePeriod: Number(v) || 0 }))} min={0} max={60} hint="الوقت المسموح به للتأخر قبل احتساب مخالفة" />
           {branches.length > 0 && (
-            <div>
-              <Label>الفرع</Label>
+            <FormFieldWrapper label="الفرع">
               <Select value={form.branchId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "_none" ? "" : v }))}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="جميع الفروع" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">جميع الفروع</SelectItem>
                   {branches.map((b: any) => (
@@ -161,7 +147,7 @@ export default function ShiftsCreate() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
           )}
         </div>
 

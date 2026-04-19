@@ -3,11 +3,8 @@ import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
@@ -18,6 +15,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { Calendar, Info, Clock, User } from "lucide-react";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_leaves_create";
 
@@ -56,9 +54,6 @@ export default function LeavesCreate() {
 
   if (leaveTypesQ.isLoading || loadingEmp) return <LoadingSpinner />;
   if (leaveTypesQ.isError || errorEmp) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const selectedType = leaveTypes.find((lt: any) => String(lt.id) === form.leaveTypeId);
 
@@ -144,12 +139,9 @@ export default function LeavesCreate() {
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-3">تفاصيل الإجازة</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>نوع الإجازة <span className="text-red-500">*</span></Label>
+            <FormFieldWrapper label="نوع الإجازة" required error={fieldErrors.leaveTypeId}>
               <Select value={form.leaveTypeId} onValueChange={(v) => setForm((f) => ({ ...f, leaveTypeId: v }))}>
-                <SelectTrigger className={`mt-1 ${errCls("leaveTypeId")}`}>
-                  <SelectValue placeholder="اختر النوع" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر النوع" /></SelectTrigger>
                 <SelectContent>
                   {leaveTypes.length > 0 ? leaveTypes.map((lt: any) => (
                     <SelectItem key={lt.id} value={String(lt.id)}>{lt.name}</SelectItem>
@@ -164,22 +156,14 @@ export default function LeavesCreate() {
                   )}
                 </SelectContent>
               </Select>
-              <FieldHint field="leaveTypeId" />
-            </div>
-            <div>
-              <Label>السبب</Label>
-              <Textarea className="mt-1" value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} placeholder="سبب طلب الإجازة..." />
-            </div>
-            <div>
-              <Label>من تاريخ <span className="text-red-500">*</span></Label>
-              <div className={`mt-1 ${errCls("startDate")}`}><DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></div>
-              <FieldHint field="startDate" />
-            </div>
-            <div>
-              <Label>إلى تاريخ <span className="text-red-500">*</span></Label>
-              <div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></div>
-              <FieldHint field="endDate" />
-            </div>
+            </FormFieldWrapper>
+            <TextAreaField label="السبب" value={form.reason} onChange={(v) => setForm((f) => ({ ...f, reason: v }))} placeholder="سبب طلب الإجازة..." />
+            <FormFieldWrapper label="من تاريخ" required error={fieldErrors.startDate}>
+              <DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="إلى تاريخ" required error={fieldErrors.endDate}>
+              <DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} />
+            </FormFieldWrapper>
           </div>
         </div>
 
@@ -207,23 +191,16 @@ export default function LeavesCreate() {
             معلومات إضافية
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>المكلّف بالعمل أثناء الإجازة</Label>
+            <FormFieldWrapper label="المكلّف بالعمل أثناء الإجازة" hint="من سيتولى المهام أثناء غيابك">
               <Autocomplete
-                className="mt-1"
                 value={form.reliefOfficer}
                 onChange={(v) => setForm((f) => ({ ...f, reliefOfficer: String(v) }))}
                 options={employees.map((e: any) => ({ value: String(e.id), label: e.name, subtitle: e.jobTitle || e.departmentName || "" }))}
                 placeholder="ابحث عن الزميل المكلّف..."
                 emptyMessage="لا يوجد موظفين"
               />
-              <p className="text-xs text-muted-foreground mt-1">من سيتولى المهام أثناء غيابك</p>
-            </div>
-            <div>
-              <Label>رقم التواصل أثناء الإجازة</Label>
-              <Input className="mt-1" value={form.contactDuringLeave} onChange={(e) => setForm((f) => ({ ...f, contactDuringLeave: e.target.value }))} placeholder="05xxxxxxxx" dir="ltr" />
-              <p className="text-xs text-muted-foreground mt-1">للتواصل في حالات الطوارئ</p>
-            </div>
+            </FormFieldWrapper>
+            <TextField label="رقم التواصل أثناء الإجازة" dir="ltr" value={form.contactDuringLeave} onChange={(v) => setForm((f) => ({ ...f, contactDuringLeave: v }))} placeholder="05xxxxxxxx" hint="للتواصل في حالات الطوارئ" />
           </div>
         </div>
       </div>
