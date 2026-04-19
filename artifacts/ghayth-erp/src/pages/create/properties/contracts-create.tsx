@@ -4,7 +4,6 @@ import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -20,6 +19,7 @@ import { Users2, FileText, Calendar, Banknote, Shield, ScrollText, Zap } from "l
 import { formatCurrency } from "@/lib/formatters";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
+import { fieldErrorClass } from "@/components/shared/form-field-wrapper";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
@@ -36,8 +36,7 @@ export default function ContractsCreate() {
   useUnsavedChanges(isDirty);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const errCls = (field: string) => fieldErrorClass(fieldErrors[field]);
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const [form, setForm] = useState({
@@ -209,7 +208,8 @@ export default function ContractsCreate() {
       toast({ title: "تم إنشاء العقد بنجاح" });
       setLocation("/properties/contracts");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء العقد", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء العقد", description: err?.fix ?? err?.message });
     }
   };
 

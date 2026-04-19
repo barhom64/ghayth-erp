@@ -14,6 +14,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
+import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -84,8 +85,6 @@ export default function InvoicesCreate() {
   const [copied, setCopied] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   useEffect(() => {
     if (copySource && !copied) {
@@ -168,7 +167,8 @@ export default function InvoicesCreate() {
       clearDraft();
       setLocation("/finance/invoices");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الفاتورة", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الفاتورة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -184,64 +184,54 @@ export default function InvoicesCreate() {
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم الفاتورة" value={autoNumberRef.current} />
-        <div>
-          <Label>التاريخ <span className="text-red-500">*</span></Label>
-          <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} /></div>
-        </div>
+        <FormFieldWrapper label="التاريخ" required>
+          <DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+        </FormFieldWrapper>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div>
-          <Label>العميل <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="العميل" required error={fieldErrors.clientId}>
           <Autocomplete
             options={clientOptions}
             value={form.clientId}
             onChange={(val) => setForm(prev => ({ ...prev, clientId: String(val) }))}
             placeholder="ابحث عن عميل..."
             loading={clientsLoading}
-            className={`mt-1 ${errCls("clientId")}`}
+            className={fieldErrorClass(fieldErrors.clientId)}
           />
-          <FieldHint field="clientId" />
           {form.clientId && (
             <div className="mt-3">
               <ClientContextCard clientId={form.clientId} section="invoice" />
             </div>
           )}
-        </div>
-        <div>
-          <Label>الفرع <span className="text-red-500">*</span></Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفرع" required>
           <Select value={form.branchId || "_none"} onValueChange={(v) => setForm(prev => ({ ...prev, branchId: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر الفرع</SelectItem>
               {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>نسبة الضريبة %</Label>
-          <Input className="mt-1" type="number" value={form.vatRate} onChange={(e) => setForm({ ...form, vatRate: e.target.value })} />
-        </div>
-        <div>
-          <Label>شروط الدفع <span className="text-red-500">*</span></Label>
+        </FormFieldWrapper>
+        <NumberField label="نسبة الضريبة %" value={form.vatRate} onChange={(v) => setForm({ ...form, vatRate: v })} min={0} max={100} step={0.01} />
+        <FormFieldWrapper label="شروط الدفع" required>
           <Select value={form.paymentTermsDays || "_none"} onValueChange={(v) => setForm(prev => ({ ...prev, paymentTermsDays: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {PAYMENT_TERMS_OPTIONS.map(t => <SelectItem key={t.value || "_none"} value={t.value || "_none"}>{t.label}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>تاريخ الاستحقاق {!form.paymentTermsDays && <span className="text-red-500">*</span>}</Label>
-          <div className={`mt-1 ${errCls("dueDate")}`}><DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} /></div>
-          <FieldHint field="dueDate" />
-        </div>
-        <div className="md:col-span-3"><Label>الوصف</Label><Input className="mt-1" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-        <div className="md:col-span-3"><Label>ملاحظات إضافية</Label><Input className="mt-1" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="ملاحظات أو تعليمات للعميل" /></div>
+        </FormFieldWrapper>
+        <FormFieldWrapper label={`تاريخ الاستحقاق ${!form.paymentTermsDays ? "*" : ""}`} error={fieldErrors.dueDate}>
+          <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
+        </FormFieldWrapper>
+        <TextField label="الوصف" value={form.description} onChange={(v) => setForm({ ...form, description: v })} className="md:col-span-3" />
+        <TextField label="ملاحظات إضافية" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} placeholder="ملاحظات أو تعليمات للعميل" className="md:col-span-3" />
       </div>
 
       <div className="mb-4">
         <Label className="text-base font-semibold">البنود</Label>
-        <FieldHint field="lines" />
+        {fieldErrors.lines && <p className="text-xs text-red-600 mt-1">{fieldErrors.lines}</p>}
         {lines.map((line, idx) => (
           <div key={idx} className="grid grid-cols-4 gap-2 mt-2 items-end">
             <div><Label className="text-xs">الوصف</Label><Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} /></div>
@@ -253,12 +243,12 @@ export default function InvoicesCreate() {
         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addLine}>+ إضافة بند</Button>
       </div>
 
-      <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${errCls("totalAmount")}`}>
+      <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${fieldErrorClass(fieldErrors.totalAmount)}`}>
         <div className="flex justify-between"><span>المجموع الفرعي:</span><span>{subtotal.toFixed(2)}</span></div>
         <div className="flex justify-between"><span>الضريبة ({form.vatRate}%):</span><span>{vatAmount.toFixed(2)}</span></div>
         <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{total.toFixed(2)}</span></div>
       </div>
-      <FieldHint field="totalAmount" />
+      {fieldErrors.totalAmount && <p className="text-xs text-red-600 mt-1">{fieldErrors.totalAmount}</p>}
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
 

@@ -16,6 +16,7 @@ import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, 
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useAppContext } from "@/contexts/app-context";
+import { fieldErrorClass } from "@/components/shared/form-field-wrapper";
 
 const OPERATIONS = [
   { key: "employee", label: "إنشاء سجل الموظف", icon: User },
@@ -77,7 +78,7 @@ export default function EmployeesCreate() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const errCls = (field: string) => fieldErrorClass(fieldErrors[field]);
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
