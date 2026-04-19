@@ -2,10 +2,7 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -14,9 +11,9 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { formatCurrency } from "@/lib/formatters";
 import { EXIT_TYPES } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
-import { LogOut, User, Calendar, Info, DollarSign, AlertTriangle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { LogOut, Info, DollarSign, AlertTriangle } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_exit_create";
 
@@ -43,9 +40,6 @@ export default function ExitCreate() {
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
   if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
@@ -103,7 +97,9 @@ export default function ExitCreate() {
       });
       clearDraft();
       setLocation("/hr/exit");
-    } catch {}
+    } catch (err: any) {
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+    }
   };
 
   return (
@@ -128,18 +124,9 @@ export default function ExitCreate() {
 
         {/* بيانات الموظف */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <User className="h-4 w-4 text-gray-500" />
-              الموظف <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={form.assignmentId}
-              onValueChange={(v) => setForm({ ...form, assignmentId: v })}
-            >
-              <SelectTrigger className={errCls("assignmentId")}>
-                <SelectValue placeholder="اختر الموظف..." />
-              </SelectTrigger>
+          <FormFieldWrapper label="الموظف" required error={fieldErrors.assignmentId}>
+            <Select value={form.assignmentId} onValueChange={(v) => setForm({ ...form, assignmentId: v })}>
+              <SelectTrigger><SelectValue placeholder="اختر الموظف..." /></SelectTrigger>
               <SelectContent>
                 {employees.map((emp: any) => (
                   <SelectItem
@@ -151,56 +138,32 @@ export default function ExitCreate() {
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint field="assignmentId" />
-          </div>
+          </FormFieldWrapper>
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <LogOut className="h-4 w-4 text-gray-500" />
-              نوع نهاية الخدمة <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={form.exitType}
-              onValueChange={(v) => setForm({ ...form, exitType: v })}
-            >
-              <SelectTrigger className={errCls("exitType")}>
-                <SelectValue />
-              </SelectTrigger>
+          <FormFieldWrapper label="نوع نهاية الخدمة" required error={fieldErrors.exitType}>
+            <Select value={form.exitType} onValueChange={(v) => setForm({ ...form, exitType: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(EXIT_TYPES).map(([k, v]) => (
                   <SelectItem key={k} value={k}>{v}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint field="exitType" />
-          </div>
+          </FormFieldWrapper>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              آخر يوم عمل <span className="text-red-500">*</span>
-            </Label>
-            <div className={errCls("lastWorkingDay")}>
-              <DatePicker
-                value={form.lastWorkingDay}
-                onChange={(v) => setForm({ ...form, lastWorkingDay: v })}
-              />
-            </div>
-            <FieldHint field="lastWorkingDay" />
-          </div>
+          <FormFieldWrapper label="آخر يوم عمل" required error={fieldErrors.lastWorkingDay}>
+            <DatePicker value={form.lastWorkingDay} onChange={(v) => setForm({ ...form, lastWorkingDay: v })} />
+          </FormFieldWrapper>
 
-          <div className="space-y-2">
-            <Label>خصومات أخرى</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.otherDeductions}
-              onChange={(e) => setForm({ ...form, otherDeductions: e.target.value })}
-            />
-          </div>
+          <NumberField
+            label="خصومات أخرى"
+            value={form.otherDeductions}
+            onChange={(v) => setForm({ ...form, otherDeductions: v })}
+            step={0.01}
+            min={0}
+          />
         </div>
 
         {/* سياق الموظف: سلف نشطة + مخالفات + إجازات مستحقة */}
@@ -250,15 +213,13 @@ export default function ExitCreate() {
         )}
 
         {/* السبب */}
-        <div className="space-y-2">
-          <Label>سبب نهاية الخدمة</Label>
-          <Textarea
-            rows={3}
-            placeholder="سبب طلب إنهاء الخدمة..."
-            value={form.exitReason}
-            onChange={(e) => setForm({ ...form, exitReason: e.target.value })}
-          />
-        </div>
+        <TextAreaField
+          label="سبب نهاية الخدمة"
+          rows={3}
+          placeholder="سبب طلب إنهاء الخدمة..."
+          value={form.exitReason}
+          onChange={(v) => setForm({ ...form, exitReason: v })}
+        />
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">

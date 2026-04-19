@@ -4,13 +4,13 @@ import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "fleet_fuel_create";
 const INITIAL = {
@@ -28,17 +28,19 @@ export default function FuelCreate() {
   const drivers = driversData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    if (!form.vehicleId) {
-      toast({ variant: "destructive", title: "يرجى اختيار المركبة" });
-      return;
-    }
-    if (!form.liters) {
-      toast({ variant: "destructive", title: "كمية الوقود مطلوبة" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.vehicleId) localErrors.vehicleId = "يرجى اختيار المركبة";
+    if (!form.liters || Number(form.liters) <= 0) localErrors.liters = "كمية الوقود يجب أن تكون أكبر من صفر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     try {
@@ -55,7 +57,8 @@ export default function FuelCreate() {
       toast({ title: "تم تسجيل التعبئة بنجاح" });
       setLocation("/fleet/fuel");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل التعبئة", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل التعبئة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -73,12 +76,9 @@ export default function FuelCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-3">
-          <Label>المركبة <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="المركبة" required error={fieldErrors.vehicleId} className="md:col-span-3">
           <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر المركبة" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
             <SelectContent>
               {vehicles.map((v: any) => (
                 <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
@@ -90,13 +90,10 @@ export default function FuelCreate() {
               <VehicleContextCard vehicleId={form.vehicleId} section="fuel" />
             </div>
           )}
-        </div>
-        <div>
-          <Label>السائق</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="السائق">
           <Select value={form.driverId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, driverId: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="— اختياري —" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— اختياري —</SelectItem>
               {drivers.map((d: any) => (
@@ -104,15 +101,19 @@ export default function FuelCreate() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>اللترات <span className="text-red-500">*</span></Label><Input className="mt-1" type="number" value={form.liters} onChange={(e) => setForm((f) => ({ ...f, liters: e.target.value }))} /></div>
-        <div><Label>سعر اللتر</Label><Input className="mt-1" type="number" step="0.01" value={form.costPerLiter} onChange={(e) => setForm((f) => ({ ...f, costPerLiter: e.target.value }))} /></div>
+        </FormFieldWrapper>
+        <NumberField label="اللترات" required value={form.liters} onChange={(v) => setForm((f) => ({ ...f, liters: v }))} step={0.01} min={0} error={fieldErrors.liters} />
+        <NumberField label="سعر اللتر" value={form.costPerLiter} onChange={(v) => setForm((f) => ({ ...f, costPerLiter: v }))} step={0.01} min={0} />
         {totalCost > 0 && (
-          <div><Label>الإجمالي</Label><Input className="mt-1 bg-gray-50 font-bold" value={totalCost.toFixed(2)} readOnly /></div>
+          <FormFieldWrapper label="الإجمالي">
+            <Input className="bg-gray-50 font-bold" value={totalCost.toFixed(2)} readOnly />
+          </FormFieldWrapper>
         )}
-        <div><Label>قراءة العداد (كم)</Label><Input className="mt-1" type="number" value={form.mileageAtFuel} onChange={(e) => setForm((f) => ({ ...f, mileageAtFuel: e.target.value }))} /></div>
-        <div><Label>المحطة</Label><Input className="mt-1" value={form.stationName} onChange={(e) => setForm((f) => ({ ...f, stationName: e.target.value }))} /></div>
-        <div><Label>التاريخ</Label><div className="mt-1"><DatePicker value={form.fuelDate} onChange={(v) => setForm((f) => ({ ...f, fuelDate: v }))} /></div></div>
+        <NumberField label="قراءة العداد (كم)" value={form.mileageAtFuel} onChange={(v) => setForm((f) => ({ ...f, mileageAtFuel: v }))} min={0} />
+        <TextField label="المحطة" value={form.stationName} onChange={(v) => setForm((f) => ({ ...f, stationName: v }))} />
+        <FormFieldWrapper label="التاريخ">
+          <DatePicker value={form.fuelDate} onChange={(v) => setForm((f) => ({ ...f, fuelDate: v }))} />
+        </FormFieldWrapper>
       </div>
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/fleet/fuel")}>إلغاء</Button>

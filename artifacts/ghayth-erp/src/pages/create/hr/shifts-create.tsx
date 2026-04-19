@@ -150,12 +150,12 @@ export default function ShiftsCreate() {
           {branches.length > 0 && (
             <div>
               <Label>الفرع</Label>
-              <Select value={form.branchId} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v }))}>
+              <Select value={form.branchId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "_none" ? "" : v }))}>
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">جميع الفروع</SelectItem>
+                  <SelectItem value="_none">جميع الفروع</SelectItem>
                   {branches.map((b: any) => (
                     <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
                   ))}

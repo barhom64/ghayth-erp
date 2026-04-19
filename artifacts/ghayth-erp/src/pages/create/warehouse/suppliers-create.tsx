@@ -1,12 +1,12 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "warehouse_suppliers_create";
 const INITIAL = { name: "", contactPerson: "", phone: "", email: "", address: "", taxNumber: "", paymentTerms: "" };
@@ -16,10 +16,17 @@ export default function SuppliersCreate() {
   const { toast } = useToast();
   const addSupplier = useApiMutation("/warehouse/suppliers", "POST", [["warehouse-suppliers"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم المورد" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "يرجى إدخال اسم المورد";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
+    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الهاتف يجب أن يكون 9 أرقام على الأقل";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     try {
@@ -28,7 +35,8 @@ export default function SuppliersCreate() {
       toast({ title: "تمت إضافة المورد بنجاح" });
       setLocation("/warehouse");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المورد", description: err.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المورد", description: err?.fix ?? err?.message });
     }
   };
 
@@ -45,16 +53,15 @@ export default function SuppliersCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اسم المورد <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم المورد" /></div>
-          <div><Label>جهة الاتصال</Label><Input className="mt-1" value={form.contactPerson} onChange={(e) => setForm((f) => ({ ...f, contactPerson: e.target.value }))} placeholder="جهة الاتصال" /></div>
-          <div><Label>الهاتف</Label><Input className="mt-1" dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="05xxxxxxxx" /></div>
-          <div><Label>البريد الإلكتروني</Label><Input className="mt-1" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="email@example.com" /></div>
-          <div><Label>العنوان</Label><Input className="mt-1" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="المدينة، الحي..." /></div>
-          <div><Label>الرقم الضريبي</Label><Input className="mt-1" dir="ltr" value={form.taxNumber} onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))} placeholder="الرقم الضريبي" /></div>
-          <div>
-            <Label>شروط الدفع</Label>
+          <TextField label="اسم المورد" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم المورد" error={fieldErrors.name} />
+          <TextField label="جهة الاتصال" value={form.contactPerson} onChange={(v) => setForm((f) => ({ ...f, contactPerson: v }))} placeholder="جهة الاتصال" />
+          <TextField label="الهاتف" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} placeholder="05xxxxxxxx" error={fieldErrors.phone} />
+          <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} placeholder="email@example.com" error={fieldErrors.email} />
+          <TextField label="العنوان" value={form.address} onChange={(v) => setForm((f) => ({ ...f, address: v }))} placeholder="المدينة، الحي..." />
+          <TextField label="الرقم الضريبي" dir="ltr" value={form.taxNumber} onChange={(v) => setForm((f) => ({ ...f, taxNumber: v }))} placeholder="الرقم الضريبي" />
+          <FormFieldWrapper label="شروط الدفع">
             <Select value={form.paymentTerms || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, paymentTerms: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الشروط" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر الشروط" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر الشروط</SelectItem>
                 <SelectItem value="cash">نقدي</SelectItem>
@@ -64,7 +71,7 @@ export default function SuppliersCreate() {
                 <SelectItem value="net_90">صافي 90 يوم</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>

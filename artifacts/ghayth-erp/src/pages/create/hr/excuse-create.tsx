@@ -3,8 +3,6 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
@@ -12,8 +10,8 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { Autocomplete } from "@/components/ui/autocomplete";
-import { Clock, LogOut, UserCheck } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_excuse_create";
 
@@ -24,8 +22,7 @@ export default function ExcuseCreate() {
   const createMut = useApiMutation("/hr/excuse-requests", "POST", [["excuse-requests"]], {
     successMessage: "تم تقديم طلب الاستئذان بنجاح",
   });
-  const { data: empData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-  const employees = empData?.data || [];
+  const { isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
     excuseDate: "",
@@ -40,9 +37,18 @@ export default function ExcuseCreate() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const handleSubmit = () => {
+    setFieldErrors({});
     if (!form.excuseDate) {
+      setFieldErrors({ excuseDate: "تاريخ الاستئذان مطلوب" });
       toast({ variant: "destructive", title: "تاريخ الاستئذان مطلوب" });
+      return;
+    }
+    if (form.startTime && form.endTime && form.endTime <= form.startTime) {
+      setFieldErrors({ endTime: "وقت الانتهاء يجب أن يكون بعد وقت البدء" });
+      toast({ variant: "destructive", title: "وقت الانتهاء يجب أن يكون بعد وقت البدء" });
       return;
     }
     createMut.mutate(
@@ -59,6 +65,9 @@ export default function ExcuseCreate() {
         onSuccess: () => {
           clearDraft();
           setLocation("/hr/excuse-requests");
+        },
+        onError: (err: any) => {
+          if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
         },
       },
     );
@@ -85,40 +94,30 @@ export default function ExcuseCreate() {
             تفاصيل الاستئذان
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>تاريخ الاستئذان <span className="text-red-500">*</span></Label>
-              <div className="mt-1"><DatePicker value={form.excuseDate} onChange={(v) => setForm((f) => ({ ...f, excuseDate: v }))} /></div>
-            </div>
-            <div>
-              <Label>نوع الاستئذان</Label>
+            <FormFieldWrapper label="تاريخ الاستئذان" required error={fieldErrors.excuseDate}>
+              <DatePicker value={form.excuseDate} onChange={(v) => setForm((f) => ({ ...f, excuseDate: v }))} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="نوع الاستئذان">
               <Select value={form.excuseType} onValueChange={(v) => setForm((f) => ({ ...f, excuseType: v }))}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="early_leave">خروج مبكر</SelectItem>
                   <SelectItem value="late_arrival">تأخر عن الحضور</SelectItem>
                   <SelectItem value="personal">استئذان شخصي</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>وقت البدء</Label>
-              <Input className="mt-1" type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} dir="ltr" />
-            </div>
-            <div>
-              <Label>وقت الانتهاء</Label>
-              <Input className="mt-1" type="time" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} dir="ltr" />
-            </div>
-            <div>
-              <Label>المدة التقديرية (دقائق)</Label>
-              <Input className="mt-1" type="number" value={form.estimatedMinutes} onChange={(e) => setForm((f) => ({ ...f, estimatedMinutes: e.target.value }))} placeholder="60" />
-            </div>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="وقت البدء">
+              <Input type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} dir="ltr" />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="وقت الانتهاء" error={fieldErrors.endTime}>
+              <Input type="time" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} dir="ltr" />
+            </FormFieldWrapper>
+            <NumberField label="المدة التقديرية (دقائق)" value={form.estimatedMinutes} onChange={(v) => setForm((f) => ({ ...f, estimatedMinutes: v }))} placeholder="60" min={0} />
           </div>
         </div>
 
-        <div>
-          <Label>السبب</Label>
-          <Textarea className="mt-1" value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} placeholder="سبب طلب الاستئذان..." />
-        </div>
+        <TextAreaField label="السبب" value={form.reason} onChange={(v) => setForm((f) => ({ ...f, reason: v }))} placeholder="سبب طلب الاستئذان..." />
       </div>
 
       <div className="flex justify-end gap-3 pt-6">

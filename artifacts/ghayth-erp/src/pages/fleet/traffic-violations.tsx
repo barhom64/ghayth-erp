@@ -96,10 +96,10 @@ export default function TrafficViolationsPage() {
             </div>
             <div>
               <Label>السائق</Label>
-              <Select value={form.driverId} onValueChange={(v) => setForm({ ...form, driverId: v })}>
+              <Select value={form.driverId || "_none"} onValueChange={(v) => setForm({ ...form, driverId: v === "_none" ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="اختر سائقاً" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="_none">—</SelectItem>
                   {driverList.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>

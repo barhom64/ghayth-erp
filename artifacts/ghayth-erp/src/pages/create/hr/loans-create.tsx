@@ -1,29 +1,24 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { formatCurrency } from "@/lib/formatters";
 import { LOAN_TYPES } from "@/lib/hr-type-maps";
-import { Banknote, Info, User, Calculator, Calendar, AlertTriangle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Banknote, Info, Calculator, AlertTriangle } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_loans_create";
 
 export default function LoansCreate() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
   const { toast } = useToast();
 
   const createMut = useApiMutation("/hr/loans", "POST", [["hr-loans"]], {
@@ -46,9 +41,6 @@ export default function LoansCreate() {
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
   if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
@@ -91,7 +83,9 @@ export default function LoansCreate() {
       });
       clearDraft();
       setLocation("/hr/loans");
-    } catch {}
+    } catch (err: any) {
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+    }
   };
 
   // حساب فترة بدء الخصم الافتراضية
@@ -124,18 +118,9 @@ export default function LoansCreate() {
 
         {/* بيانات الموظف */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <User className="h-4 w-4 text-gray-500" />
-              الموظف <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={form.assignmentId}
-              onValueChange={(v) => setForm({ ...form, assignmentId: v })}
-            >
-              <SelectTrigger className={errCls("assignmentId")}>
-                <SelectValue placeholder="اختر الموظف..." />
-              </SelectTrigger>
+          <FormFieldWrapper label="الموظف" required error={fieldErrors.assignmentId}>
+            <Select value={form.assignmentId} onValueChange={(v) => setForm({ ...form, assignmentId: v })}>
+              <SelectTrigger><SelectValue placeholder="اختر الموظف..." /></SelectTrigger>
               <SelectContent>
                 {employees.map((emp: any) => (
                   <SelectItem
@@ -147,28 +132,18 @@ export default function LoansCreate() {
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint field="assignmentId" />
-          </div>
+          </FormFieldWrapper>
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Banknote className="h-4 w-4 text-gray-500" />
-              نوع السلفة
-            </Label>
-            <Select
-              value={form.loanType}
-              onValueChange={(v) => setForm({ ...form, loanType: v })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+          <FormFieldWrapper label="نوع السلفة">
+            <Select value={form.loanType} onValueChange={(v) => setForm({ ...form, loanType: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(LOAN_TYPES).map(([k, v]) => (
                   <SelectItem key={k} value={k}>{v}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
 
         {/* سياق الموظف: سلف سابقة + خصم شهري + قدرة استيعاب */}
@@ -181,54 +156,40 @@ export default function LoansCreate() {
 
         {/* مبلغ السلفة والأقساط */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Calculator className="h-4 w-4 text-gray-500" />
-              مبلغ السلفة <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              type="number"
-              min="1"
-              step="0.01"
-              placeholder="0.00"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              className={cn(exceedsMax && "border-red-300 focus:ring-red-300", errCls("amount"))}
-            />
-            <FieldHint field="amount" />
-            {exceedsMax && (
-              <p className="text-xs text-red-600 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                يتجاوز الحد الأقصى ({formatCurrency(maxLoan)})
-              </p>
-            )}
-          </div>
+          <NumberField
+            label="مبلغ السلفة"
+            required
+            value={form.amount}
+            onChange={(v) => setForm({ ...form, amount: v })}
+            placeholder="0.00"
+            step={0.01}
+            min={1}
+            error={fieldErrors.amount || (exceedsMax ? `يتجاوز الحد الأقصى (${formatCurrency(maxLoan)})` : undefined)}
+          />
+          {exceedsMax && (
+            <div className="-mt-2 md:col-span-3 md:-mt-0 text-xs text-red-600 flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              {`يتجاوز الحد الأقصى (${formatCurrency(maxLoan)} — 3 أضعاف الراتب)`}
+            </div>
+          )}
 
-          <div className="space-y-2">
-            <Label>عدد الأقساط <span className="text-red-500">*</span></Label>
-            <Input
-              type="number"
-              min="1"
-              max="60"
-              value={form.installmentCount}
-              onChange={(e) => setForm({ ...form, installmentCount: e.target.value })}
-              className={errCls("installmentCount")}
-            />
-            <FieldHint field="installmentCount" />
-          </div>
+          <NumberField
+            label="عدد الأقساط"
+            required
+            value={form.installmentCount}
+            onChange={(v) => setForm({ ...form, installmentCount: v })}
+            min={1}
+            max={60}
+            error={fieldErrors.installmentCount}
+          />
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              بدء الخصم
-            </Label>
+          <FormFieldWrapper label="بدء الخصم" hint="الفترة التي يبدأ فيها خصم الأقساط من الراتب">
             <Input
               type="month"
               value={form.startDeductionPeriod || defaultPeriod}
               onChange={(e) => setForm({ ...form, startDeductionPeriod: e.target.value })}
             />
-            <p className="text-xs text-gray-400">الفترة التي يبدأ فيها خصم الأقساط من الراتب</p>
-          </div>
+          </FormFieldWrapper>
         </div>
 
         {/* ملخص الأقساط */}
@@ -258,15 +219,13 @@ export default function LoansCreate() {
         )}
 
         {/* السبب */}
-        <div className="space-y-2">
-          <Label>سبب الطلب (اختياري)</Label>
-          <Textarea
-            rows={3}
-            placeholder="اكتب سبب طلب السلفة..."
-            value={form.reason}
-            onChange={(e) => setForm({ ...form, reason: e.target.value })}
-          />
-        </div>
+        <TextAreaField
+          label="سبب الطلب (اختياري)"
+          rows={3}
+          placeholder="اكتب سبب طلب السلفة..."
+          value={form.reason}
+          onChange={(v) => setForm({ ...form, reason: v })}
+        />
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">

@@ -3,15 +3,13 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "fleet_alerts_create";
 const INITIAL = { vehicleId: "", type: "scheduled", description: "", serviceDate: "", performedBy: "" };
@@ -24,17 +22,20 @@ export default function FleetAlertsCreate() {
   const vehicles = vehiclesData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    if (!form.vehicleId) {
-      toast({ variant: "destructive", title: "يرجى اختيار المركبة" });
-      return;
-    }
-    if (!form.description) {
-      toast({ variant: "destructive", title: "وصف التنبيه مطلوب" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.vehicleId) localErrors.vehicleId = "يرجى اختيار المركبة";
+    if (!form.type) localErrors.type = "نوع التنبيه مطلوب";
+    if (!form.description.trim()) localErrors.description = "وصف التنبيه مطلوب";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     try {
@@ -49,7 +50,8 @@ export default function FleetAlertsCreate() {
       toast({ title: "تم إنشاء التنبيه بنجاح" });
       setLocation("/fleet/alerts");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التنبيه", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التنبيه", description: err?.fix ?? err?.message });
     }
   };
 
@@ -65,12 +67,9 @@ export default function FleetAlertsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="md:col-span-2">
-          <Label>المركبة</Label>
+        <FormFieldWrapper label="المركبة" required error={fieldErrors.vehicleId} className="md:col-span-2">
           <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر المركبة" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
             <SelectContent>
               {vehicles.map((v: any) => (
                 <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
@@ -82,26 +81,22 @@ export default function FleetAlertsCreate() {
               <VehicleContextCard vehicleId={form.vehicleId} section="maintenance" />
             </div>
           )}
-        </div>
-        <div>
-          <Label>نوع التنبيه</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="نوع التنبيه" required error={fieldErrors.type}>
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="scheduled">صيانة مجدولة</SelectItem>
               <SelectItem value="preventive">صيانة وقائية</SelectItem>
               <SelectItem value="corrective">صيانة إصلاحية</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>تاريخ الاستحقاق</Label><div className="mt-1"><DatePicker value={form.serviceDate} onChange={(v) => setForm((f) => ({ ...f, serviceDate: v }))} /></div></div>
-        <div><Label>الفني المسؤول</Label><Input className="mt-1" value={form.performedBy} onChange={(e) => setForm((f) => ({ ...f, performedBy: e.target.value }))} /></div>
-        <div className="md:col-span-2">
-          <Label>التفاصيل</Label>
-          <Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="تفاصيل التنبيه..." />
-        </div>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تاريخ الاستحقاق">
+          <DatePicker value={form.serviceDate} onChange={(v) => setForm((f) => ({ ...f, serviceDate: v }))} />
+        </FormFieldWrapper>
+        <TextField label="الفني المسؤول" value={form.performedBy} onChange={(v) => setForm((f) => ({ ...f, performedBy: v }))} />
+        <TextAreaField label="التفاصيل" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="تفاصيل التنبيه..." error={fieldErrors.description} className="md:col-span-2" />
       </div>
       <div className="flex justify-end gap-3 pt-6">
         <Button type="button" variant="outline" onClick={() => setLocation("/fleet/alerts")}>إلغاء</Button>

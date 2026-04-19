@@ -2,9 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
@@ -13,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "fleet_insurance_create";
 const INITIAL = {
@@ -28,23 +26,32 @@ export default function InsuranceCreate() {
   const vehicles = vehiclesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    if (!form.vehicleId) {
-      toast({ variant: "destructive", title: "يرجى اختيار المركبة" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.vehicleId) localErrors.vehicleId = "يرجى اختيار المركبة";
+    if (!form.provider.trim()) localErrors.provider = "شركة التأمين مطلوبة";
+    if (!form.startDate) localErrors.startDate = "تاريخ البدء مطلوب";
+    if (!form.endDate) localErrors.endDate = "تاريخ الانتهاء مطلوب";
+    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     try {
       await createMut.mutateAsync({
         vehicleId: Number(form.vehicleId),
         type: form.type,
-        provider: form.provider || undefined,
+        provider: form.provider,
         policyNumber: form.policyNumber || undefined,
-        startDate: form.startDate || undefined,
-        endDate: form.endDate || undefined,
+        startDate: form.startDate,
+        endDate: form.endDate,
         premium: form.premium ? Number(form.premium) : 0,
         coverageAmount: form.coverageAmount ? Number(form.coverageAmount) : undefined,
         notes: form.notes || undefined,
@@ -54,7 +61,8 @@ export default function InsuranceCreate() {
       toast({ title: "تم إضافة التأمين بنجاح" });
       setLocation("/fleet/insurance");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التأمين", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التأمين", description: err?.fix ?? err?.message });
     }
   };
 
@@ -70,10 +78,9 @@ export default function InsuranceCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-3">
-          <Label>المركبة <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="المركبة" required error={fieldErrors.vehicleId} className="md:col-span-3">
           <Select value={form.vehicleId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر المركبة</SelectItem>
               {vehicles.map((v: any) => (
@@ -86,27 +93,27 @@ export default function InsuranceCreate() {
               <VehicleContextCard vehicleId={form.vehicleId} section="insurance" />
             </div>
           )}
-        </div>
-        <div>
-          <Label>نوع التأمين</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="نوع التأمين">
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="comprehensive">شامل</SelectItem>
               <SelectItem value="third-party">ضد الغير</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>شركة التأمين</Label><Input className="mt-1" value={form.provider} onChange={(e) => setForm((f) => ({ ...f, provider: e.target.value }))} /></div>
-        <div><Label>رقم الوثيقة</Label><Input className="mt-1" value={form.policyNumber} onChange={(e) => setForm((f) => ({ ...f, policyNumber: e.target.value }))} /></div>
-        <div><Label>تاريخ البدء</Label><div className="mt-1"><DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></div></div>
-        <div><Label>تاريخ الانتهاء</Label><div className="mt-1"><DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></div></div>
-        <div><Label>القسط</Label><Input className="mt-1" type="number" value={form.premium} onChange={(e) => setForm((f) => ({ ...f, premium: e.target.value }))} /></div>
-        <div><Label>مبلغ التغطية</Label><Input className="mt-1" type="number" value={form.coverageAmount} onChange={(e) => setForm((f) => ({ ...f, coverageAmount: e.target.value }))} /></div>
-        <div className="md:col-span-3">
-          <Label>ملاحظات</Label>
-          <Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
-        </div>
+        </FormFieldWrapper>
+        <TextField label="شركة التأمين" required value={form.provider} onChange={(v) => setForm((f) => ({ ...f, provider: v }))} error={fieldErrors.provider} />
+        <TextField label="رقم الوثيقة" value={form.policyNumber} onChange={(v) => setForm((f) => ({ ...f, policyNumber: v }))} />
+        <FormFieldWrapper label="تاريخ البدء" required error={fieldErrors.startDate}>
+          <DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تاريخ الانتهاء" required error={fieldErrors.endDate}>
+          <DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} />
+        </FormFieldWrapper>
+        <NumberField label="القسط" value={form.premium} onChange={(v) => setForm((f) => ({ ...f, premium: v }))} step={0.01} min={0} />
+        <NumberField label="مبلغ التغطية" value={form.coverageAmount} onChange={(v) => setForm((f) => ({ ...f, coverageAmount: v }))} step={0.01} min={0} />
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} className="md:col-span-3" />
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات التأمين" />
       <div className="flex justify-end gap-3 pt-6">
