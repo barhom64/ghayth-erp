@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -187,7 +187,7 @@ export default function TrainingCreate() {
               {form.category && <Badge variant="outline">{TRAINING_CATEGORIES.find(c => c.value === form.category)?.label}</Badge>}
               {durationDisplay && <Badge variant="outline"><Clock className="h-3 w-3 me-1" />{durationDisplay}</Badge>}
               {form.maxParticipants && <Badge variant="outline"><Users className="h-3 w-3 me-1" />{form.maxParticipants} مشارك</Badge>}
-              {form.cost && <Badge variant="outline"><DollarSign className="h-3 w-3 me-1" />{Number(form.cost).toLocaleString()} {getCurrencySymbol()}</Badge>}
+              {form.cost && <Badge variant="outline"><DollarSign className="h-3 w-3 me-1" />{formatCurrency(Number(form.cost))}</Badge>}
             </div>
           </div>
         )}

@@ -55,7 +55,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1034,7 +1034,7 @@ function StepPenalty({
               <div className="flex justify-between">
                 <span className="text-gray-600">الأجر اليومي</span>
                 <span>
-                  {dailyWage.toFixed(2)} {getCurrencySymbol()}
+                  {formatCurrency(dailyWage)}
                 </span>
               </div>
               {!resolution.warningOnly && (
@@ -1043,16 +1043,14 @@ function StepPenalty({
                   <div className="flex justify-between">
                     <span className="text-gray-600">الخصم الأساسي</span>
                     <span>
-                      {resolution.baseDeductionAmount.toFixed(2)}{" "}
-                      {getCurrencySymbol()}
+                      {formatCurrency(resolution.baseDeductionAmount)}
                     </span>
                   </div>
                   {resolution.extraDeductionAmount > 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-600">الخصم الإضافي</span>
                       <span>
-                        {resolution.extraDeductionAmount.toFixed(2)}{" "}
-                        {getCurrencySymbol()}
+                        {formatCurrency(resolution.extraDeductionAmount)}
                       </span>
                     </div>
                   )}
@@ -1060,8 +1058,7 @@ function StepPenalty({
                   <div className="flex justify-between font-bold text-base">
                     <span>الإجمالي</span>
                     <span className="text-red-600">
-                      {resolution.totalDeductionAmount.toFixed(2)}{" "}
-                      {getCurrencySymbol()}
+                      {formatCurrency(resolution.totalDeductionAmount)}
                     </span>
                   </div>
                 </>

@@ -13,7 +13,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Briefcase, MapPin, DollarSign, Users, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { JOB_TYPES, EXPERIENCE_LEVELS, EDUCATION_LEVELS } from "@/lib/hr-type-maps";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -48,7 +48,7 @@ export default function RecruitmentCreate() {
   };
 
   const salaryRange = form.salaryMin && form.salaryMax
-    ? `${Number(form.salaryMin).toLocaleString()} - ${Number(form.salaryMax).toLocaleString()} ${getCurrencySymbol()}`
+    ? `${formatCurrency(Number(form.salaryMin))} - ${formatCurrency(Number(form.salaryMax))}`
     : null;
 
   const handleSubmit = () => {

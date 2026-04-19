@@ -10,7 +10,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -181,7 +181,7 @@ export default function OrdersCreate() {
         ))}
         {items.length > 0 && (
           <div className="flex justify-end mt-2 text-sm font-semibold">
-            الإجمالي: {totalAmount.toLocaleString()} {getCurrencySymbol()}
+            الإجمالي: {formatCurrency(totalAmount)}
           </div>
         )}
       </div>

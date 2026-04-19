@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/ui/date-picker";
+import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -17,7 +18,6 @@ import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { roundMoney } from "@/lib/formatters";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
 
@@ -184,7 +184,7 @@ export default function PurchaseOrdersCreate() {
       </div>
 
       <div className="bg-muted/50 p-4 rounded-md text-sm">
-        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{totalAmount.toFixed(2)}</span></div>
+        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(totalAmount)}</span></div>
       </div>
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />

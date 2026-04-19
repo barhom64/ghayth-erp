@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -244,9 +245,9 @@ export default function InvoicesCreate() {
       </div>
 
       <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${fieldErrorClass(fieldErrors.totalAmount)}`}>
-        <div className="flex justify-between"><span>المجموع الفرعي:</span><span>{subtotal.toFixed(2)}</span></div>
-        <div className="flex justify-between"><span>الضريبة ({form.vatRate}%):</span><span>{vatAmount.toFixed(2)}</span></div>
-        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{total.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span>المجموع الفرعي:</span><span>{formatCurrency(subtotal)}</span></div>
+        <div className="flex justify-between"><span>الضريبة ({form.vatRate}%):</span><span>{formatCurrency(vatAmount)}</span></div>
+        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(total)}</span></div>
       </div>
       {fieldErrors.totalAmount && <p className="text-xs text-red-600 mt-1">{fieldErrors.totalAmount}</p>}
 

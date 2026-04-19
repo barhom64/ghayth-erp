@@ -630,11 +630,11 @@ function WarehouseDashboard() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">وارد</span>
-                <span className="font-medium text-green-600">{fmt(data.movements?.inQty ?? 0)} وحدة</span>
+                <span className="font-medium text-green-600">{formatNumber(data.movements?.inQty ?? 0)} وحدة</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">صادر</span>
-                <span className="font-medium text-red-600">{fmt(data.movements?.outQty ?? 0)} وحدة</span>
+                <span className="font-medium text-red-600">{formatNumber(data.movements?.outQty ?? 0)} وحدة</span>
               </div>
             </div>
           </CardContent>

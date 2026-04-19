@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle, ChevronLeft,
   BarChart3, ArrowUpRight, ArrowDownRight, Wallet, Receipt,
@@ -14,11 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
-
-function formatCurrency(val: number | string | undefined): string {
-  const n = Number(val) || 0;
-  return n.toLocaleString("ar-SA", { maximumFractionDigits: 0 });
-}
 
 function MiniBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
@@ -117,7 +112,6 @@ export default function CashflowDashboard() {
                   <span className="text-xs text-emerald-600 font-medium">الإيرادات</span>
                 </div>
                 <p className="text-2xl font-bold text-emerald-700">{formatCurrency(totalIncome)}</p>
-                <p className="text-xs text-emerald-500 mt-0.5">ر.س</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
@@ -127,7 +121,6 @@ export default function CashflowDashboard() {
                   <span className="text-xs text-red-600 font-medium">المصروفات</span>
                 </div>
                 <p className="text-2xl font-bold text-red-700">{formatCurrency(totalExpenses)}</p>
-                <p className="text-xs text-red-500 mt-0.5">ر.س</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
@@ -139,7 +132,6 @@ export default function CashflowDashboard() {
                 <p className={cn("text-2xl font-bold", isPositive ? "text-blue-700" : "text-orange-700")}>
                   {isPositive ? "" : "-"}{formatCurrency(Math.abs(netCashflow))}
                 </p>
-                <p className={cn("text-xs mt-0.5", isPositive ? "text-blue-500" : "text-orange-500")}>ر.س</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
@@ -228,7 +220,7 @@ export default function CashflowDashboard() {
                           const p = ba > 0 ? Math.round((aa / ba) * 100) : 0;
                           return (
                             <p key={i} className="text-xs text-red-700">
-                              <span className="font-medium">{item.category || item.name || `بند ${i + 1}`}:</span> استُنفد {p}% من الميزانية ({formatCurrency(aa)} من {formatCurrency(ba)} ر.س)
+                              <span className="font-medium">{item.category || item.name || `بند ${i + 1}`}:</span> استُنفد {p}% من الميزانية ({formatCurrency(aa)} من {formatCurrency(ba)})
                             </p>
                           );
                         })}
@@ -260,7 +252,7 @@ export default function CashflowDashboard() {
                           const p = ba > 0 ? Math.round((aa / ba) * 100) : 0;
                           return (
                             <p key={i} className="text-xs text-amber-700">
-                              <span className="font-medium">{item.category || item.name || `بند ${i + 1}`}:</span> استُنفد {p}% ({formatCurrency(aa)} من {formatCurrency(ba)} ر.س) — متبقي {formatCurrency(ba - aa)} ر.س
+                              <span className="font-medium">{item.category || item.name || `بند ${i + 1}`}:</span> استُنفد {p}% ({formatCurrency(aa)} من {formatCurrency(ba)}) — متبقي {formatCurrency(ba - aa)}
                             </p>
                           );
                         })}
@@ -308,7 +300,7 @@ export default function CashflowDashboard() {
                             />
                           </div>
                           <div className="flex justify-between text-xs text-gray-400">
-                            <span>الفعلي: {formatCurrency(actual_amount)} ر.س</span>
+                            <span>الفعلي: {formatCurrency(actual_amount)}</span>
                             <span className={cn(isOver ? "text-red-600 font-medium" : isCritical ? "text-orange-600 font-medium" : isHigh ? "text-amber-600 font-medium" : "")}>{pct}% من الميزانية</span>
                           </div>
                         </div>
@@ -348,7 +340,7 @@ export default function CashflowDashboard() {
                         <p className="text-xs text-gray-400">{dueDate ? `مستحق: ${formatDateAr(dueDate.toISOString())}` : "—"}</p>
                       </div>
                       <div className="text-end">
-                        <p className={cn("text-sm font-bold", isOverdue ? "text-red-700" : "text-gray-800")}>{formatCurrency(inv.amount)} ر.س</p>
+                        <p className={cn("text-sm font-bold", isOverdue ? "text-red-700" : "text-gray-800")}>{formatCurrency(inv.amount)}</p>
                         {isOverdue && <Badge className="text-[10px] bg-red-100 text-red-700">متأخر</Badge>}
                       </div>
                     </div>
@@ -385,7 +377,7 @@ export default function CashflowDashboard() {
                       exp.status === "rejected" ? "bg-red-100 text-red-700" :
                       "bg-yellow-100 text-yellow-700"
                     )}>
-                      {formatCurrency(exp.amount)} ر.س
+                      {formatCurrency(exp.amount)}
                     </Badge>
                   </div>
                 ))}

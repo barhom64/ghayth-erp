@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -105,7 +106,7 @@ export default function FuelCreate() {
         <NumberField label="سعر اللتر" value={form.costPerLiter} onChange={(v) => setForm((f) => ({ ...f, costPerLiter: v }))} step={0.01} min={0} />
         {totalCost > 0 && (
           <FormFieldWrapper label="الإجمالي">
-            <Input className="bg-gray-50 font-bold" value={totalCost.toFixed(2)} readOnly />
+            <Input className="bg-gray-50 font-bold" value={formatCurrency(totalCost)} readOnly />
           </FormFieldWrapper>
         )}
         <NumberField label="قراءة العداد (كم)" value={form.mileageAtFuel} onChange={(v) => setForm((f) => ({ ...f, mileageAtFuel: v }))} min={0} />

@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField } from "@/components/shared/form-field-wrapper";
-import { roundMoney } from "@/lib/formatters";
+import { roundMoney, formatCurrency } from "@/lib/formatters";
 
 interface JournalLine {
   accountCode: string;
@@ -166,8 +166,8 @@ export default function JournalCreate() {
             <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2 pt-2 border-t font-semibold text-sm">
               <span></span>
               <span>الإجمالي</span>
-              <span>{totalDebit.toLocaleString("ar-SA")}</span>
-              <span>{totalCredit.toLocaleString("ar-SA")}</span>
+              <span>{formatCurrency(totalDebit)}</span>
+              <span>{formatCurrency(totalCredit)}</span>
               <span></span>
             </div>
             {!isBalanced && totalDebit > 0 && (
