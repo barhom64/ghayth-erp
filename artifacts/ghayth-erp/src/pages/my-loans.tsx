@@ -1,7 +1,7 @@
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   Wallet, Clock, CheckCircle2, XCircle, Loader2,
   DollarSign, Calendar, TrendingDown,
@@ -29,9 +29,6 @@ const loanTypeLabels: Record<string, string> = {
   other: "أخرى",
 };
 
-function formatAmount(v: any): string {
-  return Number(v ?? 0).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 export default function MyLoans() {
   const { data, isLoading, isError } = useApiQuery<any>(["my-loans"], "/hr/loans/my");
@@ -65,8 +62,8 @@ export default function MyLoans() {
         {[
           { label: "سلف نشطة", value: activeCount, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
           { label: "طلبات معلقة", value: pendingCount, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-          { label: "إجمالي السلف", value: `${formatAmount(totalAmount)} ر.س`, icon: DollarSign, color: "text-blue-600 bg-blue-50" },
-          { label: "المتبقي", value: `${formatAmount(remainingAmount)} ر.س`, icon: TrendingDown, color: "text-red-600 bg-red-50" },
+          { label: "إجمالي السلف", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
+          { label: "المتبقي", value: formatCurrency(remainingAmount), icon: TrendingDown, color: "text-red-600 bg-red-50" },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -125,14 +122,14 @@ export default function MyLoans() {
                       <tr key={loan.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                         <td className="px-4 py-3 text-gray-500">#{loan.loanNumber || loan.id}</td>
                         <td className="px-4 py-3 text-gray-700">{loanTypeLabels[loan.loanType] || loan.loanType}</td>
-                        <td className="px-4 py-3 font-medium">{formatAmount(loan.amount)} ر.س</td>
+                        <td className="px-4 py-3 font-medium">{formatCurrency(loan.amount)}</td>
                         <td className="px-4 py-3 text-gray-700">
                           {loan.paidInstallments ?? 0}/{loan.installmentCount ?? 0}
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{formatAmount(installmentAmount)} ر.س</td>
+                        <td className="px-4 py-3 text-gray-700">{formatCurrency(installmentAmount)}</td>
                         <td className="px-4 py-3">
                           {loan.status === "active" ? (
-                            <span className="text-red-600 font-medium">{formatAmount(loan.remainingAmount ?? loan.amount)} ر.س</span>
+                            <span className="text-red-600 font-medium">{formatCurrency(loan.remainingAmount ?? loan.amount)}</span>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}

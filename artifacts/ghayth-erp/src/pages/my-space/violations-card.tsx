@@ -1,3 +1,4 @@
+import { formatCurrency } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
@@ -28,7 +29,7 @@ export function ViolationsCard({ violations }: ViolationsCardProps) {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {v.deduction > 0 && (
-                  <span className="text-xs text-red-600 font-medium">-{Number(v.deduction).toLocaleString("ar-SA")} ر.س</span>
+                  <span className="text-xs text-red-600 font-medium">-{formatCurrency(Number(v.deduction))}</span>
                 )}
                 <Badge className={cn("text-[10px]", severityColors[v.severity] || "bg-gray-100 text-gray-700")}>
                   {v.severity === "low" ? "منخفض" : v.severity === "medium" ? "متوسط" : "عالي"}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -761,7 +762,7 @@ function DeliveryStatsTab() {
                       </td>
                       <td className="p-2 text-xs">{(log.templateKey as string) ?? "-"}</td>
                       <td className="p-2 text-xs text-muted-foreground">
-                        {log.createdAt ? new Date(log.createdAt as string).toLocaleString("ar-SA") : "-"}
+                        {formatDateAr(log.createdAt as string)}
                       </td>
                     </tr>
                   ))}

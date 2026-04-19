@@ -654,12 +654,12 @@ export default function UnitDetail() {
                         <td className="p-3 text-gray-500 max-w-xs truncate">{m.description || "-"}</td>
                         <td className="p-3"><PageStatusBadge status={m.priority} /></td>
                         <td className="p-3"><PageStatusBadge status={m.status} /></td>
-                        <td className="p-3 text-gray-500">{m.actualCost != null ? `${Number(m.actualCost).toLocaleString("ar-SA")} ر.س` : "-"}</td>
+                        <td className="p-3 text-gray-500">{m.actualCost != null ? formatCurrency(Number(m.actualCost)) : "-"}</td>
                         <td className="p-3 text-gray-500">
                           {materials.length > 0 ? (
                             <ul className="list-disc list-inside text-xs">
                               {materials.map((mat: any, idx: number) => (
-                                <li key={idx}>{mat.name}{mat.quantity ? ` × ${mat.quantity}` : ""}{mat.cost ? ` (${Number(mat.cost).toLocaleString("ar-SA")} ر.س)` : ""}</li>
+                                <li key={idx}>{mat.name}{mat.quantity ? ` × ${mat.quantity}` : ""}{mat.cost ? ` (${formatCurrency(Number(mat.cost))})` : ""}</li>
                               ))}
                             </ul>
                           ) : "-"}

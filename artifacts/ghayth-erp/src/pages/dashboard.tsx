@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
@@ -76,7 +76,7 @@ function AnimatedNumber({ value, duration = 700 }: { value: number; duration?: n
     requestAnimationFrame(animate);
     prev.current = end;
   }, [value, duration]);
-  return <span>{display.toLocaleString("ar-SA")}</span>;
+  return <span>{formatNumber(display)}</span>;
 }
 
 function StatCard({ title, value, sub, icon: Icon, color = "blue", link, trend }: {
@@ -119,7 +119,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
       {payload.map((p: TooltipPayloadEntry, i: number) => (
         <p key={i} style={{ color: p.color }} className="flex items-center gap-1.5 py-0.5">
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
-          {p.name}: {Number(p.value).toLocaleString("ar-SA")}
+          {p.name}: {formatNumber(Number(p.value))}
         </p>
       ))}
     </div>
@@ -192,12 +192,6 @@ const priorityColors: Record<string, string> = {
   urgent: "bg-red-200 text-red-800",
 };
 
-const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700",
-  in_progress: "bg-blue-100 text-blue-700",
-  completed: "bg-green-100 text-green-700",
-  cancelled: "bg-gray-100 text-gray-500",
-};
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -553,7 +547,7 @@ export default function Dashboard() {
                   <p className="text-2xl font-bold text-red-700">{roleData.finance.overdueCount}</p>
                   <p className="text-xs text-red-600">فواتير متأخرة</p>
                   {roleData.finance.overdueAmount > 0 && (
-                    <p className="text-[10px] text-red-500 mt-0.5">{Number(roleData.finance.overdueAmount).toLocaleString("ar-SA")} {currencyLabel}</p>
+                    <p className="text-[10px] text-red-500 mt-0.5">{formatCurrency(Number(roleData.finance.overdueAmount))}</p>
                   )}
                 </div>
               </Link>

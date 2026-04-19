@@ -3,8 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, ClipboardList, ChevronLeft, CheckCircle2 } from "lucide-react";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { cn } from "@/lib/utils";
-import { formatTimeAgo, statusLabels, requestTypeLabels } from "./shared";
+import { formatTimeAgo, requestTypeLabels } from "./shared";
 
 interface LeavesAndRequestsSectionProps {
   leaveBalances: any[];
@@ -86,9 +87,7 @@ export function LeavesAndRequestsSection({ leaveBalances, openRequests }: Leaves
                     </p>
                     <p className="text-xs text-gray-400">{r.createdAt ? formatTimeAgo(r.createdAt) : ""}</p>
                   </div>
-                  <Badge className={cn("text-[10px] shrink-0", statusLabels[r.status]?.color || "bg-gray-100 text-gray-700")}>
-                    {statusLabels[r.status]?.label || r.status}
-                  </Badge>
+                  <PageStatusBadge status={r.status} className="text-[10px] shrink-0" />
                 </div>
               ))}
             </div>

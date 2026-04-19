@@ -1,6 +1,7 @@
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/lib/formatters";
 import { Building2, Home, Wrench, TrendingUp, DollarSign } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { PageShell } from "@/components/page-shell";
@@ -62,8 +63,8 @@ export default function OccupancyReportPage() {
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold">{(data?.totalMonthlyRent || 0).toLocaleString()}</div>
-            <div className="text-xs text-gray-500">إيجار شهري (ر.س)</div>
+            <div className="text-xl font-bold">{formatCurrency(data?.totalMonthlyRent || 0)}</div>
+            <div className="text-xs text-gray-500">إيجار شهري</div>
           </CardContent>
         </Card>
       </div>
@@ -147,7 +148,7 @@ export default function OccupancyReportPage() {
                       </Badge>
                     </td>
                     <td className="px-3 py-2">{u.tenantName || "—"}</td>
-                    <td className="px-3 py-2">{u.monthlyRent ? `${Number(u.monthlyRent).toLocaleString()} ر.س` : "—"}</td>
+                    <td className="px-3 py-2">{u.monthlyRent ? formatCurrency(Number(u.monthlyRent)) : "—"}</td>
                     <td className="px-3 py-2 text-gray-500">{u.contractEnd?.split("T")[0] || "—"}</td>
                   </tr>
                 ))}

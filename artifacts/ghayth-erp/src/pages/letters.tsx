@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatDateAr } from "@/lib/formatters";
 import { Mail, Send, Inbox, FileText, Search, Plus, FileSignature, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, useApiMutation, asList, getErrorMessage } from "@/lib/api";
@@ -78,7 +79,7 @@ function HROfficialLettersTab() {
     { key: "subject", header: "الموضوع", sortable: true, render: (l) => <span className="font-medium">{l.subject}</span> },
     { key: "type", header: "النوع", sortable: true, render: (l) => HR_TYPE_MAP[l.type] || l.type },
     { key: "employeeName", header: "الموظف", sortable: true, render: (l) => <span className="text-gray-500">{l.employeeName || "-"}</span> },
-    { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => <span className="text-gray-500">{l.createdAt ? new Date(l.createdAt).toLocaleDateString("ar-SA") : "-"}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => <span className="text-gray-500">{formatDateAr(l.createdAt)}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (l) => <Badge className={HR_STATUS_MAP[l.status]?.color || ""}>{HR_STATUS_MAP[l.status]?.label || l.status}</Badge> },
     {
       key: "actions",
@@ -187,7 +188,7 @@ function HROfficialLettersTab() {
           branch={branch}
           documentTitle={HR_TYPE_MAP[previewLetter.type] || "خطاب رسمي"}
           documentRef={previewLetter.ref || `LTR-${previewLetter.id}`}
-          documentDate={previewLetter.createdAt ? new Date(previewLetter.createdAt).toLocaleDateString("ar-SA") : ""}
+          documentDate={previewLetter.createdAt ? formatDateAr(previewLetter.createdAt) : ""}
         >
           <div style={{ marginBottom: "24px" }}>
             <h3 style={{ fontSize: "14pt", fontWeight: "bold", marginBottom: "12px" }}>{previewLetter.subject}</h3>
@@ -238,7 +239,7 @@ function GeneralLettersTab() {
     { key: "subject", header: "الموضوع", render: (l) => <span className="font-medium">{l.subject || "-"}</span> },
     { key: "direction", header: "الاتجاه", render: (l) => <Badge className={DIRECTION_MAP[l.direction]?.color}>{DIRECTION_MAP[l.direction]?.label || l.direction}</Badge> },
     { key: "contact", header: "المرسل/المستلم", render: (l) => <span className="text-gray-500">{l.toNumber || l.fromNumber || "-"}</span> },
-    { key: "createdAt", header: "التاريخ", render: (l) => <span className="text-gray-500">{l.createdAt ? new Date(l.createdAt).toLocaleDateString("ar-SA") : "-"}</span> },
+    { key: "createdAt", header: "التاريخ", render: (l) => <span className="text-gray-500">{formatDateAr(l.createdAt)}</span> },
     { key: "status", header: "الحالة", render: (l) => <Badge className={COMM_STATUS_MAP[l.status]?.color || "bg-gray-100 text-gray-700"}>{COMM_STATUS_MAP[l.status]?.label || l.status}</Badge> },
   ];
 

@@ -436,8 +436,8 @@ function DelegationBoard({ delegationsData }: { delegationsData: any }) {
                         </p>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {d.scope || d.description || d.reason || "تفويض عام"}
-                          {d.startDate && <> · من {new Date(d.startDate).toLocaleDateString("ar-SA")}</>}
-                          {d.endDate && <> إلى {new Date(d.endDate).toLocaleDateString("ar-SA")}</>}
+                          {d.startDate && <> · من {formatDateAr(d.startDate)}</>}
+                          {d.endDate && <> إلى {formatDateAr(d.endDate)}</>}
                         </p>
                       </div>
                       <Badge className="text-[10px] bg-indigo-100 text-indigo-700 shrink-0">نشط</Badge>

@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity } from "lucide-react";
-import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -350,7 +350,7 @@ function MonitorTab() {
                             }`}>{row.status}</span>
                           </td>
                           <td className="py-1 text-center">{row.attemptCount ?? 0}</td>
-                          <td className="py-1 text-gray-400" dir="ltr">{row.createdAt ? new Date(row.createdAt).toLocaleDateString("ar") : "-"}</td>
+                          <td className="py-1 text-gray-400" dir="ltr">{formatDateAr(row.createdAt)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -387,7 +387,7 @@ function MonitorTab() {
                             }`}>{row.status}</span>
                           </td>
                           <td className="py-1 text-center">{row.attemptCount ?? 0}</td>
-                          <td className="py-1 text-gray-400" dir="ltr">{row.createdAt ? new Date(row.createdAt).toLocaleDateString("ar") : "-"}</td>
+                          <td className="py-1 text-gray-400" dir="ltr">{formatDateAr(row.createdAt)}</td>
                         </tr>
                       ))}
                     </tbody>

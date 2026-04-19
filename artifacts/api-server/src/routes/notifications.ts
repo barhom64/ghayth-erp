@@ -20,17 +20,23 @@ router.use(authMiddleware);
 router.get("/", requirePermission("notifications:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
+    const offset = (page - 1) * pageSize;
 
-    const notifications = await rawQuery<any>(
-      `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
-       FROM notifications
-       WHERE "assignmentId" = $1
-       ORDER BY "createdAt" DESC
-       LIMIT 50`,
-      [scope.activeAssignmentId]
-    );
+    const [[countRow], notifications] = await Promise.all([
+      rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1`, [scope.activeAssignmentId]),
+      rawQuery<any>(
+        `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
+         FROM notifications
+         WHERE "assignmentId" = $1
+         ORDER BY "createdAt" DESC
+         LIMIT $2 OFFSET $3`,
+        [scope.activeAssignmentId, pageSize, offset]
+      ),
+    ]);
 
-    res.json({ data: notifications, total: notifications.length, page: 1, pageSize: notifications.length });
+    res.json({ data: notifications, total: Number(countRow?.count ?? 0), page, pageSize });
   } catch (err) {
     handleRouteError(err, res, "List notifications error:");
   }

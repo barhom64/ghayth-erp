@@ -1,10 +1,10 @@
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Activity, Target, Star, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatTimeAgo, statusLabels } from "./shared";
+import { PageStatusBadge } from "@/components/page-status-badge";
+import { formatTimeAgo } from "./shared";
 
 interface RecentActionsAndPerformanceSectionProps {
   recentActions: any[];
@@ -98,9 +98,7 @@ export function RecentActionsAndPerformanceSection({ recentActions, performanceR
                         <Star className="w-3 h-3" />
                         {score.toFixed(1)}/5
                       </div>
-                      <Badge className={cn("text-[10px]", statusLabels[r.status]?.color || "bg-gray-100 text-gray-700")}>
-                        {statusLabels[r.status]?.label || r.status}
-                      </Badge>
+                      <PageStatusBadge status={r.status} className="text-[10px]" />
                     </div>
                   </div>
                 );

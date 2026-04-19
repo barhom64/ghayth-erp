@@ -1,4 +1,5 @@
 import { useApiQuery, asList } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Wrench } from "lucide-react";
@@ -23,7 +24,7 @@ const columns: DataTableColumn<CapaItem>[] = [
   { key: "correctiveAction", header: "الإجراء التصحيحي", render: (r) => <span className="line-clamp-2">{r.correctiveAction || "-"}</span> },
   { key: "preventiveAction", header: "الإجراء الوقائي", render: (r) => <span className="line-clamp-2">{r.preventiveAction || "-"}</span> },
   { key: "responsiblePerson", header: "المسؤول", searchable: true },
-  { key: "dueDate", header: "تاريخ الاستحقاق", sortable: true, render: (r) => r.dueDate ? new Date(r.dueDate).toLocaleDateString("ar-SA") : "-" },
+  { key: "dueDate", header: "تاريخ الاستحقاق", sortable: true, render: (r) => formatDateAr(r.dueDate) },
   {
     key: "status", header: "الحالة", render: (r) => {
       const v = r.status;
@@ -31,7 +32,7 @@ const columns: DataTableColumn<CapaItem>[] = [
       return <Badge className={colors[v || ""] || "bg-gray-100 text-gray-800"}>{v === "open" ? "مفتوح" : v === "in_progress" ? "قيد التنفيذ" : v === "closed" ? "مغلق" : v || "-"}</Badge>;
     }
   },
-  { key: "completedAt", header: "تاريخ الإغلاق", render: (r) => r.completedAt ? new Date(r.completedAt).toLocaleDateString("ar-SA") : "-" },
+  { key: "completedAt", header: "تاريخ الإغلاق", render: (r) => formatDateAr(r.completedAt) },
 ];
 
 export default function GovernanceCapa() {

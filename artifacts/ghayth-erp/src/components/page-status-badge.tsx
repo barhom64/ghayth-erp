@@ -69,6 +69,7 @@ export const STATUS_MAP = {
     submitted:            { label: "مُقدَّم",           tone: "info"     },
     in_progress:          { label: "قيد التنفيذ",     tone: "progress" },
     in_review:            { label: "قيد المراجعة",    tone: "info"     },
+    under_review:         { label: "قيد المراجعة",    tone: "info"     },
     approved:             { label: "معتمد",           tone: "success"  },
     rejected:             { label: "مرفوض",           tone: "danger"   },
     returned:             { label: "مُرجَع",           tone: "warning"  },

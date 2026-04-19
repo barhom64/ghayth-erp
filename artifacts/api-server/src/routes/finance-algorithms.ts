@@ -302,6 +302,9 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", async (req, res)
     if (!requireFinance(scope, res)) return;
 
     const { batchId, accountCode = "1120", toleranceDays = 3 } = req.body as any;
+    if (!batchId) {
+      throw new ValidationError("معرف الدفعة مطلوب", { field: "batchId" });
+    }
 
     const bankRows = await rawQuery<any>(
       `SELECT * FROM bank_statements
@@ -726,7 +729,10 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) =>
     if (!requireFinance(scope, res)) return;
     const id = Number(req.params.id);
     const { period, unitsThisPeriod } = req.body as any;
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    if (!period) {
+      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
+    }
+    const targetPeriod = period;
 
     const [asset] = await rawQuery<any>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2 AND status='active'`,
@@ -805,7 +811,10 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", async (req, res) =>
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
     const { period } = req.body as any;
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    if (!period) {
+      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
+    }
+    const targetPeriod = period;
 
     const assets = await rawQuery<any>(
       `SELECT fa.* FROM fixed_assets fa WHERE fa."companyId"=$1 AND fa.status='active'

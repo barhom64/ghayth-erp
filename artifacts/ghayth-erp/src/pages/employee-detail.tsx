@@ -833,8 +833,6 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                   <tbody>
                     {loans.map((ln: any) => {
                       const loanTypes: Record<string, string> = { salary_advance: "سلفة راتب", personal: "شخصية", emergency: "طارئة" };
-                      const statusColors: Record<string, string> = { pending: "bg-amber-100 text-amber-700", active: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700", rejected: "bg-red-100 text-red-700" };
-                      const statusLabels: Record<string, string> = { pending: "معلقة", active: "نشطة", completed: "مسددة", rejected: "مرفوضة" };
                       return (
                         <tr key={ln.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                           <td className="px-4 py-2 font-mono text-xs text-blue-700">{ln.loanNumber}</td>
@@ -842,9 +840,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                           <td className="px-4 py-2 font-semibold">{formatCurrency(Number(ln.amount))}</td>
                           <td className="px-4 py-2 text-red-600">{formatCurrency(Number(ln.remainingAmount || 0))}</td>
                           <td className="px-4 py-2">
-                            <Badge variant="outline" className={cn("text-xs", statusColors[ln.status] || "")}>
-                              {statusLabels[ln.status] || ln.status}
-                            </Badge>
+                            <PageStatusBadge status={ln.status} />
                           </td>
                         </tr>
                       );
@@ -876,23 +872,17 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {overtime.map((ot: any) => {
-                      const otStatusColors: Record<string, string> = { pending: "bg-amber-100 text-amber-700", approved: "bg-green-100 text-green-700", paid: "bg-blue-100 text-blue-700", rejected: "bg-red-100 text-red-700" };
-                      const otStatusLabels: Record<string, string> = { pending: "معلق", approved: "معتمد", paid: "مدفوع", rejected: "مرفوض" };
-                      return (
+                    {overtime.map((ot: any) => (
                         <tr key={ot.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                           <td className="px-4 py-2 font-mono text-xs text-purple-700">{ot.requestNumber}</td>
                           <td className="px-4 py-2 text-gray-600">{ot.overtimeDate ? new Date(ot.overtimeDate).toLocaleDateString("ar-SA") : "—"}</td>
                           <td className="px-4 py-2">{Number(ot.hours).toFixed(1)} ساعة</td>
                           <td className="px-4 py-2 font-semibold text-green-700">{formatCurrency(Number(ot.totalAmount || 0))}</td>
                           <td className="px-4 py-2">
-                            <Badge variant="outline" className={cn("text-xs", otStatusColors[ot.status] || "")}>
-                              {otStatusLabels[ot.status] || ot.status}
-                            </Badge>
+                            <PageStatusBadge status={ot.status} />
                           </td>
                         </tr>
-                      );
-                    })}
+                    ))}
                   </tbody>
                 </table>
               </CardContent>

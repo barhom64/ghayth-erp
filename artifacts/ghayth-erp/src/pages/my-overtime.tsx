@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   Timer, Clock, CheckCircle2, Loader2,
   DollarSign, Calendar, TrendingUp,
@@ -25,9 +25,6 @@ const multiplierLabels: Record<string, string> = {
   "2": "عطلة ×2.00",
 };
 
-function formatAmount(v: any): string {
-  return Number(v ?? 0).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 export default function MyOvertime() {
   const today = new Date();
@@ -65,7 +62,7 @@ export default function MyOvertime() {
           { label: "إجمالي الساعات", value: totalHours.toFixed(1), icon: Clock, color: "text-blue-600 bg-blue-50" },
           { label: "معتمدة", value: approvedCount, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
           { label: "معلقة", value: pendingCount, icon: Timer, color: "text-yellow-600 bg-yellow-50" },
-          { label: "إجمالي التعويض", value: `${formatAmount(totalAmount)} ر.س`, icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
+          { label: "إجمالي التعويض", value: `${formatCurrency(totalAmount)}`, icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -125,7 +122,7 @@ export default function MyOvertime() {
                         <td className="px-4 py-3 text-gray-700">{rec.endTime || "—"}</td>
                         <td className="px-4 py-3 font-medium">{Number(rec.hours || 0).toFixed(1)} س</td>
                         <td className="px-4 py-3 text-gray-700">{multiplierLabels[mult] || `×${mult}`}</td>
-                        <td className="px-4 py-3 font-medium text-emerald-600">{formatAmount(rec.totalAmount)} ر.س</td>
+                        <td className="px-4 py-3 font-medium text-emerald-600">{formatCurrency(rec.totalAmount)}</td>
                         <td className="px-4 py-3">
                           <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cfg.color)}>
                             {cfg.label}
@@ -144,7 +141,7 @@ export default function MyOvertime() {
               <span className="text-sm font-medium text-gray-600">الإجمالي للشهر</span>
               <div className="flex gap-6">
                 <span className="text-sm"><span className="font-bold">{totalHours.toFixed(1)}</span> ساعة</span>
-                <span className="text-sm font-bold text-emerald-600">{formatAmount(totalAmount)} ر.س</span>
+                <span className="text-sm font-bold text-emerald-600">{formatCurrency(totalAmount)}</span>
               </div>
             </div>
           </div>

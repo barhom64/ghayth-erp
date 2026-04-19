@@ -46,19 +46,12 @@ export default function ProjectDetail() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
-  const statusColors: Record<string, string> = {
-    completed: "bg-green-100 text-green-700",
-    done: "bg-green-100 text-green-700",
-    active: "bg-blue-100 text-blue-700",
-    in_progress: "bg-blue-100 text-blue-700",
-    planning: "bg-purple-100 text-purple-700",
-    pending: "bg-gray-100 text-gray-700",
-    todo: "bg-gray-100 text-gray-700",
-    on_hold: "bg-yellow-100 text-yellow-700",
-  };
   const statusLabels: Record<string, string> = { completed: "مكتمل", done: "مكتمل", active: "نشط", in_progress: "قيد التنفيذ", pending: "معلق", planning: "تخطيط", on_hold: "متوقف", todo: "للتنفيذ" };
   const priorityColors: Record<string, string> = { high: "bg-red-100 text-red-700", critical: "bg-red-100 text-red-700", medium: "bg-yellow-100 text-yellow-700", low: "bg-green-100 text-green-700" };
   const priorityLabels: Record<string, string> = { high: "عالية", critical: "حرجة", medium: "متوسطة", low: "منخفضة" };
+  // Task-specific status colors kept locally because "todo" and "done"
+  // are not in the shared STATUS_MAP.
+  const taskStatusColors: Record<string, string> = { completed: "bg-green-100 text-green-700", done: "bg-green-100 text-green-700", active: "bg-blue-100 text-blue-700", in_progress: "bg-blue-100 text-blue-700", planning: "bg-purple-100 text-purple-700", pending: "bg-gray-100 text-gray-700", todo: "bg-gray-100 text-gray-700", on_hold: "bg-yellow-100 text-yellow-700" };
   const taskStatusLabels: Record<string, string> = { todo: "للتنفيذ", in_progress: "جاري", done: "مكتمل", ...statusLabels };
 
   if (isLoading) return <LoadingSpinner />;
@@ -148,7 +141,7 @@ export default function ProjectDetail() {
       breadcrumbs={[{ href: "/projects", label: "المشاريع" }]}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={statusColors[project.status] || "bg-gray-100 text-gray-700"}>{statusLabels[project.status] || project.status}</Badge>
+          <PageStatusBadge status={project.status} domain="project" />
           {project.isSlipping && (
             <Badge className="bg-red-100 text-red-700 flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" /> متأخر
@@ -275,7 +268,7 @@ export default function ProjectDetail() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Badge className={statusColors[p.status] || "bg-gray-100 text-gray-700"}>{statusLabels[p.status] || p.status || "معلق"}</Badge>
+                      <PageStatusBadge status={p.status || "pending"} domain="project" />
                       {p.status !== "completed" && (
                         <Button size="sm" variant="outline" onClick={() => completePhase(p.id)}>
                           <CheckCircle2 className="h-3 w-3 me-1" />إكمال
@@ -312,7 +305,7 @@ export default function ProjectDetail() {
                       <td className="p-3 font-medium">{t.title}</td>
                       <td className="p-3 text-gray-500">{t.assigneeName || "-"}</td>
                       <td className="p-3"><Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge></td>
-                      <td className="p-3"><Badge className={statusColors[t.status] || "bg-gray-100 text-gray-700"}>{taskStatusLabels[t.status] || t.status}</Badge></td>
+                      <td className="p-3"><Badge className={taskStatusColors[t.status] || "bg-gray-100 text-gray-700"}>{taskStatusLabels[t.status] || t.status}</Badge></td>
                       <td className="p-3 text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</td>
                       <td className="p-3">
                         {t.status !== "done" && (

@@ -28,7 +28,7 @@ function CustomTooltip({ active, payload, label }: any) {
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }} className="flex items-center gap-1.5 py-0.5">
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
-          {p.name}: {Number(p.value).toLocaleString("ar-SA")}
+          {p.name}: {formatNumber(Number(p.value))}
         </p>
       ))}
     </div>

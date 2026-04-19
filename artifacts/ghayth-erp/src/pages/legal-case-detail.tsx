@@ -518,7 +518,7 @@ function DocumentsSection({ caseId, caseTitle }: { caseId: number; caseTitle: st
                 <p className="font-medium text-sm truncate">{d.title}</p>
                 <p className="text-xs text-gray-400">{d.fileName || ""} — {formatDateAr(d.createdAt)}</p>
               </div>
-              <Badge variant="outline" className="text-xs">{d.status === "approved" ? "معتمد" : d.status === "draft" ? "مسودة" : "ملغي"}</Badge>
+              <PageStatusBadge status={d.status} />
             </CardContent>
           </Card>
         ))

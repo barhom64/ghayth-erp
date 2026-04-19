@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   Clock, CheckCircle2, XCircle, AlertCircle, Calendar,
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 function formatTime(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+  return formatTimeAr(iso);
 }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -74,7 +74,7 @@ export default function MyAttendance() {
           { label: "أيام التأخير", value: lateDays, icon: AlertCircle, color: "text-orange-600 bg-orange-50" },
           { label: "دقائق التأخير", value: totalLateMinutes, icon: Clock, color: "text-blue-600 bg-blue-50" },
           { label: "الوقت الإضافي (د)", value: totalOvertimeMinutes, icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
-          { label: "إجمالي الخصومات", value: `${Number(totalDeduction).toFixed(2)} ر.س`, icon: DollarSign, color: "text-red-600 bg-red-50" },
+          { label: "إجمالي الخصومات", value: formatCurrency(Number(totalDeduction)), icon: DollarSign, color: "text-red-600 bg-red-50" },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -143,7 +143,7 @@ export default function MyAttendance() {
                         <td className="px-4 py-3">
                           {Number(rec.totalDeductions) > 0 ? (
                             <div className="flex items-center gap-1">
-                              <span className="text-red-600 font-medium">{Number(rec.totalDeductions).toFixed(2)} ر.س</span>
+                              <span className="text-red-600 font-medium">{formatCurrency(Number(rec.totalDeductions))}</span>
                               {sev && (
                                 <Badge className={cn("text-[10px] px-1 py-0", sev.color)}>
                                   <AlertTriangle className="w-2.5 h-2.5 me-0.5 inline" />

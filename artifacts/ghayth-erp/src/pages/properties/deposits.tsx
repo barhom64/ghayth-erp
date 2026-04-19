@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCurrency } from "@/lib/formatters";
 import { Vault, Plus, RotateCcw, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -74,13 +75,13 @@ export default function DepositsPage() {
         <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{deposits.length}</div><div className="text-xs text-gray-500">إجمالي الودائع</div></CardContent></Card>
         <Card className="border-blue-200 bg-blue-50/30">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-blue-600">{totalHeld.toLocaleString()} ر.س</div>
+            <div className="text-xl font-bold text-blue-600">{formatCurrency(totalHeld)}</div>
             <div className="text-xs text-gray-500">ودائع محتجزة</div>
           </CardContent>
         </Card>
         <Card className="border-green-200 bg-green-50/30">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-green-600">{totalRefunded.toLocaleString()} ر.س</div>
+            <div className="text-xl font-bold text-green-600">{formatCurrency(totalRefunded)}</div>
             <div className="text-xs text-gray-500">مُستردة</div>
           </CardContent>
         </Card>
@@ -145,9 +146,9 @@ export default function DepositsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-end">
-                  <div className="font-bold text-lg">{Number(d.amount).toLocaleString()} ر.س</div>
+                  <div className="font-bold text-lg">{formatCurrency(Number(d.amount))}</div>
                   {d.refundAmount && d.refundAmount !== d.amount && (
-                    <div className="text-sm text-green-600">مُسترد: {Number(d.refundAmount).toLocaleString()} ر.س</div>
+                    <div className="text-sm text-green-600">مُسترد: {formatCurrency(Number(d.refundAmount))}</div>
                   )}
                 </div>
                 {d.status === "held" && (
