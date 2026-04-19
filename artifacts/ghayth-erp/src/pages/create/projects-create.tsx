@@ -9,6 +9,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ClientContextCard } from "@/components/shared/client-context-card";
@@ -27,23 +28,24 @@ export default function ProjectsCreate() {
   const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (loadingC || loadingE) return <LoadingSpinner />;
   if (errorC || errorE) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name) localErrors.name = "يرجى إدخال اسم المشروع";
-    if (!form.startDate) localErrors.startDate = "تاريخ البدء مطلوب";
-    if (!form.endDate) localErrors.endDate = "تاريخ الانتهاء مطلوب";
-    if (form.budget && Number(form.budget) < 0) localErrors.budget = "الميزانية يجب أن تكون صفر أو أكثر";
-    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم المشروع",
+      startDate: form.startDate ? null : "تاريخ البدء مطلوب",
+      endDate: !form.endDate
+        ? "تاريخ الانتهاء مطلوب"
+        : form.startDate && form.endDate <= form.startDate
+          ? "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء"
+          : null,
+      budget: form.budget && Number(form.budget) < 0 ? "الميزانية يجب أن تكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -61,7 +63,7 @@ export default function ProjectsCreate() {
       toast({ title: "تم إنشاء المشروع بنجاح" });
       setLocation("/projects");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء المشروع", description: err?.fix ?? err?.message });
     }
   };

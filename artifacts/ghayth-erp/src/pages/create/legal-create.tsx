@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -25,7 +26,7 @@ export default function LegalCreate() {
   const addContract = useApiMutation("/legal/contracts", "POST", [["legal-contracts"], ["legal-stats"]]);
   const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/crm/clients");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
   const search = useSearch();
   const copyFromId = new URLSearchParams(search).get("copyFrom");
   const [copied, setCopied] = useState(false);
@@ -58,18 +59,19 @@ export default function LegalCreate() {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.title.trim()) localErrors.title = "يرجى إدخال عنوان العقد";
-    if (!form.partyName.trim()) localErrors.partyName = "الطرف الآخر مطلوب";
-    if (!form.startDate) localErrors.startDate = "يرجى تحديد تاريخ البداية";
-    if (!form.endDate) localErrors.endDate = "يرجى تحديد تاريخ النهاية";
-    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ النهاية يجب أن يكون بعد تاريخ البداية";
-    if (form.value && Number(form.value) < 0) localErrors.value = "القيمة يجب أن تكون 0 أو أكثر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      title: form.title.trim() ? null : "يرجى إدخال عنوان العقد",
+      partyName: form.partyName.trim() ? null : "الطرف الآخر مطلوب",
+      startDate: form.startDate ? null : "يرجى تحديد تاريخ البداية",
+      endDate: !form.endDate
+        ? "يرجى تحديد تاريخ النهاية"
+        : form.startDate && form.endDate <= form.startDate
+          ? "تاريخ النهاية يجب أن يكون بعد تاريخ البداية"
+          : null,
+      value: form.value && Number(form.value) < 0 ? "القيمة يجب أن تكون 0 أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -89,7 +91,7 @@ export default function LegalCreate() {
       toast({ title: "تمت إضافة العقد بنجاح" });
       setLocation("/legal");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة العقد", description: err?.fix ?? err?.message });
     }
   };

@@ -15,6 +15,7 @@ import { ROLES } from "@/lib/constants";
 import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, DollarSign, Clock, Building2, CreditCard, Users, ArrowRight } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAppContext } from "@/contexts/app-context";
 import { fieldErrorClass, TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -73,7 +74,7 @@ export default function EmployeesCreate() {
 
   const [creationResult, setCreationResult] = useState<Record<string, any> | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -82,20 +83,18 @@ export default function EmployeesCreate() {
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name) localErrors.name = "يرجى إدخال اسم الموظف";
-    if (!form.nationalId) localErrors.nationalId = "يرجى إدخال رقم الهوية";
-    if (!form.nationality) localErrors.nationality = "يرجى اختيار الجنسية";
-    if (!form.phone) localErrors.phone = "يرجى إدخال رقم الجوال";
-    if (!form.department) localErrors.department = "يرجى اختيار القسم";
-    if (!form.jobTitle) localErrors.jobTitle = "يرجى اختيار المسمى الوظيفي";
-    if (!form.contractType) localErrors.contractType = "يرجى اختيار نوع العقد";
-    if (!form.salary || Number(form.salary) <= 0) localErrors.salary = "يرجى إدخال الراتب الأساسي";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم الموظف",
+      nationalId: form.nationalId ? null : "يرجى إدخال رقم الهوية",
+      nationality: form.nationality ? null : "يرجى اختيار الجنسية",
+      phone: form.phone ? null : "يرجى إدخال رقم الجوال",
+      department: form.department ? null : "يرجى اختيار القسم",
+      jobTitle: form.jobTitle ? null : "يرجى اختيار المسمى الوظيفي",
+      contractType: form.contractType ? null : "يرجى اختيار نوع العقد",
+      salary: !form.salary || Number(form.salary) <= 0 ? "يرجى إدخال الراتب الأساسي" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -111,7 +110,7 @@ export default function EmployeesCreate() {
       setCreationResult(result as Record<string, any>);
     } catch (err) {
       if (err instanceof ApiError && err.field) {
-        setFieldErrors({ [err.field]: err.fix ?? err.message });
+        setApiError(err);
         toast({
           variant: "destructive",
           title: err.code === "CONFLICT" ? "لا يمكن تنفيذ هذه العملية الآن" : "البيانات غير صالحة",

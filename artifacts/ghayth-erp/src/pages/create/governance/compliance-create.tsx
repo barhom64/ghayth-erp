@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -19,13 +20,14 @@ export default function ComplianceCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/governance/compliance", "POST", [["governance-compliance"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    if (!form.regulation) {
-      setFieldErrors({ regulation: "يرجى إدخال اسم اللائحة أو البند" });
-      toast({ variant: "destructive", title: "يرجى إدخال اسم اللائحة أو البند" });
+    const firstError = validate({
+      regulation: form.regulation ? null : "يرجى إدخال اسم اللائحة أو البند",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -34,7 +36,7 @@ export default function ComplianceCreate() {
       toast({ title: "تم تسجيل بند الامتثال بنجاح" });
       setLocation("/governance/compliance");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل بند الامتثال", description: err?.fix ?? err?.message });
     }
   };

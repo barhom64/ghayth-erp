@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { useApiMutation } from "@/lib/api";
@@ -7,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function KpisCreate() {
@@ -16,13 +16,14 @@ export default function KpisCreate() {
     name: "", module: "", target: "", currentValue: "", unit: "", frequency: "monthly", formula: "", description: "",
   });
   const createMut = useApiMutation<unknown, Record<string, string | number | undefined>>("/bi/kpis", "POST", [["bi-kpis"]]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    if (!form.name) {
-      setFieldErrors({ name: "يرجى إدخال اسم المؤشر" });
-      toast({ variant: "destructive", title: "يرجى إدخال اسم المؤشر" });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم المؤشر",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -37,7 +38,7 @@ export default function KpisCreate() {
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إضافة المؤشر بنجاح" }); setLocation("/bi/kpis"); },
       onError: (err: any) => {
-        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المؤشر", description: err?.fix ?? err?.message });
       },
     });

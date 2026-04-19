@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -17,13 +17,14 @@ export default function RequestsTypeCreate() {
     name: "", category: "administrative", isActive: true, description: "",
   });
   const createMut = useApiMutation<unknown, Record<string, string | boolean | undefined>>("/requests/types", "POST", [["request-types"]]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    if (!form.name) {
-      setFieldErrors({ name: "يرجى إدخال اسم نوع الطلب" });
-      toast({ variant: "destructive", title: "يرجى إدخال اسم نوع الطلب" });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم نوع الطلب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -34,7 +35,7 @@ export default function RequestsTypeCreate() {
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إضافة نوع الطلب بنجاح" }); setLocation("/requests/types"); },
       onError: (err: any) => {
-        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة نوع الطلب", description: err?.fix ?? err?.message });
       },
     });

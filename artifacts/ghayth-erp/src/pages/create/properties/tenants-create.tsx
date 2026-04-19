@@ -7,6 +7,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { User, Building2, Shield, Phone, Briefcase } from "lucide-react";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -15,7 +16,7 @@ export default function TenantsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/tenants", "POST", [["property-tenants-list"]]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const [form, setForm] = useState({
     name: "",
@@ -51,15 +52,13 @@ export default function TenantsCreate() {
   const isCompany = form.tenantType === "company";
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name.trim()) localErrors.name = "يرجى إدخال اسم المستأجر";
-    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الجوال يجب أن يكون 9 أرقام على الأقل";
-    if (form.nationalId && !/^\d{10}$/.test(form.nationalId.trim())) localErrors.nationalId = "رقم الهوية يجب أن يكون 10 أرقام";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name.trim() ? null : "يرجى إدخال اسم المستأجر",
+      phone: form.phone && form.phone.replace(/\D/g, "").length < 9 ? "رقم الجوال يجب أن يكون 9 أرقام على الأقل" : null,
+      nationalId: form.nationalId && !/^\d{10}$/.test(form.nationalId.trim()) ? "رقم الهوية يجب أن يكون 10 أرقام" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -75,7 +74,7 @@ export default function TenantsCreate() {
       toast({ title: "تم إضافة المستأجر بنجاح" });
       setLocation("/properties/tenants");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المستأجر", description: err?.fix ?? err?.message });
     }
   };

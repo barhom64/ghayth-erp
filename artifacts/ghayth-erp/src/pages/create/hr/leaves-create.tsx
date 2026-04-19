@@ -51,7 +51,7 @@ export default function LeavesCreate() {
     contactDuringLeave: "",
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate } = useFieldErrors();
 
   if (leaveTypesQ.isLoading || loadingEmp) return <LoadingSpinner />;
   if (leaveTypesQ.isError || errorEmp) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -72,16 +72,17 @@ export default function LeavesCreate() {
   );
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.leaveTypeId) localErrors.leaveTypeId = "يرجى اختيار نوع الإجازة";
-    if (!form.startDate) localErrors.startDate = "تاريخ البداية مطلوب";
-    if (!form.endDate) localErrors.endDate = "تاريخ النهاية مطلوب";
-    if (form.startDate && form.endDate && form.endDate < form.startDate) localErrors.endDate = "تاريخ النهاية يجب أن يكون بعد تاريخ البدء";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      leaveTypeId: form.leaveTypeId ? null : "يرجى اختيار نوع الإجازة",
+      startDate: form.startDate ? null : "تاريخ البداية مطلوب",
+      endDate: !form.endDate
+        ? "تاريخ النهاية مطلوب"
+        : form.startDate && form.endDate < form.startDate
+          ? "تاريخ النهاية يجب أن يكون بعد تاريخ البدء"
+          : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(

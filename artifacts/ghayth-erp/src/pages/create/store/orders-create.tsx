@@ -9,6 +9,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -33,7 +34,7 @@ export default function OrdersCreate() {
     customerName: "", customerPhone: "", status: "pending", notes: "",
   });
   const [items, setItems] = useState<OrderItem[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (loadingC || loadingP) return <LoadingSpinner />;
   if (errorC || errorP) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -74,10 +75,11 @@ export default function OrdersCreate() {
   const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    if (!form.customerName) {
-      setFieldErrors({ customerName: "يرجى إدخال اسم العميل" });
-      toast({ variant: "destructive", title: "يرجى إدخال اسم العميل" });
+    const firstError = validate({
+      customerName: form.customerName ? null : "يرجى إدخال اسم العميل",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -90,7 +92,7 @@ export default function OrdersCreate() {
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الطلب بنجاح" }); setLocation("/store"); },
       onError: (err: any) => {
-        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.fix ?? err?.message });
       },
     });

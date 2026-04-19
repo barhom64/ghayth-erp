@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -19,13 +20,14 @@ export default function PoliciesCreate() {
   const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>("/governance/policies", "POST", [["governance-policies"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    if (!form.title) {
-      setFieldErrors({ title: "عنوان السياسة مطلوب" });
-      toast({ variant: "destructive", title: "عنوان السياسة مطلوب" });
+    const firstError = validate({
+      title: form.title ? null : "عنوان السياسة مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -34,7 +36,7 @@ export default function PoliciesCreate() {
       toast({ title: "تم إضافة السياسة بنجاح" });
       setLocation("/governance/policies");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السياسة", description: err?.fix ?? err?.message });
     }
   };

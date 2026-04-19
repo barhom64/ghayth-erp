@@ -9,6 +9,7 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ClientContextCard } from "@/components/shared/client-context-card";
@@ -32,21 +33,19 @@ export default function CrmCreate() {
   const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.title) localErrors.title = "يرجى إدخال عنوان الفرصة";
-    if (form.probability && (Number(form.probability) < 0 || Number(form.probability) > 100)) localErrors.probability = "نسبة الاحتمال يجب أن تكون بين 0 و 100";
-    if (form.value && Number(form.value) < 0) localErrors.value = "القيمة يجب أن تكون 0 أو أكثر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      title: form.title ? null : "يرجى إدخال عنوان الفرصة",
+      probability: form.probability && (Number(form.probability) < 0 || Number(form.probability) > 100) ? "نسبة الاحتمال يجب أن تكون بين 0 و 100" : null,
+      value: form.value && Number(form.value) < 0 ? "القيمة يجب أن تكون 0 أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -69,7 +68,7 @@ export default function CrmCreate() {
       toast({ title: "تمت إضافة الفرصة بنجاح" });
       setLocation("/crm");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الفرصة", description: err?.fix ?? err?.message });
     }
   };

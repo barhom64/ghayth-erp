@@ -6,6 +6,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
@@ -18,7 +19,7 @@ export default function PropertyMaintenanceCreate() {
   const { data: unitsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
   const units = unitsData?.data || [];
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("property_maintenance_create", {
     unitId: "", category: "", description: "", priority: "medium", cost: "",
@@ -29,15 +30,13 @@ export default function PropertyMaintenanceCreate() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.unitId) localErrors.unitId = "يرجى اختيار الوحدة";
-    if (!form.description) localErrors.description = "وصف الطلب مطلوب";
-    if (form.cost && Number(form.cost) < 0) localErrors.cost = "التكلفة يجب أن تكون صفر أو أكثر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      unitId: form.unitId ? null : "يرجى اختيار الوحدة",
+      description: form.description ? null : "وصف الطلب مطلوب",
+      cost: form.cost && Number(form.cost) < 0 ? "التكلفة يجب أن تكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -52,7 +51,7 @@ export default function PropertyMaintenanceCreate() {
       toast({ title: "تم إنشاء طلب الصيانة بنجاح" });
       setLocation("/properties");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.fix ?? err?.message });
     }
   };

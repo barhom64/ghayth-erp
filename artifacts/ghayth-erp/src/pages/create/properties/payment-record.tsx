@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout } from "@/components/create-page-layout";
@@ -17,7 +18,7 @@ export default function PaymentRecord() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { data: contractResp, isLoading, isError } = useApiQuery<any>(
     ["property-contract-detail", params?.contractId],
@@ -39,10 +40,11 @@ export default function PaymentRecord() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSave = async () => {
-    setFieldErrors({});
-    if (!form.amount || Number(form.amount) <= 0) {
-      setFieldErrors({ amount: "المبلغ يجب أن يكون أكبر من صفر" });
-      toast({ variant: "destructive", title: "المبلغ يجب أن يكون أكبر من صفر" });
+    const firstError = validate({
+      amount: !form.amount || Number(form.amount) <= 0 ? "المبلغ يجب أن يكون أكبر من صفر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     setSaving(true);
@@ -60,7 +62,7 @@ export default function PaymentRecord() {
       qc.invalidateQueries({ queryKey: ["property-contracts"] });
       setLocation(`/properties/contracts`);
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة", description: err?.fix ?? err?.message });
     }
     finally { setSaving(false); }

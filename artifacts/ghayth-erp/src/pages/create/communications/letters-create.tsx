@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -20,7 +21,7 @@ export default function LettersCreate() {
   const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/communications/send", "POST", [["comm-letters"]]);
   const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -29,13 +30,12 @@ export default function LettersCreate() {
   const employees = employeesData?.data || [];
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.subject) localErrors.subject = "يرجى إدخال موضوع الخطاب";
-    if (!form.toNumber) localErrors.toNumber = "يرجى إدخال المستلم";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+    const firstError = validate({
+      subject: form.subject ? null : "يرجى إدخال موضوع الخطاب",
+      toNumber: form.toNumber ? null : "يرجى إدخال المستلم",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -47,7 +47,7 @@ export default function LettersCreate() {
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/letters"); },
       onError: (err: any) => {
-        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الخطاب", description: err?.fix ?? err?.message });
       },
     });

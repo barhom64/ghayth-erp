@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TextField, TextAreaField } from "@/components/shared/form-field-wrapper";
 
@@ -16,19 +16,20 @@ export default function DashboardsCreate() {
     title: "", description: "", isDefault: false,
   });
   const createMut = useApiMutation<unknown, Record<string, string | boolean | undefined>>("/bi/dashboards", "POST", [["bi-dashboards"]]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    if (!form.title) {
-      setFieldErrors({ title: "يرجى إدخال اسم لوحة المعلومات" });
-      toast({ variant: "destructive", title: "يرجى إدخال اسم لوحة المعلومات" });
+    const firstError = validate({
+      title: form.title ? null : "يرجى إدخال اسم لوحة المعلومات",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({ title: form.title, description: form.description || undefined, isDefault: form.isDefault }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء لوحة المعلومات بنجاح" }); setLocation("/bi/dashboards"); },
       onError: (err: any) => {
-        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء لوحة المعلومات", description: err?.fix ?? err?.message });
       },
     });

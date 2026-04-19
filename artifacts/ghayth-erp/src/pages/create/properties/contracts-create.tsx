@@ -10,6 +10,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -33,7 +34,7 @@ export default function ContractsCreate() {
   const [isDirty, setIsDirty] = useState(false);
   useUnsavedChanges(isDirty);
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
   const errCls = (field: string) => fieldErrorClass(fieldErrors[field]);
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
@@ -145,18 +146,17 @@ export default function ContractsCreate() {
   }, [form.startDate, form.endDate, form.monthlyRent, form.paymentFrequency, form.paymentDay, form.totalContractValue, form.numberOfInstallments]);
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.unitId) localErrors.unitId = "يرجى اختيار الوحدة";
-    if (!form.tenantId && !form.tenantName) localErrors.tenantId = "يرجى اختيار أو إدخال المستأجر";
-    if (!form.startDate) localErrors.startDate = "تاريخ بدء العقد مطلوب";
-    if (!form.endDate) localErrors.endDate = "تاريخ انتهاء العقد مطلوب";
-    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
-    if (!form.monthlyRent || Number(form.monthlyRent) <= 0) localErrors.monthlyRent = "الإيجار الشهري يجب أن يكون أكبر من صفر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      unitId: form.unitId ? null : "يرجى اختيار الوحدة",
+      tenantId: !form.tenantId && !form.tenantName ? "يرجى اختيار أو إدخال المستأجر" : null,
+      startDate: form.startDate ? null : "تاريخ بدء العقد مطلوب",
+      endDate: !form.endDate
+        ? "تاريخ انتهاء العقد مطلوب"
+        : (form.startDate && form.endDate <= form.startDate ? "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء" : null),
+      monthlyRent: !form.monthlyRent || Number(form.monthlyRent) <= 0 ? "الإيجار الشهري يجب أن يكون أكبر من صفر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -206,7 +206,7 @@ export default function ContractsCreate() {
       toast({ title: "تم إنشاء العقد بنجاح" });
       setLocation("/properties/contracts");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء العقد", description: err?.fix ?? err?.message });
     }
   };

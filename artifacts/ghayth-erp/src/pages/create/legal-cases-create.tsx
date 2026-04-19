@@ -8,6 +8,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -24,20 +25,18 @@ export default function LegalCasesCreate() {
     court: "", opposingParty: "", lawyerName: "", filingDate: "",
     status: "open", description: "", notes: "",
   });
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.title) localErrors.title = "يرجى إدخال عنوان القضية";
-    if (form.caseNumber && !/^[A-Za-z0-9\-\/]+$/.test(form.caseNumber)) localErrors.caseNumber = "رقم القضية يجب أن يحتوي على أحرف وأرقام وشرطات فقط";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      title: form.title ? null : "يرجى إدخال عنوان القضية",
+      caseNumber: form.caseNumber && !/^[A-Za-z0-9\-\/]+$/.test(form.caseNumber) ? "رقم القضية يجب أن يحتوي على أحرف وأرقام وشرطات فقط" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -49,7 +48,7 @@ export default function LegalCasesCreate() {
       toast({ title: "تمت إضافة القضية بنجاح" });
       setLocation("/legal");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القضية", description: err?.fix ?? err?.message });
     }
   };

@@ -8,6 +8,7 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -27,20 +28,18 @@ export default function SupportCreate() {
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (loadingC || loadingE) return <LoadingSpinner />;
   if (errorC || errorE) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.title) localErrors.title = "يرجى إدخال عنوان التذكرة";
-    if (!form.description) localErrors.description = "يرجى إدخال وصف المشكلة";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      title: form.title ? null : "يرجى إدخال عنوان التذكرة",
+      description: form.description ? null : "يرجى إدخال وصف المشكلة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -57,7 +56,7 @@ export default function SupportCreate() {
       toast({ title: "تم إنشاء التذكرة بنجاح" });
       setLocation("/support");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التذكرة", description: err?.fix ?? err?.message });
     }
   };

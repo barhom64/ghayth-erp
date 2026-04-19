@@ -6,6 +6,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -16,7 +17,7 @@ export default function BuildingsCreate() {
   const { data: ownersResp, isLoading, isError } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const owners = asList(ownersResp);
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -43,14 +44,12 @@ export default function BuildingsCreate() {
   });
 
   const handleSave = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name) localErrors.name = "اسم المبنى مطلوب";
-    if (form.floors && Number(form.floors) < 0) localErrors.floors = "عدد الطوابق يجب أن يكون صفر أو أكثر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name ? null : "اسم المبنى مطلوب",
+      floors: form.floors && Number(form.floors) < 0 ? "عدد الطوابق يجب أن يكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     setSaving(true);
@@ -59,7 +58,7 @@ export default function BuildingsCreate() {
       toast({ title: "تمت إضافة المبنى بنجاح" });
       setLocation("/properties/buildings");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المبنى", description: err?.fix ?? err?.message });
     }
     finally { setSaving(false); }

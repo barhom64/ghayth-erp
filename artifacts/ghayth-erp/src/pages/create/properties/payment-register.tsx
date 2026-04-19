@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout } from "@/components/create-page-layout";
@@ -18,7 +19,7 @@ export default function PaymentRegisterPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { data: paymentsResp, isLoading, isError } = useApiQuery<any>(["rent-payments"], "/properties/payments");
   const payments = asList(paymentsResp);
@@ -41,10 +42,11 @@ export default function PaymentRegisterPage() {
   }
 
   const handleSave = async () => {
-    setFieldErrors({});
-    if (!form.paidAmount || Number(form.paidAmount) <= 0) {
-      setFieldErrors({ paidAmount: "يرجى تحديد المبلغ" });
-      toast({ variant: "destructive", title: "يرجى تحديد المبلغ" });
+    const firstError = validate({
+      paidAmount: !form.paidAmount || Number(form.paidAmount) <= 0 ? "يرجى تحديد المبلغ" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     setSaving(true);
@@ -62,7 +64,7 @@ export default function PaymentRegisterPage() {
       qc.invalidateQueries({ queryKey: ["rent-payments"] });
       setLocation("/properties/payments");
     } catch (err: any) {
-      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة", description: err?.fix ?? err?.message });
     } finally {
       setSaving(false);
