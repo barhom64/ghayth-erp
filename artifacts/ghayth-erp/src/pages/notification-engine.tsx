@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -105,9 +106,9 @@ function RoutingRulesTab() {
                     <div className="flex flex-col gap-2 flex-1 max-w-lg">
                       <div className="flex flex-wrap gap-2">
                         {ALL_CHANNELS.map((ch) => (
-                          <label key={ch} className="flex items-center gap-1 text-sm">
-                            <input type="checkbox" checked={editChannels.includes(ch)}
-                              onChange={(e) => setEditChannels(e.target.checked ? [...editChannels, ch] : editChannels.filter((c) => c !== ch))} />
+                          <label key={ch} className="flex items-center gap-1 text-sm cursor-pointer">
+                            <Checkbox checked={editChannels.includes(ch)}
+                              onCheckedChange={(v) => setEditChannels(v === true ? [...editChannels, ch] : editChannels.filter((c) => c !== ch))} />
                             {CHANNEL_LABELS[ch]?.label ?? ch}
                           </label>
                         ))}

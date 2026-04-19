@@ -3,6 +3,7 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
@@ -193,7 +194,7 @@ export function WorkflowDefinitionsTab() {
               </div>
               <div className="flex items-end gap-2 pb-1">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={slaForm.autoApproveOnTimeout} onChange={(e) => setSlaForm({ ...slaForm, autoApproveOnTimeout: e.target.checked })} className="rounded" />
+                  <Checkbox checked={slaForm.autoApproveOnTimeout} onCheckedChange={(v) => setSlaForm({ ...slaForm, autoApproveOnTimeout: v === true })} />
                   <span className="text-sm">موافقة تلقائية عند التجاوز</span>
                 </label>
               </div>
@@ -244,11 +245,11 @@ export function WorkflowDefinitionsTab() {
               <div><Label>المهلة الافتراضية (ساعة)</Label><Input type="number" value={form.defaultSlaHours} onChange={(e) => setForm({ ...form, defaultSlaHours: Number(e.target.value) })} /></div>
               <div className="flex items-center gap-6 pt-6">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.isReturnable} onChange={(e) => setForm({ ...form, isReturnable: e.target.checked })} className="rounded" />
+                  <Checkbox checked={form.isReturnable} onCheckedChange={(v) => setForm({ ...form, isReturnable: v === true })} />
                   <span className="text-sm">قابل للإرجاع</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.enableEscalation} onChange={(e) => setForm({ ...form, enableEscalation: e.target.checked })} className="rounded" />
+                  <Checkbox checked={form.enableEscalation} onCheckedChange={(v) => setForm({ ...form, enableEscalation: v === true })} />
                   <span className="text-sm">تصعيد تلقائي</span>
                 </label>
               </div>
@@ -270,7 +271,7 @@ export function WorkflowDefinitionsTab() {
                       </select>
                       <Input type="number" placeholder="مهلة (ساعة)" value={step.slaHours} onChange={(e) => updateStep(idx, "slaHours", Number(e.target.value))} />
                       <label className="flex items-center gap-1 text-xs cursor-pointer">
-                        <input type="checkbox" checked={step.autoApproveOnTimeout} onChange={(e) => updateStep(idx, "autoApproveOnTimeout", e.target.checked)} className="rounded" />
+                        <Checkbox checked={step.autoApproveOnTimeout} onCheckedChange={(v) => updateStep(idx, "autoApproveOnTimeout", v === true)} />
                         موافقة تلقائية
                       </label>
                     </div>

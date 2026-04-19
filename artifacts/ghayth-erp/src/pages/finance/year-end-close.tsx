@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { useToast } from "@/hooks/use-toast";
@@ -85,8 +86,8 @@ export default function YearEndClosePage() {
               />
             </div>
             <div className="flex items-end">
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+              <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={force} onCheckedChange={(v) => setForce(v === true)} />
                 إقفال الفترات الشهرية المتبقية تلقائياً
               </label>
             </div>
