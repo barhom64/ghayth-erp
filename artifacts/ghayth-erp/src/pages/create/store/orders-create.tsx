@@ -1,17 +1,17 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface OrderItem {
   name: string;
@@ -33,6 +33,7 @@ export default function OrdersCreate() {
     customerName: "", customerPhone: "", status: "pending", notes: "",
   });
   const [items, setItems] = useState<OrderItem[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (loadingC || loadingP) return <LoadingSpinner />;
   if (errorC || errorP) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -73,7 +74,9 @@ export default function OrdersCreate() {
   const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
 
   const handleSubmit = () => {
+    setFieldErrors({});
     if (!form.customerName) {
+      setFieldErrors({ customerName: "يرجى إدخال اسم العميل" });
       toast({ variant: "destructive", title: "يرجى إدخال اسم العميل" });
       return;
     }
@@ -86,7 +89,10 @@ export default function OrdersCreate() {
       items: items.length > 0 ? items : undefined,
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الطلب بنجاح" }); setLocation("/store"); },
-      onError: (err) => toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err.message }),
+      onError: (err: any) => {
+        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.fix ?? err?.message });
+      },
     });
   };
 
@@ -102,10 +108,9 @@ export default function OrdersCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label>اختر من العملاء</Label>
+        <FormFieldWrapper label="اختر من العملاء">
           <Select value="_none" onValueChange={(v) => { if (v !== "_none") handleClientSelect(v); }}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— اختر عميل أو أدخل يدوياً —</SelectItem>
               {clients.map((c: any) => (
@@ -113,13 +118,12 @@ export default function OrdersCreate() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>اسم العميل <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.customerName} onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))} /></div>
-        <div><Label>هاتف العميل</Label><Input className="mt-1" dir="ltr" value={form.customerPhone} onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))} placeholder="05xxxxxxxx" /></div>
-        <div>
-          <Label>الحالة</Label>
+        </FormFieldWrapper>
+        <TextField label="اسم العميل" required value={form.customerName} onChange={(v) => setForm((f) => ({ ...f, customerName: v }))} error={fieldErrors.customerName} />
+        <TextField label="هاتف العميل" dir="ltr" value={form.customerPhone} onChange={(v) => setForm((f) => ({ ...f, customerPhone: v }))} placeholder="05xxxxxxxx" />
+        <FormFieldWrapper label="الحالة">
           <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="pending">قيد الانتظار</SelectItem>
               <SelectItem value="confirmed">مؤكد</SelectItem>
@@ -129,7 +133,7 @@ export default function OrdersCreate() {
               <SelectItem value="cancelled">ملغي</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </FormFieldWrapper>
       </div>
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
@@ -180,7 +184,7 @@ export default function OrdersCreate() {
         )}
       </div>
 
-      <div><Label>ملاحظات</Label><Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية..." /></div>
+      <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." className="mt-4" />
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/store")}>إلغاء</Button>

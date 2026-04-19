@@ -1,8 +1,8 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, getErrorMessage } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Autocomplete } from "@/components/ui/autocomplete";
@@ -10,6 +10,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Switch } from "@/components/ui/switch";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 const natureMap: Record<string, string> = { debit: "مدين", credit: "دائن" };
@@ -24,18 +25,29 @@ export default function AccountsCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.code) localErrors.code = "الرمز مطلوب";
+    if (!form.name) localErrors.name = "الاسم مطلوب";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
+      return;
+    }
     try {
       await createMut.mutateAsync(form);
       clearDraft();
       toast({ title: "تم إضافة الحساب" });
       setLocation("/finance/accounts");
-    } catch (err) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    } catch (err: any) {
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ", description: err?.fix ?? getErrorMessage(err) });
     }
   };
 
@@ -51,38 +63,34 @@ export default function AccountsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><Label>الرمز</Label><Input className="mt-1" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="1100" /></div>
-        <div><Label>الاسم</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-        <div><Label>الاسم بالإنجليزية</Label><Input className="mt-1" dir="ltr" value={form.nameEn} onChange={(e) => setForm((f) => ({ ...f, nameEn: e.target.value }))} placeholder="Account Name" /></div>
-        <div>
-          <Label>النوع</Label>
+        <TextField label="الرمز" required dir="ltr" value={form.code} onChange={(v) => setForm((f) => ({ ...f, code: v }))} placeholder="1100" error={fieldErrors.code} />
+        <TextField label="الاسم" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} />
+        <TextField label="الاسم بالإنجليزية" dir="ltr" value={form.nameEn} onChange={(v) => setForm((f) => ({ ...f, nameEn: v }))} placeholder="Account Name" />
+        <FormFieldWrapper label="النوع">
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(typeMap).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>الحساب الأب</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الحساب الأب">
           <Autocomplete
-            className="mt-1"
             value={form.parentCode}
             onChange={(v) => setForm((f) => ({ ...f, parentCode: String(v) }))}
             options={accounts.map((a: any) => ({ value: String(a.code), label: `${a.code} - ${a.name}` }))}
             placeholder="ابحث عن حساب أب..."
             emptyMessage="لا توجد حسابات"
           />
-        </div>
-        <div>
-          <Label>الطبيعة</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الطبيعة">
           <Select value={form.nature} onValueChange={(v) => setForm((f) => ({ ...f, nature: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(natureMap).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
+        </FormFieldWrapper>
         <div className="flex items-center gap-3 pt-6">
           <Switch checked={form.allowPosting} onCheckedChange={(v) => setForm((f) => ({ ...f, allowPosting: v }))} id="allowPosting" />
           <Label htmlFor="allowPosting">يقبل الحركة (ترحيل)</Label>
