@@ -2,14 +2,13 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { ProductContextCard } from "@/components/shared/product-context-card";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "warehouse_movements_create";
 const INITIAL = { productId: "", type: "in", quantity: "", unitCost: "", reference: "", notes: "" };
@@ -22,17 +21,19 @@ export default function MovementsCreate() {
   const products = productsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    if (!form.productId) {
-      toast({ variant: "destructive", title: "يرجى اختيار المنتج" });
-      return;
-    }
-    if (!form.quantity) {
-      toast({ variant: "destructive", title: "الكمية مطلوبة" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.productId) localErrors.productId = "يرجى اختيار المنتج";
+    if (!form.quantity || Number(form.quantity) <= 0) localErrors.quantity = "الكمية يجب أن تكون أكبر من صفر";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     try {
@@ -48,7 +49,8 @@ export default function MovementsCreate() {
       toast({ title: "تمت إضافة الحركة بنجاح" });
       setLocation("/warehouse");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الحركة", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الحركة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -64,12 +66,9 @@ export default function MovementsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="md:col-span-2">
-          <Label>المنتج</Label>
+        <FormFieldWrapper label="المنتج" required error={fieldErrors.productId} className="md:col-span-2">
           <Select value={form.productId} onValueChange={(v) => setForm((f) => ({ ...f, productId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر المنتج" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر المنتج" /></SelectTrigger>
             <SelectContent>
               {products.map((p: any) => (
                 <SelectItem key={p.id} value={String(p.id)}>{p.sku ? `${p.sku} - ` : ""}{p.name}</SelectItem>
@@ -84,23 +83,20 @@ export default function MovementsCreate() {
               />
             </div>
           )}
-        </div>
-        <div>
-          <Label>النوع</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="النوع">
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="in">إدخال</SelectItem>
               <SelectItem value="out">إخراج</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>الكمية</Label><Input className="mt-1" type="number" value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} /></div>
-        <div><Label>تكلفة الوحدة</Label><Input className="mt-1" type="number" value={form.unitCost} onChange={(e) => setForm((f) => ({ ...f, unitCost: e.target.value }))} /></div>
-        <div><Label>المرجع</Label><Input className="mt-1" value={form.reference} onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))} /></div>
-        <div><Label>ملاحظات</Label><Input className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></div>
+        </FormFieldWrapper>
+        <NumberField label="الكمية" required value={form.quantity} onChange={(v) => setForm((f) => ({ ...f, quantity: v }))} min={0} step={0.01} error={fieldErrors.quantity} />
+        <NumberField label="تكلفة الوحدة" value={form.unitCost} onChange={(v) => setForm((f) => ({ ...f, unitCost: v }))} step={0.01} min={0} />
+        <TextField label="المرجع" value={form.reference} onChange={(v) => setForm((f) => ({ ...f, reference: v }))} />
+        <TextField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} />
       </div>
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>

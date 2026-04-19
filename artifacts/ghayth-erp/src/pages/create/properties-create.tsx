@@ -4,15 +4,15 @@ import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function PropertiesCreate() {
   const [, setLocation] = useLocation();
@@ -28,9 +28,6 @@ export default function PropertiesCreate() {
   const owners = asList(ownersResp);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const [form, setForm] = useState({
     unitNumber: "",
@@ -128,7 +125,10 @@ export default function PropertiesCreate() {
       ...(attachments.length > 0 ? { attachments } : {}),
     }, {
       onSuccess: () => { toast({ title: "تمت إضافة الوحدة بنجاح" }); setIsDirty(false); setLocation("/properties"); },
-      onError: (err) => toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الوحدة", description: err.message }),
+      onError: (err: any) => {
+        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الوحدة", description: err?.fix ?? err?.message });
+      },
     });
   };
 
@@ -136,24 +136,11 @@ export default function PropertiesCreate() {
     <CreatePageLayout title="إضافة وحدة عقارية" backPath="/properties">
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>رقم الوحدة <span className="text-red-500">*</span></Label>
-            <Input
-              className={errCls("unitNumber")}
-              value={form.unitNumber}
-              onChange={e => set("unitNumber", e.target.value)}
-              placeholder="مثل: A-101"
-              required
-            />
-            <FieldHint field="unitNumber" />
-          </div>
-          <div>
-            <Label>المبنى / المجمع</Label>
+          <TextField label="رقم الوحدة" required value={form.unitNumber} onChange={(v) => set("unitNumber", v)} placeholder="مثل: A-101" error={fieldErrors.unitNumber} />
+          <FormFieldWrapper label="المبنى / المجمع">
             {buildings.length > 0 ? (
               <Select value={form.buildingId} onValueChange={v => set("buildingId", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر مبنى (اختياري)" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر مبنى (اختياري)" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— بدون مبنى —</SelectItem>
                   {buildings.map((b: any) => (
@@ -162,15 +149,10 @@ export default function PropertiesCreate() {
                 </SelectContent>
               </Select>
             ) : (
-              <Input
-                value={form.buildingName}
-                onChange={e => set("buildingName", e.target.value)}
-                placeholder="اسم المبنى"
-              />
+              <Input value={form.buildingName} onChange={e => set("buildingName", e.target.value)} placeholder="اسم المبنى" />
             )}
-          </div>
-          <div>
-            <Label>النوع</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="النوع">
             <Select value={form.type} onValueChange={v => set("type", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -182,9 +164,8 @@ export default function PropertiesCreate() {
                 <SelectItem value="land">أرض</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الحالة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={v => set("status", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -193,24 +174,19 @@ export default function PropertiesCreate() {
                 <SelectItem value="under_maintenance">تحت الصيانة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div><Label>المساحة (م²)</Label><Input className={errCls("area")} type="number" value={form.area} onChange={e => set("area", e.target.value)} placeholder="٠" /><FieldHint field="area" /></div>
-          <div><Label>الطابق</Label><Input className={errCls("floor")} type="number" value={form.floor} onChange={e => set("floor", e.target.value)} placeholder="٠" /><FieldHint field="floor" /></div>
-          <div><Label>غرف نوم</Label><Input type="number" value={form.bedrooms} onChange={e => set("bedrooms", e.target.value)} placeholder="٠" /></div>
-          <div><Label>حمامات</Label><Input type="number" value={form.bathrooms} onChange={e => set("bathrooms", e.target.value)} placeholder="٠" /></div>
+          <NumberField label="المساحة (م²)" value={form.area} onChange={(v) => set("area", v)} placeholder="٠" min={0} error={fieldErrors.area} />
+          <NumberField label="الطابق" value={form.floor} onChange={(v) => set("floor", v)} placeholder="٠" min={0} error={fieldErrors.floor} />
+          <NumberField label="غرف نوم" value={form.bedrooms} onChange={(v) => set("bedrooms", v)} placeholder="٠" min={0} />
+          <NumberField label="حمامات" value={form.bathrooms} onChange={(v) => set("bathrooms", v)} placeholder="٠" min={0} />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label>{`الإيجار الشهري (${getCurrencySymbol()})`}</Label>
-            <Input className={errCls("monthlyRent")} type="number" step="0.01" value={form.monthlyRent} onChange={e => set("monthlyRent", e.target.value)} placeholder="٠" />
-            <FieldHint field="monthlyRent" />
-          </div>
-          <div>
-            <Label>الاتجاه</Label>
+          <NumberField label={`الإيجار الشهري (${getCurrencySymbol()})`} value={form.monthlyRent} onChange={(v) => set("monthlyRent", v)} placeholder="٠" step={0.01} min={0} error={fieldErrors.monthlyRent} />
+          <FormFieldWrapper label="الاتجاه">
             <Select value={form.direction || "none"} onValueChange={v => set("direction", v)}>
               <SelectTrigger><SelectValue placeholder="اختر الاتجاه" /></SelectTrigger>
               <SelectContent>
@@ -225,9 +201,8 @@ export default function PropertiesCreate() {
                 <SelectItem value="south_west">جنوبي غربي</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>مستوى التشطيب</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="مستوى التشطيب">
             <Select value={form.finishing || "none"} onValueChange={v => set("finishing", v)}>
               <SelectTrigger><SelectValue placeholder="مستوى التشطيب" /></SelectTrigger>
               <SelectContent>
@@ -239,12 +214,11 @@ export default function PropertiesCreate() {
                 <SelectItem value="furnished">مفروشة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label>نوع الاستخدام</Label>
+          <FormFieldWrapper label="نوع الاستخدام">
             <Select value={form.usageType} onValueChange={v => set("usageType", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -253,24 +227,14 @@ export default function PropertiesCreate() {
                 <SelectItem value="industrial">صناعي</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>رقم عداد الكهرباء</Label>
-            <Input value={form.electricityMeter} onChange={e => set("electricityMeter", e.target.value)} placeholder="رقم العداد" dir="ltr" />
-          </div>
-          <div>
-            <Label>رقم عداد المياه</Label>
-            <Input value={form.waterMeter} onChange={e => set("waterMeter", e.target.value)} placeholder="رقم العداد" dir="ltr" />
-          </div>
+          </FormFieldWrapper>
+          <TextField label="رقم عداد الكهرباء" dir="ltr" value={form.electricityMeter} onChange={(v) => set("electricityMeter", v)} placeholder="رقم العداد" />
+          <TextField label="رقم عداد المياه" dir="ltr" value={form.waterMeter} onChange={(v) => set("waterMeter", v)} placeholder="رقم العداد" />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <Label>مواقف سيارات</Label>
-            <Input type="number" value={form.parkingSpaces} onChange={e => set("parkingSpaces", e.target.value)} placeholder="0" />
-          </div>
-          <div>
-            <Label>نوع التكييف</Label>
+          <NumberField label="مواقف سيارات" value={form.parkingSpaces} onChange={(v) => set("parkingSpaces", v)} placeholder="0" min={0} />
+          <FormFieldWrapper label="نوع التكييف">
             <Select value={form.acType || "none"} onValueChange={v => set("acType", v === "none" ? "" : v)}>
               <SelectTrigger><SelectValue placeholder="— غير محدد —" /></SelectTrigger>
               <SelectContent>
@@ -280,13 +244,12 @@ export default function PropertiesCreate() {
                 <SelectItem value="window">شباك</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
           <div className="flex items-end gap-2 pb-1">
             <Checkbox id="hasKitchen" checked={form.hasKitchen} onCheckedChange={(v) => { setIsDirty(true); setForm(prev => ({ ...prev, hasKitchen: v === true })); }} />
             <Label htmlFor="hasKitchen">مطبخ مجهز</Label>
           </div>
-          <div>
-            <Label>المالك</Label>
+          <FormFieldWrapper label="المالك">
             <Select value={form.ownerId || "none"} onValueChange={v => set("ownerId", v === "none" ? "" : v)}>
               <SelectTrigger><SelectValue placeholder="— بدون —" /></SelectTrigger>
               <SelectContent>
@@ -294,13 +257,10 @@ export default function PropertiesCreate() {
                 {owners.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
 
-        <div>
-          <Label>العنوان</Label>
-          <Input value={form.address} onChange={e => set("address", e.target.value)} placeholder="المدينة، الحي، الشارع" />
-        </div>
+        <TextField label="العنوان" value={form.address} onChange={(v) => set("address", v)} placeholder="المدينة، الحي، الشارع" />
 
         <div>
           <Label className="block mb-2">المرافق والمميزات</Label>
@@ -322,10 +282,7 @@ export default function PropertiesCreate() {
           </div>
         </div>
 
-        <div>
-          <Label>ملاحظات</Label>
-          <Textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="ملاحظات إضافية عن الوحدة..." />
-        </div>
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => set("notes", v)} placeholder="ملاحظات إضافية عن الوحدة..." />
 
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="صور ومرفقات الوحدة" />
 
