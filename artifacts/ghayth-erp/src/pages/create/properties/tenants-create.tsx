@@ -2,9 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,15 +9,13 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { User, Building2, Shield, Phone, Briefcase } from "lucide-react";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function TenantsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/tenants", "POST", [["property-tenants-list"]]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const [form, setForm] = useState({
     name: "",
@@ -80,7 +75,8 @@ export default function TenantsCreate() {
       toast({ title: "تم إضافة المستأجر بنجاح" });
       setLocation("/properties/tenants");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المستأجر", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المستأجر", description: err?.fix ?? err?.message });
     }
   };
 
@@ -94,8 +90,7 @@ export default function TenantsCreate() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>نوع المستأجر</Label>
+              <FormFieldWrapper label="نوع المستأجر">
                 <Select value={form.tenantType} onValueChange={v => set("tenantType", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -103,23 +98,11 @@ export default function TenantsCreate() {
                     <SelectItem value="company">شركة / مؤسسة</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>{isCompany ? "اسم الشركة" : "الاسم الكامل"} <span className="text-red-500">*</span></Label>
-                <Input className={errCls("name")} value={form.name} onChange={e => set("name", e.target.value)} placeholder={isCompany ? "اسم الشركة أو المؤسسة" : "الاسم الرباعي"} />
-                <FieldHint field="name" />
-              </div>
-              <div className="space-y-2">
-                <Label>رقم الجوال</Label>
-                <Input className={errCls("phone")} dir="ltr" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="05XXXXXXXX" />
-                <FieldHint field="phone" />
-              </div>
-              <div className="space-y-2">
-                <Label>البريد الإلكتروني</Label>
-                <Input type="email" dir="ltr" value={form.email} onChange={e => set("email", e.target.value)} placeholder="example@email.com" />
-              </div>
-              <div className="space-y-2">
-                <Label>نوع الهوية</Label>
+              </FormFieldWrapper>
+              <TextField label={isCompany ? "اسم الشركة" : "الاسم الكامل"} required value={form.name} onChange={v => set("name", v)} placeholder={isCompany ? "اسم الشركة أو المؤسسة" : "الاسم الرباعي"} error={fieldErrors.name} />
+              <TextField label="رقم الجوال" dir="ltr" value={form.phone} onChange={v => set("phone", v)} placeholder="05XXXXXXXX" error={fieldErrors.phone} />
+              <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={v => set("email", v)} placeholder="example@email.com" />
+              <FormFieldWrapper label="نوع الهوية">
                 <Select value={form.idType} onValueChange={v => set("idType", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -129,16 +112,9 @@ export default function TenantsCreate() {
                     <SelectItem value="cr">سجل تجاري</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>رقم الهوية</Label>
-                <Input className={errCls("nationalId")} dir="ltr" value={form.nationalId} onChange={e => set("nationalId", e.target.value)} placeholder="رقم الهوية أو الإقامة" />
-                <FieldHint field="nationalId" />
-              </div>
-              <div className="space-y-2">
-                <Label>الجنسية</Label>
-                <Input value={form.nationality} onChange={e => set("nationality", e.target.value)} placeholder="الجنسية" />
-              </div>
+              </FormFieldWrapper>
+              <TextField label="رقم الهوية" dir="ltr" value={form.nationalId} onChange={v => set("nationalId", v)} placeholder="رقم الهوية أو الإقامة" error={fieldErrors.nationalId} />
+              <TextField label="الجنسية" value={form.nationality} onChange={v => set("nationality", v)} placeholder="الجنسية" />
             </div>
           </CardContent>
         </Card>
@@ -150,14 +126,8 @@ export default function TenantsCreate() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>رقم السجل التجاري</Label>
-                  <Input dir="ltr" value={form.crNumber} onChange={e => set("crNumber", e.target.value)} placeholder="رقم السجل التجاري" />
-                </div>
-                <div className="space-y-2">
-                  <Label>الرقم الموحد (700)</Label>
-                  <Input dir="ltr" value={form.unifiedNumber} onChange={e => set("unifiedNumber", e.target.value)} placeholder="700XXXXXXX" />
-                </div>
+                <TextField label="رقم السجل التجاري" dir="ltr" value={form.crNumber} onChange={v => set("crNumber", v)} placeholder="رقم السجل التجاري" />
+                <TextField label="الرقم الموحد (700)" dir="ltr" value={form.unifiedNumber} onChange={v => set("unifiedNumber", v)} placeholder="700XXXXXXX" />
               </div>
             </CardContent>
           </Card>
@@ -170,12 +140,10 @@ export default function TenantsCreate() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>تاريخ الميلاد</Label>
+                <FormFieldWrapper label="تاريخ الميلاد">
                   <DatePicker value={form.birthDate} onChange={v => set("birthDate", v)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>الجنس</Label>
+                </FormFieldWrapper>
+                <FormFieldWrapper label="الجنس">
                   <Select value={form.gender || "none"} onValueChange={v => set("gender", v === "none" ? "" : v)}>
                     <SelectTrigger><SelectValue placeholder="— غير محدد —" /></SelectTrigger>
                     <SelectContent>
@@ -184,9 +152,8 @@ export default function TenantsCreate() {
                       <SelectItem value="female">أنثى</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>الحالة الاجتماعية</Label>
+                </FormFieldWrapper>
+                <FormFieldWrapper label="الحالة الاجتماعية">
                   <Select value={form.maritalStatus || "none"} onValueChange={v => set("maritalStatus", v === "none" ? "" : v)}>
                     <SelectTrigger><SelectValue placeholder="— غير محدد —" /></SelectTrigger>
                     <SelectContent>
@@ -197,15 +164,9 @@ export default function TenantsCreate() {
                       <SelectItem value="widowed">أرمل</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>المهنة</Label>
-                  <Input value={form.occupation} onChange={e => set("occupation", e.target.value)} placeholder="المهنة أو الوظيفة" />
-                </div>
-                <div className="space-y-2">
-                  <Label>الدخل الشهري ({getCurrencySymbol()})</Label>
-                  <Input type="number" value={form.monthlyIncome} onChange={e => set("monthlyIncome", e.target.value)} placeholder="0" />
-                </div>
+                </FormFieldWrapper>
+                <TextField label="المهنة" value={form.occupation} onChange={v => set("occupation", v)} placeholder="المهنة أو الوظيفة" />
+                <NumberField label={`الدخل الشهري (${getCurrencySymbol()})`} value={form.monthlyIncome} onChange={v => set("monthlyIncome", v)} placeholder="0" min={0} />
               </div>
             </CardContent>
           </Card>
@@ -217,22 +178,10 @@ export default function TenantsCreate() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>اسم الكفيل / الضامن</Label>
-                <Input value={form.guarantorName} onChange={e => set("guarantorName", e.target.value)} placeholder="اسم الكفيل الكامل" />
-              </div>
-              <div className="space-y-2">
-                <Label>رقم هوية الكفيل</Label>
-                <Input dir="ltr" value={form.guarantorId} onChange={e => set("guarantorId", e.target.value)} placeholder="رقم الهوية" />
-              </div>
-              <div className="space-y-2">
-                <Label>هاتف الكفيل</Label>
-                <Input dir="ltr" value={form.guarantorPhone} onChange={e => set("guarantorPhone", e.target.value)} placeholder="05XXXXXXXX" />
-              </div>
-              <div className="space-y-2">
-                <Label>صلة القرابة</Label>
-                <Input value={form.guarantorRelation} onChange={e => set("guarantorRelation", e.target.value)} placeholder="مثل: أخ، زميل عمل" />
-              </div>
+              <TextField label="اسم الكفيل / الضامن" value={form.guarantorName} onChange={v => set("guarantorName", v)} placeholder="اسم الكفيل الكامل" />
+              <TextField label="رقم هوية الكفيل" dir="ltr" value={form.guarantorId} onChange={v => set("guarantorId", v)} placeholder="رقم الهوية" />
+              <TextField label="هاتف الكفيل" dir="ltr" value={form.guarantorPhone} onChange={v => set("guarantorPhone", v)} placeholder="05XXXXXXXX" />
+              <TextField label="صلة القرابة" value={form.guarantorRelation} onChange={v => set("guarantorRelation", v)} placeholder="مثل: أخ، زميل عمل" />
             </div>
           </CardContent>
         </Card>
@@ -243,34 +192,16 @@ export default function TenantsCreate() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>اسم شخص الطوارئ</Label>
-                <Input value={form.emergencyName} onChange={e => set("emergencyName", e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>هاتف الطوارئ</Label>
-                <Input dir="ltr" value={form.emergencyContact} onChange={e => set("emergencyContact", e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>عنوان السكن السابق</Label>
-                <Input value={form.previousAddress} onChange={e => set("previousAddress", e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>اسم المؤجر السابق</Label>
-                <Input value={form.previousLandlord} onChange={e => set("previousLandlord", e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>هاتف المؤجر السابق</Label>
-                <Input dir="ltr" value={form.previousLandlordPhone} onChange={e => set("previousLandlordPhone", e.target.value)} />
-              </div>
+              <TextField label="اسم شخص الطوارئ" value={form.emergencyName} onChange={v => set("emergencyName", v)} />
+              <TextField label="هاتف الطوارئ" dir="ltr" value={form.emergencyContact} onChange={v => set("emergencyContact", v)} />
+              <TextField label="عنوان السكن السابق" value={form.previousAddress} onChange={v => set("previousAddress", v)} />
+              <TextField label="اسم المؤجر السابق" value={form.previousLandlord} onChange={v => set("previousLandlord", v)} />
+              <TextField label="هاتف المؤجر السابق" dir="ltr" value={form.previousLandlordPhone} onChange={v => set("previousLandlordPhone", v)} />
             </div>
           </CardContent>
         </Card>
 
-        <div className="space-y-2">
-          <Label>ملاحظات</Label>
-          <Textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="أي ملاحظات إضافية..." rows={3} />
-        </div>
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={v => set("notes", v)} placeholder="أي ملاحظات إضافية..." rows={3} />
 
         <div className="flex justify-end pt-2">
           <Button onClick={handleSubmit} disabled={createMut.isPending} className="min-w-32">
