@@ -7,6 +7,7 @@ import {
   IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -22,6 +23,114 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ZOD VALIDATION SCHEMAS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const createProjectSchema = z.object({
+  name: z.string().min(1, "اسم المشروع مطلوب"),
+  description: z.string().optional().nullable(),
+  clientId: z.number().optional().nullable(),
+  managerId: z.number().optional().nullable(),
+  startDate: z.string().min(1, "تاريخ بداية المشروع مطلوب"),
+  endDate: z.string().min(1, "تاريخ نهاية المشروع مطلوب"),
+  budget: z.union([z.number(), z.string()]).optional().nullable(),
+  status: z.string().optional(),
+  phases: z.array(z.object({
+    name: z.string().min(1, "اسم المرحلة مطلوب"),
+    startDate: z.string().optional().nullable(),
+    endDate: z.string().optional().nullable(),
+  })).optional(),
+});
+
+const updateProjectSchema = z.object({
+  name: z.string().min(1, "اسم المشروع مطلوب").optional(),
+  description: z.string().optional().nullable(),
+  status: z.string().optional(),
+  budget: z.union([z.number(), z.string()]).optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  managerId: z.number().optional().nullable(),
+  spentAmount: z.union([z.number(), z.string()]).optional().nullable(),
+}).partial();
+
+const createPhaseSchema = z.object({
+  name: z.string().min(1, "اسم المرحلة مطلوب"),
+  orderIndex: z.number().optional(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+});
+
+const createTaskSchema = z.object({
+  title: z.string().min(1, "عنوان المهمة مطلوب"),
+  description: z.string().optional().nullable(),
+  assigneeId: z.number().optional().nullable(),
+  phaseId: z.number().optional().nullable(),
+  priority: z.string().optional(),
+  startDate: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  estimatedHours: z.union([z.number(), z.string()]).optional().nullable(),
+  dependsOn: z.array(z.number()).optional(),
+});
+
+const updateTaskSchema = z.object({
+  status: z.string().optional(),
+  progress: z.union([z.number(), z.string()]).optional(),
+  actualHours: z.union([z.number(), z.string()]).optional(),
+}).partial();
+
+const createMilestoneSchema = z.object({
+  title: z.string().min(1, "عنوان المعلَم مطلوب"),
+  description: z.string().optional().nullable(),
+  targetDate: z.string().min(1, "تاريخ المعلَم المستهدف مطلوب"),
+  completedDate: z.string().optional().nullable(),
+});
+
+const updateMilestoneSchema = z.object({
+  title: z.string().min(1, "عنوان المعلَم مطلوب").optional(),
+  status: z.string().optional(),
+  targetDate: z.string().optional().nullable(),
+  completedDate: z.string().optional().nullable(),
+}).partial();
+
+const createRiskSchema = z.object({
+  title: z.string().min(1, "عنوان المخاطرة مطلوب"),
+  description: z.string().optional().nullable(),
+  probability: z.union([z.number(), z.string()]).optional(),
+  impact: z.union([z.number(), z.string()]).optional(),
+  mitigationPlan: z.string().optional().nullable(),
+  responsibleId: z.number().optional().nullable(),
+});
+
+const updateRiskSchema = z.object({
+  title: z.string().min(1, "عنوان المخاطرة مطلوب").optional(),
+  status: z.string().optional(),
+  mitigationPlan: z.string().optional().nullable(),
+  probability: z.union([z.number(), z.string()]).optional(),
+  impact: z.union([z.number(), z.string()]).optional(),
+}).partial();
+
+const createResourceSchema = z.object({
+  employeeId: z.number().optional().nullable(),
+  taskId: z.number().optional().nullable(),
+  role: z.string().optional(),
+  allocatedHours: z.union([z.number(), z.string()]).optional(),
+  budgetAllocated: z.union([z.number(), z.string()]).optional(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+});
+
+const createCostSchema = z.object({
+  description: z.string().min(1, "وصف التكلفة مطلوب"),
+  amount: z.union([z.number(), z.string()]).refine((v) => Number(v) > 0, { message: "المبلغ يجب أن يكون أكبر من صفر" }),
+  category: z.string().optional(),
+  costDate: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  sourceType: z.string().optional(),
+});
+
+const closeProjectSchema = z.object({}).passthrough();
 
 const router = Router();
 router.use(authMiddleware);
@@ -142,6 +251,8 @@ async function assertProjectAccess(projectId: number, scope: any): Promise<any> 
 
 router.post("/", requirePermission("projects:create"), async (req, res) => {
   try {
+    const parsed = createProjectSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
       throw new ForbiddenError("لا تملك صلاحية إنشاء مشاريع", { fix: "راجع مدير الحساب للحصول على صلاحية projects_manager" });
@@ -328,6 +439,8 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
 
 router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
   try {
+    const parsed = updateProjectSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.id);
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
@@ -470,6 +583,8 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
 
 router.post("/:id/phases", requirePermission("projects:create"), async (req, res) => {
   try {
+    const parsed = createPhaseSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const projectId = Number(req.params.id);
     const b = req.body;
@@ -561,6 +676,8 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
 
 router.post("/:id/tasks", requirePermission("projects:create"), async (req, res) => {
   try {
+    const parsed = createTaskSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
@@ -672,6 +789,8 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
 // per-role gates apply.
 router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req, res) => {
   try {
+    const parsed = updateTaskSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const taskId = Number(req.params.taskId);
     const b = req.body;
@@ -850,6 +969,152 @@ router.get("/stats/summary", requirePermission("projects:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Projects stats error:"); }
 });
 
+router.get("/stats/overview", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const [counts] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) as total,
+         COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
+         COUNT(*) FILTER (WHERE status='completed') as completed,
+         COUNT(*) FILTER (WHERE status='planning') as planning,
+         COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
+         COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
+         COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping
+       FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [cid]
+    );
+
+    const [budget] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(budget),0) as "totalBudget",
+              COALESCE(SUM("spentAmount"),0) as "totalSpent"
+       FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [cid]
+    );
+
+    const [taskCounts] = await rawQuery<any>(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE pt.status='done') as done,
+              COUNT(*) FILTER (WHERE pt.status='in_progress') as in_progress,
+              COUNT(*) FILTER (WHERE pt.status='blocked') as blocked,
+              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
+       FROM project_tasks pt
+       JOIN projects p ON pt."projectId"=p.id
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL`,
+      [cid]
+    );
+
+    const slippingProjects = await rawQuery<any>(
+      `SELECT id, name, status, "endDate", progress, budget, "spentAmount",
+              (SELECT name FROM employees WHERE id=p."managerId") as "managerName"
+       FROM projects p
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+         AND p.status IN ('active','in_progress') AND p."endDate" < CURRENT_DATE
+       ORDER BY p."endDate" LIMIT 10`,
+      [cid]
+    );
+
+    const recentProjects = await rawQuery<any>(
+      `SELECT id, name, status, progress, budget, "spentAmount", "endDate",
+              (SELECT name FROM employees WHERE id=p."managerId") as "managerName"
+       FROM projects p
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND p.status IN ('active','in_progress')
+       ORDER BY p."updatedAt" DESC LIMIT 8`,
+      [cid]
+    );
+
+    const upcomingMilestones = await rawQuery<any>(
+      `SELECT pm.id, pm.title, pm."targetDate", pm.status, p.name as "projectName", p.id as "projectId"
+       FROM project_milestones pm
+       JOIN projects p ON pm."projectId"=p.id
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+         AND pm.status IN ('pending','in_progress')
+         AND pm."targetDate" >= CURRENT_DATE
+       ORDER BY pm."targetDate" LIMIT 8`,
+      [cid]
+    );
+
+    const openRisks = await rawQuery<any>(
+      `SELECT pr.id, pr.title, pr."riskLevel", pr."riskScore", pr.status, p.name as "projectName", p.id as "projectId"
+       FROM project_risks pr
+       JOIN projects p ON pr."projectId"=p.id
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND pr.status IN ('open','realized')
+       ORDER BY pr."riskScore" DESC LIMIT 8`,
+      [cid]
+    );
+
+    res.json({
+      counts: {
+        total: Number(counts.total), active: Number(counts.active),
+        completed: Number(counts.completed), planning: Number(counts.planning),
+        onHold: Number(counts.on_hold), cancelled: Number(counts.cancelled),
+        slipping: Number(counts.slipping),
+      },
+      budget: { total: Number(budget.totalBudget), spent: Number(budget.totalSpent) },
+      tasks: {
+        total: Number(taskCounts.total), done: Number(taskCounts.done),
+        inProgress: Number(taskCounts.in_progress), blocked: Number(taskCounts.blocked),
+        overdue: Number(taskCounts.overdue),
+      },
+      slippingProjects,
+      recentProjects,
+      upcomingMilestones,
+      openRisks,
+    });
+  } catch (err) { handleRouteError(err, res, "Projects overview error:"); }
+});
+
+router.get("/manager/:employeeId/workload", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employeeId = Number(req.params.employeeId);
+    if (!employeeId) throw new ValidationError("معرّف الموظف مطلوب");
+
+    const [counts] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
+         COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
+         COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping,
+         COALESCE(SUM(budget) FILTER (WHERE status IN ('active','in_progress')),0) as "activeBudget",
+         COALESCE(SUM("spentAmount") FILTER (WHERE status IN ('active','in_progress')),0) as "activeSpent"
+       FROM projects
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2`,
+      [scope.companyId, employeeId]
+    );
+
+    const [taskCounts] = await rawQuery<any>(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled')) as open,
+              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
+       FROM project_tasks pt
+       JOIN projects p ON pt."projectId"=p.id
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+         AND (p."managerId"=$2 OR pt."assigneeId"=$2)`,
+      [scope.companyId, employeeId]
+    );
+
+    const recent = await rawQuery<any>(
+      `SELECT id, name, status, progress, "endDate"
+       FROM projects
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2 AND status IN ('active','in_progress','planning')
+       ORDER BY "updatedAt" DESC LIMIT 5`,
+      [scope.companyId, employeeId]
+    );
+
+    res.json({
+      projects: {
+        active: Number(counts.active), onHold: Number(counts.on_hold),
+        slipping: Number(counts.slipping),
+        activeBudget: Number(counts.activeBudget), activeSpent: Number(counts.activeSpent),
+      },
+      tasks: { total: Number(taskCounts.total), open: Number(taskCounts.open), overdue: Number(taskCounts.overdue) },
+      recent,
+    });
+  } catch (err) { handleRouteError(err, res, "Manager workload error:"); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PROJECT MILESTONES — معالم المشروع
 // ─────────────────────────────────────────────────────────────────────────────
@@ -869,6 +1134,8 @@ router.get("/:id/milestones", requirePermission("projects:read"), async (req, re
 
 router.post("/:id/milestones", requirePermission("projects:create"), async (req, res) => {
   try {
+    const parsed = createMilestoneSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
@@ -926,6 +1193,8 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
 // after the company-scoped lookup so the same role gates apply.
 router.patch("/milestones/:milestoneId", requirePermission("projects:update"), async (req, res) => {
   try {
+    const parsed = updateMilestoneSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.milestoneId);
     const [existing] = await rawQuery<any>(
@@ -994,6 +1263,8 @@ router.get("/:id/risks", requirePermission("projects:read"), async (req, res) =>
 
 router.post("/:id/risks", requirePermission("projects:create"), async (req, res) => {
   try {
+    const parsed = createRiskSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
@@ -1024,6 +1295,8 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
 // not have read access to via `assertProjectAccess`.
 router.patch("/risks/:riskId", requirePermission("projects:update"), async (req, res) => {
   try {
+    const parsed = updateRiskSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const id = Number(req.params.riskId);
     const [existingRisk] = await rawQuery<any>(
@@ -1106,6 +1379,8 @@ router.get("/:id/resources", requirePermission("projects:read"), async (req, res
 
 router.post("/:id/resources", requirePermission("projects:create"), async (req, res) => {
   try {
+    const parsed = createResourceSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
@@ -1154,6 +1429,8 @@ router.get("/:id/costs", requirePermission("projects:read"), async (req, res) =>
 
 router.post("/:id/costs", requirePermission("projects:create"), async (req, res) => {
   try {
+    const parsed = createCostSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
     const projectId = Number(req.params.id);
@@ -1285,6 +1562,8 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/:id/close", requirePermission("projects:update"), async (req, res) => {
   try {
+    const parsed = closeProjectSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const projectId = Number(req.params.id);
     const project = await assertProjectAccess(projectId, scope);

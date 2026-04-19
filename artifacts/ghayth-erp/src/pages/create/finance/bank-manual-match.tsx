@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -19,7 +20,7 @@ export default function BankManualMatchPage() {
   const [jeSearching, setJeSearching] = useState(false);
   const [matchMsg, setMatchMsg] = useState("");
 
-  const { data: batchDetail } = useApiQuery<any>(
+  const { data: batchDetail, isLoading, isError } = useApiQuery<any>(
     ["bank-batch", params?.batchId],
     params?.batchId ? `/finance/bank-reconciliation/${params.batchId}` : null,
     { enabled: !!params?.batchId }
@@ -28,6 +29,9 @@ export default function BankManualMatchPage() {
   const row = rows.find((r: any) => String(r.id) === params?.rowId);
 
   const manualMatchMutation = useApiMutation("/finance/bank-reconciliation/manual-match", "POST");
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   async function searchJournalLines() {
     if (!jeSearch.trim()) return;

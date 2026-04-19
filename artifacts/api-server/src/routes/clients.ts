@@ -7,6 +7,7 @@ import { createAuditLog } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 const createClientSchema = z.object({
   name: z.string().min(1, "اسم العميل مطلوب"),
@@ -20,7 +21,7 @@ const createClientSchema = z.object({
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search = "", classification = "", page = "1", limit: lim = "20" } = req.query as any;
@@ -66,14 +67,11 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("crm:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createClientSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const {
       name,
       phone,
@@ -112,7 +110,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -226,7 +224,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -256,7 +254,7 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-router.post("/auto-create", async (req, res) => {
+router.post("/auto-create", requirePermission("crm:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { phone, name, source = "auto" } = req.body as any;
@@ -302,7 +300,7 @@ router.post("/auto-create", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requirePermission("crm:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -318,7 +316,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.get("/:id/portal-account", async (req, res) => {
+router.get("/:id/portal-account", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -339,7 +337,7 @@ router.get("/:id/portal-account", async (req, res) => {
   }
 });
 
-router.post("/:id/portal-account", async (req, res) => {
+router.post("/:id/portal-account", requirePermission("crm:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -395,7 +393,7 @@ router.post("/:id/portal-account", async (req, res) => {
   }
 });
 
-router.patch("/:id/portal-account", async (req, res) => {
+router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;

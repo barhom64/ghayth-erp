@@ -5,6 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -102,17 +104,20 @@ function IntegrationsList() {
           <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="اسم التكامل" /></div>
             <div><Label>النوع</Label>
-              <select className="w-full border rounded-md p-2" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                <option value="email">بريد إلكتروني</option>
-                <option value="sms">رسائل نصية</option>
-                <option value="whatsapp">واتساب</option>
-                <option value="webhook">خطاف استدعاء</option>
-              </select>
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="email">بريد إلكتروني</SelectItem>
+                  <SelectItem value="sms">رسائل نصية</SelectItem>
+                  <SelectItem value="whatsapp">واتساب</SelectItem>
+                  <SelectItem value="webhook">خطاف استدعاء</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="md:col-span-2">
               <Label>الإعدادات (بصيغة جيسون)</Label>
-              <textarea
-                className="w-full border rounded-md p-2 font-mono text-sm min-h-[100px]"
+              <Textarea
+                className="font-mono text-sm min-h-[100px]"
                 value={form.config}
                 onChange={(e) => setForm({ ...form, config: e.target.value })}
                 placeholder={form.type === "email" ? '{"host":"smtp.gmail.com","port":587,"user":"...","password":"...","from":"..."}' : form.type === "webhook" ? '{"url":"https://...","headers":{}}' : "{}"}

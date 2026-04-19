@@ -2,43 +2,41 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function PropertyMaintenanceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/maintenance-requests", "POST", [["maintenance-requests"]]);
-  const { data: unitsData } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
+  const { data: unitsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
   const units = unitsData?.data || [];
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("property_maintenance_create", {
     unitId: "", category: "", description: "", priority: "medium", cost: "",
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.unitId) localErrors.unitId = "يرجى اختيار الوحدة";
-    if (!form.description) localErrors.description = "وصف الطلب مطلوب";
-    if (form.cost && Number(form.cost) < 0) localErrors.cost = "التكلفة يجب أن تكون صفر أو أكثر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      unitId: form.unitId ? null : "يرجى اختيار الوحدة",
+      description: form.description ? null : "وصف الطلب مطلوب",
+      cost: form.cost && Number(form.cost) < 0 ? "التكلفة يجب أن تكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -53,7 +51,8 @@ export default function PropertyMaintenanceCreate() {
       toast({ title: "تم إنشاء طلب الصيانة بنجاح" });
       setLocation("/properties");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.fix ?? err?.message });
     }
   };
 
@@ -62,17 +61,16 @@ export default function PropertyMaintenanceCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label>الوحدة</Label>
+        <FormFieldWrapper label="الوحدة" required error={fieldErrors.unitId}>
           <Select value={form.unitId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, unitId: v === "_none" ? "" : v }))}>
-            <SelectTrigger className={`mt-1 ${errCls("unitId")}`}><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر الوحدة</SelectItem>
               {units.map((u: any) => (
@@ -80,17 +78,15 @@ export default function PropertyMaintenanceCreate() {
               ))}
             </SelectContent>
           </Select>
-          <FieldHint field="unitId" />
           {form.unitId && (
             <div className="mt-3">
               <PropertyUnitContextCard unitId={form.unitId} section="maintenance" />
             </div>
           )}
-        </div>
-        <div>
-          <Label>الفئة</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفئة">
           <Select value={form.category || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, category: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر الفئة</SelectItem>
               <SelectItem value="plumbing">سباكة</SelectItem>
@@ -99,28 +95,19 @@ export default function PropertyMaintenanceCreate() {
               <SelectItem value="general">عامة</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>الأولوية</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الأولوية">
           <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="low">منخفضة</SelectItem>
               <SelectItem value="medium">متوسطة</SelectItem>
               <SelectItem value="high">عالية</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div className="md:col-span-2">
-          <Label>الوصف</Label>
-          <Textarea className={`mt-1 ${errCls("description")}`} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} />
-          <FieldHint field="description" />
-        </div>
-        <div>
-          <Label>التكلفة</Label>
-          <Input className={`mt-1 ${errCls("cost")}`} type="number" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))} placeholder="0" />
-          <FieldHint field="cost" />
-        </div>
+        </FormFieldWrapper>
+        <TextAreaField label="الوصف" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} rows={3} error={fieldErrors.description} className="md:col-span-2" />
+        <NumberField label="التكلفة" value={form.cost} onChange={(v) => setForm((f) => ({ ...f, cost: v }))} placeholder="0" step={0.01} min={0} error={fieldErrors.cost} />
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">

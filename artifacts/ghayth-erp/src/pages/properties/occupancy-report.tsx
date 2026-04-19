@@ -1,10 +1,12 @@
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/lib/formatters";
 import { Building2, Home, Wrench, TrendingUp, DollarSign } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   rented: { label: "مؤجرة", color: "text-green-600", bg: "bg-green-100" },
@@ -28,11 +30,48 @@ export default function OccupancyReportPage() {
     { name: "صيانة", value: data?.maintenance || 0 },
   ].filter((d) => d.value > 0);
 
+  const unitColumns: DataTableColumn<any>[] = [
+    {
+      key: "unitNumber",
+      header: "الوحدة",
+      render: (u) => <span className="font-medium">{u.unitNumber}</span>,
+    },
+    {
+      key: "buildingName",
+      header: "المبنى",
+      render: (u) => <span className="text-gray-500">{u.buildingName}</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (u) => (
+        <Badge className={`${STATUS_LABELS[u.status]?.bg || "bg-gray-100"} ${STATUS_LABELS[u.status]?.color || "text-gray-600"} text-xs`}>
+          {STATUS_LABELS[u.status]?.label || u.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "tenantName",
+      header: "المستأجر",
+      render: (u) => u.tenantName || "—",
+    },
+    {
+      key: "monthlyRent",
+      header: "الإيجار الشهري",
+      render: (u) => u.monthlyRent ? formatCurrency(Number(u.monthlyRent)) : "—",
+    },
+    {
+      key: "contractEnd",
+      header: "انتهاء العقد",
+      render: (u) => <span className="text-gray-500">{u.contractEnd?.split("T")[0] || "—"}</span>,
+    },
+  ];
+
   return (
     <PageShell
       title="تقرير الإشغال العقاري"
       subtitle="نظرة شاملة على حالة الوحدات العقارية"
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { label: "تقرير الإشغال العقاري" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "تقرير الإشغال العقاري" }]}
       loading={isLoading}
     >
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -62,8 +101,8 @@ export default function OccupancyReportPage() {
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold">{(data?.totalMonthlyRent || 0).toLocaleString()}</div>
-            <div className="text-xs text-gray-500">إيجار شهري (ر.س)</div>
+            <div className="text-xl font-bold">{formatCurrency(data?.totalMonthlyRent || 0)}</div>
+            <div className="text-xs text-gray-500">إيجار شهري</div>
           </CardContent>
         </Card>
       </div>
@@ -123,37 +162,16 @@ export default function OccupancyReportPage() {
         <CardHeader>
           <CardTitle className="text-sm">قائمة الوحدات ({units.length})</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-start">الوحدة</th>
-                  <th className="px-3 py-2 text-start">المبنى</th>
-                  <th className="px-3 py-2 text-start">الحالة</th>
-                  <th className="px-3 py-2 text-start">المستأجر</th>
-                  <th className="px-3 py-2 text-start">الإيجار الشهري</th>
-                  <th className="px-3 py-2 text-start">انتهاء العقد</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {units.map((u: any) => (
-                  <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 font-medium">{u.unitNumber}</td>
-                    <td className="px-3 py-2 text-gray-500">{u.buildingName}</td>
-                    <td className="px-3 py-2">
-                      <Badge className={`${STATUS_LABELS[u.status]?.bg || "bg-gray-100"} ${STATUS_LABELS[u.status]?.color || "text-gray-600"} text-xs`}>
-                        {STATUS_LABELS[u.status]?.label || u.status}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2">{u.tenantName || "—"}</td>
-                    <td className="px-3 py-2">{u.monthlyRent ? `${Number(u.monthlyRent).toLocaleString()} ر.س` : "—"}</td>
-                    <td className="px-3 py-2 text-gray-500">{u.contractEnd?.split("T")[0] || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={unitColumns}
+            data={units}
+            searchPlaceholder={null}
+            noToolbar
+            pageSize={20}
+            emptyMessage="لا توجد وحدات"
+            emptyIcon={<Home className="h-10 w-10 text-gray-300" />}
+          />
         </CardContent>
       </Card>
     </PageShell>

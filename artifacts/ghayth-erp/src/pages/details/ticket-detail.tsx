@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { formatDateAr, formatTimeAr } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Headphones, User, MessageSquare, Send, Trash2, Clock, FileText } from "lucide-react";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
@@ -134,7 +136,7 @@ export default function TicketDetail() {
                     <span className="text-sm font-medium flex items-center gap-1">
                       <User className="w-3 h-3" /> {r.authorName || "مجهول"}
                     </span>
-                    <span className="text-xs text-gray-500">{r.createdAt ? new Date(r.createdAt).toLocaleString("ar-SA") : "-"}</span>
+                    <span className="text-xs text-gray-500">{r.createdAt ? `${formatDateAr(r.createdAt)} ${formatTimeAr(r.createdAt)}` : "-"}</span>
                   </div>
                   <p className="text-sm text-gray-700">{r.message}</p>
                 </div>
@@ -164,18 +166,21 @@ export default function TicketDetail() {
             <CardHeader><CardTitle className="text-base">معلومات التذكرة</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الحالة</span>
-                <select value={ticket.status} onChange={(e) => handleStatusChange(e.target.value)} className="border rounded px-2 py-1 text-xs">
-                  <option value="open">مفتوحة</option>
-                  <option value="in_progress">قيد المعالجة</option>
-                  <option value="resolved">تم الحل</option>
-                  <option value="closed">مغلقة</option>
-                </select>
+                <Select value={ticket.status} onValueChange={(v) => handleStatusChange(v)}>
+                  <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">مفتوحة</SelectItem>
+                    <SelectItem value="in_progress">قيد المعالجة</SelectItem>
+                    <SelectItem value="resolved">تم الحل</SelectItem>
+                    <SelectItem value="closed">مغلقة</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الأولوية</span><Badge className={priorityMap[ticket.priority]?.color || "bg-gray-100 text-gray-700"}>{priorityMap[ticket.priority]?.label || ticket.priority}</Badge></div>
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الفئة</span><span>{ticket.category || "-"}</span></div>
               <div className="flex justify-between py-2 border-b"><span className="text-gray-500">العميل</span><span>{ticket.clientName || "-"}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-gray-500">تاريخ الإنشاء</span><span className="text-xs">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleString("ar-SA") : "-"}</span></div>
-              <div className="flex justify-between py-2"><span className="text-gray-500">آخر تحديث</span><span className="text-xs">{ticket.updatedAt ? new Date(ticket.updatedAt).toLocaleString("ar-SA") : "-"}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-gray-500">تاريخ الإنشاء</span><span className="text-xs">{ticket.createdAt ? `${formatDateAr(ticket.createdAt)} ${formatTimeAr(ticket.createdAt)}` : "-"}</span></div>
+              <div className="flex justify-between py-2"><span className="text-gray-500">آخر تحديث</span><span className="text-xs">{ticket.updatedAt ? `${formatDateAr(ticket.updatedAt)} ${formatTimeAr(ticket.updatedAt)}` : "-"}</span></div>
               {ticket.isSlaBreached && (
                 <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs text-center">
                   تم تجاوز اتفاقية مستوى الخدمة

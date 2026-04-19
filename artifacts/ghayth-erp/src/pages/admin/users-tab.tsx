@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, X, CheckCircle, KeySquare, Eye, EyeOff, ToggleLeft, ToggleRight } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ROLE_OPTIONS } from "./shared";
 
 export function UsersTab() {
@@ -80,8 +81,77 @@ export function UsersTab() {
     }
   };
 
-  if (isLoading1 || isLoading2) return <LoadingSpinner />;
-  if (isError1 || isError2) return <ErrorState onRetry={() => window.location.reload()} />;
+  const userColumns: DataTableColumn<any>[] = [
+    {
+      key: "email",
+      header: "البريد الإلكتروني",
+      sortable: true,
+      searchable: true,
+      ltr: true,
+      render: (u) => <span className="font-mono text-xs">{u.email}</span>,
+    },
+    {
+      key: "employeeName",
+      header: "الموظف المرتبط",
+      sortable: true,
+      searchable: true,
+      render: (u) =>
+        u.employeeName ? (
+          <div>
+            <p className="text-sm font-medium">{u.employeeName}</p>
+            <p className="text-xs text-gray-400">{u.empNumber}</p>
+          </div>
+        ) : (
+          <span className="text-gray-400 text-xs">—</span>
+        ),
+    },
+    {
+      key: "role",
+      header: "الدور",
+      sortable: true,
+      render: (u) => <Badge variant="outline" className="text-xs">{roleLabel(u.role)}</Badge>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (u) => <PageStatusBadge status={u.status || (u.isActive ? "active" : "inactive")} />,
+    },
+    {
+      key: "lastLoginAt",
+      header: "آخر دخول",
+      sortable: true,
+      render: (u) => (
+        <span className="text-xs text-gray-400">
+          {u.lastLoginAt ? formatDateAr(u.lastLoginAt) : "لم يسجل بعد"}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (u) => (
+        <div className="flex gap-1">
+          <Button
+            variant="ghost" size="sm"
+            className="h-7 text-xs gap-1"
+            title={u.isActive ? "تعليق الحساب" : "تفعيل الحساب"}
+            onClick={(e) => { e.stopPropagation(); toggleActive(u); }}
+          >
+            {u.isActive
+              ? <ToggleRight className="h-4 w-4 text-green-500" />
+              : <ToggleLeft className="h-4 w-4 text-gray-400" />}
+          </Button>
+          <Button
+            variant="ghost" size="sm"
+            className="h-7 text-xs gap-1 text-orange-600"
+            onClick={(e) => { e.stopPropagation(); setResetUserId(u.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); }}
+          >
+            <KeySquare className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -101,16 +171,22 @@ export function UsersTab() {
             </div>
             <div>
               <Label>الدور الوظيفي</Label>
-              <select className="w-full border rounded-md p-2 mt-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>ربط بموظف (اختياري)</Label>
-              <select className="w-full border rounded-md p-2 mt-1" value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
-                <option value="">— بدون ربط —</option>
-                {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} ({e.empNumber})</option>)}
-              </select>
+              <Select value={form.employeeId || "_none"} onValueChange={(v) => setForm({ ...form, employeeId: v === "_none" ? "" : v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— بدون ربط —</SelectItem>
+                  {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.empNumber})</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>كلمة المرور (اختياري - ستُنشأ تلقائياً)</Label>
@@ -173,64 +249,16 @@ export function UsersTab() {
         </Card>
       )}
 
-      <Card><CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">البريد الإلكتروني</th>
-                <th className="p-3 text-start">الموظف المرتبط</th>
-                <th className="p-3 text-start">الدور</th>
-                <th className="p-3 text-start">الحالة</th>
-                <th className="p-3 text-start">آخر دخول</th>
-                <th className="p-3 text-start">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((u: any) => {
-                return (
-                  <tr key={u.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-xs">{u.email}</td>
-                    <td className="p-3">
-                      {u.employeeName ? (
-                        <div>
-                          <p className="text-sm font-medium">{u.employeeName}</p>
-                          <p className="text-xs text-gray-400">{u.empNumber}</p>
-                        </div>
-                      ) : <span className="text-gray-400 text-xs">—</span>}
-                    </td>
-                    <td className="p-3"><Badge variant="outline" className="text-xs">{roleLabel(u.role)}</Badge></td>
-                    <td className="p-3"><PageStatusBadge status={u.status || (u.isActive ? "active" : "inactive")} /></td>
-                    <td className="p-3 text-xs text-gray-400">{u.lastLoginAt ? formatDateAr(u.lastLoginAt) : "لم يسجل بعد"}</td>
-                    <td className="p-3">
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost" size="sm"
-                          className="h-7 text-xs gap-1"
-                          title={u.isActive ? "تعليق الحساب" : "تفعيل الحساب"}
-                          onClick={() => toggleActive(u)}
-                        >
-                          {u.isActive
-                            ? <ToggleRight className="h-4 w-4 text-green-500" />
-                            : <ToggleLeft className="h-4 w-4 text-gray-400" />}
-                        </Button>
-                        <Button
-                          variant="ghost" size="sm"
-                          className="h-7 text-xs gap-1 text-orange-600"
-                          onClick={() => { setResetUserId(u.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); }}
-                        >
-                          <KeySquare className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {items.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا يوجد مستخدمين</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </CardContent></Card>
+      <DataTable
+        columns={userColumns}
+        data={items}
+        isLoading={isLoading1 || isLoading2}
+        isError={isError1 || isError2}
+        onRetry={() => window.location.reload()}
+        searchPlaceholder="بحث بالبريد أو اسم الموظف..."
+        emptyMessage="لا يوجد مستخدمين"
+        pageSize={0}
+      />
     </div>
   );
 }

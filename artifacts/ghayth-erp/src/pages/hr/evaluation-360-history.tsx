@@ -1,5 +1,6 @@
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
@@ -22,10 +23,13 @@ export default function Evaluation360HistoryPage() {
   const [, params] = useRoute("/hr/evaluation-360/history/:employeeId");
   const employeeId = params?.employeeId ?? "";
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["evaluation-history", employeeId],
     `/hr/employees/${employeeId}/evaluation-history`
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const employee = data?.employee;
   const history = data?.history || [];

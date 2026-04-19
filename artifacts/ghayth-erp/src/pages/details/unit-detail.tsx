@@ -6,7 +6,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   Building, FileText, Banknote, Wrench, Users, Clock, DollarSign,
@@ -23,6 +22,7 @@ import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, BookOpen } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },
@@ -110,17 +110,47 @@ export default function UnitDetail() {
 
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
-  if (isLoading) return <LoadingSpinner />;
+  const shellBreadcrumbs = [
+    { href: "/properties/dashboard", label: "إدارة الأملاك" },
+    { href: "/properties", label: "الوحدات" },
+  ];
 
-  if (is404 || (!isLoading && !unit)) return (
-    <div className="text-center py-12">
-      <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">الوحدة غير موجودة</p>
-      <Link href="/properties"><Button variant="outline" className="mt-4">العودة للعقارات</Button></Link>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <PageShell title="جاري التحميل..." breadcrumbs={shellBreadcrumbs}>
+        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
+      </PageShell>
+    );
+  }
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (is404 || (!isLoading && !unit)) {
+    return (
+      <PageShell title="الوحدة غير موجودة" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 mb-1">الوحدة المطلوبة غير موجودة أو تم حذفها.</p>
+            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة الوحدات.</p>
+            <Link href="/properties"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للوحدات</Button></Link>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
+
+  if (isError) {
+    return (
+      <PageShell title="خطأ" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
+            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات الوحدة.</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
 
   const contracts: any[] = unit.contracts || [];
   const payments: any[] = unit.payments || [];
@@ -135,7 +165,7 @@ export default function UnitDetail() {
       title={`وحدة ${unit.unitNumber}`}
       subtitle={`${unit.buildingName || "-"}${unit.address ? ` — ${unit.address}` : ""}`}
       loading={isLoading}
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties", label: "الوحدات" }]}
       actions={
         <div className="flex items-center gap-2">
           <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-gray-100 text-gray-700")}>
@@ -434,22 +464,17 @@ export default function UnitDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-red-50">
-                    <th className="p-2 text-right text-xs">المستأجر</th>
-                    <th className="p-2 text-right text-xs">الاستحقاق</th>
-                    <th className="p-2 text-right text-xs">المبلغ</th>
-                  </tr></thead>
-                  <tbody>
-                    {overduePayments.slice(0, 3).map((p: any) => (
-                      <tr key={p.id} className="border-b">
-                        <td className="p-2 text-xs">{p.tenantName}</td>
-                        <td className="p-2 text-xs text-red-600">{formatDateAr(p.dueDate)}</td>
-                        <td className="p-2 text-xs font-bold">{formatCurrency(Number(p.amount || 0))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable<any>
+                  columns={[
+                    { key: "tenantName", header: "المستأجر" },
+                    { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
+                    { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
+                  ]}
+                  data={overduePayments.slice(0, 3)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               </CardContent>
             </Card>
           )}
@@ -526,28 +551,21 @@ export default function UnitDetail() {
             {contracts.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد عقود</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-start">المستأجر</th>
-                  <th className="p-3 text-start">من</th>
-                  <th className="p-3 text-start">إلى</th>
-                  <th className="p-3 text-start">الإيجار</th>
-                  <th className="p-3 text-start">المحصل</th>
-                  <th className="p-3 text-start">الحالة</th>
-                </tr></thead>
-                <tbody>
-                  {contracts.map((c: any) => (
-                    <tr key={c.id} className={cn("border-b hover:bg-gray-50", c.status === "active" && "bg-blue-50/30")}>
-                      <td className="p-3 font-medium">{c.tenantName}</td>
-                      <td className="p-3 text-gray-500">{formatDateAr(c.startDate)}</td>
-                      <td className="p-3 text-gray-500">{formatDateAr(c.endDate)}</td>
-                      <td className="p-3 font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</td>
-                      <td className="p-3 text-emerald-600">{formatCurrency(Number(c.totalPaid || 0))}</td>
-                      <td className="p-3"><PageStatusBadge status={c.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable<any>
+                columns={[
+                  { key: "tenantName", header: "المستأجر", render: (c) => <span className="font-medium">{c.tenantName}</span> },
+                  { key: "startDate", header: "من", render: (c) => <span className="text-gray-500">{formatDateAr(c.startDate)}</span> },
+                  { key: "endDate", header: "إلى", render: (c) => <span className="text-gray-500">{formatDateAr(c.endDate)}</span> },
+                  { key: "monthlyRent", header: "الإيجار", render: (c) => <span className="font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</span> },
+                  { key: "totalPaid", header: "المحصل", render: (c) => <span className="text-emerald-600">{formatCurrency(Number(c.totalPaid || 0))}</span> },
+                  { key: "status", header: "الحالة", render: (c) => <PageStatusBadge status={c.status} /> },
+                ]}
+                data={contracts}
+                rowClassName={(c) => cn(c.status === "active" && "bg-blue-50/30")}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>
@@ -563,26 +581,19 @@ export default function UnitDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-red-50">
-                    <th className="p-3 text-start">المستأجر</th>
-                    <th className="p-3 text-start">تاريخ الاستحقاق</th>
-                    <th className="p-3 text-start">المبلغ</th>
-                    <th className="p-3 text-start">المدفوع</th>
-                    <th className="p-3 text-start">الحالة</th>
-                  </tr></thead>
-                  <tbody>
-                    {overduePayments.map((p: any) => (
-                      <tr key={p.id} className="border-b">
-                        <td className="p-3">{p.tenantName}</td>
-                        <td className="p-3 text-red-600">{formatDateAr(p.dueDate)}</td>
-                        <td className="p-3 font-bold">{formatCurrency(Number(p.amount || 0))}</td>
-                        <td className="p-3 text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</td>
-                        <td className="p-3"><PageStatusBadge status={p.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable<any>
+                  columns={[
+                    { key: "tenantName", header: "المستأجر" },
+                    { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
+                    { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
+                    { key: "paidAmount", header: "المدفوع", render: (p) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
+                    { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+                  ]}
+                  data={overduePayments}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               </CardContent>
             </Card>
           )}
@@ -596,29 +607,20 @@ export default function UnitDetail() {
               {payments.length === 0 ? (
                 <p className="text-center text-gray-400 py-8">لا توجد مدفوعات</p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-gray-50">
-                    <th className="p-3 text-start">المستأجر</th>
-                    <th className="p-3 text-start">تاريخ الاستحقاق</th>
-                    <th className="p-3 text-start">المبلغ</th>
-                    <th className="p-3 text-start">المدفوع</th>
-                    <th className="p-3 text-start">الحالة</th>
-                  </tr></thead>
-                  <tbody>
-                    {payments.map((p: any) => (
-                      <tr key={p.id} className={cn(
-                        "border-b hover:bg-gray-50",
-                        p.status !== "paid" && new Date(p.dueDate) < new Date() && "bg-red-50/30"
-                      )}>
-                        <td className="p-3">{p.tenantName}</td>
-                        <td className="p-3 text-gray-500">{formatDateAr(p.dueDate)}</td>
-                        <td className="p-3 font-bold">{formatCurrency(Number(p.amount || 0))}</td>
-                        <td className="p-3 text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</td>
-                        <td className="p-3"><PageStatusBadge status={p.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable<any>
+                  columns={[
+                    { key: "tenantName", header: "المستأجر" },
+                    { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
+                    { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
+                    { key: "paidAmount", header: "المدفوع", render: (p) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
+                    { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+                  ]}
+                  data={payments}
+                  rowClassName={(p) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() && "bg-red-50/30")}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               )}
             </CardContent>
           </Card>
@@ -636,39 +638,29 @@ export default function UnitDetail() {
             {maintenance.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد سجلات صيانة</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-start">الفئة</th>
-                  <th className="p-3 text-start">الوصف</th>
-                  <th className="p-3 text-start">الأولوية</th>
-                  <th className="p-3 text-start">الحالة</th>
-                  <th className="p-3 text-start">التكلفة</th>
-                  <th className="p-3 text-start">المواد المستخدمة</th>
-                </tr></thead>
-                <tbody>
-                  {maintenance.map((m: any) => {
+              <DataTable<any>
+                columns={[
+                  { key: "category", header: "الفئة", render: (m) => <span className="font-medium">{m.category || "-"}</span> },
+                  { key: "description", header: "الوصف", render: (m) => <span className="text-gray-500 max-w-xs truncate block">{m.description || "-"}</span> },
+                  { key: "priority", header: "الأولوية", render: (m) => <PageStatusBadge status={m.priority} /> },
+                  { key: "status", header: "الحالة", render: (m) => <PageStatusBadge status={m.status} /> },
+                  { key: "actualCost", header: "التكلفة", render: (m) => <span className="text-gray-500">{m.actualCost != null ? formatCurrency(Number(m.actualCost)) : "-"}</span> },
+                  { key: "materialsUsed", header: "المواد المستخدمة", render: (m) => {
                     const materials = m.materialsUsed ? (typeof m.materialsUsed === "string" ? JSON.parse(m.materialsUsed) : m.materialsUsed) : [];
-                    return (
-                      <tr key={m.id} className="border-b hover:bg-gray-50">
-                        <td className="p-3 font-medium">{m.category || "-"}</td>
-                        <td className="p-3 text-gray-500 max-w-xs truncate">{m.description || "-"}</td>
-                        <td className="p-3"><PageStatusBadge status={m.priority} /></td>
-                        <td className="p-3"><PageStatusBadge status={m.status} /></td>
-                        <td className="p-3 text-gray-500">{m.actualCost != null ? `${Number(m.actualCost).toLocaleString("ar-SA")} ر.س` : "-"}</td>
-                        <td className="p-3 text-gray-500">
-                          {materials.length > 0 ? (
-                            <ul className="list-disc list-inside text-xs">
-                              {materials.map((mat: any, idx: number) => (
-                                <li key={idx}>{mat.name}{mat.quantity ? ` × ${mat.quantity}` : ""}{mat.cost ? ` (${Number(mat.cost).toLocaleString("ar-SA")} ر.س)` : ""}</li>
-                              ))}
-                            </ul>
-                          ) : "-"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    return materials.length > 0 ? (
+                      <ul className="list-disc list-inside text-xs text-gray-500">
+                        {materials.map((mat: any, idx: number) => (
+                          <li key={idx}>{mat.name}{mat.quantity ? ` × ${mat.quantity}` : ""}{mat.cost ? ` (${formatCurrency(Number(mat.cost))})` : ""}</li>
+                        ))}
+                      </ul>
+                    ) : "-";
+                  }},
+                ]}
+                data={maintenance}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>

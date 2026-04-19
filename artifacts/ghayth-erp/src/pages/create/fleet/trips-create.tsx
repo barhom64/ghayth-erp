@@ -3,14 +3,15 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "fleet_trips_create";
 const INITIAL = {
@@ -23,31 +24,30 @@ export default function TripsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/fleet/trips", "POST", [["trips"]]);
-  const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
-  const { data: driversData } = useApiQuery<{ data: any[] }>(["fleet-drivers"], "/fleet/drivers");
-  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: vehiclesData, isLoading: loadingV, isError: errorV } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
+  const { data: driversData, isLoading: loadingD, isError: errorD } = useApiQuery<{ data: any[] }>(["fleet-drivers"], "/fleet/drivers");
+  const { data: clientsData, isLoading: loadingC, isError: errorC } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const vehicles = vehiclesData?.data || [];
   const drivers = driversData?.data || [];
   const clients = clientsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  if (loadingV || loadingD || loadingC) return <LoadingSpinner />;
+  if (errorV || errorD || errorC) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    if (!form.vehicleId) {
-      toast({ variant: "destructive", title: "يرجى اختيار المركبة" });
-      return;
-    }
-    if (!form.driverId) {
-      toast({ variant: "destructive", title: "يرجى اختيار السائق" });
-      return;
-    }
-    if (!form.fromLocation || !form.toLocation) {
-      toast({ variant: "destructive", title: "نقطة الانطلاق والوصول مطلوبتان" });
-      return;
-    }
-    if (form.startTime && form.endTime && form.endTime <= form.startTime) {
-      toast({ variant: "destructive", title: "وقت الوصول يجب أن يكون بعد وقت الانطلاق" });
+    const firstError = validate({
+      vehicleId: form.vehicleId ? null : "يرجى اختيار المركبة",
+      driverId: form.driverId ? null : "يرجى اختيار السائق",
+      fromLocation: form.fromLocation ? null : "نقطة الانطلاق مطلوبة",
+      toLocation: form.toLocation ? null : "نقطة الوصول مطلوبة",
+      endTime: form.startTime && form.endTime && form.endTime <= form.startTime ? "وقت الوصول يجب أن يكون بعد وقت الانطلاق" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -68,7 +68,8 @@ export default function TripsCreate() {
       toast({ title: "تم إنشاء الرحلة بنجاح" });
       setLocation("/fleet/trips");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الرحلة", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الرحلة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -84,12 +85,9 @@ export default function TripsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-3">
-          <Label>المركبة <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="المركبة" required error={fieldErrors.vehicleId} className="md:col-span-3">
           <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر المركبة" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
             <SelectContent>
               {vehicles.map((v: any) => (
                 <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
@@ -101,26 +99,20 @@ export default function TripsCreate() {
               <VehicleContextCard vehicleId={form.vehicleId} section="trip" />
             </div>
           )}
-        </div>
-        <div>
-          <Label>السائق <span className="text-red-500">*</span></Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="السائق" required error={fieldErrors.driverId}>
           <Select value={form.driverId} onValueChange={(v) => setForm((f) => ({ ...f, driverId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر السائق" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر السائق" /></SelectTrigger>
             <SelectContent>
               {drivers.map((d: any) => (
                 <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>العميل</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="العميل">
           <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="— بدون عميل —" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="— بدون عميل —" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— بدون عميل —</SelectItem>
               {clients.map((c: any) => (
@@ -128,19 +120,20 @@ export default function TripsCreate() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>من</Label><Input className="mt-1" value={form.fromLocation} onChange={(e) => setForm((f) => ({ ...f, fromLocation: e.target.value }))} placeholder="نقطة الانطلاق" /></div>
-        <div><Label>إلى</Label><Input className="mt-1" value={form.toLocation} onChange={(e) => setForm((f) => ({ ...f, toLocation: e.target.value }))} placeholder="الوجهة" /></div>
-        <div><Label>المسافة (كم)</Label><Input className="mt-1" type="number" value={form.distance} onChange={(e) => setForm((f) => ({ ...f, distance: e.target.value }))} /></div>
-        <div><Label>التكلفة</Label><Input className="mt-1" type="number" step="0.01" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))} /></div>
-        <div><Label>وقت المغادرة</Label><Input className="mt-1" type="datetime-local" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} /></div>
-        <div><Label>وقت الوصول</Label><Input className="mt-1" type="datetime-local" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} /></div>
-        <div>
-          <Label>الحالة</Label>
+        </FormFieldWrapper>
+        <TextField label="من" required value={form.fromLocation} onChange={(v) => setForm((f) => ({ ...f, fromLocation: v }))} placeholder="نقطة الانطلاق" error={fieldErrors.fromLocation} />
+        <TextField label="إلى" required value={form.toLocation} onChange={(v) => setForm((f) => ({ ...f, toLocation: v }))} placeholder="الوجهة" error={fieldErrors.toLocation} />
+        <NumberField label="المسافة (كم)" value={form.distance} onChange={(v) => setForm((f) => ({ ...f, distance: v }))} min={0} />
+        <NumberField label="التكلفة" value={form.cost} onChange={(v) => setForm((f) => ({ ...f, cost: v }))} step={0.01} min={0} />
+        <FormFieldWrapper label="وقت المغادرة">
+          <Input type="datetime-local" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="وقت الوصول" error={fieldErrors.endTime}>
+          <Input type="datetime-local" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الحالة">
           <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="scheduled">مجدولة</SelectItem>
               <SelectItem value="in_progress">جارية</SelectItem>
@@ -148,11 +141,8 @@ export default function TripsCreate() {
               <SelectItem value="cancelled">ملغاة</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div className="md:col-span-3">
-          <Label>ملاحظات</Label>
-          <Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
-        </div>
+        </FormFieldWrapper>
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} className="md:col-span-3" />
       </div>
       
       <FileDropZone files={attachments} onFilesChange={setAttachments} />

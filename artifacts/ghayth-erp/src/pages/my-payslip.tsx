@@ -3,14 +3,11 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { formatCurrency } from "@/lib/formatters";
 import { DollarSign, TrendingUp, TrendingDown, FileText, Printer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-function formatAmount(v: any): string {
-  return Number(v ?? 0).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 export default function MyPayslip() {
   const today = new Date();
@@ -63,7 +60,7 @@ export default function MyPayslip() {
           <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
             <CardContent className="p-6">
               <p className="text-sm text-gray-500 mb-1">صافي الراتب</p>
-              <p className="text-3xl font-bold text-primary">{formatAmount(payslip.netSalary)} <span className="text-lg font-normal">ر.س</span></p>
+              <p className="text-3xl font-bold text-primary">{formatCurrency(payslip.netSalary)}</p>
               <p className="text-xs text-gray-400 mt-2">فترة: {period}</p>
             </CardContent>
           </Card>
@@ -84,12 +81,12 @@ export default function MyPayslip() {
                 ].filter((item) => Number(item.value) > 0).map((item) => (
                   <div key={item.label} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0">
                     <span className="text-gray-500">{item.label}</span>
-                    <span className="font-medium text-green-700">{formatAmount(item.value)}</span>
+                    <span className="font-medium text-green-700">{formatCurrency(item.value)}</span>
                   </div>
                 ))}
                 <div className="flex justify-between text-sm pt-2 font-semibold">
                   <span className="text-gray-700">الإجمالي</span>
-                  <span className="text-green-700">{formatAmount(payslip.grossSalary ?? payslip.baseSalary)}</span>
+                  <span className="text-green-700">{formatCurrency(payslip.grossSalary ?? payslip.baseSalary)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -109,12 +106,12 @@ export default function MyPayslip() {
                 ].filter((item) => Number(item.value) > 0).map((item) => (
                   <div key={item.label} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0">
                     <span className="text-gray-500">{item.label}</span>
-                    <span className="font-medium text-red-600">{formatAmount(item.value)}</span>
+                    <span className="font-medium text-red-600">{formatCurrency(item.value)}</span>
                   </div>
                 ))}
                 <div className="flex justify-between text-sm pt-2 font-semibold">
                   <span className="text-gray-700">الإجمالي</span>
-                  <span className="text-red-600">{formatAmount(payslip.totalDeductions)}</span>
+                  <span className="text-red-600">{formatCurrency(payslip.totalDeductions)}</span>
                 </div>
               </CardContent>
             </Card>

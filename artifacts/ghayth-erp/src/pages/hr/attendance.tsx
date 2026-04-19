@@ -14,6 +14,7 @@ import { Clock, Plus, CheckCircle, XCircle, AlertCircle, Users, ChevronDown, Che
 import { ExportButton } from "@/components/shared/export-buttons";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { cn } from "@/lib/utils";
+import { formatCurrency, formatTimeAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -72,7 +73,7 @@ function PenaltyChain({ record }: { record: any }) {
           <div className="flex items-center gap-1.5 text-xs">
             <DollarSign className="w-3.5 h-3.5 text-red-500" />
             <span className="text-gray-600">خصم:</span>
-            <span className="font-medium text-red-600">{deduction.toFixed(2)} ر.س</span>
+            <span className="font-medium text-red-600">{formatCurrency(deduction)}</span>
           </div>
         )}
         {overtimeMin > 0 && (
@@ -167,7 +168,7 @@ export default function AttendancePage() {
       sortable: true,
       render: (a) => (
         <span className="text-green-600 font-mono">
-          {a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}
+          {formatTimeAr(a.checkIn)}
         </span>
       ),
     },
@@ -177,7 +178,7 @@ export default function AttendancePage() {
       sortable: true,
       render: (a) => (
         <span className="text-red-600 font-mono">
-          {a.checkOut ? new Date(a.checkOut).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}
+          {formatTimeAr(a.checkOut)}
         </span>
       ),
     },

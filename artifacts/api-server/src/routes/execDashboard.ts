@@ -139,6 +139,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
                   FROM journal_lines jl
                   JOIN journal_entries je ON je.id = jl."journalId"
                   WHERE je."companyId" = b."companyId" AND je."deletedAt" IS NULL
+                    AND je.status = 'posted'
                     AND jl."accountCode" = b."accountCode"
                     AND je."createdAt"::date BETWEEN $2::date AND $3::date
                 ), 0) AS "actual"
@@ -229,6 +230,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
          JOIN journal_entries je ON je.id = jl."journalId"
          JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId"
          WHERE je."companyId"=$1 AND je."deletedAt" IS NULL
+           AND je.status = 'posted'
            AND coa.type='revenue' AND je."createdAt"::date BETWEEN $2::date AND $3::date`,
         [companyId, start, end]
       );
@@ -238,6 +240,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
          JOIN journal_entries je ON je.id = jl."journalId"
          JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId"
          WHERE je."companyId"=$1 AND je."deletedAt" IS NULL
+           AND je.status = 'posted'
            AND coa.type='expense' AND je."createdAt"::date BETWEEN $2::date AND $3::date`,
         [companyId, start, end]
       );

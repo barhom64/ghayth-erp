@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckSquare, Calendar, Building2, Phone, Plus, User, Pencil, Trash2, Check, X, PlayCircle, CheckCircle2, Loader2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
@@ -270,7 +271,7 @@ export default function Tasks() {
                         <td className="p-3"><PageStatusBadge status={task.status} /></td>
                         <td className="p-3 text-muted-foreground">
                           {task.scheduledStart
-                            ? new Date(task.scheduledStart).toLocaleString("ar-SA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                            ? formatDateAr(task.scheduledStart)
                             : task.scheduledDate
                             ? formatDateAr(task.scheduledDate)
                             : "-"
@@ -373,27 +374,25 @@ export default function Tasks() {
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">الأولوية</label>
-                                <select
-                                  className="w-full border rounded-md p-2 text-sm"
-                                  value={editForm.priority || "medium"}
-                                  onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}
-                                >
-                                  <option value="low">منخفضة</option>
-                                  <option value="medium">متوسطة</option>
-                                  <option value="high">عالية</option>
-                                </select>
+                                <Select value={editForm.priority || "medium"} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="low">منخفضة</SelectItem>
+                                    <SelectItem value="medium">متوسطة</SelectItem>
+                                    <SelectItem value="high">عالية</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">الحالة</label>
-                                <select
-                                  className="w-full border rounded-md p-2 text-sm"
-                                  value={editForm.status || "pending"}
-                                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                                >
-                                  {statusOptions.map((s) => (
-                                    <option key={s.value} value={s.value}>{s.label}</option>
-                                  ))}
-                                </select>
+                                <Select value={editForm.status || "pending"} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {statusOptions.map((s) => (
+                                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                               <div className="flex items-end gap-2">
                                 <Button size="sm" onClick={saveEdit} disabled={saving} className="gap-1">

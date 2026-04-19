@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
@@ -20,6 +21,7 @@ import {
   Zap,
   Send,
 } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -103,6 +105,7 @@ export default function InvoiceDetailPage() {
   );
   const [showPayment, setShowPayment] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const printContainerRef = useRef<HTMLDivElement>(null);
 
   // R.4 iter 4 — both mutations now flow through useApiMutation so
@@ -151,9 +154,8 @@ export default function InvoiceDetailPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const amount = parseFloat(fd.get("amount") as string);
-    const method = fd.get("method") as string;
-    if (!amount || !method) return;
-    paymentMut.mutate({ amount, method });
+    if (!amount || !paymentMethod) return;
+    paymentMut.mutate({ amount, method: paymentMethod });
   };
 
   const handleZatcaSubmit = () => {
@@ -359,12 +361,15 @@ export default function InvoiceDetailPage() {
               </div>
               <div className="w-48">
                 <label className="text-sm font-medium">طريقة الدفع</label>
-                <select name="method" className="w-full border rounded-md p-2 mt-1" defaultValue="bank_transfer">
-                  <option value="bank_transfer">حوالة بنكية</option>
-                  <option value="cash">نقداً</option>
-                  <option value="card">بطاقة</option>
-                  <option value="cheque">شيك</option>
-                </select>
+                <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank_transfer">حوالة بنكية</SelectItem>
+                    <SelectItem value="cash">نقداً</SelectItem>
+                    <SelectItem value="card">بطاقة</SelectItem>
+                    <SelectItem value="cheque">شيك</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="submit" disabled={paymentMut.isPending}>
                 {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
@@ -377,92 +382,69 @@ export default function InvoiceDetailPage() {
         </Card>
       )}
 
-      {lines.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>بنود الفاتورة</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">#</th>
-                <th className="p-3 text-start">الوصف</th>
-                <th className="p-3 text-start">الكمية</th>
-                <th className="p-3 text-start">سعر الوحدة</th>
-                <th className="p-3 text-start">الإجمالي</th>
-                <th className="p-3 text-start">الضريبة</th>
-                <th className="p-3 text-start">الصافي</th>
-              </tr></thead>
-              <tbody>
-                {lines.map((l: any, i: number) => (
-                  <tr key={i} className="border-b">
-                    <td className="p-3 text-gray-400">{i + 1}</td>
-                    <td className="p-3 font-medium">{l.description || "-"}</td>
-                    <td className="p-3">{l.quantity}</td>
-                    <td className="p-3">{formatCurrency(Number(l.unitPrice))}</td>
-                    <td className="p-3">{formatCurrency(Number(l.lineTotal))}</td>
-                    <td className="p-3 text-gray-500">{formatCurrency(Number(l.vatAmount || 0))}</td>
-                    <td className="p-3 font-bold">{formatCurrency(Number(l.lineGross || l.lineTotal))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader><CardTitle>بنود الفاتورة</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={[
+              { key: "_index", header: "#", render: (_r, i) => <span className="text-gray-400">{i + 1}</span> },
+              { key: "description", header: "الوصف", render: (r) => <span className="font-medium">{r.description || "-"}</span> },
+              { key: "quantity", header: "الكمية", sortable: true },
+              { key: "unitPrice", header: "سعر الوحدة", sortable: true, render: (r) => formatCurrency(Number(r.unitPrice)) },
+              { key: "lineTotal", header: "الإجمالي", sortable: true, render: (r) => formatCurrency(Number(r.lineTotal)) },
+              { key: "vatAmount", header: "الضريبة", sortable: true, render: (r) => <span className="text-gray-500">{formatCurrency(Number(r.vatAmount || 0))}</span> },
+              { key: "lineGross", header: "الصافي", sortable: true, render: (r) => <span className="font-bold">{formatCurrency(Number(r.lineGross || r.lineTotal))}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={lines}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد بنود"
+          />
+        </CardContent>
+      </Card>
 
-      {payments.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>سجل الدفعات</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">المرجع</th>
-                <th className="p-3 text-start">الوصف</th>
-                <th className="p-3 text-start">المبلغ</th>
-                <th className="p-3 text-start">التاريخ</th>
-              </tr></thead>
-              <tbody>
-                {payments.map((p: any) => (
-                  <tr key={p.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-sm text-blue-600">{p.ref}</td>
-                    <td className="p-3">{p.description || "-"}</td>
-                    <td className="p-3 font-bold text-green-600">{formatCurrency(Number(p.amount))}</td>
-                    <td className="p-3 text-gray-500 text-sm">{p.date ? formatDateAr(p.date) : "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader><CardTitle>سجل الدفعات</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={[
+              { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-blue-600">{r.ref}</span> },
+              { key: "description", header: "الوصف", render: (r) => r.description || "-" },
+              { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-bold text-green-600">{formatCurrency(Number(r.amount))}</span> },
+              { key: "date", header: "التاريخ", render: (r) => <span className="text-gray-500 text-sm">{r.date ? formatDateAr(r.date) : "-"}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={payments}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد دفعات"
+          />
+        </CardContent>
+      </Card>
 
-      {journalEntries.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-muted-foreground" />
-              القيود المحاسبية ({journalEntries.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">المرجع</th>
-                <th className="p-3 text-start">الوصف</th>
-                <th className="p-3 text-start">التاريخ</th>
-              </tr></thead>
-              <tbody>
-                {journalEntries.map((je: any) => (
-                  <tr key={je.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-sm text-purple-600">{je.ref}</td>
-                    <td className="p-3">{je.description || "-"}</td>
-                    <td className="p-3 text-gray-500 text-sm">{je.date ? formatDateAr(je.date) : "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-muted-foreground" />
+            القيود المحاسبية ({journalEntries.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={[
+              { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-purple-600">{r.ref}</span> },
+              { key: "description", header: "الوصف", render: (r) => r.description || "-" },
+              { key: "date", header: "التاريخ", render: (r) => <span className="text-gray-500 text-sm">{r.date ? formatDateAr(r.date) : "-"}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={journalEntries}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد قيود محاسبية"
+          />
+        </CardContent>
+      </Card>
 
       {invoice.status === "pending" && (
         <Card>
@@ -563,10 +545,10 @@ export default function InvoiceDetailPage() {
                   <td>{i + 1}</td>
                   <td>{l.description || "-"}</td>
                   <td>{l.quantity}</td>
-                  <td>{Number(l.unitPrice).toLocaleString()} ﷼</td>
-                  <td>{Number(l.lineTotal).toLocaleString()} ﷼</td>
-                  <td>{Number(l.vatAmount || 0).toLocaleString()} ﷼</td>
-                  <td style={{ fontWeight: "bold" }}>{Number(l.lineGross || l.lineTotal).toLocaleString()} ﷼</td>
+                  <td>{formatCurrency(Number(l.unitPrice))}</td>
+                  <td>{formatCurrency(Number(l.lineTotal))}</td>
+                  <td>{formatCurrency(Number(l.vatAmount || 0))}</td>
+                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineGross || l.lineTotal))}</td>
                 </tr>
               ))}
             </tbody>
@@ -577,23 +559,23 @@ export default function InvoiceDetailPage() {
           <tbody>
             <tr>
               <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(invoice.subtotal || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.subtotal || 0))}</td>
             </tr>
             <tr>
               <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(invoice.vatAmount || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.vatAmount || 0))}</td>
             </tr>
             <tr style={{ borderTop: "2px solid #333" }}>
               <td className="label" style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{Number(invoice.total).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(Number(invoice.total))}</td>
             </tr>
             <tr>
               <td className="label" style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{Number(invoice.paidAmount || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{formatCurrency(Number(invoice.paidAmount || 0))}</td>
             </tr>
             <tr>
               <td className="label" style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{remaining.toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{formatCurrency(remaining)}</td>
             </tr>
           </tbody>
         </table>
@@ -640,18 +622,18 @@ export default function InvoiceDetailPage() {
               <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th>الضريبة</th><th>الصافي</th></tr></thead>
               <tbody>
                 {lines.map((l: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{l.description || "-"}</td><td>{l.quantity}</td><td>{Number(l.unitPrice).toLocaleString()} ﷼</td><td>{Number(l.lineTotal).toLocaleString()} ﷼</td><td>{Number(l.vatAmount || 0).toLocaleString()} ﷼</td><td style={{ fontWeight: "bold" }}>{Number(l.lineGross || l.lineTotal).toLocaleString()} ﷼</td></tr>
+                  <tr key={i}><td>{i + 1}</td><td>{l.description || "-"}</td><td>{l.quantity}</td><td>{formatCurrency(Number(l.unitPrice))}</td><td>{formatCurrency(Number(l.lineTotal))}</td><td>{formatCurrency(Number(l.vatAmount || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineGross || l.lineTotal))}</td></tr>
                 ))}
               </tbody>
             </table>
           )}
           <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
             <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(invoice.subtotal || 0).toLocaleString()} ﷼</td></tr>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(invoice.vatAmount || 0).toLocaleString()} ﷼</td></tr>
-              <tr style={{ borderTop: "2px solid #333" }}><td style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{Number(invoice.total).toLocaleString()} ﷼</td></tr>
-              <tr><td style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{Number(invoice.paidAmount || 0).toLocaleString()} ﷼</td></tr>
-              <tr><td style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{remaining.toLocaleString()} ﷼</td></tr>
+              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.subtotal || 0))}</td></tr>
+              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.vatAmount || 0))}</td></tr>
+              <tr style={{ borderTop: "2px solid #333" }}><td style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(Number(invoice.total))}</td></tr>
+              <tr><td style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{formatCurrency(Number(invoice.paidAmount || 0))}</td></tr>
+              <tr><td style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{formatCurrency(remaining)}</td></tr>
             </tbody>
           </table>
           {invoice.zatcaQrCode && (

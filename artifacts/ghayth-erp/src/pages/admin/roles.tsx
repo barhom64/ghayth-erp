@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KeyRound, CheckCircle, Shield, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -269,14 +270,16 @@ export default function AdminRolesPage() {
           <CardContent className="p-4 space-y-4">
             <div>
               <Label className="text-sm mb-1.5 block">اختر الدور لضبط صلاحياته</Label>
-              <select className="w-full border rounded-lg p-2.5 bg-white text-sm" value={selectedPermRole}
-                onChange={(e) => { setSelectedPermRole(e.target.value); loadRolePerms(e.target.value); }}>
-                {predefinedRoles.map((r: any) => (
-                  <option key={r.roleKey} value={r.roleKey}>
-                    {r.label}{r.isCustom ? " (مخصص)" : ""}
-                  </option>
-                ))}
-              </select>
+              <Select value={selectedPermRole} onValueChange={(v) => { setSelectedPermRole(v); loadRolePerms(v); }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {predefinedRoles.map((r: any) => (
+                    <SelectItem key={r.roleKey} value={r.roleKey}>
+                      {r.label}{r.isCustom ? " (مخصص)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {permsLoading ? (
               <p className="text-sm text-gray-400 text-center py-4">جاري التحميل...</p>

@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -129,9 +129,7 @@ export default function OvertimePage() {
       sortable: true,
       render: (v) => (
         <span className="text-sm text-gray-600">
-          {v.overtimeDate
-            ? new Date(v.overtimeDate).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
-            : "-"}
+          {formatDateAr(v.overtimeDate)}
         </span>
       ),
     },

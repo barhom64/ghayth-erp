@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { TrendingUp } from "lucide-react";
@@ -8,6 +9,9 @@ export function TrainingROITab() {
   const { data, isLoading, isError } = useApiQuery<any>(["bi-training-roi"], "/bi/reports/training-roi");
   const summary = data?.summary || {};
   const programs = (data?.byProgram || []) as any[];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

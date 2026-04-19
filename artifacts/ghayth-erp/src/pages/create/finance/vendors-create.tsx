@@ -1,18 +1,19 @@
 import { useState } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "finance_vendors_create";
-const INITIAL = { name: "", contactPerson: "", phone: "", email: "", taxNumber: "", address: "", paymentTerms: "", category: "", date: new Date().toISOString().split("T")[0] };
+const INITIAL = { name: "", contactPerson: "", phone: "", email: "", taxNumber: "", address: "", paymentTerms: "", category: "", date: todayLocal() };
 
 export default function VendorsCreate() {
   const [, setLocation] = useLocation();
@@ -20,22 +21,17 @@ export default function VendorsCreate() {
   const createMut = useApiMutation("/finance/vendors/create", "POST", [["vendors"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name) localErrors.name = "اسم المورد مطلوب";
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
-    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الهاتف يجب أن يكون 9 أرقام على الأقل";
-    if (form.taxNumber && !/^\d{15}$/.test(form.taxNumber.replace(/\s/g, ""))) localErrors.taxNumber = "الرقم الضريبي يجب أن يكون 15 رقماً";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name ? null : "اسم المورد مطلوب",
+      email: form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? "صيغة البريد الإلكتروني غير صحيحة" : null,
+      phone: form.phone && form.phone.replace(/\D/g, "").length < 9 ? "رقم الهاتف يجب أن يكون 9 أرقام على الأقل" : null,
+      taxNumber: form.taxNumber && !/^\d{15}$/.test(form.taxNumber.replace(/\s/g, "")) ? "الرقم الضريبي يجب أن يكون 15 رقماً" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -44,7 +40,8 @@ export default function VendorsCreate() {
       toast({ title: "تم إضافة المورد بنجاح" });
       setLocation("/finance/vendors");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المورد", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المورد", description: err?.fix ?? err?.message });
     }
   };
 
@@ -58,24 +55,20 @@ export default function VendorsCreate() {
       )}
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>التاريخ</Label>
-          <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></div>
-        </div>
+        <FormFieldWrapper label="التاريخ">
+          <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />
+        </FormFieldWrapper>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div><Label>الاسم <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /><FieldHint field="name" /></div>
-        <div><Label>جهة الاتصال</Label><Input className="mt-1" value={form.contactPerson} onChange={(e) => setForm((f) => ({ ...f, contactPerson: e.target.value }))} /></div>
-        <div><Label>الهاتف</Label><Input className={`mt-1 ${errCls("phone")}`} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /><FieldHint field="phone" /></div>
-        <div><Label>البريد</Label><Input className={`mt-1 ${errCls("email")}`} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /><FieldHint field="email" /></div>
-        <div><Label>الرقم الضريبي</Label><Input className={`mt-1 ${errCls("taxNumber")}`} dir="ltr" value={form.taxNumber} onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))} /><FieldHint field="taxNumber" /></div>
-        <div><Label>العنوان</Label><Input className="mt-1" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} /></div>
-        <div>
-          <Label>شروط الدفع</Label>
+        <TextField label="الاسم" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} />
+        <TextField label="جهة الاتصال" value={form.contactPerson} onChange={(v) => setForm((f) => ({ ...f, contactPerson: v }))} />
+        <TextField label="الهاتف" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} error={fieldErrors.phone} />
+        <TextField label="البريد" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} error={fieldErrors.email} />
+        <TextField label="الرقم الضريبي" dir="ltr" value={form.taxNumber} onChange={(v) => setForm((f) => ({ ...f, taxNumber: v }))} error={fieldErrors.taxNumber} />
+        <TextField label="العنوان" value={form.address} onChange={(v) => setForm((f) => ({ ...f, address: v }))} />
+        <FormFieldWrapper label="شروط الدفع">
           <Select value={form.paymentTerms || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, paymentTerms: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر</SelectItem>
               <SelectItem value="net_30">صافي 30 يوم</SelectItem>
@@ -85,7 +78,7 @@ export default function VendorsCreate() {
               <SelectItem value="advance">مقدماً</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </FormFieldWrapper>
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">

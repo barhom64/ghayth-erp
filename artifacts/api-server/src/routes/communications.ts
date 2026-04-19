@@ -1,5 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -10,6 +11,39 @@ import { sendPushToCompany, getVapidPublicKey } from "../lib/pushService.js";
 import { encryptPushEndpoint, hashPushEndpoint, decryptPushEndpoint } from "../lib/pushCrypto.js";
 
 export { decryptPushEndpoint as decryptEndpoint };
+
+/* ── Zod Schemas ───────────────────────────────────────────────── */
+
+const sendCommunicationSchema = z.object({
+  channel: z.string({ required_error: "قناة المراسلة مطلوبة" }).min(1, "قناة المراسلة مطلوبة"),
+  toNumber: z.string().optional(),
+  toEmail: z.string().optional(),
+  body: z.string({ required_error: "محتوى الرسالة مطلوب" }).min(1, "محتوى الرسالة مطلوب"),
+  fromNumber: z.string().optional(),
+  subject: z.string().optional(),
+  relatedType: z.string().optional(),
+  relatedId: z.number().optional(),
+});
+
+const convertLogSchema = z.object({
+  targetType: z.enum(["task", "ticket", "request"], { required_error: "نوع التحويل مطلوب", invalid_type_error: "نوع التحويل غير صالح. المتاح: task, ticket, request" }),
+});
+
+const pushSubscribeSchema = z.object({
+  endpoint: z.string({ required_error: "رابط الاشتراك مطلوب" }).min(1, "رابط الاشتراك مطلوب"),
+  keys: z.object({
+    p256dh: z.string({ required_error: "مفتاح p256dh مطلوب" }).min(1, "مفتاح p256dh مطلوب"),
+    auth: z.string({ required_error: "مفتاح auth مطلوب" }).min(1, "مفتاح auth مطلوب"),
+  }, { required_error: "مفاتيح الاشتراك مطلوبة" }),
+});
+
+const updateLogSchema = z.object({
+  body: z.string().optional(),
+  content: z.string().optional(),
+  subject: z.string().optional(),
+  direction: z.string().optional(),
+  status: z.string().optional(),
+});
 
 const router = Router();
 
@@ -345,6 +379,8 @@ router.get("/log", requirePermission("communications:read"), async (req, res): P
 
 router.post("/send", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
+    const parsed = sendCommunicationSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
 
@@ -418,6 +454,8 @@ router.get("/pbx", requirePermission("communications:read"), async (req, res): P
 
 router.patch("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
+    const parsed = updateLogSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const { body, content, subject, direction, status } = req.body as any;
     const sets: string[] = [];
@@ -442,6 +480,8 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
 
 router.post("/log/:id/convert", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
+    const parsed = convertLogSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const logId = Number(req.params.id);
     const { targetType } = req.body;
@@ -623,6 +663,8 @@ router.get("/push/vapid-key", async (_req, res): Promise<void> => {
 
 router.post("/push/subscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
+    const parsed = pushSubscribeSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const { endpoint, keys } = req.body as {
       endpoint: string;
@@ -680,6 +722,8 @@ router.delete("/push/unsubscribe", requirePermission("communications:write"), as
 
 router.post("/push/test", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
+    const parsed = z.object({}).safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const result = await sendPushToCompany(
       scope.companyId,

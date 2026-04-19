@@ -1,18 +1,22 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
+import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -45,7 +49,7 @@ export default function InvoicesCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/invoices", "POST", [["invoices"]]);
-  const { data: clientsData, isLoading: clientsLoading } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: clientsData, isLoading: clientsLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
   const clients = clientsData?.data || [];
   const branches = branchesData?.data || [];
@@ -66,7 +70,7 @@ export default function InvoicesCreate() {
   const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("invoice-create", {
     clientId: copyDefaults?.clientId ? String(copyDefaults.clientId) : "",
     description: copyDefaults?.description || "",
-    date: new Date().toISOString().split("T")[0],
+    date: todayLocal(),
     dueDate: "",
     vatRate: copyDefaults?.vatRate ? String(copyDefaults.vatRate) : "15",
     branchId: selectedBranchId ? String(selectedBranchId) : "",
@@ -81,10 +85,8 @@ export default function InvoicesCreate() {
   const [lines, setLines] = useState([{ description: "", quantity: "1", unitPrice: "" }]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [copied, setCopied] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   useEffect(() => {
     if (copySource && !copied) {
@@ -107,6 +109,9 @@ export default function InvoicesCreate() {
   }, [copySource, copied]);
   const autoNumberRef = useRef(`INV-${Date.now().toString(36).toUpperCase()}`);
 
+  if (clientsLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const addLine = () => setLines([...lines, { description: "", quantity: "1", unitPrice: "" }]);
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
   const updateLine = (idx: number, field: string, value: string) => {
@@ -115,21 +120,19 @@ export default function InvoicesCreate() {
     setLines(updated);
   };
 
-  const subtotal = lines.reduce((sum, l) => sum + Number(l.quantity || 0) * Number(l.unitPrice || 0), 0);
-  const vatAmount = subtotal * (Number(form.vatRate) / 100);
-  const total = subtotal + vatAmount;
+  const subtotal = roundMoney(lines.reduce((sum, l) => sum + roundMoney(Number(l.quantity || 0) * Number(l.unitPrice || 0)), 0));
+  const vatAmount = roundMoney(subtotal * (Number(form.vatRate) / 100));
+  const total = roundMoney(subtotal + vatAmount);
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.clientId) localErrors.clientId = "يرجى اختيار العميل";
-    if (!form.dueDate && !form.paymentTermsDays) localErrors.dueDate = "حدد شروط الدفع أو تاريخ الاستحقاق";
-    if (lines.length === 0 || !lines[0].unitPrice) localErrors.lines = "يرجى إضافة بند واحد على الأقل بسعر";
-    if (total <= 0) localErrors.totalAmount = "إجمالي الفاتورة يجب أن يكون أكبر من صفر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      clientId: form.clientId ? null : "يرجى اختيار العميل",
+      dueDate: !form.dueDate && !form.paymentTermsDays ? "حدد شروط الدفع أو تاريخ الاستحقاق" : null,
+      lines: lines.length === 0 || !lines[0].unitPrice ? "يرجى إضافة بند واحد على الأقل بسعر" : null,
+      totalAmount: total <= 0 ? "إجمالي الفاتورة يجب أن يكون أكبر من صفر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     if (!form.branchId) {
@@ -164,7 +167,8 @@ export default function InvoicesCreate() {
       clearDraft();
       setLocation("/finance/invoices");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الفاتورة", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الفاتورة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -173,71 +177,61 @@ export default function InvoicesCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div data-form>
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم الفاتورة" value={autoNumberRef.current} />
-        <div>
-          <Label>التاريخ <span className="text-red-500">*</span></Label>
-          <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} /></div>
-        </div>
+        <FormFieldWrapper label="التاريخ" required>
+          <DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+        </FormFieldWrapper>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div>
-          <Label>العميل <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="العميل" required error={fieldErrors.clientId}>
           <Autocomplete
             options={clientOptions}
             value={form.clientId}
             onChange={(val) => setForm(prev => ({ ...prev, clientId: String(val) }))}
             placeholder="ابحث عن عميل..."
             loading={clientsLoading}
-            className={`mt-1 ${errCls("clientId")}`}
+            className={fieldErrorClass(fieldErrors.clientId)}
           />
-          <FieldHint field="clientId" />
           {form.clientId && (
             <div className="mt-3">
               <ClientContextCard clientId={form.clientId} section="invoice" />
             </div>
           )}
-        </div>
-        <div>
-          <Label>الفرع <span className="text-red-500">*</span></Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفرع" required>
           <Select value={form.branchId || "_none"} onValueChange={(v) => setForm(prev => ({ ...prev, branchId: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر الفرع</SelectItem>
               {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>نسبة الضريبة %</Label>
-          <Input className="mt-1" type="number" value={form.vatRate} onChange={(e) => setForm({ ...form, vatRate: e.target.value })} />
-        </div>
-        <div>
-          <Label>شروط الدفع <span className="text-red-500">*</span></Label>
+        </FormFieldWrapper>
+        <NumberField label="نسبة الضريبة %" value={form.vatRate} onChange={(v) => setForm({ ...form, vatRate: v })} min={0} max={100} step={0.01} />
+        <FormFieldWrapper label="شروط الدفع" required>
           <Select value={form.paymentTermsDays || "_none"} onValueChange={(v) => setForm(prev => ({ ...prev, paymentTermsDays: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {PAYMENT_TERMS_OPTIONS.map(t => <SelectItem key={t.value || "_none"} value={t.value || "_none"}>{t.label}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>تاريخ الاستحقاق {!form.paymentTermsDays && <span className="text-red-500">*</span>}</Label>
-          <div className={`mt-1 ${errCls("dueDate")}`}><DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} /></div>
-          <FieldHint field="dueDate" />
-        </div>
-        <div className="md:col-span-3"><Label>الوصف</Label><Input className="mt-1" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-        <div className="md:col-span-3"><Label>ملاحظات إضافية</Label><Input className="mt-1" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="ملاحظات أو تعليمات للعميل" /></div>
+        </FormFieldWrapper>
+        <FormFieldWrapper label={`تاريخ الاستحقاق ${!form.paymentTermsDays ? "*" : ""}`} error={fieldErrors.dueDate}>
+          <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
+        </FormFieldWrapper>
+        <TextField label="الوصف" value={form.description} onChange={(v) => setForm({ ...form, description: v })} className="md:col-span-3" />
+        <TextField label="ملاحظات إضافية" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} placeholder="ملاحظات أو تعليمات للعميل" className="md:col-span-3" />
       </div>
 
       <div className="mb-4">
         <Label className="text-base font-semibold">البنود</Label>
-        <FieldHint field="lines" />
+        {fieldErrors.lines && <p className="text-xs text-red-600 mt-1">{fieldErrors.lines}</p>}
         {lines.map((line, idx) => (
           <div key={idx} className="grid grid-cols-4 gap-2 mt-2 items-end">
             <div><Label className="text-xs">الوصف</Label><Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} /></div>
@@ -249,12 +243,12 @@ export default function InvoicesCreate() {
         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addLine}>+ إضافة بند</Button>
       </div>
 
-      <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${errCls("totalAmount")}`}>
-        <div className="flex justify-between"><span>المجموع الفرعي:</span><span>{subtotal.toFixed(2)}</span></div>
-        <div className="flex justify-between"><span>الضريبة ({form.vatRate}%):</span><span>{vatAmount.toFixed(2)}</span></div>
-        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{total.toFixed(2)}</span></div>
+      <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${fieldErrorClass(fieldErrors.totalAmount)}`}>
+        <div className="flex justify-between"><span>المجموع الفرعي:</span><span>{formatCurrency(subtotal)}</span></div>
+        <div className="flex justify-between"><span>الضريبة ({form.vatRate}%):</span><span>{formatCurrency(vatAmount)}</span></div>
+        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(total)}</span></div>
       </div>
-      <FieldHint field="totalAmount" />
+      {fieldErrors.totalAmount && <p className="text-xs text-red-600 mt-1">{fieldErrors.totalAmount}</p>}
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
 
@@ -278,25 +272,26 @@ export default function InvoicesCreate() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
             <div>
               <Label>نوع الفاتورة الضريبية</Label>
-              <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.invoiceTypeCode}
-                onChange={(e) => setForm({ ...form, invoiceTypeCode: e.target.value })}>
-                {INVOICE_TYPE_CODES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <Select value={form.invoiceTypeCode} onValueChange={(v) => setForm((f) => ({ ...f, invoiceTypeCode: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {INVOICE_TYPE_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>فئة الضريبة</Label>
-              <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.taxCategoryCode}
-                onChange={(e) => setForm({ ...form, taxCategoryCode: e.target.value })}>
-                {TAX_CATEGORY_CODES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <Select value={form.taxCategoryCode} onValueChange={(v) => setForm((f) => ({ ...f, taxCategoryCode: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TAX_CATEGORY_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             {(form.taxCategoryCode === "E" || form.taxCategoryCode === "Z") && (
               <div>
                 <Label>سبب الإعفاء / النسبة الصفرية</Label>
-                <input type="text" className="w-full border rounded-md p-2 mt-1 text-sm"
-                  value={form.exemptionReason}
-                  onChange={(e) => setForm({ ...form, exemptionReason: e.target.value })}
-                  placeholder="أدخل سبب الإعفاء..." />
+                <Input className="mt-1" value={form.exemptionReason} onChange={(e) => setForm((f) => ({ ...f, exemptionReason: e.target.value }))} placeholder="أدخل سبب الإعفاء..." />
               </div>
             )}
             <div className="md:col-span-3 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-md">

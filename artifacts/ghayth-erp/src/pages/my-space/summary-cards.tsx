@@ -6,6 +6,7 @@ import {
   Clock, Calendar, DollarSign, LogIn, LogOut as LogOutIcon, Timer, XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/formatters";
 import { formatTime } from "./shared";
 
 interface SummaryCardsProps {
@@ -170,19 +171,19 @@ export function SummaryCards({ attendance, monthlyStats, currentShift, lastPaysl
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">الراتب الأساسي</span>
-                <span className="font-medium">{Number(lastPayslip.basicSalary).toLocaleString("ar-SA")} ر.س</span>
+                <span className="font-medium">{formatCurrency(Number(lastPayslip.basicSalary))}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">البدلات</span>
-                <span className="font-medium text-green-600">+{Number(lastPayslip.totalAllowances).toLocaleString("ar-SA")}</span>
+                <span className="font-medium text-green-600">+{formatCurrency(Number(lastPayslip.totalAllowances))}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">الخصومات</span>
-                <span className="font-medium text-red-600">-{Number(lastPayslip.totalDeductions).toLocaleString("ar-SA")}</span>
+                <span className="font-medium text-red-600">-{formatCurrency(Number(lastPayslip.totalDeductions))}</span>
               </div>
               <div className="border-t pt-2 flex justify-between text-sm font-bold">
                 <span>صافي الراتب</span>
-                <span className="text-primary">{Number(lastPayslip.netSalary).toLocaleString("ar-SA")} ر.س</span>
+                <span className="text-primary">{formatCurrency(Number(lastPayslip.netSalary))}</span>
               </div>
             </div>
           ) : (

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -24,7 +25,7 @@ const VIOLATION_TYPES: Record<string, string> = {
 
 export default function TrafficViolationsPage() {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
+  const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: todayLocal(), fineAmount: "", location: "", violationNumber: "", notes: "" });
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
   const violations = asList(data?.data || data);
@@ -43,7 +44,7 @@ export default function TrafficViolationsPage() {
       await apiFetch("/fleet/traffic-violations", { method: "POST", body: JSON.stringify({ ...form, vehicleId: Number(form.vehicleId), driverId: form.driverId ? Number(form.driverId) : null, fineAmount: Number(form.fineAmount || 0) }) });
       toast({ title: "تم تسجيل المخالفة" });
       setShowForm(false);
-      setForm({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
+      setForm({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: todayLocal(), fineAmount: "", location: "", violationNumber: "", notes: "" });
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
@@ -71,13 +72,13 @@ export default function TrafficViolationsPage() {
         <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{violations.length}</div><div className="text-xs text-gray-500">إجمالي المخالفات</div></CardContent></Card>
         <Card className="border-red-200 bg-red-50/30">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-red-600">{pendingFines.toFixed(0)} ر.س</div>
+            <div className="text-xl font-bold text-red-600">{formatCurrency(pendingFines)}</div>
             <div className="text-xs text-gray-500">غرامات غير مدفوعة</div>
           </CardContent>
         </Card>
         <Card className="border-green-200 bg-green-50/30">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-green-600">{paidFines.toFixed(0)} ر.س</div>
+            <div className="text-xl font-bold text-green-600">{formatCurrency(paidFines)}</div>
             <div className="text-xs text-gray-500">غرامات مدفوعة</div>
           </CardContent>
         </Card>
@@ -96,10 +97,10 @@ export default function TrafficViolationsPage() {
             </div>
             <div>
               <Label>السائق</Label>
-              <Select value={form.driverId} onValueChange={(v) => setForm({ ...form, driverId: v })}>
+              <Select value={form.driverId || "_none"} onValueChange={(v) => setForm({ ...form, driverId: v === "_none" ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="اختر سائقاً" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="_none">—</SelectItem>
                   {driverList.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -159,7 +160,7 @@ export default function TrafficViolationsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-end">
-                  <div className="font-bold text-red-600">{Number(v.fineAmount || 0).toFixed(0)} ر.س</div>
+                  <div className="font-bold text-red-600">{formatCurrency(Number(v.fineAmount || 0))}</div>
                   <PageStatusBadge status={v.status || "unpaid"} domain="traffic_violation" />
                 </div>
                 {v.status !== "paid" && (

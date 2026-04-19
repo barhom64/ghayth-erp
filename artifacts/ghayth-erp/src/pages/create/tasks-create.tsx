@@ -1,19 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { useApiMutation, useApiQuery, asList } from "@/lib/api";
+import { useApiMutation, useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Badge } from "@/components/ui/badge";
 import { Link2 } from "lucide-react";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const ENTITY_TYPE_OPTIONS = [
   { value: "", label: "— بدون ربط —" },
@@ -31,7 +33,7 @@ export default function TasksCreate() {
   const { user } = useAuth();
   const { toast } = useToast();
   const createMut = useApiMutation("/tasks", "POST", [["tasks"]]);
-  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const clients = clientsData?.data || [];
   const searchStr = useSearch();
   const searchParams = new URLSearchParams(searchStr);
@@ -71,9 +73,17 @@ export default function TasksCreate() {
     subtitle: item.category || item.email || item.phone || undefined,
   }));
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
   const handleSubmit = async () => {
-    if (!form.title) {
-      toast({ variant: "destructive", title: "يرجى إدخال عنوان المهمة" });
+    const firstError = validate({
+      title: form.title.trim() ? null : "يرجى إدخال عنوان المهمة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     const payload: any = { ...form, assignedTo: user?.name || "" };
@@ -96,7 +106,8 @@ export default function TasksCreate() {
       toast({ title: "تم إنشاء المهمة بنجاح" });
       setLocation("/tasks");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء المهمة", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء المهمة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -113,41 +124,40 @@ export default function TasksCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><Label>العنوان</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div>
-        <div>
-          <Label>النوع</Label>
+        <TextField label="العنوان" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} error={fieldErrors.title} />
+        <FormFieldWrapper label="النوع">
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="task">مهمة عامة</SelectItem>
               <SelectItem value="meeting">اجتماع</SelectItem>
               <SelectItem value="call">مكالمة</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>الأولوية</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الأولوية">
           <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="low">منخفضة</SelectItem>
               <SelectItem value="medium">متوسطة</SelectItem>
               <SelectItem value="high">عالية</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>الموعد</Label><Input className="mt-1" type="datetime-local" value={form.scheduledStart} onChange={(e) => setForm((f) => ({ ...f, scheduledStart: e.target.value }))} /></div>
-        <div>
-          <Label>العميل</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الموعد">
+          <Input type="datetime-local" value={form.scheduledStart} onChange={(e) => setForm((f) => ({ ...f, scheduledStart: e.target.value }))} />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="العميل">
           <Select value={form.clientName || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientName: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="— بدون عميل —" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="— بدون عميل —" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— بدون عميل —</SelectItem>
               {clients.map((c: any) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div className="md:col-span-2"><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} /></div>
+        </FormFieldWrapper>
+        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} rows={3} className="md:col-span-2" />
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
           <div className="flex items-center gap-2 mb-3">
@@ -160,20 +170,18 @@ export default function TasksCreate() {
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>نوع الكيان</Label>
+            <FormFieldWrapper label="نوع الكيان">
               <Select value={form.linkedEntityType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, linkedEntityType: v === "_none" ? "" : v, linkedEntityId: "" }))}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="— بدون ربط —" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="— بدون ربط —" /></SelectTrigger>
                 <SelectContent>
                   {ENTITY_TYPE_OPTIONS.map(opt => (
                     <SelectItem key={opt.value || "_none"} value={opt.value || "_none"}>{opt.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormFieldWrapper>
             {form.linkedEntityType && (
-              <div>
-                <Label>اختر الكيان</Label>
+              <FormFieldWrapper label="اختر الكيان">
                 <Autocomplete
                   options={entityOptions}
                   value={form.linkedEntityId}
@@ -183,7 +191,7 @@ export default function TasksCreate() {
                   emptyMessage={entityLoading ? "جاري التحميل..." : "لا توجد نتائج — تأكد من إضافة كيانات من هذا النوع أولاً"}
                   className="mt-1"
                 />
-              </div>
+              </FormFieldWrapper>
             )}
           </div>
         </div>

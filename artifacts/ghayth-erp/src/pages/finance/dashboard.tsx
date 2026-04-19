@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   Wallet,
   TrendingUp,
@@ -217,6 +218,14 @@ export default function FinanceDashboard() {
     bankGuarantees.isLoading ||
     fiscalPeriods.isLoading ||
     pendingManualJournals.isLoading;
+  const isAnyError =
+    summary.isError ||
+    bankGuarantees.isError ||
+    fiscalPeriods.isError ||
+    pendingManualJournals.isError;
+
+  if (isAnyLoading) return <LoadingSpinner />;
+  if (isAnyError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const periods = asList<FiscalPeriodRow>(fiscalPeriods.data?.data);
   const openPeriod = periods.find((p) => p.status === "open");

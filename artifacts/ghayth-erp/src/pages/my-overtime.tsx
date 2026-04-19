@@ -2,12 +2,13 @@ import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
-  Timer, Clock, CheckCircle2, Loader2,
-  DollarSign, Calendar, TrendingUp,
+  Timer, Clock, CheckCircle2,
+  DollarSign,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -25,9 +26,29 @@ const multiplierLabels: Record<string, string> = {
   "2": "عطلة ×2.00",
 };
 
-function formatAmount(v: any): string {
-  return Number(v ?? 0).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+
+const overtimeColumns: DataTableColumn<any>[] = [
+  { key: "overtimeNumber", header: "الرقم", render: (r) => `#${r.overtimeNumber || r.id}`, ltr: true },
+  { key: "date", header: "التاريخ", sortable: true, searchable: true, render: (r) => formatDateAr(r.date) },
+  { key: "startTime", header: "من", render: (r) => r.startTime || "—" },
+  { key: "endTime", header: "إلى", render: (r) => r.endTime || "—" },
+  { key: "hours", header: "الساعات", sortable: true, render: (r) => <span className="font-medium">{Number(r.hours || 0).toFixed(1)} س</span> },
+  {
+    key: "multiplier", header: "المضاعف",
+    render: (r) => {
+      const mult = String(r.multiplier ?? "1.25");
+      return multiplierLabels[mult] || `×${mult}`;
+    },
+  },
+  { key: "totalAmount", header: "المبلغ", sortable: true, render: (r) => <span className="font-medium text-emerald-600">{formatCurrency(r.totalAmount)}</span> },
+  {
+    key: "status", header: "الحالة", searchable: true,
+    render: (r) => {
+      const cfg = statusConfig[r.status] ?? { label: r.status, color: "text-gray-600 bg-gray-50" };
+      return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cfg.color)}>{cfg.label}</span>;
+    },
+  },
+];
 
 export default function MyOvertime() {
   const today = new Date();
@@ -65,7 +86,7 @@ export default function MyOvertime() {
           { label: "إجمالي الساعات", value: totalHours.toFixed(1), icon: Clock, color: "text-blue-600 bg-blue-50" },
           { label: "معتمدة", value: approvedCount, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
           { label: "معلقة", value: pendingCount, icon: Timer, color: "text-yellow-600 bg-yellow-50" },
-          { label: "إجمالي التعويض", value: `${formatAmount(totalAmount)} ر.س`, icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
+          { label: "إجمالي التعويض", value: `${formatCurrency(totalAmount)}`, icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -82,74 +103,24 @@ export default function MyOvertime() {
         })}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="animate-spin text-primary" size={32} />
-        </div>
-      ) : records.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-gray-400">
-            <Timer size={36} className="mx-auto mb-3 opacity-40" />
-            <p className="font-medium">لا توجد سجلات وقت إضافي لهذا الشهر</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">تفاصيل الوقت الإضافي</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">الرقم</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">التاريخ</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">من</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">إلى</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">الساعات</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">المضاعف</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">المبلغ</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">الحالة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((rec: any) => {
-                    const cfg = statusConfig[rec.status] ?? { label: rec.status, color: "text-gray-600 bg-gray-50" };
-                    const mult = String(rec.multiplier ?? "1.25");
-                    return (
-                      <tr key={rec.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                        <td className="px-4 py-3 text-gray-500">#{rec.overtimeNumber || rec.id}</td>
-                        <td className="px-4 py-3 text-gray-700">{formatDateAr(rec.date)}</td>
-                        <td className="px-4 py-3 text-gray-700">{rec.startTime || "—"}</td>
-                        <td className="px-4 py-3 text-gray-700">{rec.endTime || "—"}</td>
-                        <td className="px-4 py-3 font-medium">{Number(rec.hours || 0).toFixed(1)} س</td>
-                        <td className="px-4 py-3 text-gray-700">{multiplierLabels[mult] || `×${mult}`}</td>
-                        <td className="px-4 py-3 font-medium text-emerald-600">{formatAmount(rec.totalAmount)} ر.س</td>
-                        <td className="px-4 py-3">
-                          <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cfg.color)}>
-                            {cfg.label}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-
-          <div className="border-t p-4 bg-gray-50/50">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-600">الإجمالي للشهر</span>
-              <div className="flex gap-6">
-                <span className="text-sm"><span className="font-bold">{totalHours.toFixed(1)}</span> ساعة</span>
-                <span className="text-sm font-bold text-emerald-600">{formatAmount(totalAmount)} ر.س</span>
-              </div>
+      <DataTable<any>
+        columns={overtimeColumns}
+        data={records}
+        emptyMessage="لا توجد سجلات وقت إضافي لهذا الشهر"
+        emptyIcon={<Timer size={36} className="opacity-40" />}
+        searchPlaceholder="بحث..."
+        statusOptions={Object.entries(statusConfig).map(([value, { label }]) => ({ value, label }))}
+        pageSize={31}
+        caption={records.length > 0 ? (
+          <div className="flex justify-between items-center rounded-lg border p-3 bg-gray-50/50">
+            <span className="text-sm font-medium text-gray-600">الإجمالي للشهر</span>
+            <div className="flex gap-6">
+              <span className="text-sm"><span className="font-bold">{totalHours.toFixed(1)}</span> ساعة</span>
+              <span className="text-sm font-bold text-emerald-600">{formatCurrency(totalAmount)}</span>
             </div>
           </div>
-        </Card>
-      )}
+        ) : undefined}
+      />
     </PageShell>
   );
 }

@@ -1,11 +1,10 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
-import { pool } from "../lib/rawdb.js";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
@@ -104,8 +103,7 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
     const scope = req.scope!;
     const parsed = createUserSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
-      return;
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { email, role, password, employeeId } = parsed.data;
     if (employeeId) {
@@ -279,8 +277,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
     if (!userBelongs) { res.status(403).json({ error: "المستخدم لا ينتمي لشركتك" }); return; }
     const parsed = resetPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
-      return;
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { newPassword } = parsed.data;
     const hashed = await hashPassword(newPassword);
@@ -312,8 +309,7 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
       permissions: req.body?.permissions,
     });
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
-      return;
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { roleKey, label, level, modules, permissions: rolePermissions } = req.body;
     if (!roleKey || !label) { res.status(400).json({ error: "roleKey و label مطلوبان" }); return; }
@@ -489,8 +485,7 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
     const scope = req.scope!;
     const parsed = createIntegrationSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
-      return;
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { type, name, config, status, maxRetries } = req.body;
     const r = await rawExecute(

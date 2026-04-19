@@ -1,11 +1,11 @@
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { TextField } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "warehouse_categories_create";
 const INITIAL = { name: "" };
@@ -15,10 +15,14 @@ export default function CategoriesCreate() {
   const { toast } = useToast();
   const addCategory = useApiMutation("/warehouse/categories", "POST", [["warehouse-categories"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم التصنيف" });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم التصنيف",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -27,7 +31,8 @@ export default function CategoriesCreate() {
       toast({ title: "تمت إضافة التصنيف بنجاح" });
       setLocation("/warehouse");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التصنيف", description: err.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة التصنيف", description: err?.fix ?? err?.message });
     }
   };
 
@@ -43,7 +48,7 @@ export default function CategoriesCreate() {
         <CreationDateField />
       </div>
       <div className="space-y-4">
-        <div><Label>اسم التصنيف</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم التصنيف" /></div>
+        <TextField label="اسم التصنيف" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم التصنيف" error={fieldErrors.name} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>
           <Button onClick={handleSubmit} disabled={addCategory.isPending}>{addCategory.isPending ? "جاري الإضافة..." : "إضافة"}</Button>

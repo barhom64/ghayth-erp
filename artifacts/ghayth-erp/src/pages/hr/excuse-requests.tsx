@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, CheckCircle, XCircle, LogOut } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -77,7 +78,7 @@ export default function ExcuseRequestsPage() {
       sortable: true,
       render: (r) => (
         <span className="text-sm text-gray-600">
-          {r.excuseDate ? new Date(r.excuseDate).toLocaleDateString("ar-SA") : "-"}
+          {formatDateAr(r.excuseDate)}
         </span>
       ),
     },

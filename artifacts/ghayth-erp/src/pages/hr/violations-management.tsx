@@ -87,7 +87,11 @@ export default function ViolationsManagementPage() {
     <PageShell
       title="إدارة المخالفات المتقدمة"
       subtitle="تحليل وإدارة المخالفات مع التصعيد التلقائي"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة المخالفات المتقدمة" }]}
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        { label: "تحليل متقدم" },
+      ]}
     >
       <KpiGrid items={[
         { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },

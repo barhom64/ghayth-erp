@@ -51,7 +51,7 @@ export default function FixedAssetsPage() {
       setForm({ name: "", code: "", category: "", purchaseDate: "", purchaseCost: "", salvageValue: "0", usefulLifeYears: "5", depreciationMethod: "straight_line", description: "" });
       refetch();
     } catch (err: any) {
-      console.error(err);
+      // error handled by mutation hook toast
     }
   }
 
@@ -62,7 +62,7 @@ export default function FixedAssetsPage() {
       setDepResult(res);
       refetch();
     } catch (err: any) {
-      console.error(err);
+      // error handled by mutation hook toast
     }
   }
 
@@ -72,7 +72,7 @@ export default function FixedAssetsPage() {
       setBatchResult(res);
       refetch();
     } catch (err: any) {
-      console.error(err);
+      // error handled by mutation hook toast
     }
   }
 

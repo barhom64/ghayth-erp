@@ -51,7 +51,7 @@ reportsRouter.get("/reports/trial-balance", async (req, res) => {
        LEFT JOIN (
          SELECT jl."accountCode", jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        ) fl ON fl."accountCode" = coa.code
        WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL
        GROUP BY coa.id, coa.code, coa.name, coa.type, coa."parentId", coa.level, coa."allowPosting"
@@ -81,8 +81,8 @@ reportsRouter.get("/reports/income-statement", async (req, res) => {
     const params: any[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    const revenues = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
-    const expenses = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
+    const revenues = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
+    const expenses = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
     const totalRevenue = revenues.reduce((s: number, r: any) => s + Number(r.amount), 0);
     const totalExpenses = expenses.reduce((s: number, r: any) => s + Number(r.amount), 0);
     res.json({ revenues, expenses, summary: { totalRevenue, totalExpenses, netIncome: totalRevenue - totalExpenses } });
@@ -106,7 +106,7 @@ reportsRouter.get("/reports/balance-sheet", async (req, res) => {
        LEFT JOIN (
          SELECT jl."accountCode", jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        ) fl ON fl."accountCode" = coa.code
        WHERE coa."companyId" = $1 AND coa.type IN ('asset','liability','equity') AND coa."deletedAt" IS NULL
        GROUP BY coa.code, coa.name, coa.type ORDER BY coa.type, coa.code`,
@@ -161,7 +161,7 @@ reportsRouter.get("/reports/cash-flow", async (req, res) => {
       `SELECT COALESCE(SUM(jl.debit - jl.credit), 0) AS balance
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
-        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted'
           AND je."createdAt" < $2
           AND jl."accountCode" = ANY($3)`,
       [scope.companyId, from, cashCodes]
@@ -177,7 +177,7 @@ reportsRouter.get("/reports/cash-flow", async (req, res) => {
               jl_cash.debit AS "cashDebit", jl_cash.credit AS "cashCredit"
          FROM journal_entries je
          JOIN journal_lines jl_cash ON jl_cash."journalId" = je.id
-        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted'
           AND je."createdAt" >= $2 AND je."createdAt" <= $3
           AND jl_cash."accountCode" = ANY($4)
           AND (jl_cash.debit > 0 OR jl_cash.credit > 0)
@@ -792,7 +792,7 @@ reportsRouter.get("/reports/expenses-analysis", async (req, res) => {
               COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount,
               COUNT(DISTINCT je.id) AS "entryCount"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense'
        LEFT JOIN branches b ON b.id = je."branchId"
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
@@ -826,7 +826,7 @@ reportsRouter.get("/reports/revenue-analysis", async (req, res) => {
               COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount,
               COUNT(DISTINCT je.id) AS "entryCount"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue'
        GROUP BY coa.code, coa.name
        ORDER BY amount DESC`,
@@ -906,7 +906,7 @@ reportsRouter.get("/reports/cash-bank-statement", async (req, res) => {
               jl.debit, jl.credit, je."createdAt" AS date,
               b.name AS "branchName"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        LEFT JOIN branches b ON b.id = je."branchId"
        WHERE jl."accountCode" = $2
        ORDER BY je."createdAt" ASC`,

@@ -1,8 +1,13 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email("الرجاء إدخال بريد إلكتروني صحيح"),
+});
 
 const router = Router();
 
@@ -54,11 +59,9 @@ router.get("/employee-of-month", publicLimiter, async (_req, res) => {
 
 router.post("/forgot-password", publicLimiter, async (req, res) => {
   try {
-    const { email } = req.body as { email: string };
-    if (!email || !email.includes("@")) {
-      res.status(400).json({ error: "الرجاء إدخال بريد إلكتروني صحيح" });
-      return;
-    }
+    const parsed = forgotPasswordSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { email } = parsed.data;
 
     await rawExecute(
       `INSERT INTO password_reset_requests (email, status) VALUES ($1, 'pending')`,

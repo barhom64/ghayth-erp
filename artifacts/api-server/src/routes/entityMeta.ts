@@ -1,9 +1,25 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+import { z } from "zod";
+
+const createCommentSchema = z.object({
+  body: z.string().min(1, "نص التعليق مطلوب"),
+});
+
+const createTagSchema = z.object({
+  tag: z.string().min(1, "اسم الوسم مطلوب"),
+  color: z.string().optional(),
+});
+
+const bulkActionSchema = z.object({
+  entityType: z.string().min(1),
+  entityIds: z.array(z.number().int().positive()).min(1),
+  action: z.string().min(1),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -27,9 +43,12 @@ router.get("/comments/:entityType/:entityId", async (req, res) => {
 
 router.post("/comments/:entityType/:entityId", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_comment = createCommentSchema.safeParse(req.body);
+    if (!parsed_comment.success) throw new ValidationError(parsed_comment.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const validatedBody = parsed_comment.data;
     const scope = req.scope!;
     const { entityType, entityId } = req.params;
-    const { body } = req.body;
+    const { body } = validatedBody;
     if (!body || !body.trim()) {
       res.status(400).json({ error: "نص التعليق مطلوب" }); return;
     }
@@ -95,9 +114,12 @@ router.get("/tags/:entityType/:entityId", async (req, res) => {
 
 router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_tag = createTagSchema.safeParse(req.body);
+    if (!parsed_tag.success) throw new ValidationError(parsed_tag.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const validatedBody = parsed_tag.data;
     const scope = req.scope!;
     const { entityType, entityId } = req.params;
-    const { tag, color } = req.body;
+    const { tag, color } = validatedBody;
     if (!tag || !tag.trim()) {
       res.status(400).json({ error: "اسم الوسم مطلوب" }); return;
     }
@@ -188,8 +210,11 @@ router.get("/tags-list/:entityType", async (req, res) => {
 
 router.post("/bulk-action", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
+    const parsed_bulk = bulkActionSchema.safeParse(req.body);
+    if (!parsed_bulk.success) throw new ValidationError(parsed_bulk.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const validatedBody = parsed_bulk.data;
     const scope = req.scope!;
-    const { entityType, entityIds, action } = req.body;
+    const { entityType, entityIds, action } = validatedBody;
     if (!entityType || !Array.isArray(entityIds) || entityIds.length === 0 || !action) {
       res.status(400).json({ error: "بيانات غير مكتملة" }); return;
     }

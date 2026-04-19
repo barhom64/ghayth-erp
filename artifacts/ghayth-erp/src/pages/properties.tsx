@@ -7,6 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Building, Building2, Plus, Eye, Home, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -83,18 +84,14 @@ export default function Properties() {
     },
   ];
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell
       title="الوحدات العقارية"
       subtitle="إدارة وتتبع الوحدات العقارية"
-      breadcrumbs={[{ label: "العقارات" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "الوحدات العقارية" }]}
       actions={
         canManage ? (
           <Link href="/properties/create">

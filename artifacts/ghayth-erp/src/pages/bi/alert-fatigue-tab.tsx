@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import { BellOff } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -75,17 +76,16 @@ export function AlertFatigueTab() {
               onChange={(e) => setMuteType(e.target.value)}
               dir="ltr"
             />
-            <select
-              className="border rounded-md px-3 py-2 text-sm"
-              value={muteHours}
-              onChange={(e) => setMuteHours(e.target.value)}
-            >
-              <option value="1">ساعة واحدة</option>
-              <option value="4">4 ساعات</option>
-              <option value="8">8 ساعات</option>
-              <option value="24">يوم كامل</option>
-              <option value="72">3 أيام</option>
-            </select>
+            <Select value={muteHours} onValueChange={setMuteHours}>
+              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">ساعة واحدة</SelectItem>
+                <SelectItem value="4">4 ساعات</SelectItem>
+                <SelectItem value="8">8 ساعات</SelectItem>
+                <SelectItem value="24">يوم كامل</SelectItem>
+                <SelectItem value="72">3 أيام</SelectItem>
+              </SelectContent>
+            </Select>
             <Button onClick={handleMute} disabled={loading}>
               <BellOff className="h-4 w-4 me-2" />كتم
             </Button>

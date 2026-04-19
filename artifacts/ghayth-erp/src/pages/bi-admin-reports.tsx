@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatNumber, formatCurrency } from "@/lib/formatters";
+import { formatNumber, formatCurrency , todayLocal } from "@/lib/formatters";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, Cell,
@@ -28,7 +28,7 @@ function CustomTooltip({ active, payload, label }: any) {
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }} className="flex items-center gap-1.5 py-0.5">
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
-          {p.name}: {Number(p.value).toLocaleString("ar-SA")}
+          {p.name}: {formatNumber(Number(p.value))}
         </p>
       ))}
     </div>
@@ -78,7 +78,7 @@ function StatBox({ label, value, sub, icon: Icon, color = "blue", change }: {
 }
 
 function DailyReportTab() {
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayLocal());
   const { data, isLoading, isError } = useApiQuery<any>(["admin-report-daily", date], `/bi/admin-reports/daily?date=${date}`);
 
   if (isLoading) return <LoadingSpinner />;

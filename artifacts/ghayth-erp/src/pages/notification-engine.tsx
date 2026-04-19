@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Route, Bell, Mail, MessageSquare, Smartphone, Globe, Zap, Plus, Save,
   Trash2, RefreshCw, ArrowRight, AlertCircle, CheckCircle, XCircle,
@@ -37,8 +41,8 @@ function ChannelBadge({ channel }: { channel: string }) {
 }
 
 function RoutingRulesTab() {
-  const { data: rulesData } = useApiQuery(["notif-routing-rules"], "/notification-engine/routing-rules");
-  const { data: chainsData } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
+  const { data: rulesData, isLoading: loadingR, isError: errorR } = useApiQuery(["notif-routing-rules"], "/notification-engine/routing-rules");
+  const { data: chainsData, isLoading: loadingC, isError: errorC } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
   const rules = asList(rulesData);
   const chains = asList(chainsData);
   const [editId, setEditId] = useState<number | null>(null);
@@ -68,6 +72,9 @@ function RoutingRulesTab() {
     if (!editId) return;
     saveRuleMut.mutate({ id: editId, channels: editChannels, priority: editPriority, fallbackChainId: editChainId });
   };
+
+  if (loadingR || loadingC) return <LoadingSpinner />;
+  if (errorR || errorC) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">
@@ -101,9 +108,9 @@ function RoutingRulesTab() {
                     <div className="flex flex-col gap-2 flex-1 max-w-lg">
                       <div className="flex flex-wrap gap-2">
                         {ALL_CHANNELS.map((ch) => (
-                          <label key={ch} className="flex items-center gap-1 text-sm">
-                            <input type="checkbox" checked={editChannels.includes(ch)}
-                              onChange={(e) => setEditChannels(e.target.checked ? [...editChannels, ch] : editChannels.filter((c) => c !== ch))} />
+                          <label key={ch} className="flex items-center gap-1 text-sm cursor-pointer">
+                            <Checkbox checked={editChannels.includes(ch)}
+                              onCheckedChange={(v) => setEditChannels(v === true ? [...editChannels, ch] : editChannels.filter((c) => c !== ch))} />
                             {CHANNEL_LABELS[ch]?.label ?? ch}
                           </label>
                         ))}
@@ -156,8 +163,7 @@ function RoutingRulesTab() {
 }
 
 function TemplatesTab() {
-  const { data: templatesData } = useApiQuery(["notif-templates"], "/notification-engine/templates");
-  const templates = asList(templatesData);
+  const { data: templatesData, isLoading, isError } = useApiQuery(["notif-templates"], "/notification-engine/templates");
   const [editId, setEditId] = useState<number | null>(null);
   const [editBody, setEditBody] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -167,6 +173,10 @@ function TemplatesTab() {
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const templates = asList(templatesData);
   const grouped = templates.reduce((acc: Record<string, Array<Record<string, unknown>>>, t: Record<string, unknown>) => {
     const key = t.templateKey as string;
     if (!acc[key]) acc[key] = [];
@@ -341,8 +351,7 @@ function TemplatesTab() {
 }
 
 function FallbackChainsTab() {
-  const { data: chainsData } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
-  const chains = asList(chainsData);
+  const { data: chainsData, isLoading, isError } = useApiQuery(["notif-fallback-chains"], "/notification-engine/fallback-chains");
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -379,6 +388,10 @@ function FallbackChainsTab() {
     { successMessage: "تم الحذف" }
   );
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const chains = asList(chainsData);
   const createChain = () => {
     if (!newName || newSteps.length === 0) return;
     createMut.mutate({ name: newName, description: newDesc, steps: newSteps });
@@ -490,8 +503,7 @@ function FallbackChainsTab() {
 }
 
 function WebhooksTab() {
-  const { data: webhooksData } = useApiQuery(["notif-webhooks"], "/notification-engine/webhooks");
-  const webhooks = asList(webhooksData);
+  const { data: webhooksData, isLoading, isError } = useApiQuery(["notif-webhooks"], "/notification-engine/webhooks");
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -525,6 +537,10 @@ function WebhooksTab() {
     [["notif-webhooks"]]
   );
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const webhooks = asList(webhooksData);
   const createWebhook = () => {
     if (!newName || !newUrl) return;
     const events = newEvents.split(",").map((e) => e.trim()).filter(Boolean);
@@ -632,8 +648,11 @@ function WebhooksTab() {
 
 function DeliveryStatsTab() {
   const [days, setDays] = useState(30);
-  const { data: statsData } = useApiQuery(["notif-delivery-stats", String(days)], `/notification-engine/delivery-stats?days=${days}`);
-  const { data: logData } = useApiQuery(["notif-delivery-log"], "/notification-engine/delivery-log?limit=20");
+  const { data: statsData, isLoading: loadingStats, isError: errorStats } = useApiQuery(["notif-delivery-stats", String(days)], `/notification-engine/delivery-stats?days=${days}`);
+  const { data: logData, isLoading: loadingLog, isError: errorLog } = useApiQuery(["notif-delivery-log"], "/notification-engine/delivery-log?limit=20");
+
+  if (loadingStats || loadingLog) return <LoadingSpinner />;
+  if (errorStats || errorLog) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const stats = statsData?.data as {
     byChannel?: Array<{ channel: string; total: number; delivered: number; failed: number; pending: number }>;
@@ -643,6 +662,53 @@ function DeliveryStatsTab() {
   } | undefined;
 
   const logs = logData?.data as Array<Record<string, unknown>> | undefined;
+
+  const deliveryLogColumns: DataTableColumn<Record<string, unknown>>[] = [
+    {
+      key: "channel",
+      header: "القناة",
+      render: (log) => <ChannelBadge channel={log.channel as string} />,
+    },
+    {
+      key: "recipient",
+      header: "المستلم",
+      ltr: true,
+      render: (log) => (
+        <span className="font-mono text-xs">{(log.recipient as string)?.substring(0, 30)}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (log) => (
+        <Badge variant={
+          (log.status === "delivered" || log.status === "sent") ? "default" :
+          log.status === "failed" ? "destructive" : "secondary"
+        } className="text-xs">
+          {log.status === "delivered" ? "وصل" :
+           log.status === "sent" ? "أُرسل" :
+           log.status === "failed" ? "فشل" :
+           log.status === "queued" ? "انتظار" :
+           log.status === "fallback_triggered" ? "تصعيد" :
+           log.status as string}
+        </Badge>
+      ),
+    },
+    {
+      key: "templateKey",
+      header: "القالب",
+      render: (log) => <span className="text-xs">{(log.templateKey as string) ?? "-"}</span>,
+    },
+    {
+      key: "createdAt",
+      header: "الوقت",
+      render: (log) => (
+        <span className="text-xs text-muted-foreground">
+          {formatDateAr(log.createdAt as string)}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -712,45 +778,15 @@ function DeliveryStatsTab() {
       {logs && logs.length > 0 && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">آخر عمليات التوصيل</CardTitle></CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    <th className="text-right p-2">القناة</th>
-                    <th className="text-right p-2">المستلم</th>
-                    <th className="text-right p-2">الحالة</th>
-                    <th className="text-right p-2">القالب</th>
-                    <th className="text-right p-2">الوقت</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log) => (
-                    <tr key={log.id as number} className="border-b">
-                      <td className="p-2"><ChannelBadge channel={log.channel as string} /></td>
-                      <td className="p-2 font-mono text-xs" dir="ltr">{(log.recipient as string)?.substring(0, 30)}</td>
-                      <td className="p-2">
-                        <Badge variant={
-                          (log.status === "delivered" || log.status === "sent") ? "default" :
-                          log.status === "failed" ? "destructive" : "secondary"
-                        } className="text-xs">
-                          {log.status === "delivered" ? "وصل" :
-                           log.status === "sent" ? "أُرسل" :
-                           log.status === "failed" ? "فشل" :
-                           log.status === "queued" ? "انتظار" :
-                           log.status === "fallback_triggered" ? "تصعيد" :
-                           log.status as string}
-                        </Badge>
-                      </td>
-                      <td className="p-2 text-xs">{(log.templateKey as string) ?? "-"}</td>
-                      <td className="p-2 text-xs text-muted-foreground">
-                        {log.createdAt ? new Date(log.createdAt as string).toLocaleString("ar-SA") : "-"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <CardContent className="p-0">
+            <DataTable<Record<string, unknown>>
+              columns={deliveryLogColumns}
+              data={logs}
+              searchPlaceholder={null}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد سجلات"
+            />
           </CardContent>
         </Card>
       )}
@@ -759,7 +795,7 @@ function DeliveryStatsTab() {
 }
 
 function PreferencesTab() {
-  const { data: prefsData } = useApiQuery(["notif-preferences"], "/notification-engine/preferences");
+  const { data: prefsData, isLoading, isError } = useApiQuery(["notif-preferences"], "/notification-engine/preferences");
   const preferences = asList(prefsData?.data);
   const categories: Array<{ eventCategory: string; description: string | null }> = prefsData?.categories ?? [];
 
@@ -804,6 +840,9 @@ function PreferencesTab() {
     }
   );
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const saveAll = () => {
     const prefs = Object.entries(localPrefs).map(([category, channels]) => ({
       category,
@@ -820,6 +859,33 @@ function PreferencesTab() {
     { key: "push", label: "فوري" },
   ];
 
+  const preferencesColumns: DataTableColumn<{ category: string; channels: Record<string, boolean> }>[] = [
+    {
+      key: "category",
+      header: "نوع الحدث",
+      render: (row) => {
+        const catInfo = categories.find((c) => c.eventCategory === row.category);
+        return (
+          <div>
+            <div className="font-medium">{row.category}</div>
+            {catInfo?.description && <div className="text-xs text-muted-foreground">{catInfo.description}</div>}
+          </div>
+        );
+      },
+    },
+    ...channelCols.map((ch) => ({
+      key: ch.key,
+      header: ch.label,
+      align: "center" as const,
+      render: (row: { category: string; channels: Record<string, boolean> }) => (
+        <Switch
+          checked={row.channels[ch.key] ?? false}
+          onCheckedChange={() => toggle(row.category, ch.key)}
+        />
+      ),
+    })),
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -834,39 +900,15 @@ function PreferencesTab() {
 
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-right p-3 font-medium">نوع الحدث</th>
-                  {channelCols.map((ch) => (
-                    <th key={ch.key} className="text-center p-3 font-medium">{ch.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(localPrefs).sort(([a], [b]) => a.localeCompare(b)).map(([category, channels]) => {
-                  const catInfo = categories.find((c) => c.eventCategory === category);
-                  return (
-                    <tr key={category} className="border-b hover:bg-muted/30">
-                      <td className="p-3">
-                        <div className="font-medium">{category}</div>
-                        {catInfo?.description && <div className="text-xs text-muted-foreground">{catInfo.description}</div>}
-                      </td>
-                      {channelCols.map((ch) => (
-                        <td key={ch.key} className="text-center p-3">
-                          <Switch
-                            checked={channels[ch.key] ?? false}
-                            onCheckedChange={() => toggle(category, ch.key)}
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<{ category: string; channels: Record<string, boolean> }>
+            columns={preferencesColumns}
+            data={Object.entries(localPrefs).sort(([a], [b]) => a.localeCompare(b)).map(([category, channels]) => ({ category, channels }))}
+            rowKey={(row) => row.category}
+            searchPlaceholder={null}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا توجد تفضيلات"
+          />
         </CardContent>
       </Card>
     </div>

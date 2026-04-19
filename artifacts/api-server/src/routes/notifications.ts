@@ -1,9 +1,18 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+import { z } from "zod";
+
+/* ── Zod Schemas ────────────────────────────────────────────── */
+
+const preferencesSchema = z.object({
+  channel: z.string().optional(),
+  category: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -11,17 +20,23 @@ router.use(authMiddleware);
 router.get("/", requirePermission("notifications:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
+    const offset = (page - 1) * pageSize;
 
-    const notifications = await rawQuery<any>(
-      `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
-       FROM notifications
-       WHERE "assignmentId" = $1
-       ORDER BY "createdAt" DESC
-       LIMIT 50`,
-      [scope.activeAssignmentId]
-    );
+    const [[countRow], notifications] = await Promise.all([
+      rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1`, [scope.activeAssignmentId]),
+      rawQuery<any>(
+        `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
+         FROM notifications
+         WHERE "assignmentId" = $1
+         ORDER BY "createdAt" DESC
+         LIMIT $2 OFFSET $3`,
+        [scope.activeAssignmentId, pageSize, offset]
+      ),
+    ]);
 
-    res.json({ data: notifications, total: notifications.length, page: 1, pageSize: notifications.length });
+    res.json({ data: notifications, total: Number(countRow?.count ?? 0), page, pageSize });
   } catch (err) {
     handleRouteError(err, res, "List notifications error:");
   }
@@ -84,8 +99,11 @@ router.get("/preferences", requirePermission("notifications:read"), async (req, 
 
 router.post("/preferences", requirePermission("notifications:write"), async (req, res) => {
   try {
+    const parsed_preferencesSchema = preferencesSchema.safeParse(req.body);
+    if (!parsed_preferencesSchema.success) throw new ValidationError(parsed_preferencesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_preferencesSchema.data;
     const scope = req.scope!;
-    const { channel, category, enabled } = req.body;
+    const { channel, category, enabled } = body;
     const { insertId } = await rawExecute(
       `INSERT INTO notification_preferences ("userId","companyId",channel,category,enabled)
        VALUES ($1,$2,$3,$4,$5)

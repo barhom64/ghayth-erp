@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,23 +85,29 @@ export default function HR() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
 
-  const { data: employeesResp } = useApiQuery<any>(["employees-summary", scopeQueryString], `/employees?page=1&limit=1${scopeSuffix}`);
-  const { data: pendingLeavesResp } = useApiQuery<any>(["leaves-pending", scopeQueryString], `/hr/leave-requests?status=pending&page=1&limit=1${scopeSuffix}`);
-  const { data: payrollResp } = useApiQuery<any>(["payroll-latest", scopeQueryString], `/hr/payroll?page=1&limit=1${scopeSuffix}`);
-  const { data: attendanceResp } = useApiQuery<any>(["attendance-today", scopeQueryString], `/hr/attendance?page=1&limit=1${scopeSuffix}`);
-  const { data: loansResp } = useApiQuery<any>(["loans-active", scopeQueryString], `/hr/loans?status=active&page=1&limit=1${scopeSuffix}`);
-  const { data: overtimeResp } = useApiQuery<any>(["overtime-pending", scopeQueryString], `/hr/overtime?status=pending&page=1&limit=1${scopeSuffix}`);
-  const { data: exitResp } = useApiQuery<any>(["exit-pending", scopeQueryString], `/hr/exit?status=pending&page=1&limit=1${scopeSuffix}`);
-  const { data: violationsResp } = useApiQuery<any>(["violations-stats", scopeQueryString], `/hr/violations-stats?${scopeQueryString || ""}`);
+  const empQ = useApiQuery<any>(["employees-summary", scopeQueryString], `/employees?page=1&limit=1${scopeSuffix}`);
+  const leavesQ = useApiQuery<any>(["leaves-pending", scopeQueryString], `/hr/leave-requests?status=pending&page=1&limit=1${scopeSuffix}`);
+  const payrollQ = useApiQuery<any>(["payroll-latest", scopeQueryString], `/hr/payroll?page=1&limit=1${scopeSuffix}`);
+  const attendanceQ = useApiQuery<any>(["attendance-today", scopeQueryString], `/hr/attendance?page=1&limit=1${scopeSuffix}`);
+  const loansQ = useApiQuery<any>(["loans-active", scopeQueryString], `/hr/loans?status=active&page=1&limit=1${scopeSuffix}`);
+  const overtimeQ = useApiQuery<any>(["overtime-pending", scopeQueryString], `/hr/overtime?status=pending&page=1&limit=1${scopeSuffix}`);
+  const exitQ = useApiQuery<any>(["exit-pending", scopeQueryString], `/hr/exit?status=pending&page=1&limit=1${scopeSuffix}`);
+  const violationsQ = useApiQuery<any>(["violations-stats", scopeQueryString], `/hr/violations-stats?${scopeQueryString || ""}`);
 
-  const totalEmployees = employeesResp?.total ?? "—";
-  const pendingLeaves = pendingLeavesResp?.total ?? "—";
-  const latestPayroll = asList(payrollResp)[0];
-  const totalAttendanceToday = attendanceResp?.total ?? "—";
-  const activeLoans = loansResp?.total ?? 0;
-  const pendingOvertime = overtimeResp?.total ?? 0;
-  const pendingExit = exitResp?.total ?? 0;
-  const violationsThisMonth = violationsResp?.thisMonth ?? 0;
+  const isLoading = empQ.isLoading || leavesQ.isLoading || payrollQ.isLoading || attendanceQ.isLoading;
+  const isError = empQ.isError || leavesQ.isError || payrollQ.isError || attendanceQ.isError;
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const totalEmployees = empQ.data?.total ?? "—";
+  const pendingLeaves = leavesQ.data?.total ?? "—";
+  const latestPayroll = asList(payrollQ.data)[0];
+  const totalAttendanceToday = attendanceQ.data?.total ?? "—";
+  const activeLoans = loansQ.data?.total ?? 0;
+  const pendingOvertime = overtimeQ.data?.total ?? 0;
+  const pendingExit = exitQ.data?.total ?? 0;
+  const violationsThisMonth = violationsQ.data?.thisMonth ?? 0;
 
   return (
     <PageShell

@@ -1,10 +1,11 @@
-import { useState, Fragment } from "react";
+import { useState, useMemo } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -25,6 +26,7 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const iconMap: Record<string, any> = {
   Calendar, DollarSign, FileSignature, KeyRound, Wrench,
@@ -255,6 +257,136 @@ function RequestsList() {
   const statusCounts: Record<string, number> = {};
   allItems.forEach((r: any) => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
 
+  const requestColumns = useMemo<DataTableColumn<any>[]>(() => [
+    {
+      key: "_select",
+      header: "",
+      width: "2rem",
+      render: (r: any) => (
+        <BulkCheckbox checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} />
+      ),
+    },
+    {
+      key: "title",
+      header: "العنوان",
+      searchable: true,
+      render: (r: any) => (
+        <div>
+          <span className="font-medium">{r.title}</span>
+          <NotesDisplay status={r.status} notes={r.notes} returnReason={r.returnReason} />
+        </div>
+      ),
+    },
+    {
+      key: "tags",
+      header: "الوسوم",
+      render: (r: any) => <EntityTags entityType="request" entityId={r.id} inline />,
+    },
+    {
+      key: "requesterName",
+      header: "مقدم الطلب",
+      searchable: true,
+      render: (r: any) => <span className="text-gray-500">{r.requesterName || "-"}</span>,
+    },
+    {
+      key: "priority",
+      header: "الأولوية",
+      render: (r: any) => <Badge variant="outline">{priorityMap[r.priority] || r.priority}</Badge>,
+    },
+    {
+      key: "attachments",
+      header: "المرفقات",
+      render: (r: any) => {
+        const atts = parseAttachments(r.attachments);
+        return atts.length > 0 ? (
+          <div className="flex items-center gap-1">
+            <Paperclip className="h-3.5 w-3.5 text-blue-500" />
+            <span className="text-xs text-blue-600">{atts.length} ملف</span>
+          </div>
+        ) : (
+          <span className="text-xs text-gray-300">&mdash;</span>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (r: any) => <PageStatusBadge status={r.status} />,
+    },
+    {
+      key: "approval",
+      header: "إجراءات الموافقة",
+      render: (r: any) => (
+        <ApprovalActions
+          entityType="request"
+          entityId={r.id}
+          currentStatus={r.status}
+          approveEndpoint={`/requests/${r.id}/approve`}
+          rejectEndpoint={`/requests/${r.id}/reject`}
+          returnEndpoint={`/requests/${r.id}/return`}
+          onDone={handleApprovalDone}
+        />
+      ),
+    },
+    {
+      key: "actions",
+      header: "تعديل",
+      render: (r: any) => (
+        <div className="flex items-center gap-1">
+          <RowActions
+            onEdit={() => startEdit(r.id, { title: r.title, description: r.description || "", priority: r.priority || "medium", status: r.status || "pending" })}
+            onDelete={() => startDelete(r.id)}
+          />
+          <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-gray-400 hover:text-gray-600 p-1">
+            {expandedId === r.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      ),
+    },
+  ], [selectedIds, expandedId, editingId, deletingId]);
+
+  const renderRowExtras = (r: any) => {
+    const extras: React.ReactNode[] = [];
+    if (expandedId === r.id) {
+      extras.push(
+        <div key="expanded" className="p-3 bg-gray-50/50">
+          <div className="space-y-3">
+            {r.status === "approved" && (
+              <ConvertRequestPanel
+                requestId={r.id}
+                onSuccess={() => { refetch(); qc.invalidateQueries({ queryKey: ["req-stats"] }); }}
+              />
+            )}
+            {STATUS_EFFECTS[r.status] && (
+              <div className={cn("flex items-center gap-2 text-xs font-medium px-2 py-1 rounded", STATUS_EFFECTS[r.status].color)}>
+                <span>{STATUS_EFFECTS[r.status].icon}</span>
+                <span>{STATUS_EFFECTS[r.status].text}</span>
+              </div>
+            )}
+            <EntityTags entityType="request" entityId={r.id} />
+            <EntityComments entityType="request" entityId={r.id} />
+            <ActionHistory entityType="request" entityId={r.id} defaultOpen />
+          </div>
+        </div>
+      );
+    }
+    if (editingId === r.id) {
+      extras.push(
+        <div key="edit" className="p-2">
+          <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(r.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+        </div>
+      );
+    }
+    if (deletingId === r.id) {
+      extras.push(
+        <div key="delete" className="p-2">
+          <InlineDeleteConfirm onConfirm={() => handleDelete(r.id)} onCancel={cancelDelete} isPending={isPending} itemName={r.title} entityType="request" entityId={r.id} />
+        </div>
+      );
+    }
+    return extras.length > 0 ? <>{extras}</> : null;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -274,26 +406,24 @@ function RequestsList() {
             className="pe-9 ps-3"
           />
         </div>
-        <select
-          className="border rounded-md px-3 py-2 text-sm bg-white"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-        >
-          <option value="">جميع الحالات</option>
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label} ({statusCounts[o.value] || 0})</option>
-          ))}
-        </select>
-        <select
-          className="border rounded-md px-3 py-2 text-sm bg-white"
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-        >
-          <option value="">جميع الأنواع</option>
-          {[...new Set(allItems.map((r: any) => r.typeName).filter(Boolean))].map((t: any) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
+        <Select value={filterStatus || "_none"} onValueChange={(v) => setFilterStatus(v === "_none" ? "" : v)}>
+          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_none">جميع الحالات</SelectItem>
+            {STATUS_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label} ({statusCounts[o.value] || 0})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterType || "_none"} onValueChange={(v) => setFilterType(v === "_none" ? "" : v)}>
+          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_none">جميع الأنواع</SelectItem>
+            {[...new Set(allItems.map((r: any) => r.typeName).filter(Boolean))].map((t: any) => (
+              <SelectItem key={t} value={t}>{t}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-1">
           <DatePicker
             value={filterDateFrom}
@@ -328,7 +458,7 @@ function RequestsList() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><Label>العنوان</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
             <div><Label>مقدم الطلب</Label><Input value={form.requesterName} onChange={(e) => setForm({ ...form, requesterName: e.target.value })} /></div>
-            <div><Label>الأولوية</Label><select className="w-full border rounded-md p-2" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}><option value="low">منخفض</option><option value="medium">متوسط</option><option value="high">عالي</option><option value="critical">حرج</option></select></div>
+            <div><Label>الأولوية</Label><Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">منخفض</SelectItem><SelectItem value="medium">متوسط</SelectItem><SelectItem value="high">عالي</SelectItem><SelectItem value="critical">حرج</SelectItem></SelectContent></Select></div>
             <div><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           </div>
           <FileDropZone files={attachments} onFilesChange={setAttachments} />
@@ -357,97 +487,16 @@ function RequestsList() {
         actions={["approve", "reject", "export", "delete"]}
       />
 
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50"><th className="p-3 w-8"><BulkCheckbox checked={selectedIds.size === items.length && items.length > 0} indeterminate={selectedIds.size > 0 && selectedIds.size < items.length} onChange={() => toggleAll(items.map((r: any) => r.id))} /></th><th className="p-3 text-start">العنوان</th><th className="p-3 text-start">الوسوم</th><th className="p-3 text-start">مقدم الطلب</th><th className="p-3 text-start">الأولوية</th><th className="p-3 text-start">المرفقات</th><th className="p-3 text-start">الحالة</th><th className="p-3 text-start">إجراءات الموافقة</th><th className="p-3 text-start">تعديل</th></tr></thead>
-          <tbody>
-            {items.map((r: any) => {
-              const atts = parseAttachments(r.attachments);
-              return (
-                <Fragment key={r.id}>
-                  <tr className={cn("border-b hover:bg-gray-50", selectedIds.has(r.id) && "bg-blue-50/50")}>
-                    <td className="p-3"><BulkCheckbox checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} /></td>
-                    <td className="p-3">
-                      <div>
-                        <span className="font-medium">{r.title}</span>
-                        <NotesDisplay status={r.status} notes={r.notes} returnReason={r.returnReason} />
-                      </div>
-                    </td>
-                    <td className="p-3"><EntityTags entityType="request" entityId={r.id} inline /></td>
-                    <td className="p-3 text-gray-500">{r.requesterName || "-"}</td>
-                    <td className="p-3"><Badge variant="outline">{priorityMap[r.priority] || r.priority}</Badge></td>
-                    <td className="p-3">
-                      {atts.length > 0 ? (
-                        <div className="flex items-center gap-1">
-                          <Paperclip className="h-3.5 w-3.5 text-blue-500" />
-                          <span className="text-xs text-blue-600">{atts.length} ملف</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="p-3"><PageStatusBadge status={r.status} /></td>
-                    <td className="p-3">
-                      <ApprovalActions
-                        entityType="request"
-                        entityId={r.id}
-                        currentStatus={r.status}
-                        approveEndpoint={`/requests/${r.id}/approve`}
-                        rejectEndpoint={`/requests/${r.id}/reject`}
-                        returnEndpoint={`/requests/${r.id}/return`}
-                        onDone={handleApprovalDone}
-                      />
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1">
-                        <RowActions
-                          onEdit={() => startEdit(r.id, { title: r.title, description: r.description || "", priority: r.priority || "medium", status: r.status || "pending" })}
-                          onDelete={() => startDelete(r.id)}
-                        />
-                        <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                          {expandedId === r.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {expandedId === r.id && (
-                    <tr><td colSpan={9} className="p-3 bg-gray-50/50">
-                      <div className="space-y-3">
-                        {r.status === "approved" && (
-                          <ConvertRequestPanel
-                            requestId={r.id}
-                            onSuccess={() => { refetch(); qc.invalidateQueries({ queryKey: ["req-stats"] }); }}
-                          />
-                        )}
-                        {STATUS_EFFECTS[r.status] && (
-                          <div className={cn("flex items-center gap-2 text-xs font-medium px-2 py-1 rounded", STATUS_EFFECTS[r.status].color)}>
-                            <span>{STATUS_EFFECTS[r.status].icon}</span>
-                            <span>{STATUS_EFFECTS[r.status].text}</span>
-                          </div>
-                        )}
-                        <EntityTags entityType="request" entityId={r.id} />
-                        <EntityComments entityType="request" entityId={r.id} />
-                        <ActionHistory entityType="request" entityId={r.id} defaultOpen />
-                      </div>
-                    </td></tr>
-                  )}
-                  {editingId === r.id && (
-                    <tr><td colSpan={9} className="p-2">
-                      <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(r.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
-                    </td></tr>
-                  )}
-                  {deletingId === r.id && (
-                    <tr><td colSpan={9} className="p-2">
-                      <InlineDeleteConfirm onConfirm={() => handleDelete(r.id)} onCancel={cancelDelete} isPending={isPending} itemName={r.title} entityType="request" entityId={r.id} />
-                    </td></tr>
-                  )}
-                </Fragment>
-              );
-            })}
-            {items.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-gray-400">لا توجد طلبات</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        columns={requestColumns}
+        data={items}
+        noToolbar
+        pageSize={20}
+        emptyMessage="لا توجد طلبات"
+        emptyIcon={<ClipboardCheck className="h-10 w-10 text-gray-300" />}
+        rowClassName={(r: any) => selectedIds.has(r.id) ? "bg-blue-50/50" : undefined}
+        renderRowExtras={renderRowExtras}
+      />
     </div>
   );
 }
@@ -473,21 +522,18 @@ function TypesTab() {
           <div className="md:col-span-2"><Button onClick={async () => { await createMut.mutateAsync(form); setForm({ name: "", description: "", category: "" }); setShowForm(false); refetch(); }} disabled={!form.name}>حفظ</Button></div>
         </CardContent></Card>
       )}
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50"><th className="p-3 text-start">الاسم</th><th className="p-3 text-start">التصنيف</th><th className="p-3 text-start">الحالة</th></tr></thead>
-          <tbody>
-            {items.map((t: any) => (
-              <tr key={t.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-medium">{t.name}</td>
-                <td className="p-3 text-gray-500">{t.category || "-"}</td>
-                <td className="p-3"><Badge className="bg-green-100 text-green-700">نشط</Badge></td>
-              </tr>
-            ))}
-            {items.length === 0 && <tr><td colSpan={3} className="p-8 text-center text-gray-400">لا توجد أنواع</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        columns={[
+          { key: "name", header: "الاسم", searchable: true, render: (t: any) => <span className="font-medium">{t.name}</span> },
+          { key: "category", header: "التصنيف", render: (t: any) => <span className="text-gray-500">{t.category || "-"}</span> },
+          { key: "status", header: "الحالة", render: () => <Badge className="bg-green-100 text-green-700">نشط</Badge> },
+        ]}
+        data={items}
+        noToolbar
+        pageSize={0}
+        emptyMessage="لا توجد أنواع"
+        emptyIcon={<ListTodo className="h-10 w-10 text-gray-300" />}
+      />
     </div>
   );
 }
@@ -512,20 +558,17 @@ function WorkflowsTab() {
           <div className="md:col-span-2"><Button onClick={async () => { await createMut.mutateAsync(form); setForm({ name: "", description: "" }); setShowForm(false); refetch(); }} disabled={!form.name}>حفظ</Button></div>
         </CardContent></Card>
       )}
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50"><th className="p-3 text-start">الاسم</th><th className="p-3 text-start">الوصف</th></tr></thead>
-          <tbody>
-            {items.map((w: any) => (
-              <tr key={w.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-medium">{w.name}</td>
-                <td className="p-3 text-gray-500">{w.description || "-"}</td>
-              </tr>
-            ))}
-            {items.length === 0 && <tr><td colSpan={2} className="p-8 text-center text-gray-400">لا يوجد سير عمل</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        columns={[
+          { key: "name", header: "الاسم", searchable: true, render: (w: any) => <span className="font-medium">{w.name}</span> },
+          { key: "description", header: "الوصف", render: (w: any) => <span className="text-gray-500">{w.description || "-"}</span> },
+        ]}
+        data={items}
+        noToolbar
+        pageSize={0}
+        emptyMessage="لا يوجد سير عمل"
+        emptyIcon={<GitBranch className="h-10 w-10 text-gray-300" />}
+      />
     </div>
   );
 }

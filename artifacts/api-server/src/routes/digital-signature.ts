@@ -3,8 +3,23 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
+import { z } from "zod";
+
+const requestOtpSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: z.union([z.number(), z.string().min(1)]),
+  action: z.string().min(1),
+});
+
+const verifySignatureSchema = z.object({
+  otp: z.string().min(1),
+  entityType: z.string().min(1),
+  entityId: z.union([z.number(), z.string().min(1)]),
+  action: z.string().min(1),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -32,8 +47,11 @@ function getClientIP(req: Request): string {
 
 router.post("/request-otp", requirePermission("documents:write"), async (req, res: Response) => {
   try {
+    const parsed_requestOtpSchema = requestOtpSchema.safeParse(req.body);
+    if (!parsed_requestOtpSchema.success) throw new ValidationError(parsed_requestOtpSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_requestOtpSchema.data;
     const scope = (req as any).scope!;
-    const { entityType, entityId, action } = req.body;
+    const { entityType, entityId, action } = body;
     if (!entityType || !entityId || !action) {
       res.status(400).json({ error: "entityType و entityId و action مطلوبة" });
       return;
@@ -71,8 +89,11 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
 
 router.post("/verify", requirePermission("documents:write"), async (req, res: Response) => {
   try {
+    const parsed_verifySignatureSchema = verifySignatureSchema.safeParse(req.body);
+    if (!parsed_verifySignatureSchema.success) throw new ValidationError(parsed_verifySignatureSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_verifySignatureSchema.data;
     const scope = (req as any).scope!;
-    const { otp, entityType, entityId, action } = req.body;
+    const { otp, entityType, entityId, action } = body;
     if (!otp || !entityType || !entityId || !action) {
       res.status(400).json({ error: "جميع الحقول مطلوبة: otp, entityType, entityId, action" });
       return;

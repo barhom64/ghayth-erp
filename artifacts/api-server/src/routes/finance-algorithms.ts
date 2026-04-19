@@ -181,6 +181,7 @@ financeAlgorithmsRouter.get("/ap-aging", async (req, res) => {
        JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je."companyId" = $2
          AND je."deletedAt" IS NULL
+         AND je.status = 'posted'
          AND (jl."accountCode" LIKE '21%' OR jl."accountCode" LIKE '23%')
          AND je."createdAt"::date <= $1::date
          AND COALESCE(je."sourceType",'') NOT IN ('purchase_order','purchase_request')
@@ -301,6 +302,9 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", async (req, res)
     if (!requireFinance(scope, res)) return;
 
     const { batchId, accountCode = "1120", toleranceDays = 3 } = req.body as any;
+    if (!batchId) {
+      throw new ValidationError("معرف الدفعة مطلوب", { field: "batchId" });
+    }
 
     const bankRows = await rawQuery<any>(
       `SELECT * FROM bank_statements
@@ -725,7 +729,10 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) =>
     if (!requireFinance(scope, res)) return;
     const id = Number(req.params.id);
     const { period, unitsThisPeriod } = req.body as any;
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    if (!period) {
+      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
+    }
+    const targetPeriod = period;
 
     const [asset] = await rawQuery<any>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2 AND status='active'`,
@@ -804,7 +811,10 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", async (req, res) =>
     const scope = req.scope!;
     if (!requireFinance(scope, res)) return;
     const { period } = req.body as any;
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    if (!period) {
+      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
+    }
+    const targetPeriod = period;
 
     const assets = await rawQuery<any>(
       `SELECT fa.* FROM fixed_assets fa WHERE fa."companyId"=$1 AND fa.status='active'
@@ -1475,6 +1485,7 @@ financeAlgorithmsRouter.get("/treasury", async (req, res) => {
        JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je."companyId" = $1
          AND je."deletedAt" IS NULL
+         AND je.status = 'posted'
          AND je."createdAt" >= $2
          AND EXISTS (
            SELECT 1 FROM journal_lines jl2
@@ -1493,6 +1504,7 @@ financeAlgorithmsRouter.get("/treasury", async (req, res) => {
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+         AND je.status = 'posted'
          AND je."createdAt" >= $2
          AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%')
        GROUP BY DATE(je."createdAt")
@@ -1507,11 +1519,12 @@ financeAlgorithmsRouter.get("/treasury", async (req, res) => {
          SELECT je.id,
                 SUM(CASE WHEN jl.debit > 0 THEN jl.debit ELSE 0 END)
                 - COALESCE((SELECT SUM(jl2.credit) FROM journal_lines jl2 JOIN journal_entries je2 ON je2.id = jl2."journalId"
-                   WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.ref LIKE 'CUSTODY-SETTLE%'
+                   WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.status = 'posted' AND je2.ref LIKE 'CUSTODY-SETTLE%'
                    AND je2.description LIKE '%' || je.ref || '%'), 0) AS remaining
          FROM journal_entries je
          JOIN journal_lines jl ON jl."journalId" = je.id
          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+           AND je.status = 'posted'
            AND je.ref LIKE 'CUSTODY-%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
          GROUP BY je.id, je.ref
        ) sub`,
@@ -1575,7 +1588,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
         `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType",
                 COALESCE((SELECT SUM(jl.debit) - SUM(jl.credit) FROM journal_lines jl
                   JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-                  WHERE jl."accountCode" = ca.code), 0) AS balance
+                  WHERE jl."accountCode" = ca.code AND je.status = 'posted'), 0) AS balance
          FROM subsidiary_accounts sa
          JOIN chart_of_accounts ca ON ca.id = sa."accountId"
          WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3`,
@@ -1605,7 +1618,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
-         WHERE ${safeCol} = $2
+         WHERE ${safeCol} = $2 AND je.status = 'posted'
          GROUP BY ca.code, ca.name
          ORDER BY SUM(jl.debit) DESC`,
         [cid, eid]
@@ -1620,7 +1633,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
            MAX(je."createdAt") AS "lastTransaction"
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-         WHERE ${safeCol} = $2`,
+         WHERE ${safeCol} = $2 AND je.status = 'posted'`,
         [cid, eid]
       ),
     ]);

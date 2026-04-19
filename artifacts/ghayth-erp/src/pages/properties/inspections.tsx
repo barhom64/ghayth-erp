@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +57,7 @@ export default function InspectionsPage() {
     try {
       await apiFetch(`/properties/inspections/${id}`, { method: "PATCH", body: JSON.stringify({
         status: "completed",
-        inspectionDate: new Date().toISOString().split("T")[0],
+        inspectionDate: todayLocal(),
         conditionRating: rating ? Number(rating) : null,
         notes: notes || null,
       }) });
@@ -72,7 +73,7 @@ export default function InspectionsPage() {
     <PageShell
       title="فحص الوحدات العقارية"
       subtitle="جدولة وتتبع عمليات فحص الوحدات"
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { label: "فحص الوحدات العقارية" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "فحص الوحدات العقارية" }]}
       actions={
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> جدولة فحص

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useFormContext } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +27,10 @@ import {
   Autocomplete,
   type AutocompleteOption,
 } from "@/components/ui/autocomplete";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   AlertTriangle,
@@ -52,7 +56,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -184,7 +188,7 @@ const STEP_LABELS = [
 
 const violationSchema = z.object({
   incidentDate: z.string().min(1, "تاريخ الواقعة مطلوب").refine(
-    (val) => !val || val <= new Date().toISOString().split("T")[0],
+    (val) => !val || val <= todayLocal(),
     "لا يمكن اختيار تاريخ مستقبلي",
   ),
   incidentType: z.string().min(1, "نوع الواقعة مطلوب"),
@@ -308,9 +312,7 @@ function DraftManager({
   if (!visible) return null;
 
   const extra = loadDraftExtra();
-  const savedAt = extra.savedAt
-    ? new Date(extra.savedAt).toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" })
-    : null;
+  const savedAt = extra.savedAt ? formatDateAr(extra.savedAt) : null;
 
   return (
     <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-sm text-amber-700">
@@ -657,15 +659,13 @@ function DisruptsOthersCheckbox() {
   return (
     <div className="flex flex-col justify-end">
       <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={checked}
-          onChange={(e) =>
-            setValue("disruptsOthers", e.target.checked, {
+          onCheckedChange={(v) =>
+            setValue("disruptsOthers", v === true, {
               shouldValidate: true,
             })
           }
-          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
         <div>
           <span className="text-sm font-medium">هل عطّل عمالاً آخرين؟</span>
@@ -768,9 +768,7 @@ function StepEmployee({
                   {priorMemos.length} مخالفة سابقة
                 </span>
                 {" — آخرها: "}
-                {priorMemos[0]?.createdAt
-                  ? new Date(priorMemos[0].createdAt).toLocaleDateString("ar-SA")
-                  : "—"}
+                {formatDateAr(priorMemos[0]?.createdAt)}
               </div>
             ) : (
               <div className="text-xs text-green-600">
@@ -783,8 +781,15 @@ function StepEmployee({
 
       {/* Employee context card */}
       {assignmentId && selectedEmp && (
-        <div className="mt-3">
+        <div className="mt-3 space-y-3">
           <EmployeeContextCard employeeId={selectedEmp.id} section="violations" />
+          <EmployeeDisciplineSummary
+            employeeId={selectedEmp.id}
+            employeeName={selectedEmp.name}
+            title="ملف الانضباط — لقطة مباشرة"
+            hideCreateButton
+            compact
+          />
         </div>
       )}
     </div>
@@ -1033,7 +1038,7 @@ function StepPenalty({
               <div className="flex justify-between">
                 <span className="text-gray-600">الأجر اليومي</span>
                 <span>
-                  {dailyWage.toFixed(2)} {getCurrencySymbol()}
+                  {formatCurrency(dailyWage)}
                 </span>
               </div>
               {!resolution.warningOnly && (
@@ -1042,16 +1047,14 @@ function StepPenalty({
                   <div className="flex justify-between">
                     <span className="text-gray-600">الخصم الأساسي</span>
                     <span>
-                      {resolution.baseDeductionAmount.toFixed(2)}{" "}
-                      {getCurrencySymbol()}
+                      {formatCurrency(resolution.baseDeductionAmount)}
                     </span>
                   </div>
                   {resolution.extraDeductionAmount > 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-600">الخصم الإضافي</span>
                       <span>
-                        {resolution.extraDeductionAmount.toFixed(2)}{" "}
-                        {getCurrencySymbol()}
+                        {formatCurrency(resolution.extraDeductionAmount)}
                       </span>
                     </div>
                   )}
@@ -1059,8 +1062,7 @@ function StepPenalty({
                   <div className="flex justify-between font-bold text-base">
                     <span>الإجمالي</span>
                     <span className="text-red-600">
-                      {resolution.totalDeductionAmount.toFixed(2)}{" "}
-                      {getCurrencySymbol()}
+                      {formatCurrency(resolution.totalDeductionAmount)}
                     </span>
                   </div>
                 </>
@@ -1071,17 +1073,16 @@ function StepPenalty({
             {!resolution.warningOnly && (
               <div className="mt-4 pt-3 border-t border-gray-100">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={showManualOverride}
-                    onChange={(e) => {
-                      setShowManualOverride(e.target.checked);
-                      if (!e.target.checked) {
+                    onCheckedChange={(v) => {
+                      const checked = v === true;
+                      setShowManualOverride(checked);
+                      if (!checked) {
                         setValue("manualOverrideAmount", undefined);
                         setValue("manualOverrideReason", "");
                       }
                     }}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600"
                   />
                   <span className="text-sm text-gray-700">
                     تعديل يدوي للمبلغ
@@ -1231,8 +1232,7 @@ function StepDocumentation({
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
+                  <Input
                     value={w.name || ""}
                     onChange={(e) => {
                       const next = [...witnesses];
@@ -1240,10 +1240,8 @@ function StepDocumentation({
                       setWitnesses(next);
                     }}
                     placeholder="الاسم"
-                    className="text-sm border rounded-md px-3 py-2"
                   />
-                  <input
-                    type="text"
+                  <Input
                     value={w.role || ""}
                     onChange={(e) => {
                       const next = [...witnesses];
@@ -1251,7 +1249,6 @@ function StepDocumentation({
                       setWitnesses(next);
                     }}
                     placeholder="الصفة"
-                    className="text-sm border rounded-md px-3 py-2"
                   />
                 </div>
               )}
@@ -1283,8 +1280,7 @@ function StepDocumentation({
         <div className="space-y-2">
           {reasons.map((r, i) => (
             <div key={i} className="flex items-center gap-2">
-              <input
-                type="text"
+              <Input
                 value={r}
                 onChange={(e) => {
                   const next = [...reasons];
@@ -1292,7 +1288,7 @@ function StepDocumentation({
                   setReasons(next);
                 }}
                 placeholder={`سبب ${i + 1}`}
-                className="flex-1 text-sm border rounded-md px-3 py-2"
+                className="flex-1"
               />
               <button
                 type="button"
@@ -1390,8 +1386,7 @@ function StepDocumentation({
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
+                  <Input
                     value={p.name || ""}
                     onChange={(e) => {
                       const next = [...relatedParties];
@@ -1399,10 +1394,8 @@ function StepDocumentation({
                       setRelatedParties(next);
                     }}
                     placeholder="الاسم"
-                    className="text-sm border rounded-md px-3 py-2"
                   />
-                  <input
-                    type="text"
+                  <Input
                     value={p.role || ""}
                     onChange={(e) => {
                       const next = [...relatedParties];
@@ -1410,7 +1403,6 @@ function StepDocumentation({
                       setRelatedParties(next);
                     }}
                     placeholder="الدور"
-                    className="text-sm border rounded-md px-3 py-2"
                   />
                 </div>
               )}
@@ -1448,7 +1440,7 @@ export default function ViolationsCreate() {
 
   // Load saved extra draft state (witnesses, reasons, relatedParties, openStep)
   const [draftExtra] = useState(() => loadDraftExtra());
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate } = useFieldErrors();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [witnesses, setWitnesses] = useState<WitnessEntry[]>(draftExtra.witnesses || []);
   const [reasons, setReasons] = useState<string[]>(draftExtra.reasons || []);
@@ -1464,9 +1456,6 @@ export default function ViolationsCreate() {
 
   // Draft defaults
   const draftDefaults = loadDraftDefaults();
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   // Memo creation mutation — successMessage: false so we show the memo number ourselves
   const createMemo = useApiMutation<
@@ -1496,15 +1485,15 @@ export default function ViolationsCreate() {
           </Button>
         }
         onSubmit={async (values) => {
-          setFieldErrors({});
-          const localErrors: Record<string, string> = {};
-          if (!values.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
-          if (!values.incidentType) localErrors.incidentType = "نوع الواقعة مطلوب";
-          if (values.manualOverrideAmount !== undefined && values.manualOverrideAmount < 0) localErrors.manualOverrideAmount = "مبلغ الخصم يجب أن يكون صفر أو أكثر";
-          if (Object.keys(localErrors).length > 0) {
-            setFieldErrors(localErrors);
-            const firstKey = Object.keys(localErrors)[0];
-            toast({ variant: "destructive", title: localErrors[firstKey] });
+          const firstError = validate({
+            assignmentId: values.assignmentId ? null : "يرجى اختيار الموظف",
+            incidentType: values.incidentType ? null : "نوع الواقعة مطلوب",
+            manualOverrideAmount: values.manualOverrideAmount !== undefined && values.manualOverrideAmount < 0
+              ? "مبلغ الخصم يجب أن يكون صفر أو أكثر"
+              : null,
+          });
+          if (firstError) {
+            toast({ variant: "destructive", title: firstError });
             return;
           }
           const result = await createMemo.mutateAsync({

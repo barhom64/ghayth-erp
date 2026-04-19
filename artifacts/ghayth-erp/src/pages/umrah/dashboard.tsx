@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -115,7 +116,7 @@ export default function UmrahDashboard() {
           <CardHeader><CardTitle className="text-base">الغرامات</CardTitle></CardHeader>
           <CardContent>
             <div className="flex justify-between items-center">
-              <div><span className="text-2xl font-bold text-red-600">{Number(pen.totalAmount || 0).toLocaleString()}</span> <span className="text-sm">ريال</span></div>
+              <div><span className="text-2xl font-bold text-red-600">{formatCurrency(Number(pen.totalAmount || 0))}</span></div>
               <Badge variant="outline">{pen.pending || 0} معلقة</Badge>
             </div>
           </CardContent>
@@ -145,7 +146,7 @@ export default function UmrahDashboard() {
                 { key: "fullName", header: "الاسم", render: (r) => <span className="font-medium">{r.fullName}</span> },
                 { key: "passportNumber", header: "الجواز" },
                 { key: "nationality", header: "الجنسية" },
-                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => r.actualArrival ? new Date(r.actualArrival).toLocaleDateString("ar-SA") : "-" },
+                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => formatDateAr(r.actualArrival) },
                 { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
               ] as DataTableColumn<any>[]}
               data={dash?.recentArrivals || []}

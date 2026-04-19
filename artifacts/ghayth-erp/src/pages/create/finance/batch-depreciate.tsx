@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TrendingDown, Save } from "lucide-react";
 import { CreatePageLayout } from "@/components/create-page-layout";
+import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function BatchDepreciatePage() {
   const [depPeriod, setDepPeriod] = useState(new Date().toISOString().slice(0, 7));
@@ -16,8 +16,8 @@ export default function BatchDepreciatePage() {
     try {
       const res = await batchDepMutation.mutateAsync({ period: depPeriod });
       setBatchResult(res);
-    } catch (err: any) {
-      console.error(err);
+    } catch {
+      // error handled by mutation hook toast
     }
   }
 
@@ -33,8 +33,9 @@ export default function BatchDepreciatePage() {
             <TrendingDown className="h-5 w-5 text-orange-500" /> بيانات الإهلاك
           </h3>
           <div className="max-w-md">
-            <Label>الفترة (سنة-شهر)</Label>
-            <Input className="mt-1" type="month" value={depPeriod} onChange={e => setDepPeriod(e.target.value)} />
+            <FormFieldWrapper label="الفترة (سنة-شهر)">
+              <Input type="month" value={depPeriod} onChange={e => setDepPeriod(e.target.value)} />
+            </FormFieldWrapper>
           </div>
         </div>
         <Button onClick={handleBatchDepreciate} disabled={batchDepMutation.isPending} className="gap-2">

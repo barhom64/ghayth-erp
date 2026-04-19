@@ -1,4 +1,4 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -15,6 +15,88 @@ import { createAuditLog } from "../lib/businessHelpers.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
 import { eventBus } from "../lib/eventBus.js";
+import { z } from "zod";
+
+/* ── Zod Schemas ────────────────────────────────────────────── */
+
+const settingUpsertSchema = z.object({
+  scopeOverride: z.enum(["system", "company", "branch"]).optional(),
+  key: z.string().min(1),
+  value: z.unknown(),
+});
+
+const generalSettingsSchema = z.record(z.string().min(1), z.string());
+
+const createBranchSchema = z.object({
+  name: z.string().min(1),
+  nameEn: z.string().optional(),
+  city: z.string().optional(),
+  phone: z.string().optional(),
+  logoUrl: z.string().optional(),
+  address: z.string().optional(),
+  taxNumber: z.string().optional(),
+  crNumber: z.string().optional(),
+  email: z.string().optional(),
+  website: z.string().optional(),
+  footerText: z.string().optional(),
+  companyId: z.number().optional(),
+});
+
+const updateBranchSchema = z.object({
+  name: z.string().min(1).optional(),
+  nameEn: z.string().optional(),
+  city: z.string().optional(),
+  phone: z.string().optional(),
+  logoUrl: z.string().optional(),
+  address: z.string().optional(),
+  taxNumber: z.string().optional(),
+  crNumber: z.string().optional(),
+  email: z.string().optional(),
+  website: z.string().optional(),
+  footerText: z.string().optional(),
+});
+
+const createDepartmentSchema = z.object({
+  name: z.string().min(1),
+  nameEn: z.string().optional(),
+  manager: z.string().optional(),
+});
+
+const updateDepartmentSchema = z.object({
+  name: z.string().min(1),
+  nameEn: z.string().optional(),
+  manager: z.string().optional(),
+});
+
+const createCompanySchema = z.object({
+  name: z.string().min(1),
+  nameEn: z.string().optional(),
+  taxNumber: z.string().optional(),
+  crNumber: z.string().optional(),
+});
+
+const updateCompanySchema = z.object({
+  name: z.string().min(1),
+  nameEn: z.string().optional(),
+  taxNumber: z.string().optional(),
+  crNumber: z.string().optional(),
+});
+
+const systemControlsSchema = z.record(z.string().min(1), z.unknown());
+
+const roleModulesSchema = z.object({
+  modules: z.array(z.string()),
+});
+
+const approvalConfigSchema = z.object({
+  chainType: z.string().min(1),
+  name: z.string().optional(),
+  minAmount: z.number().optional(),
+  maxAmount: z.number().nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const channelsSchema = z.record(z.string().min(1), z.string().nullable());
 
 const publicRouter = Router();
 
@@ -73,17 +155,11 @@ router.get("/", requirePermission("settings:read"), async (req, res) => {
 
 router.put("/", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_settingUpsertSchema = settingUpsertSchema.safeParse(req.body);
+    if (!parsed_settingUpsertSchema.success) throw new ValidationError(parsed_settingUpsertSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_settingUpsertSchema.data;
     const scope = req.scope!;
-    const { scopeOverride, key, value } = req.body as {
-      scopeOverride?: SettingScope;
-      key: string;
-      value: unknown;
-    };
-
-    if (!key) {
-      res.status(400).json({ error: "key مطلوب" });
-      return;
-    }
+    const { scopeOverride, key, value } = body;
 
     const requestedScope: SettingScope = scopeOverride ?? "company";
 
@@ -187,11 +263,9 @@ router.get("/resolved", requirePermission("settings:read"), async (req, res) => 
 
 router.put("/general", requirePermission("settings:write"), async (req, res) => {
   try {
-    const entries = req.body as Record<string, string>;
-    if (!entries || typeof entries !== "object") {
-      res.status(400).json({ error: "البيانات مطلوبة" });
-      return;
-    }
+    const parsed_generalSettings = generalSettingsSchema.safeParse(req.body);
+    if (!parsed_generalSettings.success) throw new ValidationError(parsed_generalSettings.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const entries: Record<string, string> = parsed_generalSettings.data;
     const hasTimezoneChange = "timezone" in entries;
     for (const [key, value] of Object.entries(entries)) {
       if (!key) continue;
@@ -273,12 +347,11 @@ router.get("/audit-log", requirePermission("settings:read"), async (req, res) =>
 
 router.post("/branches", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_createBranchSchema = createBranchSchema.safeParse(req.body);
+    if (!parsed_createBranchSchema.success) throw new ValidationError(parsed_createBranchSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createBranchSchema.data;
     const scope = req.scope!;
-    const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText, companyId } = req.body;
-    if (!name) {
-      res.status(400).json({ error: "اسم الفرع مطلوب" });
-      return;
-    }
+    const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText, companyId } = body;
     const targetCompanyId = companyId && scope.allowedCompanies.includes(Number(companyId)) ? Number(companyId) : scope.companyId;
     const r = await rawExecute(
       `INSERT INTO branches (name, "nameEn", "companyId", city, phone, "logoUrl", address, "taxNumber", "crNumber", email, website, "footerText") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
@@ -295,11 +368,14 @@ router.post("/branches", requirePermission("settings:write"), async (req, res) =
 
 router.put("/branches/:id", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_updateBranchSchema = updateBranchSchema.safeParse(req.body);
+    if (!parsed_updateBranchSchema.success) throw new ValidationError(parsed_updateBranchSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateBranchSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery(`SELECT id, "companyId" FROM branches WHERE id=$1 AND "companyId" = ANY($2)`, [id, scope.allowedCompanies]);
     if (!existing) { res.status(404).json({ error: "الفرع غير موجود" }); return; }
-    const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText } = req.body;
+    const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText } = body;
     const sets: string[] = [];
     const params: any[] = [];
     if (name !== undefined) { params.push(name); sets.push(`name=$${params.length}`); }
@@ -369,11 +445,10 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
 
 router.post("/departments", requirePermission("settings:write"), async (req, res) => {
   try {
-    const { name, nameEn, manager } = req.body;
-    if (!name) {
-      res.status(400).json({ error: "اسم القسم مطلوب" });
-      return;
-    }
+    const parsed_createDepartmentSchema = createDepartmentSchema.safeParse(req.body);
+    if (!parsed_createDepartmentSchema.success) throw new ValidationError(parsed_createDepartmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createDepartmentSchema.data;
+    const { name, nameEn, manager } = body;
     const scope = req.scope!;
     const r = await rawExecute(`INSERT INTO departments (name, "nameEn", manager) VALUES ($1,$2,$3)`, [name, nameEn || null, manager || null]);
     createAuditLog({
@@ -387,12 +462,11 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
 
 router.put("/departments/:id", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_updateDepartmentSchema = updateDepartmentSchema.safeParse(req.body);
+    if (!parsed_updateDepartmentSchema.success) throw new ValidationError(parsed_updateDepartmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateDepartmentSchema.data;
     const { id } = req.params;
-    const { name, nameEn, manager } = req.body;
-    if (!name) {
-      res.status(400).json({ error: "اسم القسم مطلوب" });
-      return;
-    }
+    const { name, nameEn, manager } = body;
     const scope = req.scope!;
     await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 RETURNING id`, [name, nameEn || null, manager || null, id]);
     createAuditLog({
@@ -429,12 +503,11 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
 
 router.post("/companies", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_createCompanySchema = createCompanySchema.safeParse(req.body);
+    if (!parsed_createCompanySchema.success) throw new ValidationError(parsed_createCompanySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createCompanySchema.data;
     const scope = req.scope!;
-    const { name, nameEn, taxNumber, crNumber } = req.body;
-    if (!name) {
-      res.status(400).json({ error: "اسم الشركة مطلوب" });
-      return;
-    }
+    const { name, nameEn, taxNumber, crNumber } = body;
     const r = await rawExecute(`INSERT INTO companies (name, "nameEn", "taxNumber", "crNumber") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, taxNumber || null, crNumber || null]);
     const companyId = r.insertId;
 
@@ -490,12 +563,11 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
 
 router.put("/companies/:id", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_updateCompanySchema = updateCompanySchema.safeParse(req.body);
+    if (!parsed_updateCompanySchema.success) throw new ValidationError(parsed_updateCompanySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateCompanySchema.data;
     const { id } = req.params;
-    const { name, nameEn, taxNumber, crNumber } = req.body;
-    if (!name) {
-      res.status(400).json({ error: "اسم الشركة مطلوب" });
-      return;
-    }
+    const { name, nameEn, taxNumber, crNumber } = body;
     const scope = req.scope!;
     await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "taxNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     createAuditLog({
@@ -547,7 +619,9 @@ router.get("/system-controls", requirePermission("settings:read"), async (_req, 
 
 router.put("/system-controls", requirePermission("settings:write"), async (req, res) => {
   try {
-    const entries = req.body as Record<string, any>;
+    const parsed_systemControls = systemControlsSchema.safeParse(req.body);
+    if (!parsed_systemControls.success) throw new ValidationError(parsed_systemControls.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const entries: Record<string, unknown> = parsed_systemControls.data;
     for (const [key, value] of Object.entries(entries)) {
       const jsonVal = JSON.stringify(value);
       const existing = await rawQuery(`SELECT id FROM settings WHERE scope='system' AND "scopeId"=0 AND key=$1`, [key]);
@@ -592,10 +666,12 @@ router.get("/role-modules", requirePermission("settings:read"), async (req, res)
 
 router.put("/role-modules/:roleKey", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_roleModulesSchema = roleModulesSchema.safeParse(req.body);
+    if (!parsed_roleModulesSchema.success) throw new ValidationError(parsed_roleModulesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_roleModulesSchema.data;
     const scope = req.scope!;
     const { roleKey } = req.params;
-    const { modules } = req.body;
-    if (!Array.isArray(modules)) { res.status(400).json({ error: "modules يجب أن يكون مصفوفة" }); return; }
+    const { modules } = body;
     await rawExecute(
       `UPDATE user_roles SET modules=$1 WHERE "roleKey"=$2 AND "companyId"=$3`,
       [JSON.stringify(modules), roleKey, scope.companyId]
@@ -622,8 +698,11 @@ router.get("/approval-config", requirePermission("settings:read"), async (req, r
 
 router.post("/approval-config", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_approvalConfigSchema = approvalConfigSchema.safeParse(req.body);
+    if (!parsed_approvalConfigSchema.success) throw new ValidationError(parsed_approvalConfigSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_approvalConfigSchema.data;
     const scope = req.scope!;
-    const { chainType, name, minAmount, maxAmount, isActive } = req.body;
+    const { chainType, name, minAmount, maxAmount, isActive } = body;
     const r = await rawExecute(
       `INSERT INTO approval_chains ("companyId", "chainType", "name", "minAmount", "maxAmount", "isActive") VALUES ($1,$2,$3,$4,$5,$6)`,
       [scope.companyId, chainType, name || chainType, minAmount || 0, maxAmount || null, isActive !== false]
@@ -687,8 +766,10 @@ router.get("/channels", requirePermission("settings:read"), async (req, res) => 
 
 router.put("/channels", requirePermission("settings:write"), async (req, res) => {
   try {
+    const parsed_channels = channelsSchema.safeParse(req.body);
+    if (!parsed_channels.success) throw new ValidationError(parsed_channels.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const entries: Record<string, string | null> = parsed_channels.data;
     const scope = req.scope!;
-    const entries = req.body as Record<string, string>;
 
     const SECRET_KEYS_PUT = new Set(["sms_auth_token", "whatsapp_access_token"]);
     const allowedKeys = new Set(CHANNEL_SETTING_KEYS);

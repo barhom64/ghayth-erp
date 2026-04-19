@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable } from "@/components/ui/data-table";
 import { Activity, Plus, Eye } from "lucide-react";
@@ -84,17 +87,20 @@ export function ComplianceActionsTab() {
               <div key={f.key}>
                 <label className="text-xs text-gray-500 mb-1 block">{f.label}</label>
                 {f.type === "select" ? (
-                  <select className="w-full border rounded px-2 py-1 text-sm" value={(newForm as any)[f.key]} onChange={e => setNewForm(p => ({ ...p, [f.key]: e.target.value }))}>
-                    {f.options!.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
+                  <Select value={(newForm as any)[f.key]} onValueChange={(v) => setNewForm(p => ({ ...p, [f.key]: v }))}>
+                    <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {f.options!.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 ) : (
-                  <input type={f.type === "date" ? "date" : "text"} className="w-full border rounded px-2 py-1 text-sm" value={(newForm as any)[f.key]} onChange={e => setNewForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                  <Input type={f.type === "date" ? "date" : "text"} className="text-sm" value={(newForm as any)[f.key]} onChange={e => setNewForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 )}
               </div>
             ))}
             <div className="col-span-2">
               <label className="text-xs text-gray-500 mb-1 block">الوصف</label>
-              <textarea className="w-full border rounded px-2 py-1 text-sm" rows={2} value={newForm.description} onChange={e => setNewForm(p => ({ ...p, description: e.target.value }))} />
+              <Textarea className="text-sm" rows={2} value={newForm.description} onChange={e => setNewForm(p => ({ ...p, description: e.target.value }))} />
             </div>
             <div className="col-span-2 flex gap-2">
               <Button size="sm" onClick={handleCreate}>حفظ</Button>

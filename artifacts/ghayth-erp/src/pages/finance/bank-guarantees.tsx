@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import {
@@ -617,31 +618,27 @@ export default function BankGuaranteesPage() {
               </div>
               <div>
                 <Label htmlFor="guaranteeType">نوع الضمان</Label>
-                <select
-                  id="guaranteeType"
-                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                  value={form.guaranteeType}
-                  onChange={(e) => setForm((f) => ({ ...f, guaranteeType: e.target.value }))}
-                >
-                  {GUARANTEE_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
+                <Select value={form.guaranteeType} onValueChange={(v) => setForm((f) => ({ ...f, guaranteeType: v }))}>
+                  <SelectTrigger id="guaranteeType"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {GUARANTEE_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {editing && (
                 <div>
                   <Label htmlFor="status">الحالة</Label>
-                  <select
-                    id="status"
-                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                    value={form.status ?? "active"}
-                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                  >
-                    <option value="active">نشط</option>
-                    <option value="released">مُحرَّر</option>
-                    <option value="renewed">مُجدَّد</option>
-                    <option value="cancelled">ملغى</option>
-                  </select>
+                  <Select value={form.status ?? "active"} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+                    <SelectTrigger id="status"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">نشط</SelectItem>
+                      <SelectItem value="released">مُحرَّر</SelectItem>
+                      <SelectItem value="renewed">مُجدَّد</SelectItem>
+                      <SelectItem value="cancelled">ملغى</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
               <div className="col-span-2">

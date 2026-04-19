@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 type JournalLine = { accountCode: string; description: string; debit: number; credit: number };
 
@@ -21,13 +24,13 @@ export default function JournalManualCreatePage() {
 
   const [form, setForm] = useState({
     description: "",
-    date: new Date().toISOString().split("T")[0],
+    date: todayLocal(),
     costCenter: "",
     notes: "",
     lines: [emptyLine(), emptyLine()],
   });
 
-  const { data: coaData } = useApiQuery<any>(
+  const { data: coaData, isLoading, isError } = useApiQuery<any>(
     ["chart-of-accounts"],
     `/finance/chart-of-accounts${scopeSuffix}`
   );
@@ -42,10 +45,13 @@ export default function JournalManualCreatePage() {
     },
   );
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const coa = coaData?.data ?? coaData ?? [];
 
-  const totalDebit = form.lines.reduce((s, l) => s + Number(l.debit || 0), 0);
-  const totalCredit = form.lines.reduce((s, l) => s + Number(l.credit || 0), 0);
+  const totalDebit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.debit), 0));
+  const totalCredit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.credit), 0));
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
 
   function addLine() {
@@ -81,7 +87,7 @@ export default function JournalManualCreatePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1">البيان *</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm" required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف القيد اليدوي" />
+                <Input required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف القيد اليدوي" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">التاريخ</label>
@@ -108,9 +114,8 @@ export default function JournalManualCreatePage() {
                   {form.lines.map((line, i) => (
                     <tr key={i} className="border-t">
                       <td className="px-2 py-1">
-                        <input
+                        <Input
                           list={`coa-list-${i}`}
-                          className="w-full border rounded px-2 py-1 text-sm"
                           value={line.accountCode}
                           onChange={e => updateLine(i, "accountCode", e.target.value)}
                           placeholder="الحساب"
@@ -120,13 +125,13 @@ export default function JournalManualCreatePage() {
                         </datalist>
                       </td>
                       <td className="px-2 py-1">
-                        <input className="w-full border rounded px-2 py-1 text-sm" value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
+                        <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
                       </td>
                       <td className="px-2 py-1">
-                        <input className="w-24 border rounded px-2 py-1 text-sm" type="number" min="0" value={line.debit || ""} onChange={e => updateLine(i, "debit", e.target.value)} placeholder="0" />
+                        <Input className="w-24" type="number" min="0" value={line.debit || ""} onChange={e => updateLine(i, "debit", e.target.value)} placeholder="0" />
                       </td>
                       <td className="px-2 py-1">
-                        <input className="w-24 border rounded px-2 py-1 text-sm" type="number" min="0" value={line.credit || ""} onChange={e => updateLine(i, "credit", e.target.value)} placeholder="0" />
+                        <Input className="w-24" type="number" min="0" value={line.credit || ""} onChange={e => updateLine(i, "credit", e.target.value)} placeholder="0" />
                       </td>
                       <td className="px-2 py-1">
                         <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
@@ -160,7 +165,7 @@ export default function JournalManualCreatePage() {
 
             <div>
               <label className="block text-sm font-medium mb-1">ملاحظات</label>
-              <textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات اختيارية" />
+              <Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات اختيارية" />
             </div>
 
             <div className="flex justify-end gap-3 pt-2">

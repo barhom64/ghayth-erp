@@ -1,11 +1,11 @@
 import { Link } from "wouter";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KeyRound, FileText, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { statusLabels } from "./shared";
+import { PageStatusBadge } from "@/components/page-status-badge";
 
 interface CustodiesAndDocumentsSectionProps {
   custodies: any[];
@@ -37,11 +37,9 @@ export function CustodiesAndDocumentsSection({ custodies, documents }: Custodies
                 <div key={c.id} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{c.description || `عهدة #${c.id}`}</p>
-                    <p className="text-xs text-gray-400">{Number(c.amount).toLocaleString("ar-SA")} ر.س</p>
+                    <p className="text-xs text-gray-400">{formatCurrency(Number(c.amount))}</p>
                   </div>
-                  <Badge className={cn("text-[10px] shrink-0", statusLabels[c.status]?.color || "bg-gray-100 text-gray-700")}>
-                    {statusLabels[c.status]?.label || c.status}
-                  </Badge>
+                  <PageStatusBadge status={c.status} domain="custody" className="text-[10px] shrink-0" />
                 </div>
               ))}
             </div>

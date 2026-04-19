@@ -1,4 +1,5 @@
 import { PageShell } from "@/components/page-shell";
+import { todayLocal } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Link } from "wouter";
@@ -24,7 +25,7 @@ export default function DailyClose() {
   const items = data?.items || [];
   const allPassed = data?.allPassed || false;
   const closedToday = data?.closedToday || false;
-  const closeDate = data?.date || new Date().toISOString().split("T")[0];
+  const closeDate = data?.date || todayLocal();
 
   const passedCount = items.filter((i: any) => i.passed).length;
   const failedCount = items.filter((i: any) => !i.passed).length;

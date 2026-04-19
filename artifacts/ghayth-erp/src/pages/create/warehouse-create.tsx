@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "warehouse_product_create";
 const INITIAL = { name: "", sku: "", categoryId: "", unit: "piece", costPrice: "", sellPrice: "", currentStock: "", minStock: "", location: "" };
@@ -18,26 +19,24 @@ export default function WarehouseCreate() {
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const addProduct = useApiMutation("/warehouse/products", "POST", [["warehouse-products"], ["warehouse-stats"]]);
-  const { data: categoriesRes } = useApiQuery<{ data: any[] }>(["warehouse-categories"], "/warehouse/categories");
+  const { data: categoriesRes, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-categories"], "/warehouse/categories");
   const categories = categoriesRes?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name) localErrors.name = "يرجى إدخال اسم المنتج";
-    if (form.costPrice && Number(form.costPrice) < 0) localErrors.costPrice = "سعر التكلفة يجب أن يكون صفر أو أكثر";
-    if (form.sellPrice && Number(form.sellPrice) < 0) localErrors.sellPrice = "سعر البيع يجب أن يكون صفر أو أكثر";
-    if (form.minStock && Number(form.minStock) < 0) localErrors.minStock = "الحد الأدنى يجب أن يكون صفر أو أكثر";
-    if (form.currentStock && Number(form.currentStock) < 0) localErrors.currentStock = "المخزون الحالي يجب أن يكون صفر أو أكثر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم المنتج",
+      costPrice: form.costPrice && Number(form.costPrice) < 0 ? "سعر التكلفة يجب أن يكون صفر أو أكثر" : null,
+      sellPrice: form.sellPrice && Number(form.sellPrice) < 0 ? "سعر البيع يجب أن يكون صفر أو أكثر" : null,
+      minStock: form.minStock && Number(form.minStock) < 0 ? "الحد الأدنى يجب أن يكون صفر أو أكثر" : null,
+      currentStock: form.currentStock && Number(form.currentStock) < 0 ? "المخزون الحالي يجب أن يكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -56,7 +55,8 @@ export default function WarehouseCreate() {
       toast({ title: "تمت إضافة المنتج بنجاح" });
       setLocation("/warehouse");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المنتج", description: err.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المنتج", description: err?.fix ?? err?.message });
     }
   };
 
@@ -73,22 +73,20 @@ export default function WarehouseCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اسم المنتج <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("name")}`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم المنتج" /><FieldHint field="name" /></div>
-          <div><Label>رمز المنتج</Label><Input className="mt-1" value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} placeholder="رمز المنتج" /></div>
-          <div>
-            <Label>التصنيف</Label>
+          <TextField label="اسم المنتج" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم المنتج" error={fieldErrors.name} />
+          <TextField label="رمز المنتج" dir="ltr" value={form.sku} onChange={(v) => setForm((f) => ({ ...f, sku: v }))} placeholder="رمز المنتج" />
+          <FormFieldWrapper label="التصنيف">
             <Select value={form.categoryId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">بدون تصنيف</SelectItem>
                 {categories.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الوحدة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الوحدة">
             <Select value={form.unit} onValueChange={(v) => setForm((f) => ({ ...f, unit: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="piece">قطعة</SelectItem>
                 <SelectItem value="kg">كيلوغرام</SelectItem>
@@ -97,13 +95,13 @@ export default function WarehouseCreate() {
                 <SelectItem value="box">صندوق</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>سعر التكلفة</Label><Input className={`mt-1 ${errCls("costPrice")}`} type="number" step="0.01" value={form.costPrice} onChange={(e) => setForm((f) => ({ ...f, costPrice: e.target.value }))} placeholder="٠" /><FieldHint field="costPrice" /></div>
-          <div><Label>سعر البيع</Label><Input className={`mt-1 ${errCls("sellPrice")}`} type="number" step="0.01" value={form.sellPrice} onChange={(e) => setForm((f) => ({ ...f, sellPrice: e.target.value }))} placeholder="٠" /><FieldHint field="sellPrice" /></div>
-          <div><Label>المخزون الحالي</Label><Input className={`mt-1 ${errCls("currentStock")}`} type="number" value={form.currentStock} onChange={(e) => setForm((f) => ({ ...f, currentStock: e.target.value }))} placeholder="٠" /><FieldHint field="currentStock" /></div>
-          <div><Label>الحد الأدنى</Label><Input className={`mt-1 ${errCls("minStock")}`} type="number" value={form.minStock} onChange={(e) => setForm((f) => ({ ...f, minStock: e.target.value }))} placeholder="٠" /><FieldHint field="minStock" /></div>
+          </FormFieldWrapper>
+          <NumberField label="سعر التكلفة" value={form.costPrice} onChange={(v) => setForm((f) => ({ ...f, costPrice: v }))} placeholder="٠" step={0.01} min={0} error={fieldErrors.costPrice} />
+          <NumberField label="سعر البيع" value={form.sellPrice} onChange={(v) => setForm((f) => ({ ...f, sellPrice: v }))} placeholder="٠" step={0.01} min={0} error={fieldErrors.sellPrice} />
+          <NumberField label="المخزون الحالي" value={form.currentStock} onChange={(v) => setForm((f) => ({ ...f, currentStock: v }))} placeholder="٠" min={0} error={fieldErrors.currentStock} />
+          <NumberField label="الحد الأدنى" value={form.minStock} onChange={(v) => setForm((f) => ({ ...f, minStock: v }))} placeholder="٠" min={0} error={fieldErrors.minStock} />
         </div>
-        <div><Label>الموقع في المستودع</Label><Input className="mt-1" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="الموقع في المستودع" /></div>
+        <TextField label="الموقع في المستودع" value={form.location} onChange={(v) => setForm((f) => ({ ...f, location: v }))} placeholder="الموقع في المستودع" />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>

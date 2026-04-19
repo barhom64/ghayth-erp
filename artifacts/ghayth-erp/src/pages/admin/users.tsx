@@ -10,6 +10,7 @@ import {
   Shield, Plus, X, CheckCircle, KeySquare, Eye, EyeOff, ToggleLeft, ToggleRight,
   Search, Users, Trash2, Edit2, ShieldAlert, AlertCircle,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -198,16 +199,22 @@ export default function AdminUsersPage() {
             </div>
             <div>
               <Label>الدور الوظيفي</Label>
-              <select className="w-full border rounded-md p-2 mt-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>ربط بموظف (اختياري)</Label>
-              <select className="w-full border rounded-md p-2 mt-1" value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
-                <option value="">— بدون ربط —</option>
-                {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} ({e.empNumber})</option>)}
-              </select>
+              <Select value={form.employeeId || "_none"} onValueChange={(v) => setForm({ ...form, employeeId: v === "_none" ? "" : v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— بدون ربط —</SelectItem>
+                  {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.empNumber})</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>كلمة المرور (اختياري - ستُنشأ تلقائياً)</Label>
@@ -253,16 +260,22 @@ export default function AdminUsersPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">الدور الوظيفي</Label>
-                <select className="w-full border rounded-md p-2 mt-1 text-sm bg-white" value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}>
-                  {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
+                <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="text-xs">ربط بموظف</Label>
-                <select className="w-full border rounded-md p-2 mt-1 text-sm bg-white" value={editForm.employeeId} onChange={(e) => setEditForm({ ...editForm, employeeId: e.target.value })}>
-                  <option value="">— بدون ربط —</option>
-                  {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} ({e.empNumber})</option>)}
-                </select>
+                <Select value={editForm.employeeId || "_none"} onValueChange={(v) => setEditForm({ ...editForm, employeeId: v === "_none" ? "" : v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— بدون ربط —</SelectItem>
+                    {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.empNumber})</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex gap-2">
@@ -315,15 +328,21 @@ export default function AdminUsersPage() {
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input placeholder="بحث بالبريد أو الاسم..." className="ps-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <select className="border rounded-md px-3 py-2 text-sm" value={filterRole} onChange={(e) => setFilterRole(e.target.value)}>
-              <option value="">كل الأدوار</option>
-              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-            <select className="border rounded-md px-3 py-2 text-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-              <option value="">كل الحالات</option>
-              <option value="active">نشط</option>
-              <option value="inactive">معلق</option>
-            </select>
+            <Select value={filterRole || "_none"} onValueChange={(v) => setFilterRole(v === "_none" ? "" : v)}>
+              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">كل الأدوار</SelectItem>
+                {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterStatus || "_none"} onValueChange={(v) => setFilterStatus(v === "_none" ? "" : v)}>
+              <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">كل الحالات</SelectItem>
+                <SelectItem value="active">نشط</SelectItem>
+                <SelectItem value="inactive">معلق</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -452,10 +471,13 @@ function RoleAssignmentSection({ users }: { users: any[] }) {
 
   return (
     <div className="space-y-3">
-      <select className="w-full border rounded-lg p-2.5 bg-white text-sm" value={selectedUserId ?? ""} onChange={(e) => { const id = Number(e.target.value) || null; setSelectedUserId(id); if (id) loadUserRoles(id); }}>
-        <option value="">— اختر مستخدم لإدارة أدواره —</option>
-        {users.map((u: any) => <option key={u.id} value={u.id}>{u.employeeName || u.email}</option>)}
-      </select>
+      <Select value={selectedUserId ? String(selectedUserId) : "_none"} onValueChange={(v) => { const id = v === "_none" ? null : Number(v); setSelectedUserId(id); if (id) loadUserRoles(id); }}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="_none">— اختر مستخدم لإدارة أدواره —</SelectItem>
+          {users.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.employeeName || u.email}</SelectItem>)}
+        </SelectContent>
+      </Select>
       {selectedUserId && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>

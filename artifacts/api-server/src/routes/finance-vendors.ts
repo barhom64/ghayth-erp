@@ -286,6 +286,7 @@ vendorsRouter.get("/payments", async (req, res) => {
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" LIKE '1%'
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+         AND je.status = 'posted'
          AND (je.ref LIKE 'PV%' OR je.ref LIKE 'PAY%')
        GROUP BY je.id, je.ref, je.description, je."createdAt"
        ORDER BY je."createdAt" DESC LIMIT 100`,

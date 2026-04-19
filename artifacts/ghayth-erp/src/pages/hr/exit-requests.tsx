@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -129,9 +129,7 @@ export default function ExitRequestsPage() {
       sortable: true,
       render: (v) => (
         <span className="text-sm text-gray-600">
-          {v.lastWorkingDay
-            ? new Date(v.lastWorkingDay).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
-            : "-"}
+          {formatDateAr(v.lastWorkingDay)}
         </span>
       ),
     },

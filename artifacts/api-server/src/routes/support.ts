@@ -8,11 +8,10 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { slaDeadlineForPriority, haversineKm } from "../lib/algorithms.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, createJournalEntry, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-
-import { loadBalanceAssign } from "../lib/algorithms.js";
 const router = Router();
 router.use(authMiddleware);
 
@@ -60,7 +59,7 @@ function detectPriority(text: string): string {
   return 'medium';
 }
 
-router.get("/tickets", async (req, res) => {
+router.get("/tickets", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, priority } = req.query as any;
@@ -78,7 +77,7 @@ router.get("/tickets", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Support tickets error:"); }
 });
 
-router.post("/tickets", async (req, res) => {
+router.post("/tickets", requirePermission("support:create"), async (req, res) => {
   // Phase C — Support domain audit, mirror of the HR Step 1 treatment.
   // Adds input validation the old handler lacked, a pre-check on the
   // client FK so a stale clientId produces a clean field-tagged error
@@ -229,7 +228,7 @@ router.post("/tickets", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create ticket error:"); }
 });
 
-router.get("/tickets/:id", async (req, res) => {
+router.get("/tickets/:id", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [ticket] = await rawQuery<any>(
@@ -250,7 +249,7 @@ router.get("/tickets/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get ticket error:"); }
 });
 
-router.post("/tickets/:id/replies", async (req, res) => {
+router.post("/tickets/:id/replies", requirePermission("support:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createReplySchema.safeParse(req.body);
@@ -290,7 +289,7 @@ router.post("/tickets/:id/replies", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create reply error:"); }
 });
 
-router.post("/tickets/:id/field-visit", async (req, res) => {
+router.post("/tickets/:id/field-visit", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const ticketId = Number(req.params.id);
@@ -353,7 +352,7 @@ const TICKET_TRANSITIONS: Record<string, readonly string[]> = {
   closed:            [],                           // terminal
 };
 
-router.patch("/tickets/:id", async (req, res) => {
+router.patch("/tickets/:id", requirePermission("support:write"), async (req, res) => {
   // Phase C — Support ticket update audit.
   //   - state-machine guard on status changes (ConflictError on illegal
   //     transitions instead of silent UPDATE)
@@ -510,7 +509,7 @@ router.patch("/tickets/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Update ticket error:"); }
 });
 
-router.delete("/tickets/:id", async (req, res) => {
+router.delete("/tickets/:id", requirePermission("support:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -533,7 +532,7 @@ router.delete("/tickets/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
 });
 
-router.post("/tickets/check-sla", async (req, res) => {
+router.post("/tickets/check-sla", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const breached = await rawQuery<any>(
@@ -559,7 +558,7 @@ router.post("/tickets/check-sla", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/replies", async (req, res) => {
+router.get("/replies", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -580,7 +579,7 @@ router.get("/replies", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Support replies error:"); }
 });
 
-router.get("/stats", async (req, res) => {
+router.get("/stats", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -599,7 +598,7 @@ router.get("/stats", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Support stats error:"); }
 });
 
-router.post("/tickets/:id/csat", async (req, res) => {
+router.post("/tickets/:id/csat", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const ticketId = Number(req.params.id);
@@ -624,7 +623,7 @@ router.post("/tickets/:id/csat", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
 
-router.get("/csat", async (req, res) => {
+router.get("/csat", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -647,7 +646,7 @@ router.get("/csat", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CSAT list error:"); }
 });
 
-router.get("/kb", async (req, res) => {
+router.get("/kb", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { q, category } = req.query as any;
@@ -660,7 +659,7 @@ router.get("/kb", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
 
-router.get("/kb/:id", async (req, res) => {
+router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -671,7 +670,7 @@ router.get("/kb/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
 
-router.post("/kb", async (req, res) => {
+router.post("/kb", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createKbSchema.safeParse(req.body);
@@ -687,7 +686,7 @@ router.post("/kb", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
 
-router.patch("/kb/:id", async (req, res) => {
+router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -706,7 +705,7 @@ router.patch("/kb/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
 
-router.delete("/kb/:id", async (req, res) => {
+router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -723,7 +722,7 @@ router.delete("/kb/:id", async (req, res) => {
 // scope pattern at line 612: validate the article is visible to the
 // caller (own company OR global) before incrementing, and scope the
 // UPDATE the same way.
-router.post("/kb/:id/feedback", async (req, res) => {
+router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);

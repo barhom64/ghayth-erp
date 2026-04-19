@@ -10,9 +10,10 @@ import { PageShell } from "@/components/page-shell";
 import { TERMINATION_TYPES } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 
 export default function GratuityPage() {
-  const [form, setForm] = useState({ employeeId: "", terminationType: "end_of_service", terminationDate: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ employeeId: "", terminationType: "end_of_service", terminationDate: todayLocal() });
   const [calcUrl, setCalcUrl] = useState<string>("");
 
   const { data: employees, isLoading: employeesLoading, isError: employeesError } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
@@ -32,7 +33,6 @@ export default function GratuityPage() {
     setCalcUrl(`/hr/gratuity/${form.employeeId}?terminationType=${form.terminationType}&terminationDate=${form.terminationDate}`);
   };
 
-  const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(n);
 
   return (
     <PageShell
@@ -102,7 +102,7 @@ export default function GratuityPage() {
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <DollarSign className="w-4 h-4 mx-auto text-gray-400 mb-1" />
-                  <div className="text-sm font-medium">{fmt(result.monthlySalary)}</div>
+                  <div className="text-sm font-medium">{formatCurrency(result.monthlySalary)}</div>
                   <div className="text-xs text-gray-500">الراتب الشهري</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
@@ -116,12 +116,12 @@ export default function GratuityPage() {
                 <div className="divide-y">
                   <div className="flex justify-between px-4 py-2 text-sm">
                     <span>أول 5 سنوات (نصف شهر/سنة)</span>
-                    <span className="font-medium">{fmt(result.breakdown?.first5Years || 0)}</span>
+                    <span className="font-medium">{formatCurrency(result.breakdown?.first5Years || 0)}</span>
                   </div>
                   {result.yearsOfService > 5 && (
                     <div className="flex justify-between px-4 py-2 text-sm">
                       <span>ما زاد عن 5 سنوات (شهر كامل/سنة)</span>
-                      <span className="font-medium">{fmt(result.breakdown?.above5Years || 0)}</span>
+                      <span className="font-medium">{formatCurrency(result.breakdown?.above5Years || 0)}</span>
                     </div>
                   )}
                   {result.reductionFactor < 1 && (
@@ -132,7 +132,7 @@ export default function GratuityPage() {
                   )}
                   <div className="flex justify-between px-4 py-3 font-bold text-primary bg-primary/5">
                     <span>إجمالي المكافأة المستحقة</span>
-                    <span className="text-lg">{fmt(result.finalGratuity)}</span>
+                    <span className="text-lg">{formatCurrency(result.finalGratuity)}</span>
                   </div>
                 </div>
               </div>

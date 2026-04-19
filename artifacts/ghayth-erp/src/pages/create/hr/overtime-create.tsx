@@ -1,20 +1,21 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency } from "@/lib/formatters";
 import { OVERTIME_MULTIPLIERS } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Clock, User, Calculator, Info } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_overtime_create";
 
@@ -39,10 +40,10 @@ export default function OvertimeCreate() {
     reason: "",
   });
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  if (employeesQ.isLoading) return <LoadingSpinner />;
+  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
@@ -77,16 +78,19 @@ export default function OvertimeCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
-    if (!form.overtimeDate) localErrors.overtimeDate = "تاريخ الوقت الإضافي مطلوب";
-    if (hours <= 0) localErrors.hours = "عدد الساعات يجب أن يكون أكبر من صفر";
-    if (hours > 12) localErrors.hours = "لا يمكن تسجيل أكثر من 12 ساعة في اليوم";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      overtimeDate: form.overtimeDate ? null : "تاريخ الوقت الإضافي مطلوب",
+      startTime: form.startTime ? null : "وقت البدء مطلوب",
+      endTime: form.endTime ? null : "وقت الانتهاء مطلوب",
+      hours: hours <= 0
+        ? "عدد الساعات يجب أن يكون أكبر من صفر"
+        : hours > 12
+          ? "لا يمكن تسجيل أكثر من 12 ساعة في اليوم"
+          : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
 
@@ -102,7 +106,9 @@ export default function OvertimeCreate() {
       });
       clearDraft();
       setLocation("/hr/overtime");
-    } catch {}
+    } catch (err: any) {
+      setApiError(err);
+    }
   };
 
   return (
@@ -127,18 +133,14 @@ export default function OvertimeCreate() {
 
         {/* الموظف والتاريخ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <User className="h-4 w-4 text-gray-500" />
-              الموظف <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={form.assignmentId}
-              onValueChange={(v) => setForm({ ...form, assignmentId: v })}
-            >
-              <SelectTrigger className={errCls("assignmentId")}>
-                <SelectValue placeholder="اختر الموظف..." />
-              </SelectTrigger>
+          <FormFieldWrapper
+            label="الموظف"
+            required
+            error={fieldErrors.assignmentId}
+            hint={selectedEmployee && salary > 0 ? `معدل الساعة: ${formatCurrency(hourlyRate)}` : undefined}
+          >
+            <Select value={form.assignmentId} onValueChange={(v) => setForm({ ...form, assignmentId: v })}>
+              <SelectTrigger><SelectValue placeholder="اختر الموظف..." /></SelectTrigger>
               <SelectContent>
                 {employees.map((emp: any) => (
                   <SelectItem
@@ -150,25 +152,15 @@ export default function OvertimeCreate() {
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint field="assignmentId" />
-            {selectedEmployee && salary > 0 && (
-              <p className="text-xs text-gray-500">
-                معدل الساعة: {formatCurrency(hourlyRate)}
-              </p>
-            )}
-          </div>
+          </FormFieldWrapper>
 
-          <div className="space-y-2">
-            <Label>تاريخ الوقت الإضافي <span className="text-red-500">*</span></Label>
-            <div className={errCls("overtimeDate")}>
-              <DatePicker
-                value={form.overtimeDate}
-                onChange={(v) => setForm({ ...form, overtimeDate: v })}
-                maxDate={new Date()}
-              />
-            </div>
-            <FieldHint field="overtimeDate" />
-          </div>
+          <FormFieldWrapper label="تاريخ الوقت الإضافي" required error={fieldErrors.overtimeDate}>
+            <DatePicker
+              value={form.overtimeDate}
+              onChange={(v) => setForm({ ...form, overtimeDate: v })}
+              maxDate={new Date()}
+            />
+          </FormFieldWrapper>
         </div>
 
         {/* سياق الموظف: ساعات إضافية هذا الشهر + تنبيهات */}
@@ -181,57 +173,34 @@ export default function OvertimeCreate() {
 
         {/* الأوقات والساعات */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-gray-500" />
-              وقت البداية <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              type="time"
-              value={form.startTime}
-              onChange={(e) => handleTimeChange("startTime", e.target.value)}
-            />
-          </div>
+          <FormFieldWrapper label="وقت البداية" required>
+            <Input type="time" value={form.startTime} onChange={(e) => handleTimeChange("startTime", e.target.value)} />
+          </FormFieldWrapper>
 
-          <div className="space-y-2">
-            <Label>وقت النهاية <span className="text-red-500">*</span></Label>
-            <Input
-              type="time"
-              value={form.endTime}
-              onChange={(e) => handleTimeChange("endTime", e.target.value)}
-            />
-          </div>
+          <FormFieldWrapper label="وقت النهاية" required>
+            <Input type="time" value={form.endTime} onChange={(e) => handleTimeChange("endTime", e.target.value)} />
+          </FormFieldWrapper>
 
-          <div className="space-y-2">
-            <Label>عدد الساعات</Label>
-            <Input
-              type="number"
-              step="0.25"
-              min="0.25"
-              max="12"
-              value={form.hours}
-              onChange={(e) => setForm({ ...form, hours: e.target.value })}
-              className={errCls("hours")}
-            />
-            <FieldHint field="hours" />
-          </div>
+          <NumberField
+            label="عدد الساعات"
+            value={form.hours}
+            onChange={(v) => setForm({ ...form, hours: v })}
+            step={0.25}
+            min={0.25}
+            max={12}
+            error={fieldErrors.hours}
+          />
 
-          <div className="space-y-2">
-            <Label>معامل الضرب</Label>
-            <Select
-              value={form.multiplier}
-              onValueChange={(v) => setForm({ ...form, multiplier: v })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+          <FormFieldWrapper label="معامل الضرب">
+            <Select value={form.multiplier} onValueChange={(v) => setForm({ ...form, multiplier: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {OVERTIME_MULTIPLIERS.map((m) => (
                   <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
 
         {/* ملخص التكلفة */}
@@ -265,15 +234,13 @@ export default function OvertimeCreate() {
         )}
 
         {/* السبب */}
-        <div className="space-y-2">
-          <Label>سبب الطلب (اختياري)</Label>
-          <Textarea
-            rows={3}
-            placeholder="سبب العمل الإضافي..."
-            value={form.reason}
-            onChange={(e) => setForm({ ...form, reason: e.target.value })}
-          />
-        </div>
+        <TextAreaField
+          label="سبب الطلب (اختياري)"
+          rows={3}
+          placeholder="سبب العمل الإضافي..."
+          value={form.reason}
+          onChange={(v) => setForm({ ...form, reason: v })}
+        />
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">

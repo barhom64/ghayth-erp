@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -81,6 +82,21 @@ async function ensureLoanTables(): Promise<void> {
 async function generateLoanNumber(companyId: number): Promise<string> {
   return generateSequentialNumber(HR_TABLES.LOANS, companyId, NUMBER_PREFIXES.LOAN);
 }
+
+// ─── Zod Schemas ──────────────────────────────────────────────────────────────
+
+const createLoanSchema = z.object({
+  assignmentId: z.number({ message: "يرجى اختيار الموظف" }),
+  amount: z.number({ message: "المبلغ مطلوب" }).positive("المبلغ يجب أن يكون أكبر من صفر"),
+  installmentCount: z.number({ message: "عدد الأقساط مطلوب" }).int().min(1, "عدد الأقساط يجب أن يكون 1 على الأقل"),
+  loanType: z.string().optional(),
+  reason: z.string().optional(),
+  startDeductionPeriod: z.string().optional(),
+});
+
+const rejectLoanSchema = z.object({
+  reason: z.string().optional(),
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans — قائمة السلف
@@ -179,14 +195,12 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
-    const b = req.body as any;
+    const parsed_createLoanSchema = createLoanSchema.safeParse(req.body);
+    if (!parsed_createLoanSchema.success) throw new ValidationError(parsed_createLoanSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_createLoanSchema.data;
 
-    if (!b.assignmentId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
-    if (!b.amount || Number(b.amount) <= 0) throw new ValidationError("المبلغ مطلوب", { field: "amount" });
-    if (!b.installmentCount || Number(b.installmentCount) < 1) throw new ValidationError("عدد الأقساط مطلوب", { field: "installmentCount" });
-
-    const amount = Number(b.amount);
-    const installmentCount = Number(b.installmentCount);
+    const amount = b.amount;
+    const installmentCount = b.installmentCount;
     const installmentAmount = Math.round((amount / installmentCount) * 100) / 100;
 
     // التحقق من عدم وجود سلفة نشطة
@@ -289,6 +303,8 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
+    // No body expected
+    { const _guard = z.object({}).strict().safeParse(req.body ?? {}); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     // التحقق من الأدوار: المدير المباشر، مدير HR، المدير العام، المالك، المدير المالي
     if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
@@ -389,7 +405,9 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       throw new ForbiddenError("صلاحية رفض السلف محصورة بالمدير أو HR أو المدير المالي أو المالك");
     }
 
-    const b = req.body as any;
+    const parsed_rejectLoanSchema = rejectLoanSchema.safeParse(req.body);
+    if (!parsed_rejectLoanSchema.success) throw new ValidationError(parsed_rejectLoanSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_rejectLoanSchema.data;
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [req.params.id, scope.companyId]

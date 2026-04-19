@@ -53,10 +53,7 @@ router.post("/policies", requirePermission("governance:write"), async (req, res)
   try {
     const scope = req.scope!;
     const parsed = createPolicySchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { title, description, category, status, effectiveDate, expiryDate, modules } = parsed.data;
     const r = await rawExecute(
       `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "companyId")
@@ -247,10 +244,7 @@ router.post("/risks", requirePermission("governance:write"), async (req, res) =>
   try {
     const scope = req.scope!;
     const parsed = createRiskSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { title, description, severity, likelihood, impact, status, mitigationPlan, assignedTo } = parsed.data;
     const r = await rawExecute(
       `INSERT INTO governance_risks (title, description, severity, likelihood, impact, status, "mitigationPlan", "assignedTo", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,

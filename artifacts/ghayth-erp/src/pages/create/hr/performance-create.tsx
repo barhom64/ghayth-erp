@@ -2,18 +2,18 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Star, Target, TrendingUp, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface Competency {
   name: string;
@@ -66,7 +66,7 @@ export default function PerformanceCreate() {
   const createMut = useApiMutation("/hr/performance", "POST", [["performance"]], {
     successMessage: "تم إضافة التقييم بنجاح",
   });
-  const { data: empData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const { data: empData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = empData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
@@ -81,6 +81,9 @@ export default function PerformanceCreate() {
   const [competencies, setCompetencies] = useState<Competency[]>(defaultCompetencies.map((c) => ({ ...c })));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const avgScore = competencies.filter((c) => c.score > 0).length > 0
     ? (competencies.reduce((sum, c) => sum + c.score, 0) / competencies.filter((c) => c.score > 0).length)
     : 0;
@@ -92,14 +95,15 @@ export default function PerformanceCreate() {
   };
 
   const selectedEmployee = employees.find((e: any) => String(e.assignmentId || e.id) === form.assignmentId);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
-    if (!form.assignmentId) {
-      toast({ variant: "destructive", title: "يرجى اختيار الموظف" });
-      return;
-    }
-    if (!form.period) {
-      toast({ variant: "destructive", title: "الفترة مطلوبة" });
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      period: form.period ? null : "الفترة مطلوبة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     const finalScore = form.overallScore || Math.round(avgScore * 10) / 10;
@@ -122,6 +126,9 @@ export default function PerformanceCreate() {
         onSuccess: () => {
           clearDraft();
           setLocation("/hr/performance");
+        },
+        onError: (err: any) => {
+          setApiError(err);
         },
       },
     );
@@ -146,12 +153,9 @@ export default function PerformanceCreate() {
             معلومات التقييم الأساسية
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>الموظف <span className="text-red-500">*</span></Label>
+            <FormFieldWrapper label="الموظف" required error={fieldErrors.assignmentId}>
               <Select value={form.assignmentId} onValueChange={(v) => setForm((f) => ({ ...f, assignmentId: v }))}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="اختر الموظف" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
                 <SelectContent>
                   {employees.map((emp: any) => (
                     <SelectItem key={emp.assignmentId || emp.id} value={String(emp.assignmentId || emp.id)}>
@@ -160,14 +164,17 @@ export default function PerformanceCreate() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>فترة التقييم <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} placeholder="الربع الأول ٢٠٢٦" />
-            </div>
-            <div>
-              <Label>التقييم العام</Label>
-              <div className="mt-2 flex items-center gap-3">
+            </FormFieldWrapper>
+            <TextField
+              label="فترة التقييم"
+              required
+              value={form.period}
+              onChange={(v) => setForm((f) => ({ ...f, period: v }))}
+              placeholder="الربع الأول ٢٠٢٦"
+              error={fieldErrors.period}
+            />
+            <FormFieldWrapper label="التقييم العام">
+              <div className="flex items-center gap-3">
                 <StarRating value={form.overallScore} onChange={(v) => setForm((f) => ({ ...f, overallScore: v }))} />
                 {form.overallScore > 0 && (
                   <span className={cn(
@@ -180,7 +187,7 @@ export default function PerformanceCreate() {
                   </span>
                 )}
               </div>
-            </div>
+            </FormFieldWrapper>
           </div>
           {selectedEmployee && (
             <div className="mt-4">
@@ -230,22 +237,10 @@ export default function PerformanceCreate() {
             التفاصيل والملاحظات
           </h3>
           <div className="grid grid-cols-1 gap-4">
-            <div>
-              <Label>نقاط القوة</Label>
-              <Textarea className="mt-1" value={form.strengths} onChange={(e) => setForm((f) => ({ ...f, strengths: e.target.value }))} placeholder="ما يتميز به الموظف..." rows={2} />
-            </div>
-            <div>
-              <Label>مجالات التحسين</Label>
-              <Textarea className="mt-1" value={form.improvements} onChange={(e) => setForm((f) => ({ ...f, improvements: e.target.value }))} placeholder="المجالات التي تحتاج تطوير..." rows={2} />
-            </div>
-            <div>
-              <Label>الأهداف المستقبلية</Label>
-              <Textarea className="mt-1" value={form.goals} onChange={(e) => setForm((f) => ({ ...f, goals: e.target.value }))} placeholder="الأهداف المتوقعة للفترة القادمة..." rows={2} />
-            </div>
-            <div>
-              <Label>ملاحظات عامة</Label>
-              <Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="أي ملاحظات إضافية..." rows={2} />
-            </div>
+            <TextAreaField label="نقاط القوة" value={form.strengths} onChange={(v) => setForm((f) => ({ ...f, strengths: v }))} placeholder="ما يتميز به الموظف..." rows={2} />
+            <TextAreaField label="مجالات التحسين" value={form.improvements} onChange={(v) => setForm((f) => ({ ...f, improvements: v }))} placeholder="المجالات التي تحتاج تطوير..." rows={2} />
+            <TextAreaField label="الأهداف المستقبلية" value={form.goals} onChange={(v) => setForm((f) => ({ ...f, goals: v }))} placeholder="الأهداف المتوقعة للفترة القادمة..." rows={2} />
+            <TextAreaField label="ملاحظات عامة" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="أي ملاحظات إضافية..." rows={2} />
           </div>
         </div>
       </div>

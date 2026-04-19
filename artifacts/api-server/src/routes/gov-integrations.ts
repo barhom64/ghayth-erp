@@ -1,10 +1,35 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
+import { z } from "zod";
+
+const updateIntegrationSchema = z.object({
+  config: z.record(z.unknown()).optional(),
+  enabled: z.boolean().optional(),
+  status: z.string().optional(),
+});
+
+const createLinkSchema = z.object({
+  integrationId: z.number().int(),
+  entityType: z.string().min(1),
+  entityId: z.union([z.number(), z.string().min(1)]),
+  externalRef: z.string().optional().nullable(),
+  enabled: z.boolean().optional(),
+  notes: z.string().optional().nullable(),
+});
+
+const patchLinkSchema = z.object({
+  enabled: z.boolean().optional(),
+  externalRef: z.string().optional().nullable(),
+  syncStatus: z.string().optional(),
+  notes: z.string().optional().nullable(),
+});
+
+const testIntegrationSchema = z.object({}).passthrough().optional();
 
 function isPrivateIP(ip: string): boolean {
   if (ip === "127.0.0.1" || ip === "::1" || ip === "0.0.0.0" || ip === "::") return true;
@@ -90,9 +115,12 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
 
 router.put("/:id", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_updateIntegrationSchema = updateIntegrationSchema.safeParse(req.body);
+    if (!parsed_updateIntegrationSchema.success) throw new ValidationError(parsed_updateIntegrationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_updateIntegrationSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { config, enabled, status } = req.body;
+    const { config, enabled, status } = body;
 
     if (config !== undefined && (typeof config !== "object" || config === null || Array.isArray(config))) {
       res.status(400).json({ error: "config must be a JSON object" });
@@ -145,6 +173,7 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
 
 router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
   try {
+    { const _guard = testIntegrationSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     const id = Number(req.params.id);
 
@@ -325,8 +354,11 @@ router.get("/links", requirePermission("admin:write"), async (req, res) => {
 
 router.post("/links", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_createLinkSchema = createLinkSchema.safeParse(req.body);
+    if (!parsed_createLinkSchema.success) throw new ValidationError(parsed_createLinkSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createLinkSchema.data;
     const scope = req.scope!;
-    const { integrationId, entityType, entityId, externalRef, enabled, notes } = req.body;
+    const { integrationId, entityType, entityId, externalRef, enabled, notes } = body;
 
     if (!integrationId || !entityType || !entityId) {
       res.status(400).json({ error: "integrationId و entityType و entityId مطلوبة" });
@@ -367,9 +399,12 @@ router.post("/links", requirePermission("admin:write"), async (req, res) => {
 
 router.patch("/links/:id", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_patchLinkSchema = patchLinkSchema.safeParse(req.body);
+    if (!parsed_patchLinkSchema.success) throw new ValidationError(parsed_patchLinkSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_patchLinkSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { enabled, externalRef, syncStatus, notes } = req.body;
+    const { enabled, externalRef, syncStatus, notes } = body;
 
     const [existing] = await rawQuery<any>(
       `SELECT gl.id FROM gov_integration_links gl WHERE gl.id = $1 AND gl."companyId" = $2`,

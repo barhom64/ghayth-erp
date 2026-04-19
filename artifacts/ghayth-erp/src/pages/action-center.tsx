@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { useApiMutation } from "@/lib/api";
@@ -248,7 +248,7 @@ export default function ActionCenter() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{Number(item.amount).toLocaleString("ar-SA")} ر.س — {item.reason || "سلفة راتب"}</p>
+              <p className="text-xs text-gray-500">{formatCurrency(Number(item.amount))} — {item.reason || "سلفة راتب"}</p>
             </div>
           </div>
         );
@@ -260,7 +260,7 @@ export default function ActionCenter() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{item.description} — {Number(item.amount).toLocaleString("ar-SA")} ر.س</p>
+              <p className="text-xs text-gray-500">{item.description} — {formatCurrency(Number(item.amount))}</p>
             </div>
           </div>
         );
@@ -309,7 +309,7 @@ export default function ActionCenter() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{loanTypeLabels[item.loanType] || item.loanType} — {Number(item.amount).toLocaleString("ar-SA")} ر.س</p>
+              <p className="text-xs text-gray-500">{loanTypeLabels[item.loanType] || item.loanType} — {formatCurrency(Number(item.amount))}</p>
             </div>
           </div>
         );
@@ -322,7 +322,7 @@ export default function ActionCenter() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{Number(item.hours).toFixed(1)} ساعة — {Number(item.totalAmount).toLocaleString("ar-SA")} ر.س</p>
+              <p className="text-xs text-gray-500">{Number(item.hours).toFixed(1)} ساعة — {formatCurrency(Number(item.totalAmount))}</p>
             </div>
           </div>
         );

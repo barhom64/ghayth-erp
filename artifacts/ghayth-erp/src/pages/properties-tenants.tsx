@@ -15,6 +15,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { PageShell } from "@/components/page-shell";
 
 export default function PropertiesTenants() {
   const { scopeQueryString } = useAppContext();
@@ -29,7 +30,7 @@ export default function PropertiesTenants() {
   const [expandedId, setExpandedId] = useState<any>(null);
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <PageShell title="المستأجرون" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المستأجرون" }]}><LoadingSpinner /></PageShell>;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(tenants, filters, {
@@ -142,17 +143,16 @@ export default function PropertiesTenants() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">المستأجرون</h1>
-          <p className="text-gray-500 text-sm mt-1">سجل كامل لجميع المستأجرين الحاليين والسابقين</p>
-        </div>
+    <PageShell
+      title="المستأجرون"
+      subtitle="سجل كامل لجميع المستأجرين الحاليين والسابقين"
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المستأجرون" }]}
+      actions={
         <Link href="/properties/tenants/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> مستأجر جديد</Button>
         </Link>
-      </div>
-
+      }
+    >
       <KpiGrid items={[
         { label: "إجمالي المستأجرين", value: tenants.length, icon: Users, color: "text-blue-600 bg-blue-50" },
         { label: "نشط", value: tenants.filter((t: any) => t.activeContracts > 0).length, icon: UserCheck, color: "text-emerald-600 bg-emerald-50" },
@@ -248,6 +248,6 @@ export default function PropertiesTenants() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

@@ -1,12 +1,46 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
+
+const createDashboardSchema = z.object({
+  title: z.string().min(1, "عنوان لوحة القيادة مطلوب"),
+  description: z.string().optional().nullable(),
+  layout: z.any().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+const createKpiSchema = z.object({
+  name: z.string().min(1, "اسم المؤشر مطلوب"),
+  description: z.string().optional().nullable(),
+  module: z.string().min(1, "الوحدة مطلوبة"),
+  formula: z.string().min(1, "الصيغة مطلوبة"),
+  target: z.number().optional().nullable(),
+  currentValue: z.number().optional().nullable(),
+  unit: z.string().optional().nullable(),
+  frequency: z.string().optional(),
+});
+
+const createReportSchema = z.object({
+  title: z.string().min(1, "عنوان التقرير مطلوب"),
+  description: z.string().optional().nullable(),
+  type: z.string().min(1, "نوع التقرير مطلوب"),
+  query: z.string().min(1, "استعلام التقرير مطلوب"),
+  filters: z.any().optional(),
+  scheduledAt: z.string().optional().nullable(),
+});
+
+const muteAlertSchema = z.object({
+  alertType: z.string().min(1, "alertType مطلوب"),
+  muteUntil: z.string().optional().nullable(),
+  reason: z.string().optional().nullable(),
+});
 
 router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
   try {
@@ -19,7 +53,10 @@ router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
 router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, description, layout, isDefault } = req.body;
+    const parsed_createDashboardSchema = createDashboardSchema.safeParse(req.body);
+    if (!parsed_createDashboardSchema.success) throw new ValidationError(parsed_createDashboardSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createDashboardSchema.data;
+    const { title, description, layout, isDefault } = body;
     const r = await rawExecute(
       `INSERT INTO bi_dashboards (title, description, layout, "isDefault", "createdBy", "companyId") VALUES ($1,$2,$3,$4,$5,$6)`,
       [title, description, layout ? JSON.stringify(layout) : '{}', isDefault || false, scope.userId, scope.companyId]
@@ -40,7 +77,10 @@ router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
 router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, description, module, formula, target, currentValue, unit, frequency } = req.body;
+    const parsed_createKpiSchema = createKpiSchema.safeParse(req.body);
+    if (!parsed_createKpiSchema.success) throw new ValidationError(parsed_createKpiSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createKpiSchema.data;
+    const { name, description, module, formula, target, currentValue, unit, frequency } = body;
     const r = await rawExecute(
       `INSERT INTO bi_kpis (name, description, module, formula, target, "currentValue", unit, frequency, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [name, description, module, formula, target, currentValue, unit, frequency || "monthly", scope.companyId]
@@ -61,7 +101,10 @@ router.get("/reports", requirePermission("bi:read"), async (req, res) => {
 router.post("/reports", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, description, type, query, filters, scheduledAt } = req.body;
+    const parsed_createReportSchema = createReportSchema.safeParse(req.body);
+    if (!parsed_createReportSchema.success) throw new ValidationError(parsed_createReportSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createReportSchema.data;
+    const { title, description, type, query, filters, scheduledAt } = body;
     const r = await rawExecute(
       `INSERT INTO bi_reports (title, description, type, query, filters, "scheduledAt", "createdBy", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [title, description, type, query, filters ? JSON.stringify(filters) : '{}', scheduledAt || null, scope.userId, scope.companyId]
@@ -1245,8 +1288,10 @@ router.get("/alert-fatigue/settings", async (req, res) => {
 router.post("/alert-fatigue/mute", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { alertType, muteUntil, reason } = req.body;
-    if (!alertType) { res.status(400).json({ error: "alertType مطلوب" }); return; }
+    const parsed_muteAlertSchema = muteAlertSchema.safeParse(req.body);
+    if (!parsed_muteAlertSchema.success) throw new ValidationError(parsed_muteAlertSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_muteAlertSchema.data;
+    const { alertType, muteUntil, reason } = body;
 
     await rawExecute(
       `INSERT INTO alert_mute_rules ("companyId", "assignmentId", "alertType", "muteUntil", reason, "createdAt")

@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -95,6 +96,22 @@ const DEFAULT_CLEARANCE_DEPARTMENTS = [
   { department: "security",  departmentLabel: "الأمن — بطاقة الدخول والتصاريح"             },
 ];
 
+// ─── Zod Schemas ──────────────────────────────────────────────────────────────
+
+const createExitSchema = z.object({
+  assignmentId: z.number({ message: "يرجى اختيار الموظف" }),
+  exitType: z.string().min(1, "نوع نهاية الخدمة مطلوب"),
+  lastWorkingDay: z.string().optional(),
+  exitReason: z.string().optional(),
+  otherDeductions: z.number().optional(),
+  notes: z.string().optional(),
+});
+
+const updateClearanceSchema = z.object({
+  status: z.string().min(1, "حالة إخلاء الطرف مطلوبة"),
+  notes: z.string().optional(),
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/exit — قائمة طلبات نهاية الخدمة
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -179,10 +196,9 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
   try {
     await ensureExitTables();
     const scope = req.scope!;
-    const b = req.body as any;
-
-    if (!b.assignmentId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
-    if (!b.exitType) throw new ValidationError("نوع نهاية الخدمة مطلوب", { field: "exitType" });
+    const parsed_createExitSchema = createExitSchema.safeParse(req.body);
+    if (!parsed_createExitSchema.success) throw new ValidationError(parsed_createExitSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_createExitSchema.data;
 
     // التحقق من عدم وجود طلب سابق
     const [existing] = await rawQuery<any>(
@@ -202,22 +218,22 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
 
-    // حساب مكافأة نهاية الخدمة (نظام العمل السعودي المادة 84)
+    // حساب مكافأة نهاية الخدمة — نظام العمل السعودي المادة 84 و 85
     const hireDate = emp.hireDate ? new Date(emp.hireDate) : new Date();
     const now = new Date();
     const yearsOfService = (now.getTime() - hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
     const salary = Number(emp.salary || 0);
-    let gratuity = 0;
-    if (yearsOfService <= 5) {
-      gratuity = (salary / 2) * yearsOfService;
-    } else {
-      gratuity = (salary / 2) * 5 + salary * (yearsOfService - 5);
-    }
-    // الاستقالة: يخسم ثلث المكافأة (2-5 سنوات) أو لا يستحق (<2 سنة)
+    const first5 = Math.min(yearsOfService, 5);
+    const above5 = Math.max(yearsOfService - 5, 0);
+    let gratuity = (salary / 2) * first5 + salary * above5;
+
+    // المادة 85: الاستقالة — التخفيض يُحسب على كل شريحة على حدة
     if (b.exitType === "resignation") {
       if (yearsOfService < 2) gratuity = 0;
-      else if (yearsOfService < 5) gratuity = gratuity / 3;
-      else if (yearsOfService < 10) gratuity = (gratuity * 2) / 3;
+      else if (yearsOfService < 5) gratuity = (salary / 2) * first5 / 3;
+      else if (yearsOfService < 10) {
+        gratuity = ((salary / 2) * first5 * 2) / 3 + (salary * above5 * 2) / 3;
+      }
       // 10+ سنوات: كامل المكافأة
     }
     gratuity = Math.round(gratuity * 100) / 100;
@@ -336,6 +352,9 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
+    // No body expected
+    { const _guard = z.object({}).strict().safeParse(req.body ?? {});
+    if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     // نهاية الخدمة تتطلب مستوى أعلى: HR أو المدير العام أو المالك
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
@@ -399,7 +418,9 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
 router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body as any;
+    const parsed_updateClearanceSchema = updateClearanceSchema.safeParse(req.body);
+    if (!parsed_updateClearanceSchema.success) throw new ValidationError(parsed_updateClearanceSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_updateClearanceSchema.data;
 
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_clearance WHERE id = $1 AND "companyId" = $2`,
@@ -439,6 +460,9 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, res) => {
   try {
+    // No body expected
+    { const _guard = z.object({}).strict().safeParse(req.body ?? {});
+    if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,

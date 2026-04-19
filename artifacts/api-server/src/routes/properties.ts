@@ -251,10 +251,7 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
   try {
     const scope = req.scope!;
     const parsed = createUnitSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data;
 
     const unitNumber = b.unitNumber.trim();

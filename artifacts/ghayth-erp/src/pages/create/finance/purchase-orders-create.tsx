@@ -1,19 +1,23 @@
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/ui/date-picker";
+import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
 
@@ -24,7 +28,7 @@ export default function PurchaseOrdersCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/purchase-requests", "POST", [["purchase-orders"], ["purchase-requests"]]);
-  const { data: suppliersData } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
+  const { data: suppliersData, isLoading, isError } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
   const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
   const { data: productsData } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
   const suppliers = suppliersData?.data || [];
@@ -32,11 +36,12 @@ export default function PurchaseOrdersCreate() {
   const products = productsData?.data || [];
   const { data: copySource } = useApiQuery<any>(["po-copy", copyFromId || ""], `/finance/purchase-orders/${copyFromId}`, !!copyFromId);
 
-  const INITIAL = { supplierId: "", notes: "", branchId: selectedBranchId ? String(selectedBranchId) : "", companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "", costCenter: "", expectedDelivery: "", date: new Date().toISOString().split("T")[0] };
+  const INITIAL = { supplierId: "", notes: "", branchId: selectedBranchId ? String(selectedBranchId) : "", companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "", costCenter: "", expectedDelivery: "", date: todayLocal() };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [items, setItems] = useState([{ productId: "", quantity: "1", unitPrice: "" }]);
   const [copied, setCopied] = useState(false);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   useEffect(() => {
     if (copySource && !copied) {
@@ -56,6 +61,9 @@ export default function PurchaseOrdersCreate() {
     }
   }, [copySource, copied, setForm]);
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const addItem = () => setItems([...items, { productId: "", quantity: "1", unitPrice: "" }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
   const updateItem = (idx: number, field: string, value: string) => {
@@ -64,20 +72,17 @@ export default function PurchaseOrdersCreate() {
     setItems(updated);
   };
 
-  const totalAmount = items.reduce((sum, i) => sum + Number(i.quantity || 0) * Number(i.unitPrice || 0), 0);
+  const totalAmount = roundMoney(items.reduce((sum, i) => sum + roundMoney(Number(i.quantity || 0) * Number(i.unitPrice || 0)), 0));
 
   const handleSubmit = async () => {
-    if (!form.supplierId) {
-      toast({ variant: "destructive", title: "المورد مطلوب" });
-      return;
-    }
-    if (!form.branchId) {
-      toast({ variant: "destructive", title: "الفرع مطلوب" });
-      return;
-    }
     const validItems = items.filter((i) => Number(i.unitPrice) > 0 && i.productId);
-    if (validItems.length === 0) {
-      toast({ variant: "destructive", title: "يرجى إضافة بند واحد على الأقل" });
+    const firstError = validate({
+      supplierId: form.supplierId ? null : "المورد مطلوب",
+      branchId: form.branchId ? null : "الفرع مطلوب",
+      items: validItems.length === 0 ? "يرجى إضافة بند واحد على الأقل" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -100,7 +105,8 @@ export default function PurchaseOrdersCreate() {
       toast({ title: "تم إنشاء طلب الشراء بنجاح" });
       setLocation("/finance/purchase-orders");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء طلب الشراء", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء طلب الشراء", description: err?.fix ?? err?.message });
     }
   };
 
@@ -114,16 +120,13 @@ export default function PurchaseOrdersCreate() {
       )}
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>التاريخ</Label>
-          <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></div>
-        </div>
+        <FormFieldWrapper label="التاريخ">
+          <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />
+        </FormFieldWrapper>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>المورد <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="المورد" required error={fieldErrors.supplierId}>
           <Autocomplete
-            className="mt-1"
             value={form.supplierId}
             onChange={(v) => setForm((f) => ({ ...f, supplierId: String(v) }))}
             options={suppliers.map((s: any) => ({ value: String(s.id), label: s.name }))}
@@ -135,29 +138,25 @@ export default function PurchaseOrdersCreate() {
               <SupplierContextCard supplierId={form.supplierId} />
             </div>
           )}
-        </div>
-        <div>
-          <Label>الفرع <span className="text-red-500">*</span></Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفرع" required error={fieldErrors.branchId}>
           <Select value={form.branchId} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر الفرع" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
             <SelectContent>
               {branches.map((b: any) => (
                 <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </FormFieldWrapper>
         <CostCenterSelect
           value={form.costCenter}
           onChange={(v) => setForm((f) => ({ ...f, costCenter: v }))}
         />
-        <div>
-          <Label>تاريخ التسليم المتوقع</Label>
-          <div className="mt-1"><DatePicker value={form.expectedDelivery} onChange={(v) => setForm((f) => ({ ...f, expectedDelivery: v }))} /></div>
-        </div>
-        <div className="md:col-span-2"><Label>ملاحظات</Label><Input className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></div>
+        <FormFieldWrapper label="تاريخ التسليم المتوقع">
+          <DatePicker value={form.expectedDelivery} onChange={(v) => setForm((f) => ({ ...f, expectedDelivery: v }))} />
+        </FormFieldWrapper>
+        <TextField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} className="md:col-span-2" />
       </div>
 
       <div className="mb-4">
@@ -185,7 +184,7 @@ export default function PurchaseOrdersCreate() {
       </div>
 
       <div className="bg-muted/50 p-4 rounded-md text-sm">
-        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{totalAmount.toFixed(2)}</span></div>
+        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(totalAmount)}</span></div>
       </div>
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />

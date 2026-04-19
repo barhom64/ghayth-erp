@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { rawExecute, rawQuery } from "../lib/rawdb.js";
@@ -16,6 +17,24 @@ import {
 
 export const obligationsRouter = Router();
 obligationsRouter.use(authMiddleware);
+
+const createObligationSchema = z.object({
+  entityType: z.string().min(1, "نوع الكيان مطلوب"),
+  entityId: z.union([z.number(), z.string()]).transform((v) => Number(v)).refine((v) => v > 0, "معرف الكيان مطلوب"),
+  obligationType: z.string().min(1, "نوع الالتزام مطلوب"),
+  title: z.string().min(1, "العنوان مطلوب"),
+  dueAt: z.string().min(1, "تاريخ الاستحقاق مطلوب"),
+  assignedTo: z.number().int().positive().nullable().optional(),
+  escalationSteps: z.array(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+  dedupeKey: z.string().optional(),
+});
+
+const entityActionSchema = z.object({
+  entityType: z.string().min(1, "نوع الكيان مطلوب"),
+  entityId: z.union([z.number(), z.string()]).transform((v) => Number(v)).refine((v) => v > 0, "معرف الكيان مطلوب"),
+  obligationType: z.string().optional(),
+});
 
 // List obligations (filtered)
 obligationsRouter.get("/", async (req, res) => {
@@ -55,18 +74,14 @@ obligationsRouter.get("/summary", async (req, res) => {
 obligationsRouter.post("/", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = req.body as any;
-    if (!entityType || !entityId || !obligationType || !title || !dueAt) {
-      throw new ValidationError(
-        "entityType / entityId / obligationType / title / dueAt مطلوبة",
-        { field: "dueAt", fix: "أدخل جميع الحقول المطلوبة" },
-      );
-    }
+    const parsed = createObligationSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = parsed.data;
     const id = await registerObligation({
       companyId: scope.companyId,
       branchId: scope.branchId,
       entityType,
-      entityId: Number(entityId),
+      entityId,
       obligationType: obligationType as ObligationType,
       title,
       dueAt,
@@ -103,17 +118,13 @@ obligationsRouter.post("/:id/met", async (req, res) => {
 obligationsRouter.post("/met-by-entity", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId, obligationType } = req.body as any;
-    if (!entityType || !entityId) {
-      throw new ValidationError("entityType و entityId مطلوبان", {
-        field: "entityId",
-        fix: "أدخل الحقلين",
-      });
-    }
+    const parsed = entityActionSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { entityType, entityId, obligationType } = parsed.data;
     const n = await markObligationMet(
       scope.companyId,
       entityType,
-      Number(entityId),
+      entityId,
       obligationType as ObligationType | undefined
     );
     res.json({ marked: n });
@@ -142,17 +153,13 @@ obligationsRouter.post("/:id/cancel", async (req, res) => {
 obligationsRouter.post("/cancel-by-entity", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId, obligationType } = req.body as any;
-    if (!entityType || !entityId) {
-      throw new ValidationError("entityType و entityId مطلوبان", {
-        field: "entityId",
-        fix: "أدخل الحقلين",
-      });
-    }
+    const parsed = entityActionSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { entityType, entityId, obligationType } = parsed.data;
     const n = await cancelObligation(
       scope.companyId,
       entityType,
-      Number(entityId),
+      entityId,
       obligationType as ObligationType | undefined
     );
     res.json({ cancelled: n });

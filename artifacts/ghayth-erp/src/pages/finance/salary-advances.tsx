@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Banknote, DollarSign, Plus, X, Clock, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -218,7 +219,7 @@ function CreateAdvanceForm({ onDone }: { onDone: () => void }) {
     "/finance/accounts",
   );
   const sourceAccounts = (accountsData?.data || []).filter(
-    (a: any) => a.type === "asset" || a.code?.startsWith("1"),
+    (a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"),
   );
   const [form, setForm] = useState({
     employeeName: "",
@@ -271,18 +272,17 @@ function CreateAdvanceForm({ onDone }: { onDone: () => void }) {
           </div>
           <div>
             <Label>مصدر الصرف</Label>
-            <select
-              className="w-full border rounded-md p-2 mt-1"
-              value={form.sourceAccountCode}
-              onChange={(e) => setForm({ ...form, sourceAccountCode: e.target.value })}
-            >
-              <option value="">الخزنة النقدية (1100)</option>
-              {sourceAccounts.map((a: any) => (
-                <option key={a.code || a.id} value={a.code}>
-                  {a.code} - {a.name}
-                </option>
-              ))}
-            </select>
+            <Select value={form.sourceAccountCode || "_default"} onValueChange={(v) => setForm({ ...form, sourceAccountCode: v === "_default" ? "" : v })}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="الخزنة النقدية (1100)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_default">الخزنة النقدية (1100)</SelectItem>
+                {sourceAccounts.map((a: any) => (
+                  <SelectItem key={a.code || a.id} value={a.code}>
+                    {a.code} - {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>الوصف</Label>

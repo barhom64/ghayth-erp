@@ -2,31 +2,30 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Users2, FileText, Calendar, Banknote, Shield, ScrollText, Zap } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { formatCurrency, getCurrencySymbol } from "@/lib/formatters";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
+import { fieldErrorClass, TextField, NumberField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/contracts", "POST", [["rental-contracts"]]);
-  const { data: unitsData } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
-  const { data: tenantsResp } = useApiQuery<any>(["tenants-registry"], "/properties/tenants");
-  const { data: ownersResp } = useApiQuery<any>(["property-owners"], "/properties/owners");
+  const { data: unitsData, isLoading: loadingU, isError: errorU } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
+  const { data: tenantsResp, isLoading: loadingT, isError: errorT } = useApiQuery<any>(["tenants-registry"], "/properties/tenants");
+  const { data: ownersResp, isLoading: loadingO, isError: errorO } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const units = unitsData?.data || [];
   const tenants = asList(tenantsResp);
   const owners = asList(ownersResp);
@@ -34,9 +33,8 @@ export default function ContractsCreate() {
   const [isDirty, setIsDirty] = useState(false);
   useUnsavedChanges(isDirty);
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+  const errCls = (field: string) => fieldErrorClass(fieldErrors[field]);
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const [form, setForm] = useState({
@@ -81,6 +79,9 @@ export default function ContractsCreate() {
     ejarStatus: "draft",
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  if (loadingU || loadingT || loadingO) return <LoadingSpinner />;
+  if (errorU || errorT || errorO) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const set = (field: string, value: any) => {
     setIsDirty(true);
@@ -144,18 +145,17 @@ export default function ContractsCreate() {
   }, [form.startDate, form.endDate, form.monthlyRent, form.paymentFrequency, form.paymentDay, form.totalContractValue, form.numberOfInstallments]);
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.unitId) localErrors.unitId = "يرجى اختيار الوحدة";
-    if (!form.tenantId && !form.tenantName) localErrors.tenantId = "يرجى اختيار أو إدخال المستأجر";
-    if (!form.startDate) localErrors.startDate = "تاريخ بدء العقد مطلوب";
-    if (!form.endDate) localErrors.endDate = "تاريخ انتهاء العقد مطلوب";
-    if (form.startDate && form.endDate && form.endDate <= form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
-    if (!form.monthlyRent || Number(form.monthlyRent) <= 0) localErrors.monthlyRent = "الإيجار الشهري يجب أن يكون أكبر من صفر";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      unitId: form.unitId ? null : "يرجى اختيار الوحدة",
+      tenantId: !form.tenantId && !form.tenantName ? "يرجى اختيار أو إدخال المستأجر" : null,
+      startDate: form.startDate ? null : "تاريخ بدء العقد مطلوب",
+      endDate: !form.endDate
+        ? "تاريخ انتهاء العقد مطلوب"
+        : (form.startDate && form.endDate <= form.startDate ? "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء" : null),
+      monthlyRent: !form.monthlyRent || Number(form.monthlyRent) <= 0 ? "الإيجار الشهري يجب أن يكون أكبر من صفر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -205,7 +205,8 @@ export default function ContractsCreate() {
       toast({ title: "تم إنشاء العقد بنجاح" });
       setLocation("/properties/contracts");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء العقد", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء العقد", description: err?.fix ?? err?.message });
     }
   };
 
@@ -225,14 +226,8 @@ export default function ContractsCreate() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label>رقم العقد</Label>
-                <Input className="mt-1" value={form.contractNumber} onChange={e => set("contractNumber", e.target.value)} placeholder="يُولّد تلقائياً" dir="ltr" />
-              </div>
-              <div>
-                <Label>رقم عقد إيجار</Label>
-                <Input className="mt-1" value={form.ejarNumber} onChange={e => set("ejarNumber", e.target.value)} placeholder="رقم العقد في منصة إيجار" dir="ltr" />
-              </div>
+              <TextField label="رقم العقد" value={form.contractNumber} onChange={(v) => set("contractNumber", v)} placeholder="يُولّد تلقائياً" dir="ltr" />
+              <TextField label="رقم عقد إيجار" value={form.ejarNumber} onChange={(v) => set("ejarNumber", v)} placeholder="رقم العقد في منصة إيجار" dir="ltr" />
               <div>
                 <Label>حالة إيجار</Label>
                 <Select value={form.ejarStatus} onValueChange={v => set("ejarStatus", v)}>
@@ -257,16 +252,17 @@ export default function ContractsCreate() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>الوحدة <span className="text-red-500">*</span></Label>
-                <select className={`w-full border rounded-md p-2 mt-1 text-sm ${errCls("unitId")}`} value={form.unitId} onChange={e => set("unitId", e.target.value)}>
-                  <option value="">اختر الوحدة</option>
-                  {units.map((u: any) => (
-                    <option key={u.id} value={u.id}>{u.unitNumber} - {u.buildingName || ""} ({u.type || ""})</option>
-                  ))}
-                </select>
-                <FieldHint field="unitId" />
-              </div>
+              <FormFieldWrapper label="الوحدة" required error={fieldErrors.unitId}>
+                <Select value={form.unitId || "_none"} onValueChange={(v) => set("unitId", v === "_none" ? "" : v)}>
+                  <SelectTrigger className={fieldErrorClass(fieldErrors.unitId)}><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">اختر الوحدة</SelectItem>
+                    {units.map((u: any) => (
+                      <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber} - {u.buildingName || ""} ({u.type || ""})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormFieldWrapper>
               {form.unitId && (
                 <div className="md:col-span-3">
                   <PropertyUnitContextCard unitId={form.unitId} section="contract" />
@@ -293,12 +289,9 @@ export default function ContractsCreate() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label className="flex items-center gap-2">
-                  <Users2 className="h-4 w-4 text-blue-500" /> اختر من سجل المستأجرين
-                </Label>
+              <FormFieldWrapper label="اختر من سجل المستأجرين" error={fieldErrors.tenantId}>
                 <Select value={form.tenantId || "manual"} onValueChange={handleTenantSelect}>
-                  <SelectTrigger className={`mt-1 ${errCls("tenantId")}`}>
+                  <SelectTrigger className={fieldErrorClass(fieldErrors.tenantId)}>
                     <SelectValue placeholder="— اختر مستأجراً أو أدخل يدوياً —" />
                   </SelectTrigger>
                   <SelectContent>
@@ -315,8 +308,7 @@ export default function ContractsCreate() {
                     <Users2 className="h-3 w-3" /> مرتبط بسجل المستأجر #{selectedTenant.id}
                   </Badge>
                 )}
-                <FieldHint field="tenantId" />
-              </div>
+              </FormFieldWrapper>
               <div>
                 <Label>المالك</Label>
                 <Select value={form.ownerId || "none"} onValueChange={v => set("ownerId", v === "none" ? "" : v)}>
@@ -329,22 +321,10 @@ export default function ContractsCreate() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>المستأجر <span className="text-red-500">*</span></Label>
-                <Input className="mt-1" value={form.tenantName} onChange={e => set("tenantName", e.target.value)} placeholder="اسم المستأجر" />
-              </div>
-              <div>
-                <Label>هاتف المستأجر</Label>
-                <Input className="mt-1" dir="ltr" value={form.tenantPhone} onChange={e => set("tenantPhone", e.target.value)} />
-              </div>
-              <div>
-                <Label>بريد المستأجر</Label>
-                <Input className="mt-1" type="email" dir="ltr" value={form.tenantEmail} onChange={e => set("tenantEmail", e.target.value)} />
-              </div>
-              <div>
-                <Label>رقم هوية المستأجر</Label>
-                <Input className="mt-1" value={form.tenantIdNumber} onChange={e => set("tenantIdNumber", e.target.value)} placeholder="رقم الهوية أو الإقامة" />
-              </div>
+              <TextField label="المستأجر" required value={form.tenantName} onChange={(v) => set("tenantName", v)} placeholder="اسم المستأجر" />
+              <TextField label="هاتف المستأجر" value={form.tenantPhone} onChange={(v) => set("tenantPhone", v)} dir="ltr" />
+              <TextField label="بريد المستأجر" value={form.tenantEmail} onChange={(v) => set("tenantEmail", v)} type="email" dir="ltr" />
+              <TextField label="رقم هوية المستأجر" value={form.tenantIdNumber} onChange={(v) => set("tenantIdNumber", v)} placeholder="رقم الهوية أو الإقامة" />
             </div>
           </CardContent>
         </Card>
@@ -355,16 +335,12 @@ export default function ContractsCreate() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label>من تاريخ <span className="text-red-500">*</span></Label>
-                <div className={`mt-1 ${errCls("startDate")}`}><DatePicker value={form.startDate} onChange={v => set("startDate", v)} /></div>
-                <FieldHint field="startDate" />
-              </div>
-              <div>
-                <Label>إلى تاريخ <span className="text-red-500">*</span></Label>
-                <div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={v => set("endDate", v)} /></div>
-                <FieldHint field="endDate" />
-              </div>
+              <FormFieldWrapper label="من تاريخ" required error={fieldErrors.startDate}>
+                <div className={fieldErrorClass(fieldErrors.startDate)}><DatePicker value={form.startDate} onChange={v => set("startDate", v)} /></div>
+              </FormFieldWrapper>
+              <FormFieldWrapper label="إلى تاريخ" required error={fieldErrors.endDate}>
+                <div className={fieldErrorClass(fieldErrors.endDate)}><DatePicker value={form.endDate} onChange={v => set("endDate", v)} /></div>
+              </FormFieldWrapper>
               <div>
                 <Label>دورة السداد</Label>
                 <Select value={form.paymentFrequency} onValueChange={v => set("paymentFrequency", v)}>
@@ -377,31 +353,12 @@ export default function ContractsCreate() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>الإيجار الشهري ({currency}) <span className="text-red-500">*</span></Label>
-                <Input className={`mt-1 ${errCls("monthlyRent")}`} type="number" value={form.monthlyRent} onChange={e => set("monthlyRent", e.target.value)} />
-                <FieldHint field="monthlyRent" />
-              </div>
-              <div>
-                <Label>الإيجار السنوي ({currency})</Label>
-                <Input className="mt-1" type="number" value={form.yearlyRent} onChange={e => set("yearlyRent", e.target.value)} />
-              </div>
-              <div>
-                <Label>إجمالي قيمة العقد ({currency})</Label>
-                <Input className="mt-1" type="number" value={form.totalContractValue} onChange={e => set("totalContractValue", e.target.value)} placeholder="يُحسب تلقائياً" />
-              </div>
-              <div>
-                <Label>عدد الأقساط</Label>
-                <Input className="mt-1" type="number" value={form.numberOfInstallments} onChange={e => set("numberOfInstallments", e.target.value)} placeholder="يُحسب من الدورة" />
-              </div>
-              <div>
-                <Label>يوم السداد (من الشهر)</Label>
-                <Input className="mt-1" type="number" min="1" max="28" value={form.paymentDay} onChange={e => set("paymentDay", e.target.value)} />
-              </div>
-              <div>
-                <Label>مبلغ التأمين ({currency})</Label>
-                <Input className="mt-1" type="number" value={form.depositAmount} onChange={e => set("depositAmount", e.target.value)} />
-              </div>
+              <NumberField label={`الإيجار الشهري (${currency})`} required value={form.monthlyRent} onChange={(v) => set("monthlyRent", v)} error={fieldErrors.monthlyRent} />
+              <NumberField label={`الإيجار السنوي (${currency})`} value={form.yearlyRent} onChange={(v) => set("yearlyRent", v)} />
+              <NumberField label={`إجمالي قيمة العقد (${currency})`} value={form.totalContractValue} onChange={(v) => set("totalContractValue", v)} placeholder="يُحسب تلقائياً" />
+              <NumberField label="عدد الأقساط" value={form.numberOfInstallments} onChange={(v) => set("numberOfInstallments", v)} placeholder="يُحسب من الدورة" />
+              <NumberField label="يوم السداد (من الشهر)" value={form.paymentDay} onChange={(v) => set("paymentDay", v)} min={1} max={28} />
+              <NumberField label={`مبلغ التأمين (${currency})`} value={form.depositAmount} onChange={(v) => set("depositAmount", v)} />
             </div>
           </CardContent>
         </Card>
@@ -422,22 +379,10 @@ export default function ContractsCreate() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>قيمة الغرامة {form.latePenaltyType === "percentage" ? "(%)" : `(${currency})`}</Label>
-                <Input className="mt-1" type="number" value={form.latePenaltyValue} onChange={e => set("latePenaltyValue", e.target.value)} />
-              </div>
-              <div>
-                <Label>فترة السماح (أيام)</Label>
-                <Input className="mt-1" type="number" value={form.gracePeriodDays} onChange={e => set("gracePeriodDays", e.target.value)} />
-              </div>
-              <div>
-                <Label>مدة إشعار الإنهاء (أيام)</Label>
-                <Input className="mt-1" type="number" value={form.terminationNoticeDays} onChange={e => set("terminationNoticeDays", e.target.value)} />
-              </div>
-              <div>
-                <Label>رسم الإنهاء المبكر ({currency})</Label>
-                <Input className="mt-1" type="number" value={form.earlyTerminationFee} onChange={e => set("earlyTerminationFee", e.target.value)} />
-              </div>
+              <NumberField label={`قيمة الغرامة ${form.latePenaltyType === "percentage" ? "(%)" : `(${currency})`}`} value={form.latePenaltyValue} onChange={(v) => set("latePenaltyValue", v)} />
+              <NumberField label="فترة السماح (أيام)" value={form.gracePeriodDays} onChange={(v) => set("gracePeriodDays", v)} />
+              <NumberField label="مدة إشعار الإنهاء (أيام)" value={form.terminationNoticeDays} onChange={(v) => set("terminationNoticeDays", v)} />
+              <NumberField label={`رسم الإنهاء المبكر (${currency})`} value={form.earlyTerminationFee} onChange={(v) => set("earlyTerminationFee", v)} />
               <div>
                 <Label>حامل التأمين</Label>
                 <Select value={form.depositHolder} onValueChange={v => set("depositHolder", v)}>
@@ -465,20 +410,11 @@ export default function ContractsCreate() {
               </div>
               {form.autoRenewal && (
                 <>
-                  <div>
-                    <Label>إشعار التجديد قبل (أيام)</Label>
-                    <Input className="mt-1" type="number" value={form.renewalNoticeDays} onChange={e => set("renewalNoticeDays", e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>مدة التجديد (أشهر)</Label>
-                    <Input className="mt-1" type="number" value={form.renewalPeriodMonths} onChange={e => set("renewalPeriodMonths", e.target.value)} />
-                  </div>
+                  <NumberField label="إشعار التجديد قبل (أيام)" value={form.renewalNoticeDays} onChange={(v) => set("renewalNoticeDays", v)} />
+                  <NumberField label="مدة التجديد (أشهر)" value={form.renewalPeriodMonths} onChange={(v) => set("renewalPeriodMonths", v)} />
                 </>
               )}
-              <div>
-                <Label>رسم السمسرة ({currency})</Label>
-                <Input className="mt-1" type="number" value={form.brokerageFee} onChange={e => set("brokerageFee", e.target.value)} />
-              </div>
+              <NumberField label={`رسم السمسرة (${currency})`} value={form.brokerageFee} onChange={(v) => set("brokerageFee", v)} />
               <div>
                 <Label>يدفعها</Label>
                 <Select value={form.brokeragePayor} onValueChange={v => set("brokeragePayor", v)}>
@@ -564,15 +500,8 @@ export default function ContractsCreate() {
           </Card>
         )}
 
-        <div>
-          <Label>شروط خاصة</Label>
-          <Textarea className="mt-1" rows={3} value={form.specialConditions} onChange={e => set("specialConditions", e.target.value)} placeholder="شروط إضافية خاصة بالعقد..." />
-        </div>
-
-        <div>
-          <Label>ملاحظات</Label>
-          <Textarea className="mt-1" rows={2} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="ملاحظات إضافية..." />
-        </div>
+        <TextAreaField label="شروط خاصة" value={form.specialConditions} onChange={(v) => set("specialConditions", v)} rows={3} placeholder="شروط إضافية خاصة بالعقد..." />
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => set("notes", v)} rows={2} placeholder="ملاحظات إضافية..." />
 
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات العقد" />
 

@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -153,9 +154,7 @@ export default function TrainingDetailPage() {
       sortable: true,
       render: (e) => (
         <span className="text-sm text-gray-500">
-          {e.createdAt
-            ? new Date(e.createdAt).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
-            : "-"}
+          {formatDateAr(e.createdAt)}
         </span>
       ),
     },
@@ -216,17 +215,13 @@ export default function TrainingDetailPage() {
             <div>
               <span className="text-gray-500">تاريخ البداية</span>
               <p className="font-medium">
-                {program.startDate
-                  ? new Date(program.startDate).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })
-                  : "-"}
+                {formatDateAr(program.startDate)}
               </p>
             </div>
             <div>
               <span className="text-gray-500">تاريخ النهاية</span>
               <p className="font-medium">
-                {program.endDate
-                  ? new Date(program.endDate).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })
-                  : "-"}
+                {formatDateAr(program.endDate)}
               </p>
             </div>
             {program.description && (

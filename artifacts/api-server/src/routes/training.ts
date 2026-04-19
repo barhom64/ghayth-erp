@@ -4,6 +4,54 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+import { z } from "zod";
+
+/* ── Zod Schemas ────────────────────────────────────────────── */
+
+const createProgramSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  location: z.string().optional(),
+  trainer: z.string().optional(),
+  capacity: z.number().optional(),
+  status: z.string().optional(),
+});
+
+const patchProgramSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  location: z.string().optional(),
+  trainer: z.string().optional(),
+  capacity: z.number().optional(),
+  status: z.string().optional(),
+});
+
+const approveSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const rejectSchema = z.object({
+  notes: z.string().min(1),
+});
+
+const createEnrollmentSchema = z.object({
+  programId: z.number(),
+  employeeId: z.number().optional(),
+  employeeName: z.string().optional(),
+  status: z.string().optional(),
+});
+
+const patchEnrollmentSchema = z.object({
+  status: z.string().optional(),
+  score: z.number().optional(),
+  feedback: z.string().optional(),
+});
 
 const router = Router();
 router.use(authMiddleware);
@@ -18,9 +66,12 @@ router.get("/programs", requirePermission("hr:read"), async (req, res) => {
 
 router.post("/programs", requirePermission("hr:create"), async (req, res) => {
   try {
+    const parsed_createProgramSchema = createProgramSchema.safeParse(req.body);
+    if (!parsed_createProgramSchema.success) throw new ValidationError(parsed_createProgramSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createProgramSchema.data;
     const scope = req.scope!;
-    const { title, description, category, startDate, endDate, location, trainer, capacity, status } = req.body;
-    if (!title || !String(title).trim()) {
+    const { title, description, category, startDate, endDate, location, trainer, capacity, status } = body;
+    if (!String(title).trim()) {
       throw new ValidationError("عنوان البرنامج التدريبي مطلوب", {
         field: "title",
         fix: "أدخل عنواناً واضحاً للبرنامج",
@@ -56,11 +107,13 @@ router.get("/programs/:id", requirePermission("hr:read"), async (req, res) => {
 
 router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) => {
   try {
+    const parsed_patchProgramSchema = patchProgramSchema.safeParse(req.body);
+    if (!parsed_patchProgramSchema.success) throw new ValidationError(parsed_patchProgramSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_patchProgramSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "البرنامج التدريبي غير موجود" }); return; }
-    const b = req.body;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -87,12 +140,15 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
 
 router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
+    const parsed_approveSchema = approveSchema.safeParse(req.body);
+    if (!parsed_approveSchema.success) throw new ValidationError(parsed_approveSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_approveSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!program) throw new NotFoundError("البرنامج التدريبي غير موجود");
     await rawExecute(`UPDATE training_programs SET status='approved' WHERE id=$1`, [id]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'approved',$2,$3,$4)`, [id, req.body?.notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'approved',$2,$3,$4)`, [id, body.notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "training_program.approved", entity: "training_programs", entityId: id, before: { status: program.status }, after: { status: "approved" } }).catch(console.error);
     res.json({ message: "تم اعتماد البرنامج التدريبي", status: "approved" });
   } catch (err) { handleRouteError(err, res, "Training approve error:"); }
@@ -100,10 +156,13 @@ router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req
 
 router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req, res) => {
   try {
+    const parsed_rejectSchema = rejectSchema.safeParse(req.body);
+    if (!parsed_rejectSchema.success) throw new ValidationError(parsed_rejectSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_rejectSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { notes } = req.body as any;
-    if (!notes || !String(notes).trim()) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
+    const { notes } = body;
+    if (!String(notes).trim()) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
     const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!program) throw new NotFoundError("البرنامج التدريبي غير موجود");
     await rawExecute(`UPDATE training_programs SET status='rejected' WHERE id=$1`, [id]);
@@ -143,8 +202,11 @@ router.get("/enrollments", requirePermission("hr:read"), async (req, res) => {
 
 router.post("/enrollments", requirePermission("hr:create"), async (req, res) => {
   try {
+    const parsed_createEnrollmentSchema = createEnrollmentSchema.safeParse(req.body);
+    if (!parsed_createEnrollmentSchema.success) throw new ValidationError(parsed_createEnrollmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const body = parsed_createEnrollmentSchema.data;
     const scope = req.scope!;
-    const { programId, employeeId, employeeName, status } = req.body;
+    const { programId, employeeId, employeeName, status } = body;
     if (!programId) {
       throw new ValidationError("البرنامج التدريبي مطلوب", {
         field: "programId",
@@ -196,11 +258,13 @@ router.get("/enrollments/:id", requirePermission("hr:read"), async (req, res) =>
 
 router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res) => {
   try {
+    const parsed_patchEnrollmentSchema = patchEnrollmentSchema.safeParse(req.body);
+    if (!parsed_patchEnrollmentSchema.success) throw new ValidationError(parsed_patchEnrollmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_patchEnrollmentSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT e.id FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
     if (!existing) { res.status(404).json({ error: "التسجيل غير موجود" }); return; }
-    const b = req.body;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }

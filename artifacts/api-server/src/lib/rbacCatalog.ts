@@ -31,11 +31,22 @@ export const PERMISSIONS = [
   "settings:write",
   "permissions:read",
   "permissions:write",
+  "admin:read",
+  "admin:write",
+  "notifications:read",
+  "notifications:write",
+  "communications:read",
+  "communications:write",
+  "requests:read",
+  "requests:write",
+  "governance:read",
+  "governance:write",
 
   // HR
   "hr:read",
   "hr:create",
   "hr:update",
+  "hr:write",
   "hr:delete",
   "hr:approve",
   "hr:discipline:approve",
@@ -52,6 +63,7 @@ export const PERMISSIONS = [
   "finance:read",
   "finance:create",
   "finance:update",
+  "finance:write",
   "finance:delete",
 
   // Fleet
@@ -71,6 +83,7 @@ export const PERMISSIONS = [
   "property:create",
   "property:update",
   "property:delete",
+  "properties:read",
 
   // Projects + Operations
   "projects:read",
@@ -81,6 +94,8 @@ export const PERMISSIONS = [
   "operations:create",
   "operations:update",
   "operations:delete",
+  "tasks:read",
+  "tasks:write",
 
   // Legal
   "legal:read",
@@ -100,15 +115,31 @@ export const PERMISSIONS = [
   "crm:update",
   "crm:delete",
 
+  // Marketing
+  "marketing:read",
+  "marketing:create",
+  "marketing:update",
+  "marketing:delete",
+
   // Documents vault
   "documents:read",
   "documents:create",
   "documents:update",
+  "documents:write",
   "documents:delete",
   "documents:download",
 
+  // Store
+  "store:read",
+  "store:write",
+
+  // Umrah
+  "umrah:read",
+  "umrah:write",
+
   // BI / reports
   "bi:read",
+  "bi:write",
   "reports:read",
 ] as const;
 

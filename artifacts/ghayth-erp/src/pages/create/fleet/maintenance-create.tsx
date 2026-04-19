@@ -1,22 +1,23 @@
 import { useState } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "fleet_maintenance_create";
 const INITIAL = {
   vehicleId: "", type: "", description: "", cost: "",
-  mileageAtService: "", serviceDate: new Date().toISOString().split("T")[0],
+  mileageAtService: "", serviceDate: todayLocal(),
   nextServiceDate: "", nextServiceKm: "", performedBy: "", status: "pending",
 };
 
@@ -24,22 +25,31 @@ export default function MaintenanceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/fleet/maintenance", "POST", [["fleet-maintenance"]]);
-  const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
+  const { data: vehiclesData, isLoading, isError } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
   const vehicles = vehiclesData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    if (!form.vehicleId) {
-      toast({ variant: "destructive", title: "يرجى اختيار المركبة" });
+    const firstError = validate({
+      vehicleId: form.vehicleId ? null : "يرجى اختيار المركبة",
+      type: form.type ? null : "نوع الصيانة مطلوب",
+      description: form.description.trim() ? null : "وصف الصيانة مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
       await createMut.mutateAsync({
         vehicleId: Number(form.vehicleId),
-        type: form.type || undefined,
-        description: form.description || undefined,
+        type: form.type,
+        description: form.description,
         cost: form.cost ? Number(form.cost) : undefined,
         mileageAtService: form.mileageAtService ? Number(form.mileageAtService) : undefined,
         serviceDate: form.serviceDate || undefined,
@@ -53,7 +63,8 @@ export default function MaintenanceCreate() {
       toast({ title: "تم إضافة سجل الصيانة بنجاح" });
       setLocation("/fleet/maintenance");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الصيانة", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الصيانة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -69,12 +80,9 @@ export default function MaintenanceCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-3">
-          <Label>المركبة <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="المركبة" required error={fieldErrors.vehicleId} className="md:col-span-3">
           <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر المركبة" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
             <SelectContent>
               {vehicles.map((v: any) => (
                 <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
@@ -86,13 +94,10 @@ export default function MaintenanceCreate() {
               <VehicleContextCard vehicleId={form.vehicleId} section="maintenance" />
             </div>
           )}
-        </div>
-        <div>
-          <Label>نوع الصيانة</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="نوع الصيانة" required error={fieldErrors.type}>
           <Select value={form.type || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, type: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر النوع" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر النوع" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر النوع</SelectItem>
               <SelectItem value="preventive">وقائية</SelectItem>
@@ -100,30 +105,28 @@ export default function MaintenanceCreate() {
               <SelectItem value="scheduled">مجدولة</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>الحالة</Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الحالة">
           <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="pending">معلقة</SelectItem>
               <SelectItem value="in_progress">جارية</SelectItem>
               <SelectItem value="completed">مكتملة</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>التكلفة</Label><Input className="mt-1" type="number" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))} /></div>
-        <div><Label>قراءة العداد</Label><Input className="mt-1" type="number" value={form.mileageAtService} onChange={(e) => setForm((f) => ({ ...f, mileageAtService: e.target.value }))} /></div>
-        <div><Label>تاريخ الصيانة</Label><div className="mt-1"><DatePicker value={form.serviceDate} onChange={(v) => setForm((f) => ({ ...f, serviceDate: v }))} /></div></div>
-        <div><Label>موعد الصيانة القادمة</Label><div className="mt-1"><DatePicker value={form.nextServiceDate} onChange={(v) => setForm((f) => ({ ...f, nextServiceDate: v }))} /></div></div>
-        <div><Label>الكيلومترات القادمة</Label><Input className="mt-1" type="number" value={form.nextServiceKm} onChange={(e) => setForm((f) => ({ ...f, nextServiceKm: e.target.value }))} placeholder="مثال: 50000" /></div>
-        <div><Label>الورشة / الفني</Label><Input className="mt-1" value={form.performedBy} onChange={(e) => setForm((f) => ({ ...f, performedBy: e.target.value }))} /></div>
-        <div className="md:col-span-3">
-          <Label>الوصف</Label>
-          <Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-        </div>
+        </FormFieldWrapper>
+        <NumberField label="التكلفة" value={form.cost} onChange={(v) => setForm((f) => ({ ...f, cost: v }))} step={0.01} min={0} />
+        <NumberField label="قراءة العداد" value={form.mileageAtService} onChange={(v) => setForm((f) => ({ ...f, mileageAtService: v }))} min={0} />
+        <FormFieldWrapper label="تاريخ الصيانة">
+          <DatePicker value={form.serviceDate} onChange={(v) => setForm((f) => ({ ...f, serviceDate: v }))} />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="موعد الصيانة القادمة">
+          <DatePicker value={form.nextServiceDate} onChange={(v) => setForm((f) => ({ ...f, nextServiceDate: v }))} />
+        </FormFieldWrapper>
+        <NumberField label="الكيلومترات القادمة" value={form.nextServiceKm} onChange={(v) => setForm((f) => ({ ...f, nextServiceKm: v }))} placeholder="مثال: 50000" min={0} />
+        <TextField label="الورشة / الفني" value={form.performedBy} onChange={(v) => setForm((f) => ({ ...f, performedBy: v }))} />
+        <TextAreaField label="الوصف" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} error={fieldErrors.description} className="md:col-span-3" />
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات الصيانة" />
       <div className="flex justify-end gap-3 pt-6">

@@ -11,6 +11,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { ApprovalActions } from "@/components/approval-actions";
 import { Wrench, Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 export default function PropertiesMaintenance() {
   const { data: requestsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -23,7 +24,7 @@ export default function PropertiesMaintenance() {
   const { permissions, roleLevel } = useAppContext();
   const canApprove = permissions.canManageProperty || roleLevel >= 70;
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <PageShell title="طلبات الصيانة" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "طلبات الصيانة" }]}><LoadingSpinner /></PageShell>;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const searchFiltered = requests.filter((r: any) =>
@@ -56,6 +57,9 @@ export default function PropertiesMaintenance() {
           approveMethod="PATCH"
           rejectMethod="PATCH"
           returnMethod="PATCH"
+          approveBody={(notes) => ({ approved: true, notes })}
+          rejectBody={(notes) => ({ approved: false, notes })}
+          returnBody={(notes) => ({ approved: "returned", notes })}
           onDone={() => refetch()}
         />
       ),
@@ -63,17 +67,16 @@ export default function PropertiesMaintenance() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">طلبات الصيانة</h1>
-          <p className="text-gray-500 text-sm mt-1">إدارة ومتابعة طلبات الصيانة</p>
-        </div>
+    <PageShell
+      title="طلبات الصيانة"
+      subtitle="إدارة ومتابعة طلبات الصيانة"
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "طلبات الصيانة" }]}
+      actions={
         <Link href="/properties/maintenance/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> طلب صيانة جديد</Button>
         </Link>
-      </div>
-
+      }
+    >
       <div className="flex items-center gap-4">
         <div className="flex-1 flex flex-col gap-2">
           <Input placeholder="بحث سريع..." value={maintSearch} onChange={(e) => setMaintSearch(e.target.value)} />
@@ -119,6 +122,6 @@ export default function PropertiesMaintenance() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

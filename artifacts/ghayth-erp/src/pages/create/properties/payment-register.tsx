@@ -3,14 +3,15 @@ import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout } from "@/components/create-page-layout";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function PaymentRegisterPage() {
   const [, params] = useRoute("/properties/payments/:paymentId/pay") as [boolean, { paymentId: string }];
@@ -18,8 +19,9 @@ export default function PaymentRegisterPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const { data: paymentsResp } = useApiQuery<any>(["rent-payments"], "/properties/payments");
+  const { data: paymentsResp, isLoading, isError } = useApiQuery<any>(["rent-payments"], "/properties/payments");
   const payments = asList(paymentsResp);
   const payment = payments.find((p: any) => String(p.id) === params?.paymentId);
 
@@ -27,18 +29,24 @@ export default function PaymentRegisterPage() {
 
   const [form, setForm] = useState({
     paidAmount: "",
-    paymentDate: new Date().toISOString().split("T")[0],
+    paymentDate: todayLocal(),
     paymentMethod: "bank_transfer",
     notes: "",
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   if (payment && !form.paidAmount && remaining > 0) {
     setForm(f => ({ ...f, paidAmount: String(remaining) }));
   }
 
   const handleSave = async () => {
-    if (!form.paidAmount) {
-      toast({ variant: "destructive", title: "يرجى تحديد المبلغ" });
+    const firstError = validate({
+      paidAmount: !form.paidAmount || Number(form.paidAmount) <= 0 ? "يرجى تحديد المبلغ" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     setSaving(true);
@@ -56,7 +64,8 @@ export default function PaymentRegisterPage() {
       qc.invalidateQueries({ queryKey: ["rent-payments"] });
       setLocation("/properties/payments");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة", description: err?.fix ?? err?.message });
     } finally {
       setSaving(false);
     }
@@ -83,24 +92,13 @@ export default function PaymentRegisterPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>المبلغ المدفوع <span className="text-red-500">*</span></Label>
-                <Input
-                  className="mt-1"
-                  type="number"
-                  step="0.01"
-                  value={form.paidAmount}
-                  onChange={e => setForm(f => ({ ...f, paidAmount: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>تاريخ الدفع</Label>
-                <div className="mt-1"><DatePicker value={form.paymentDate} onChange={v => setForm(f => ({ ...f, paymentDate: v }))} /></div>
-              </div>
-              <div>
-                <Label>طريقة الدفع</Label>
+              <NumberField label="المبلغ المدفوع" required value={form.paidAmount} onChange={(v) => setForm(f => ({ ...f, paidAmount: v }))} step={0.01} min={0.01} error={fieldErrors.paidAmount} />
+              <FormFieldWrapper label="تاريخ الدفع">
+                <DatePicker value={form.paymentDate} onChange={v => setForm(f => ({ ...f, paymentDate: v }))} />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="طريقة الدفع">
                 <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="bank_transfer">تحويل بنكي</SelectItem>
                     <SelectItem value="cash">نقداً</SelectItem>
@@ -108,16 +106,8 @@ export default function PaymentRegisterPage() {
                     <SelectItem value="online">دفع إلكتروني</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div>
-                <Label>ملاحظات (اختياري)</Label>
-                <Input
-                  className="mt-1"
-                  value={form.notes}
-                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="ملاحظات اختيارية"
-                />
-              </div>
+              </FormFieldWrapper>
+              <TextField label="ملاحظات (اختياري)" value={form.notes} onChange={(v) => setForm(f => ({ ...f, notes: v }))} placeholder="ملاحظات اختيارية" />
             </div>
         </div>
       )}

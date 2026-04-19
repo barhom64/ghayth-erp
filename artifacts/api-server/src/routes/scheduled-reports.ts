@@ -1,10 +1,28 @@
 import { Router } from "express";
+import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 
 export const scheduledReportsRouter = Router();
 scheduledReportsRouter.use(authMiddleware);
+
+const createScheduledReportSchema = z.object({
+  reportType: z.string().min(1, "نوع التقرير مطلوب"),
+  title: z.string().min(1, "العنوان مطلوب"),
+  frequency: z.string().min(1, "التكرار مطلوب"),
+  recipients: z.array(z.string()).min(1, "المستلمون مطلوبون"),
+  params: z.record(z.any()).optional(),
+  isActive: z.boolean().optional(),
+});
+
+const patchScheduledReportSchema = z.object({
+  title: z.string().min(1).optional(),
+  frequency: z.string().min(1).optional(),
+  recipients: z.array(z.string()).optional(),
+  params: z.record(z.any()).optional(),
+  isActive: z.boolean().optional(),
+});
 
 scheduledReportsRouter.get("/", async (req, res) => {
   try {
@@ -28,11 +46,9 @@ scheduledReportsRouter.get("/", async (req, res) => {
 scheduledReportsRouter.post("/", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { reportType, title, frequency, recipients, params, isActive } = req.body;
-    if (!reportType || !title || !frequency || !recipients?.length) {
-      res.status(400).json({ error: "Missing required fields" });
-      return;
-    }
+    const parsed = createScheduledReportSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { reportType, title, frequency, recipients, params, isActive } = parsed.data;
     const [row] = await rawQuery<any>(
       `INSERT INTO scheduled_reports ("companyId", "reportType", title, frequency, recipients, params, "isActive", "createdBy", "createdAt")
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
@@ -49,7 +65,9 @@ scheduledReportsRouter.patch("/:id", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const { title, frequency, recipients, params, isActive } = req.body;
+    const parsed = patchScheduledReportSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { title, frequency, recipients, params, isActive } = parsed.data;
     const updates: string[] = [];
     const vals: any[] = [id, scope.companyId];
     if (title !== undefined) { vals.push(title); updates.push(`title = $${vals.length}`); }

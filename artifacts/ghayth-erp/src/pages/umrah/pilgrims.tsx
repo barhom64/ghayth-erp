@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
@@ -52,13 +53,13 @@ export default function UmrahPilgrims() {
       key: "arrivalDate",
       header: "الوصول",
       sortable: true,
-      render: (p) => (p.arrivalDate ? new Date(p.arrivalDate).toLocaleDateString("ar-SA") : "-"),
+      render: (p) => formatDateAr(p.arrivalDate),
     },
     {
       key: "departureDate",
       header: "المغادرة",
       sortable: true,
-      render: (p) => (p.departureDate ? new Date(p.departureDate).toLocaleDateString("ar-SA") : "-"),
+      render: (p) => formatDateAr(p.departureDate),
     },
     {
       key: "status",

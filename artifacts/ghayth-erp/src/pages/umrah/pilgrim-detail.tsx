@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -125,7 +125,7 @@ export default function PilgrimDetail() {
                 columns={[
                   { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
                   { key: "daysOverstayed", header: "أيام التأخر", render: (p) => `${p.daysOverstayed} يوم` },
-                  { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold text-red-600">{Number(p.amount).toLocaleString()} ريال</span> },
+                  { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold text-red-600">{formatCurrency(Number(p.amount))}</span> },
                   { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
                 ] as DataTableColumn<any>[]}
                 data={data.penalties}

@@ -11,6 +11,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { PageShell } from "@/components/page-shell";
 
 export default function PropertiesPayments() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
@@ -24,7 +25,7 @@ export default function PropertiesPayments() {
   const [filters, setFilters] = useFilters();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <PageShell title="المدفوعات" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المدفوعات" }]}><LoadingSpinner /></PageShell>;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(payments, filters, {
@@ -71,21 +72,18 @@ export default function PropertiesPayments() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">مدفوعات الإيجار</h1>
-          <p className="text-gray-500 text-sm mt-1">متابعة وتسجيل مدفوعات الإيجار</p>
-        </div>
-        {canManage && (
-          <Link href="/properties/payments/new/pay">
-            <Button className="gap-2">
-              <Banknote className="h-4 w-4" /> تسجيل دفعة
-            </Button>
-          </Link>
-        )}
-      </div>
-
+    <PageShell
+      title="المدفوعات"
+      subtitle="متابعة وتسجيل مدفوعات الإيجار"
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المدفوعات" }]}
+      actions={canManage && (
+        <Link href="/properties/payments/new/pay">
+          <Button className="gap-2">
+            <Banknote className="h-4 w-4" /> تسجيل دفعة
+          </Button>
+        </Link>
+      )}
+    >
       <KpiGrid items={[
         { label: "إجمالي المدفوعات", value: payments.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
         { label: "مدفوع", value: payments.filter((p: any) => p.status === "paid").length, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
@@ -155,6 +153,6 @@ export default function PropertiesPayments() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

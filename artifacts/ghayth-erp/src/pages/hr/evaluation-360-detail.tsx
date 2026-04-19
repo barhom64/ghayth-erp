@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -136,12 +137,13 @@ export default function Evaluation360DetailPage() {
   const cycleId = params?.id ?? "";
   const [tab, setTab] = useState<"system" | "peers" | "upward" | "summary">("summary");
 
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["evaluation-cycle-detail", cycleId],
     `/hr/evaluation-cycles/${cycleId}`
   );
 
-  if (isLoading) return <div className="p-8 text-center text-gray-400">جارٍ التحميل...</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data?.cycle) return <div className="p-8 text-center text-gray-400">دورة التقييم غير موجودة</div>;
 
   const { cycle, systemEval, peerEvals = [], summary, upwardSummary } = data;

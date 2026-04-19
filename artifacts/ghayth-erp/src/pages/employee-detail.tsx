@@ -29,11 +29,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Activity },
@@ -538,14 +541,17 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">نوع التأشيرة</p>
-                      <select className="w-full border rounded-md px-3 py-2 text-sm" value={govForm.visaType} onChange={e => setGovForm(f => ({ ...f, visaType: e.target.value }))}>
-                        <option value="">—</option>
-                        <option value="work">عمل</option>
-                        <option value="visit">زيارة</option>
-                        <option value="transit">مرور</option>
-                        <option value="hajj">حج</option>
-                        <option value="umrah">عمرة</option>
-                      </select>
+                      <Select value={govForm.visaType || "_none"} onValueChange={(v) => setGovForm(f => ({ ...f, visaType: v === "_none" ? "" : v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">—</SelectItem>
+                          <SelectItem value="work">عمل</SelectItem>
+                          <SelectItem value="visit">زيارة</SelectItem>
+                          <SelectItem value="transit">مرور</SelectItem>
+                          <SelectItem value="hajj">حج</SelectItem>
+                          <SelectItem value="umrah">عمرة</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">انتهاء التأشيرة</p>
@@ -565,12 +571,15 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">حالة الإقامة</p>
-                      <select className="w-full border rounded-md px-3 py-2 text-sm" value={govForm.iqamaStatus} onChange={e => setGovForm(f => ({ ...f, iqamaStatus: e.target.value }))}>
-                        <option value="active">سارية</option>
-                        <option value="expired">منتهية</option>
-                        <option value="renewal_pending">قيد التجديد</option>
-                        <option value="cancelled">ملغاة</option>
-                      </select>
+                      <Select value={govForm.iqamaStatus} onValueChange={(v) => setGovForm(f => ({ ...f, iqamaStatus: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">سارية</SelectItem>
+                          <SelectItem value="expired">منتهية</SelectItem>
+                          <SelectItem value="renewal_pending">قيد التجديد</SelectItem>
+                          <SelectItem value="cancelled">ملغاة</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="flex gap-2 justify-end">
@@ -621,8 +630,8 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                       <PageStatusBadge status={a.status} domain="attendance" />
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span>دخول: {a.checkIn ? new Date(a.checkIn).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</span>
-                      <span>خروج: {a.checkOut ? new Date(a.checkOut).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "-"}</span>
+                      <span>دخول: {formatTimeAr(a.checkIn)}</span>
+                      <span>خروج: {formatTimeAr(a.checkOut)}</span>
                       {a.lateMinutes > 0 && (
                         <Badge variant="destructive" className="text-[10px]">تأخر {a.lateMinutes} د</Badge>
                       )}
@@ -685,55 +694,47 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             {payroll.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">لا يوجد سجل رواتب</p>
             ) : (
-              <div className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="p-3 text-start">الفترة</th>
-                      <th className="p-3 text-start">الأساسي</th>
-                      <th className="p-3 text-start">الإجمالي</th>
-                      <th className="p-3 text-start">التأمينات</th>
-                      <th className="p-3 text-start">خصم التأخر</th>
-                      <th className="p-3 text-start">الصافي</th>
-                      <th className="p-3 text-start">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payroll.map((p: any) => (
-                      <tr key={p.id} className="border-b hover:bg-gray-50">
-                        <td className="p-3 font-mono">{p.period}</td>
-                        <td className="p-3">{formatCurrency(Number(p.basic || 0))}</td>
-                        <td className="p-3">{formatCurrency(Number(p.grossSalary || 0))}</td>
-                        <td className="p-3 text-orange-600">{formatCurrency(Number(p.gosi || 0))}</td>
-                        <td className="p-3 text-red-600">{formatCurrency(Number(p.lateDeduction || 0))}</td>
-                        <td className="p-3 font-bold text-green-700">{formatCurrency(Number(p.netSalary || 0))}</td>
-                        <td className="p-3"><PageStatusBadge status={p.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable<any>
+                columns={[
+                  { key: "period", header: "الفترة", render: (p) => <span className="font-mono">{p.period}</span> },
+                  { key: "basic", header: "الأساسي", render: (p) => formatCurrency(Number(p.basic || 0)) },
+                  { key: "grossSalary", header: "الإجمالي", render: (p) => formatCurrency(Number(p.grossSalary || 0)) },
+                  { key: "gosi", header: "التأمينات", render: (p) => <span className="text-orange-600">{formatCurrency(Number(p.gosi || 0))}</span> },
+                  { key: "lateDeduction", header: "خصم التأخر", render: (p) => <span className="text-red-600">{formatCurrency(Number(p.lateDeduction || 0))}</span> },
+                  { key: "netSalary", header: "الصافي", render: (p) => <span className="font-bold text-green-700">{formatCurrency(Number(p.netSalary || 0))}</span> },
+                  { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+                ]}
+                data={payroll}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>
       )}
 
       {activeTab === "violations" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-              المخالفات والإجراءات التأديبية ({violations.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {violations.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">لا توجد مخالفات</p>
-            ) : (
-              <ViolationTimeline violations={violations} />
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <EmployeeDisciplineSummary
+            employeeId={employee.id}
+            employeeName={employee.name}
+            title="ملف انضباط الموظف"
+          />
+          {violations.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                  السجل التفصيلي ({violations.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ViolationTimeline violations={violations} />
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {activeTab === "tasks" && (
@@ -813,37 +814,22 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">رقم السلفة</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">النوع</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">المبلغ</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">المتبقي</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loans.map((ln: any) => {
+                <DataTable<any>
+                  columns={[
+                    { key: "loanNumber", header: "رقم السلفة", render: (ln) => <span className="font-mono text-xs text-blue-700">{ln.loanNumber}</span> },
+                    { key: "loanType", header: "النوع", render: (ln) => {
                       const loanTypes: Record<string, string> = { salary_advance: "سلفة راتب", personal: "شخصية", emergency: "طارئة" };
-                      const statusColors: Record<string, string> = { pending: "bg-amber-100 text-amber-700", active: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700", rejected: "bg-red-100 text-red-700" };
-                      const statusLabels: Record<string, string> = { pending: "معلقة", active: "نشطة", completed: "مسددة", rejected: "مرفوضة" };
-                      return (
-                        <tr key={ln.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                          <td className="px-4 py-2 font-mono text-xs text-blue-700">{ln.loanNumber}</td>
-                          <td className="px-4 py-2">{loanTypes[ln.loanType] || ln.loanType}</td>
-                          <td className="px-4 py-2 font-semibold">{formatCurrency(Number(ln.amount))}</td>
-                          <td className="px-4 py-2 text-red-600">{formatCurrency(Number(ln.remainingAmount || 0))}</td>
-                          <td className="px-4 py-2">
-                            <Badge variant="outline" className={cn("text-xs", statusColors[ln.status] || "")}>
-                              {statusLabels[ln.status] || ln.status}
-                            </Badge>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      return loanTypes[ln.loanType] || ln.loanType;
+                    }},
+                    { key: "amount", header: "المبلغ", render: (ln) => <span className="font-semibold">{formatCurrency(Number(ln.amount))}</span> },
+                    { key: "remainingAmount", header: "المتبقي", render: (ln) => <span className="text-red-600">{formatCurrency(Number(ln.remainingAmount || 0))}</span> },
+                    { key: "status", header: "الحالة", render: (ln) => <PageStatusBadge status={ln.status} /> },
+                  ]}
+                  data={loans}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               </CardContent>
             </Card>
           )}
@@ -858,36 +844,19 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">رقم الطلب</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">التاريخ</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">الساعات</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">المبلغ</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overtime.map((ot: any) => {
-                      const otStatusColors: Record<string, string> = { pending: "bg-amber-100 text-amber-700", approved: "bg-green-100 text-green-700", paid: "bg-blue-100 text-blue-700", rejected: "bg-red-100 text-red-700" };
-                      const otStatusLabels: Record<string, string> = { pending: "معلق", approved: "معتمد", paid: "مدفوع", rejected: "مرفوض" };
-                      return (
-                        <tr key={ot.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                          <td className="px-4 py-2 font-mono text-xs text-purple-700">{ot.requestNumber}</td>
-                          <td className="px-4 py-2 text-gray-600">{ot.overtimeDate ? new Date(ot.overtimeDate).toLocaleDateString("ar-SA") : "—"}</td>
-                          <td className="px-4 py-2">{Number(ot.hours).toFixed(1)} ساعة</td>
-                          <td className="px-4 py-2 font-semibold text-green-700">{formatCurrency(Number(ot.totalAmount || 0))}</td>
-                          <td className="px-4 py-2">
-                            <Badge variant="outline" className={cn("text-xs", otStatusColors[ot.status] || "")}>
-                              {otStatusLabels[ot.status] || ot.status}
-                            </Badge>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <DataTable<any>
+                  columns={[
+                    { key: "requestNumber", header: "رقم الطلب", render: (ot) => <span className="font-mono text-xs text-purple-700">{ot.requestNumber}</span> },
+                    { key: "overtimeDate", header: "التاريخ", render: (ot) => <span className="text-gray-600">{formatDateAr(ot.overtimeDate)}</span> },
+                    { key: "hours", header: "الساعات", render: (ot) => `${Number(ot.hours).toFixed(1)} ساعة` },
+                    { key: "totalAmount", header: "المبلغ", render: (ot) => <span className="font-semibold text-green-700">{formatCurrency(Number(ot.totalAmount || 0))}</span> },
+                    { key: "status", header: "الحالة", render: (ot) => <PageStatusBadge status={ot.status} /> },
+                  ]}
+                  data={overtime}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               </CardContent>
             </Card>
           )}

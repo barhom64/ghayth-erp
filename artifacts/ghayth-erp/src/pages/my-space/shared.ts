@@ -1,3 +1,5 @@
+import { formatTimeAr } from "@/lib/formatters";
+
 export function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
   const diff = now - new Date(timestamp).getTime();
@@ -12,19 +14,9 @@ export function formatTimeAgo(timestamp: string): string {
 
 export function formatTime(iso: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+  return formatTimeAr(iso);
 }
 
-export const statusLabels: Record<string, { label: string; color: string }> = {
-  pending: { label: "معلّق", color: "bg-yellow-100 text-yellow-700" },
-  under_review: { label: "قيد المراجعة", color: "bg-blue-100 text-blue-700" },
-  approved: { label: "معتمد", color: "bg-green-100 text-green-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
-  active: { label: "نشط", color: "bg-green-100 text-green-700" },
-  in_progress: { label: "جاري", color: "bg-blue-100 text-blue-700" },
-  completed: { label: "مكتمل", color: "bg-green-100 text-green-700" },
-};
 
 export const requestTypeLabels: Record<string, string> = {
   leave: "إجازة",

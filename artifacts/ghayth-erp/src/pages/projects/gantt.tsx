@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearch } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +46,9 @@ function GanttBar({ row, projectStart, totalDays }: { row: any; projectStart: Da
 }
 
 export default function GanttPage() {
-  const [projectId, setProjectId] = useState("");
+  const search = useSearch();
+  const urlProjectId = new URLSearchParams(search).get("projectId") || "";
+  const [projectId, setProjectId] = useState(urlProjectId);
 
   const { data: projects, isLoading: isProjectsLoading, isError: isProjectsError } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
   const projectList = asList(projects?.data || projects);
@@ -74,7 +77,7 @@ export default function GanttPage() {
     <PageShell
       title="مخطط غانت"
       subtitle="الجدول الزمني التفاعلي للمشروع"
-      breadcrumbs={[{ href: "/projects", label: "المشاريع" }, { label: "مخطط غانت" }]}
+      breadcrumbs={[{ href: "/projects", label: "إدارة المشاريع" }, { label: "مخطط غانت" }]}
       loading={isLoading}
       actions={
         <div className="flex items-center gap-2">

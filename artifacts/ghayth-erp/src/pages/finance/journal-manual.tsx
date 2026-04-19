@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr as formatDate } from "@/lib/formatters";
+import { Textarea } from "@/components/ui/textarea";
 import { Plus, ScrollText } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
@@ -84,7 +86,7 @@ export default function JournalManualPage() {
   const filterSuffix = statusFilter
     ? (scopeSuffix ? `${scopeSuffix}&status=${statusFilter}` : `?status=${statusFilter}`)
     : scopeSuffix;
-  const { data, isLoading } = useApiQuery<{ data?: JournalManualRow[] }>(
+  const { data, isLoading, isError } = useApiQuery<{ data?: JournalManualRow[] }>(
     ["journal-manual", statusFilter, scopeQueryString],
     `/finance/journal-manual${filterSuffix}`,
   );
@@ -133,6 +135,9 @@ export default function JournalManualPage() {
       onSuccess: () => setActionModal(null),
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const columns: DataTableColumn<JournalManualRow>[] = [
     {
@@ -268,8 +273,7 @@ export default function JournalManualPage() {
                   {actionModal.type === "review" && (
                     <div>
                       <label className="block text-sm font-medium mb-1.5">ملاحظات</label>
-                      <textarea
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                      <Textarea
                         rows={3}
                         value={actionNotes}
                         onChange={(e) => setActionNotes(e.target.value)}

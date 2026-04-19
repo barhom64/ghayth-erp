@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ArrowRight, ShoppingCart, User, Phone, Mail, Calendar, Package, FileText, Truck, Copy } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
@@ -93,33 +94,25 @@ export default function PurchaseOrderDetailPage() {
         </CardContent></Card>
       </div>
 
-      {lines.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>بنود أمر الشراء</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">#</th>
-                <th className="p-3 text-start">الوصف</th>
-                <th className="p-3 text-start">الكمية</th>
-                <th className="p-3 text-start">سعر الوحدة</th>
-                <th className="p-3 text-start">الإجمالي</th>
-              </tr></thead>
-              <tbody>
-                {lines.map((l: any, i: number) => (
-                  <tr key={i} className="border-b">
-                    <td className="p-3 text-gray-400">{i + 1}</td>
-                    <td className="p-3 font-medium">{l.description || l.name || "-"}</td>
-                    <td className="p-3">{l.quantity || 1}</td>
-                    <td className="p-3">{formatCurrency(Number(l.unitPrice || 0))}</td>
-                    <td className="p-3 font-bold">{formatCurrency(Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader><CardTitle>بنود أمر الشراء</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <DataTable<any>
+            columns={[
+              { key: "_index", header: "#", render: (_r, i) => <span className="text-gray-400">{i + 1}</span> },
+              { key: "description", header: "الوصف", render: (r) => <span className="font-medium">{r.description || r.name || "-"}</span> },
+              { key: "quantity", header: "الكمية", sortable: true, render: (r) => r.quantity || 1 },
+              { key: "unitPrice", header: "سعر الوحدة", sortable: true, render: (r) => formatCurrency(Number(r.unitPrice || 0)) },
+              { key: "lineTotal", header: "الإجمالي", sortable: true, render: (r) => <span className="font-bold">{formatCurrency(Number(r.lineTotal || r.total || (r.quantity || 1) * (r.unitPrice || 0)))}</span> },
+            ] satisfies DataTableColumn<any>[]}
+            data={lines}
+            pageSize={0}
+            noToolbar
+            searchPlaceholder={null}
+            emptyMessage="لا توجد بنود"
+          />
+        </CardContent>
+      </Card>
 
       {po.status === "pending" && (
         <Card>
@@ -207,8 +200,8 @@ export default function PurchaseOrderDetailPage() {
                   <td>{i + 1}</td>
                   <td>{l.description || l.name || "-"}</td>
                   <td>{l.quantity || 1}</td>
-                  <td>{Number(l.unitPrice || 0).toLocaleString()} ﷼</td>
-                  <td style={{ fontWeight: "bold" }}>{Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)).toLocaleString()} ﷼</td>
+                  <td>{formatCurrency(Number(l.unitPrice || 0))}</td>
+                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)))}</td>
                 </tr>
               ))}
             </tbody>
@@ -219,7 +212,7 @@ export default function PurchaseOrderDetailPage() {
           <tbody>
             <tr>
               <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(po.totalAmount || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(po.totalAmount || 0))}</td>
             </tr>
           </tbody>
         </table>
@@ -252,14 +245,14 @@ export default function PurchaseOrderDetailPage() {
               <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
               <tbody>
                 {lines.map((l: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{l.description || l.name || "-"}</td><td>{l.quantity || 1}</td><td>{Number(l.unitPrice || 0).toLocaleString()} ﷼</td><td style={{ fontWeight: "bold" }}>{Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)).toLocaleString()} ﷼</td></tr>
+                  <tr key={i}><td>{i + 1}</td><td>{l.description || l.name || "-"}</td><td>{l.quantity || 1}</td><td>{formatCurrency(Number(l.unitPrice || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)))}</td></tr>
                 ))}
               </tbody>
             </table>
           )}
           <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
             <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(po.totalAmount || 0).toLocaleString()} ﷼</td></tr>
+              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(po.totalAmount || 0))}</td></tr>
             </tbody>
           </table>
           {po.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {po.notes}</p>}

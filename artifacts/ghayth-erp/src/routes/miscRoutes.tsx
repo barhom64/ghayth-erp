@@ -48,6 +48,7 @@ const ModuleDashboards = lazy(() => import("@/pages/module-dashboards"));
 const OperationsCenter = lazy(() => import("@/pages/operations-center"));
 const DailyClose = lazy(() => import("@/pages/daily-close"));
 const ScheduledReports = lazy(() => import("@/pages/reports/scheduled-reports"));
+const ExecDashboard = lazy(() => import("@/pages/exec-dashboard"));
 const ProjectGantt = lazy(() => import("@/pages/projects/gantt"));
 const ProjectRisks = lazy(() => import("@/pages/projects/risks"));
 const InventoryCount = lazy(() => import("@/pages/warehouse/inventory-count"));
@@ -63,6 +64,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-loans", component: MyLoans },
   { path: "/my-overtime", component: MyOvertime },
   { path: "/action-center", component: ActionCenter },
+  { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 60 },
   { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
   { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },
   { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 40 },
@@ -78,7 +80,6 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/projects", component: Projects, module: "operations" },
   { path: "/projects/create", component: ProjectsCreate, module: "operations" },
   { path: "/projects/tasks", component: Tasks, module: "operations" },
-  { path: "/projects/expenses", component: Projects, module: "operations" },
   { path: "/projects/gantt", component: ProjectGantt, module: "operations" },
   { path: "/projects/risks", component: ProjectRisks, module: "operations" },
   { path: "/projects/:id", component: ProjectDetail, module: "operations" },

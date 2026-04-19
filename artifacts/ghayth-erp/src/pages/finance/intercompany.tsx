@@ -4,18 +4,21 @@ import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDateAr as formatDate , todayLocal } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function IntercompanyPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ toCompanyId: "", amount: "", description: "", transactionDate: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ toCompanyId: "", amount: "", description: "", transactionDate: todayLocal() });
 
   const { data, isLoading, isError } = useApiQuery<any>(
     ["intercompany"],
@@ -35,7 +38,7 @@ export default function IntercompanyPage() {
       successMessage: "تم تسجيل المعاملة البينية وإنشاء القيدين المحاسبيين",
       onSuccess: () => {
         setShowCreate(false);
-        setForm({ toCompanyId: "", amount: "", description: "", transactionDate: new Date().toISOString().split("T")[0] });
+        setForm({ toCompanyId: "", amount: "", description: "", transactionDate: todayLocal() });
       },
     },
   );
@@ -142,22 +145,25 @@ export default function IntercompanyPage() {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">الشركة المُستقبِلة *</label>
-                <select className="w-full border rounded-lg px-3 py-2 text-sm" required value={form.toCompanyId} onChange={e => setForm(f => ({ ...f, toCompanyId: e.target.value }))}>
-                  <option value="">-- اختر الشركة --</option>
-                  {(Array.isArray(companies) ? companies : []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <Select value={form.toCompanyId || "_none"} onValueChange={(v) => setForm(f => ({ ...f, toCompanyId: v === "_none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">-- اختر الشركة --</SelectItem>
+                    {(Array.isArray(companies) ? companies : []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">المبلغ *</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm" required type="number" min="1" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
+                <Input type="number" min="1" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">تاريخ المعاملة</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm" type="date" value={form.transactionDate} onChange={e => setForm(f => ({ ...f, transactionDate: e.target.value }))} />
+                <Input type="date" value={form.transactionDate} onChange={e => setForm(f => ({ ...f, transactionDate: e.target.value }))} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">البيان</label>
-                <textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف المعاملة البينية" />
+                <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف المعاملة البينية" />
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>

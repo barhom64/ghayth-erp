@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -117,8 +119,7 @@ function getModuleColor(mod: string) {
 }
 
 function formatDate(d: string) {
-  if (!d) return "";
-  return new Date(d).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" });
+  return formatDateAr(d);
 }
 
 function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: () => void; onDelete: () => void }) {
@@ -274,9 +275,12 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">نوع الحدث *</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.triggerEvent} onChange={e => setForm({ ...form, triggerEvent: e.target.value })}>
-                {TRIGGER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <Select value={form.triggerEvent} onValueChange={(v) => setForm({ ...form, triggerEvent: v })}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TRIGGER_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">اسم الحقل (اختياري)</Label>
@@ -285,9 +289,12 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
             <div className="flex gap-2">
               <div className="flex-1">
                 <Label className="text-xs">المعيار</Label>
-                <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.conditionOperator} onChange={e => setForm({ ...form, conditionOperator: e.target.value })}>
-                  {OPERATOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <Select value={form.conditionOperator} onValueChange={(v) => setForm({ ...form, conditionOperator: v })}>
+                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {OPERATOR_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex-1">
                 <Label className="text-xs">القيمة</Label>
@@ -304,21 +311,30 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">نوع الإجراء *</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.actionType} onChange={e => setForm({ ...form, actionType: e.target.value })}>
-                {ACTION_OPTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
-              </select>
+              <Select value={form.actionType} onValueChange={(v) => setForm({ ...form, actionType: v })}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ACTION_OPTIONS.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">الهدف</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.actionTarget} onChange={e => setForm({ ...form, actionTarget: e.target.value })}>
-                {TARGET_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <Select value={form.actionTarget} onValueChange={(v) => setForm({ ...form, actionTarget: v })}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TARGET_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">المسار</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.module} onChange={e => setForm({ ...form, module: e.target.value })}>
-                {Object.entries(MODULE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
+              <Select value={form.module} onValueChange={(v) => setForm({ ...form, module: v })}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(MODULE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -332,11 +348,14 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
             </div>
             <div>
               <Label className="text-xs">أولوية الإشعار</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.notifPriority} onChange={e => setForm({ ...form, notifPriority: e.target.value })}>
-                <option value="normal">عادية</option>
-                <option value="high">عالية</option>
-                <option value="urgent">عاجلة</option>
-              </select>
+              <Select value={form.notifPriority} onValueChange={(v) => setForm({ ...form, notifPriority: v })}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">عادية</SelectItem>
+                  <SelectItem value="high">عالية</SelectItem>
+                  <SelectItem value="urgent">عاجلة</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

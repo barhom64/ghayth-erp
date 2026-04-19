@@ -1,9 +1,42 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
+import { z } from "zod";
+
+const createRuleSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional().nullable(),
+  triggerEvent: z.string().min(1),
+  conditionField: z.string().optional().nullable(),
+  conditionOperator: z.string().optional(),
+  conditionValue: z.string().optional().nullable(),
+  actionType: z.string().min(1),
+  actionTarget: z.string().optional().nullable(),
+  actionConfig: z.record(z.unknown()).optional(),
+  module: z.string().optional().nullable(),
+  priority: z.number().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const patchRuleSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  triggerEvent: z.string().min(1).optional(),
+  conditionField: z.string().optional().nullable(),
+  conditionOperator: z.string().optional().nullable(),
+  conditionValue: z.string().optional().nullable(),
+  actionType: z.string().min(1).optional(),
+  actionTarget: z.string().optional().nullable(),
+  actionConfig: z.record(z.unknown()).optional(),
+  module: z.string().optional().nullable(),
+  priority: z.number().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const toggleRuleSchema = z.object({}).passthrough().optional();
 
 const router = Router();
 router.use(authMiddleware);
@@ -63,8 +96,10 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
 
 router.post("/", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_createRule = createRuleSchema.safeParse(req.body);
+    if (!parsed_createRule.success) throw new ValidationError(parsed_createRule.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_createRule.data;
     const scope = req.scope!;
-    const b = req.body;
 
     if (!b.name || !b.triggerEvent || !b.actionType) {
       res.status(400).json({ error: "الاسم ونوع الحدث ونوع الإجراء مطلوبة" });
@@ -98,9 +133,11 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
 
 router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
   try {
+    const parsed_patchRule = patchRuleSchema.safeParse(req.body);
+    if (!parsed_patchRule.success) throw new ValidationError(parsed_patchRule.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_patchRule.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const b = req.body;
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
@@ -172,6 +209,7 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
 
 router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) => {
   try {
+    { const _guard = toggleRuleSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(

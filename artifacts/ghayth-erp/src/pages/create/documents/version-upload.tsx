@@ -1,15 +1,15 @@
 import { useState, useRef, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, Save } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@/components/create-page-layout";
+import { TextField } from "@/components/shared/form-field-wrapper";
 
 const BASE = "";
 
@@ -26,7 +26,7 @@ export default function VersionUploadPage() {
   const { toast } = useToast();
   const docId = params?.docId;
 
-  const { data: versionsResp, refetch } = useApiQuery<any>(
+  const { data: versionsResp, isLoading, isError, refetch } = useApiQuery<any>(
     ["doc-versions", docId],
     docId ? `/documents/${docId}/versions` : null,
     { enabled: !!docId }
@@ -37,6 +37,9 @@ export default function VersionUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleUploadVersion = useCallback(async () => {
     if (!file || !docId) return;
@@ -104,10 +107,7 @@ export default function VersionUploadPage() {
               )}
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />
             </div>
-            <div>
-              <Label>ملاحظات (اختياري)</Label>
-              <Input className="mt-1" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="وصف التغييرات في هذا الإصدار" />
-            </div>
+            <TextField label="ملاحظات (اختياري)" value={notes} onChange={setNotes} placeholder="وصف التغييرات في هذا الإصدار" />
             <Button onClick={handleUploadVersion} disabled={!file || uploading} className="gap-2">
               <Save className="h-4 w-4" /> {uploading ? "جاري الرفع..." : "رفع الإصدار"}
             </Button>

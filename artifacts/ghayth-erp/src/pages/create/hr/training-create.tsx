@@ -2,19 +2,19 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { BookOpen, Clock, MapPin, Users, DollarSign, GraduationCap } from "lucide-react";
+import { BookOpen, Clock, Users, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TRAINING_TYPES, TRAINING_CATEGORIES } from "@/lib/hr-type-maps";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_training_create";
 const INITIAL = {
@@ -36,10 +36,7 @@ export default function TrainingCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const set = (key: string, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -50,15 +47,17 @@ export default function TrainingCreate() {
     : null;
 
   const handleSubmit = () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.title) localErrors.title = "عنوان البرنامج مطلوب";
-    if (form.maxParticipants && Number(form.maxParticipants) <= 0) localErrors.maxParticipants = "السعة القصوى يجب أن تكون أكبر من صفر";
-    if (form.startDate && form.endDate && form.endDate < form.startDate) localErrors.endDate = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      title: form.title ? null : "عنوان البرنامج مطلوب",
+      maxParticipants: form.maxParticipants && Number(form.maxParticipants) <= 0
+        ? "السعة القصوى يجب أن تكون أكبر من صفر"
+        : null,
+      endDate: form.startDate && form.endDate && form.endDate < form.startDate
+        ? "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء"
+        : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -85,6 +84,9 @@ export default function TrainingCreate() {
         onSuccess: () => {
           clearDraft();
           setLocation("/hr/training");
+        },
+        onError: (err: any) => {
+          setApiError(err);
         },
       },
     );
@@ -126,35 +128,20 @@ export default function TrainingCreate() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>العنوان <span className="text-red-500">*</span></Label>
-            <Input className={`mt-1 ${errCls("title")}`} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="اسم البرنامج التدريبي" />
-            <FieldHint field="title" />
-          </div>
-          <div>
-            <Label>التصنيف</Label>
-            <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.category} onChange={(e) => set("category", e.target.value)}>
-              <option value="">اختر التصنيف</option>
-              {TRAINING_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <Label className="flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> جهة التدريب</Label>
-            <Input className="mt-1" value={form.provider} onChange={(e) => set("provider", e.target.value)} placeholder="اسم الجهة المقدمة" />
-          </div>
-          <div>
-            <Label>المدرب</Label>
-            <Input className="mt-1" value={form.trainer} onChange={(e) => set("trainer", e.target.value)} placeholder="اسم المدرب" />
-          </div>
-          <div>
-            <Label className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> المكان</Label>
-            <Input className="mt-1" value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="قاعة التدريب أو الرابط" />
-          </div>
-          <div>
-            <Label className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> السعة القصوى</Label>
-            <Input className={`mt-1 ${errCls("maxParticipants")}`} type="number" value={form.maxParticipants} onChange={(e) => set("maxParticipants", e.target.value)} placeholder="عدد المشاركين" />
-            <FieldHint field="maxParticipants" />
-          </div>
+          <TextField label="العنوان" required value={form.title} onChange={(v) => set("title", v)} placeholder="اسم البرنامج التدريبي" error={fieldErrors.title} />
+          <FormFieldWrapper label="التصنيف">
+            <Select value={form.category || "_none"} onValueChange={(v) => set("category", v === "_none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="اختر التصنيف" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">اختر التصنيف</SelectItem>
+                {TRAINING_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+          <TextField label="جهة التدريب" value={form.provider} onChange={(v) => set("provider", v)} placeholder="اسم الجهة المقدمة" />
+          <TextField label="المدرب" value={form.trainer} onChange={(v) => set("trainer", v)} placeholder="اسم المدرب" />
+          <TextField label="المكان" value={form.location} onChange={(v) => set("location", v)} placeholder="قاعة التدريب أو الرابط" />
+          <NumberField label="السعة القصوى" value={form.maxParticipants} onChange={(v) => set("maxParticipants", v)} placeholder="عدد المشاركين" min={1} error={fieldErrors.maxParticipants} />
         </div>
 
         <div>
@@ -162,50 +149,34 @@ export default function TrainingCreate() {
             <Clock className="h-4 w-4" /> المدة والتواريخ
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label>المدة</Label>
-              <Input className="mt-1" type="number" value={form.duration} onChange={(e) => set("duration", e.target.value)} placeholder="٠" />
-            </div>
-            <div>
-              <Label>وحدة المدة</Label>
-              <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.durationUnit} onChange={(e) => set("durationUnit", e.target.value)}>
-                <option value="hours">ساعات</option>
-                <option value="days">أيام</option>
-                <option value="weeks">أسابيع</option>
-              </select>
-            </div>
-            <div>
-              <Label>تاريخ البدء</Label>
-              <div className="mt-1"><DatePicker value={form.startDate} onChange={(v) => set("startDate", v)} /></div>
-            </div>
-            <div>
-              <Label>تاريخ الانتهاء</Label>
-              <div className={`mt-1 ${errCls("endDate")}`}><DatePicker value={form.endDate} onChange={(v) => set("endDate", v)} /></div>
-              <FieldHint field="endDate" />
-            </div>
+            <NumberField label="المدة" value={form.duration} onChange={(v) => set("duration", v)} placeholder="٠" min={0} />
+            <FormFieldWrapper label="وحدة المدة">
+              <Select value={form.durationUnit} onValueChange={(v) => set("durationUnit", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hours">ساعات</SelectItem>
+                  <SelectItem value="days">أيام</SelectItem>
+                  <SelectItem value="weeks">أسابيع</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="تاريخ البدء">
+              <DatePicker value={form.startDate} onChange={(v) => set("startDate", v)} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="تاريخ الانتهاء" error={fieldErrors.endDate}>
+              <DatePicker value={form.endDate} onChange={(v) => set("endDate", v)} />
+            </FormFieldWrapper>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> التكلفة ({getCurrencySymbol()})</Label>
-            <Input className="mt-1" type="number" step="0.01" value={form.cost} onChange={(e) => set("cost", e.target.value)} placeholder="٠" />
-          </div>
-          <div>
-            <Label>الفئة المستهدفة</Label>
-            <Input className="mt-1" value={form.targetAudience} onChange={(e) => set("targetAudience", e.target.value)} placeholder="المدراء، الموظفون الجدد..." />
-          </div>
+          <NumberField label={`التكلفة (${getCurrencySymbol()})`} value={form.cost} onChange={(v) => set("cost", v)} placeholder="٠" step={0.01} min={0} />
+          <TextField label="الفئة المستهدفة" value={form.targetAudience} onChange={(v) => set("targetAudience", v)} placeholder="المدراء، الموظفون الجدد..." />
         </div>
 
-        <div>
-          <Label>أهداف البرنامج</Label>
-          <Textarea className="mt-1 min-h-[80px]" value={form.objectives} onChange={(e) => set("objectives", e.target.value)} placeholder="الأهداف المتوقعة من البرنامج التدريبي..." />
-        </div>
+        <TextAreaField label="أهداف البرنامج" value={form.objectives} onChange={(v) => set("objectives", v)} placeholder="الأهداف المتوقعة من البرنامج التدريبي..." rows={3} />
 
-        <div>
-          <Label>الوصف التفصيلي</Label>
-          <Textarea className="mt-1 min-h-[80px]" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="وصف البرنامج التدريبي ومحتوياته..." />
-        </div>
+        <TextAreaField label="الوصف التفصيلي" value={form.description} onChange={(v) => set("description", v)} placeholder="وصف البرنامج التدريبي ومحتوياته..." rows={3} />
 
         {form.title && (
           <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
@@ -216,7 +187,7 @@ export default function TrainingCreate() {
               {form.category && <Badge variant="outline">{TRAINING_CATEGORIES.find(c => c.value === form.category)?.label}</Badge>}
               {durationDisplay && <Badge variant="outline"><Clock className="h-3 w-3 me-1" />{durationDisplay}</Badge>}
               {form.maxParticipants && <Badge variant="outline"><Users className="h-3 w-3 me-1" />{form.maxParticipants} مشارك</Badge>}
-              {form.cost && <Badge variant="outline"><DollarSign className="h-3 w-3 me-1" />{Number(form.cost).toLocaleString()} {getCurrencySymbol()}</Badge>}
+              {form.cost && <Badge variant="outline"><DollarSign className="h-3 w-3 me-1" />{formatCurrency(Number(form.cost))}</Badge>}
             </div>
           </div>
         )}

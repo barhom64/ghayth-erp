@@ -87,10 +87,7 @@ router.post("/products", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createStoreProductSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { name, description, sku, price, costPrice, quantity, category, status, imageUrl } = parsed.data;
     const r = await rawExecute(
       `INSERT INTO store_products (name, description, sku, price, "costPrice", quantity, category, status, "imageUrl", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
@@ -174,10 +171,7 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createStoreOrderSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = parsed.data;
     const r = await rawExecute(
       `INSERT INTO store_orders ("orderNumber", "customerName", "customerPhone", status, "totalAmount", items, notes, "companyId", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,

@@ -2,17 +2,17 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Star, Plus, X, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_evaluation_360_create";
 
@@ -25,7 +25,7 @@ export default function Evaluation360Create() {
     successMessage: "تم بدء دورة التقييم بنجاح",
   });
 
-  const { data: empResp } = useApiQuery<any>(["employees-list", scopeQueryString], `/employees?${scopeQueryString || ""}&limit=500`);
+  const { data: empResp, isLoading, isError } = useApiQuery<any>(["employees-list", scopeQueryString], `/employees?${scopeQueryString || ""}&limit=500`);
   const employees = asList(empResp);
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
@@ -33,8 +33,13 @@ export default function Evaluation360Create() {
     period: "",
     notes: "",
   });
+
   const [participants, setParticipants] = useState<{ evaluatorId: string; evaluatorRole: "manager" | "peer"; name: string }[]>([]);
   const [addingParticipant, setAddingParticipant] = useState({ evaluatorId: "", evaluatorRole: "peer" as "manager" | "peer" });
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const addParticipant = () => {
     if (!addingParticipant.evaluatorId) return;
@@ -51,8 +56,12 @@ export default function Evaluation360Create() {
   const removeParticipant = (id: string) => setParticipants(participants.filter(p => p.evaluatorId !== id));
 
   const handleSave = () => {
-    if (!form.employeeId || !form.period) {
-      toast({ variant: "destructive", title: "الموظف والفترة مطلوبان" });
+    const firstError = validate({
+      employeeId: form.employeeId ? null : "الموظف مطلوب",
+      period: form.period ? null : "الفترة مطلوبة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -69,6 +78,9 @@ export default function Evaluation360Create() {
         onSuccess: () => {
           clearDraft();
           setLocation("/hr/evaluation-360");
+        },
+        onError: (err: any) => {
+          setApiError(err);
         },
       },
     );
@@ -98,31 +110,31 @@ export default function Evaluation360Create() {
           </h3>
           <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>الموظف <span className="text-red-500">*</span></Label>
+            <FormFieldWrapper label="الموظف" required error={fieldErrors.employeeId}>
               <Select value={form.employeeId} onValueChange={v => setForm({ ...form, employeeId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
                 <SelectContent>
                   {employees.map((e: any) => (
                     <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>الفترة <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" placeholder="مثال: الربع الأول ٢٠٢٦" value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} />
-            </div>
+            </FormFieldWrapper>
+            <TextField
+              label="الفترة"
+              required
+              placeholder="مثال: الربع الأول ٢٠٢٦"
+              value={form.period}
+              onChange={(v) => setForm({ ...form, period: v })}
+              error={fieldErrors.period}
+            />
           </div>
           {form.employeeId && (
             <div className="mt-3">
               <EmployeeContextCard employeeId={form.employeeId} section="violations" />
             </div>
           )}
-          <div>
-            <Label>ملاحظات</Label>
-            <Textarea className="mt-1" placeholder="ملاحظات اختيارية..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3} />
-          </div>
+          <TextAreaField label="ملاحظات" placeholder="ملاحظات اختيارية..." value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} rows={3} />
           </div>
         </div>
 

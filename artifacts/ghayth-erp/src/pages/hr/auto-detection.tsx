@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -215,9 +216,7 @@ export default function AutoDetectionPage() {
       sortable: true,
       render: (row) => (
         <span className="text-xs text-gray-500">
-          {new Date(row.createdAt).toLocaleString("ar-SA", {
-            hour: "2-digit", minute: "2-digit", day: "numeric", month: "short",
-          })}
+          {formatDateAr(row.createdAt)}
         </span>
       ),
     },
@@ -256,7 +255,8 @@ export default function AutoDetectionPage() {
       subtitle="محرك المراقبة الآلي — يفحص الحضور يومياً ويُصدر المخالفات والمحاضر تلقائياً"
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/violations", label: "المخالفات" },
+        { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        { label: "الرصد التلقائي" },
       ]}
       actions={
         <div className="flex items-center gap-2">
@@ -496,10 +496,7 @@ export default function AutoDetectionPage() {
           <RefreshCw className="h-3.5 w-3.5" />
           <span>
             آخر تشغيل:{" "}
-            {new Date(summary.lastRunAt).toLocaleString("ar-SA", {
-              year: "numeric", month: "short", day: "numeric",
-              hour: "2-digit", minute: "2-digit",
-            })}
+            {formatDateAr(summary.lastRunAt)}
           </span>
         </div>
       )}

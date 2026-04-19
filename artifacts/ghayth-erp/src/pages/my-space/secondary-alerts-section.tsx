@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { statusLabels } from "./shared";
+import { resolveStatus } from "@/components/page-status-badge";
 
 interface SecondaryAlertsSectionProps {
   overdueItems: any[];
@@ -36,7 +36,7 @@ export function SecondaryAlertsSection({ overdueItems, expiringSoon }: Secondary
                         {item.deadline && ` — ${formatDateAr(item.deadline)}`}
                       </p>
                     </div>
-                    <Badge className="text-[10px] bg-red-100 text-red-700 shrink-0">{statusLabels[item.status]?.label || item.status}</Badge>
+                    <Badge className="text-[10px] bg-red-100 text-red-700 shrink-0">{resolveStatus(item.status)?.label || item.status}</Badge>
                   </div>
                 </Link>
               ))}

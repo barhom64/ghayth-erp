@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Building2, Home, Plus, ArrowRight, TrendingUp, BookOpen } from "lucide-react";
+import { Building2, Home, Plus, ArrowRight, TrendingUp, BookOpen, AlertTriangle } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency } from "@/lib/formatters";
@@ -33,16 +33,47 @@ export default function BuildingDetail() {
   );
   const units = asList(unitsResp);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const shellBreadcrumbs = [
+    { href: "/properties/dashboard", label: "إدارة الأملاك" },
+    { href: "/properties/buildings", label: "المباني" },
+  ];
 
-  if (!building) return (
-    <div className="text-center py-12">
-      <Building2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">المبنى غير موجود</p>
-      <Link href="/properties/buildings"><Button variant="outline" className="mt-4">العودة للمباني</Button></Link>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <PageShell title="جاري التحميل..." breadcrumbs={shellBreadcrumbs}>
+        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
+      </PageShell>
+    );
+  }
+
+  if (isError) {
+    return (
+      <PageShell title="خطأ" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
+            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات المبنى.</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
+
+  if (!building) {
+    return (
+      <PageShell title="المبنى غير موجود" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Building2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 mb-1">المبنى المطلوب غير موجود أو تم حذفه.</p>
+            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة المباني.</p>
+            <Link href="/properties/buildings"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للمباني</Button></Link>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
 
   const totalUnits = units.length;
   const rentedUnits = units.filter((u: any) => u.status === "rented").length;
@@ -56,7 +87,7 @@ export default function BuildingDetail() {
       title={building.name}
       subtitle={subtitleParts || undefined}
       loading={isLoading}
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { href: "/properties/buildings", label: "المباني" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties/buildings", label: "المباني" }]}
       actions={
         <div className="flex items-center gap-2">
           <Badge variant="outline">

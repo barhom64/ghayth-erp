@@ -1,13 +1,13 @@
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function BiReportsCreate() {
   const [, setLocation] = useLocation();
@@ -39,7 +39,7 @@ export default function BiReportsCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -47,11 +47,16 @@ export default function BiReportsCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان التقرير <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="عنوان التقرير" /></div>
-          <div>
-            <Label>النوع</Label>
+          <TextField
+            label="عنوان التقرير"
+            required
+            value={form.title}
+            onChange={(v) => setForm((f) => ({ ...f, title: v }))}
+            placeholder="عنوان التقرير"
+          />
+          <FormFieldWrapper label="النوع">
             <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="analytics">تحليلي</SelectItem>
                 <SelectItem value="summary">ملخص</SelectItem>
@@ -59,14 +64,29 @@ export default function BiReportsCreate() {
                 <SelectItem value="comparison">مقارنة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>تاريخ الجدولة</Label><Input className="mt-1" type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))} /></div>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="تاريخ الجدولة">
+            <DatePicker value={form.scheduledAt} onChange={(v) => setForm((f) => ({ ...f, scheduledAt: v }))} />
+          </FormFieldWrapper>
         </div>
-        <div><Label>الوصف</Label><Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف التقرير..." /></div>
-        <div><Label>استعلام البيانات</Label><Textarea value={form.query} onChange={(e) => setForm((f) => ({ ...f, query: e.target.value }))} placeholder="استعلام SQL أو معرّف البيانات..." className="min-h-[80px] font-mono text-sm" dir="ltr" /></div>
+        <TextAreaField
+          label="الوصف"
+          value={form.description}
+          onChange={(v) => setForm((f) => ({ ...f, description: v }))}
+          placeholder="وصف التقرير..."
+        />
+        <FormFieldWrapper label="استعلام البيانات">
+          <Textarea
+            value={form.query}
+            onChange={(e) => setForm((f) => ({ ...f, query: e.target.value }))}
+            placeholder="استعلام SQL أو معرّف البيانات..."
+            className="min-h-[80px] font-mono text-sm"
+            dir="ltr"
+          />
+        </FormFieldWrapper>
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/bi/reports")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
+          <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
         </div>
       </div>
     </CreatePageLayout>

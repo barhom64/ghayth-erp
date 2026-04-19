@@ -2,13 +2,12 @@ import { useLocation } from "wouter";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function KpisCreate() {
   const [, setLocation] = useLocation();
@@ -17,10 +16,14 @@ export default function KpisCreate() {
     name: "", module: "", target: "", currentValue: "", unit: "", frequency: "monthly", formula: "", description: "",
   });
   const createMut = useApiMutation<unknown, Record<string, string | number | undefined>>("/bi/kpis", "POST", [["bi-kpis"]]);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم المؤشر" });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم المؤشر",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -34,7 +37,10 @@ export default function KpisCreate() {
       description: form.description || undefined,
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إضافة المؤشر بنجاح" }); setLocation("/bi/kpis"); },
-      onError: (err) => toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المؤشر", description: err.message }),
+      onError: (err: any) => {
+        setApiError(err);
+        toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المؤشر", description: err?.fix ?? err?.message });
+      },
     });
   };
 
@@ -43,7 +49,7 @@ export default function KpisCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -51,11 +57,10 @@ export default function KpisCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اسم المؤشر <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم مؤشر الأداء" /></div>
-          <div>
-            <Label>القسم</Label>
+          <TextField label="اسم المؤشر" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم مؤشر الأداء" error={fieldErrors.name} />
+          <FormFieldWrapper label="القسم">
             <Select value={form.module || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, module: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر القسم" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر القسم</SelectItem>
                 <SelectItem value="hr">الموارد البشرية</SelectItem>
@@ -66,14 +71,13 @@ export default function KpisCreate() {
                 <SelectItem value="support">الدعم</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>القيمة المستهدفة</Label><Input className="mt-1" type="number" step="0.01" value={form.target} onChange={(e) => setForm((f) => ({ ...f, target: e.target.value }))} placeholder="٠" /></div>
-          <div><Label>القيمة الحالية</Label><Input className="mt-1" type="number" step="0.01" value={form.currentValue} onChange={(e) => setForm((f) => ({ ...f, currentValue: e.target.value }))} placeholder="٠" /></div>
-          <div><Label>وحدة القياس</Label><Input className="mt-1" value={form.unit} onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))} placeholder={`% / ${getCurrencySymbol()} / عدد`} /></div>
-          <div>
-            <Label>فترة القياس</Label>
+          </FormFieldWrapper>
+          <NumberField label="القيمة المستهدفة" value={form.target} onChange={(v) => setForm((f) => ({ ...f, target: v }))} placeholder="٠" step={0.01} />
+          <NumberField label="القيمة الحالية" value={form.currentValue} onChange={(v) => setForm((f) => ({ ...f, currentValue: v }))} placeholder="٠" step={0.01} />
+          <TextField label="وحدة القياس" value={form.unit} onChange={(v) => setForm((f) => ({ ...f, unit: v }))} placeholder={`% / ${getCurrencySymbol()} / عدد`} />
+          <FormFieldWrapper label="فترة القياس">
             <Select value={form.frequency} onValueChange={(v) => setForm((f) => ({ ...f, frequency: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="daily">يومي</SelectItem>
                 <SelectItem value="weekly">أسبوعي</SelectItem>
@@ -82,10 +86,10 @@ export default function KpisCreate() {
                 <SelectItem value="yearly">سنوي</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="md:col-span-2"><Label>المعادلة</Label><Input className="mt-1" value={form.formula} onChange={(e) => setForm((f) => ({ ...f, formula: e.target.value }))} placeholder="مثال: (الإيرادات / الهدف) × 100" /></div>
+          </FormFieldWrapper>
+          <TextField label="المعادلة" value={form.formula} onChange={(v) => setForm((f) => ({ ...f, formula: v }))} placeholder="مثال: (الإيرادات / الهدف) × 100" className="md:col-span-2" />
         </div>
-        <div><Label>الوصف</Label><Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف المؤشر وكيفية حسابه..." /></div>
+        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف المؤشر وكيفية حسابه..." />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/bi/kpis")}>إلغاء</Button>
           <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الإضافة..." : "إضافة"}</Button>

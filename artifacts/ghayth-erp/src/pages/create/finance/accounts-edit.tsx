@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiPatch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreatePageLayout } from "@/components/create-page-layout";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 
 const typeMap: Record<string, string> = {
@@ -23,8 +24,9 @@ export default function AccountsEdit() {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", code: "", type: "" });
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const { data, isLoading } = useApiQuery<any>(["accounts"], "/finance/accounts");
+  const { data, isLoading, isError } = useApiQuery<any>(["accounts"], "/finance/accounts");
   const items = data?.data || [];
   const account = items.find((a: any) => String(a.id) === params?.id);
 
@@ -35,18 +37,28 @@ export default function AccountsEdit() {
   }, [account]);
 
   const handleSave = async () => {
-    if (!form.name) { toast({ variant: "destructive", title: "اسم الحساب مطلوب" }); return; }
+    const firstError = validate({
+      name: form.name ? null : "اسم الحساب مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
     setSaving(true);
     try {
       await apiPatch(`/finance/accounts/${params?.id}`, { name: form.name, type: form.type });
       toast({ title: "تم تحديث الحساب" });
       qc.invalidateQueries({ queryKey: ["accounts"] });
       setLocation("/finance/accounts");
-    } catch (err: any) { toast({ variant: "destructive", title: "حدث خطأ أثناء التحديث", description: err?.message }); }
+    } catch (err: any) {
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء التحديث", description: err?.fix ?? err?.message });
+    }
     finally { setSaving(false); }
   };
 
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!account) return <div className="text-center py-16 text-gray-500">الحساب غير موجود</div>;
 
   return (
@@ -57,23 +69,18 @@ export default function AccountsEdit() {
     >
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>اسم الحساب <span className="text-red-500">*</span></Label>
-            <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div>
-            <Label>رمز الحساب</Label>
-            <Input className="mt-1" value={form.code} disabled title="رمز الحساب غير قابل للتعديل بعد الإنشاء" />
-          </div>
-          <div>
-            <Label>النوع</Label>
+          <TextField label="اسم الحساب" required value={form.name} onChange={(v) => setForm({ ...form, name: v })} error={fieldErrors.name} />
+          <FormFieldWrapper label="رمز الحساب" hint="رمز الحساب غير قابل للتعديل بعد الإنشاء">
+            <Input value={form.code} disabled />
+          </FormFieldWrapper>
+          <FormFieldWrapper label="النوع">
             <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(typeMap).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
       </div>
 

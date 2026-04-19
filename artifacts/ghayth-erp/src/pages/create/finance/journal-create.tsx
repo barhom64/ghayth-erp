@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField } from "@/components/shared/form-field-wrapper";
+import { roundMoney, formatCurrency , todayLocal } from "@/lib/formatters";
 
 interface JournalLine {
   accountCode: string;
@@ -24,13 +27,13 @@ interface JournalLine {
 }
 
 const DRAFT_KEY = "finance_journal_create";
-const INITIAL = { description: "", date: new Date().toISOString().split("T")[0] };
+const INITIAL = { description: "", date: todayLocal() };
 
 export default function JournalCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/journal", "POST", [["journal"]]);
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
+  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
   const accounts = accountsData?.data || [];
   const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const departments = departmentsData?.data || [];
@@ -45,6 +48,9 @@ export default function JournalCreate() {
     { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" },
   ]);
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const updateLine = (idx: number, field: keyof JournalLine, value: string) => {
     const updated = [...lines];
     updated[idx] = { ...updated[idx], [field]: value };
@@ -54,8 +60,8 @@ export default function JournalCreate() {
   const addLine = () => setLines([...lines, { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" }]);
   const removeLine = (idx: number) => { if (lines.length > 2) setLines(lines.filter((_, i) => i !== idx)); };
 
-  const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
+  const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
   const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01;
 
   const handleSubmit = async () => {
@@ -86,7 +92,7 @@ export default function JournalCreate() {
       toast({ title: "تم إضافة القيد بنجاح" });
       setLocation("/finance/journal");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القيد", description: err?.message });
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القيد", description: err?.fix ?? err?.message });
     }
   };
 
@@ -101,7 +107,7 @@ export default function JournalCreate() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم القيد" value={autoNumberRef.current} />
         <CreationDateField />
-        <div className="md:col-span-2"><Label>الوصف</Label><Input className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></div>
+        <TextField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} className="md:col-span-2" />
       </div>
 
       <Card className="mb-4">
@@ -160,8 +166,8 @@ export default function JournalCreate() {
             <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2 pt-2 border-t font-semibold text-sm">
               <span></span>
               <span>الإجمالي</span>
-              <span>{totalDebit.toLocaleString("ar-SA")}</span>
-              <span>{totalCredit.toLocaleString("ar-SA")}</span>
+              <span>{formatCurrency(totalDebit)}</span>
+              <span>{formatCurrency(totalCredit)}</span>
               <span></span>
             </div>
             {!isBalanced && totalDebit > 0 && (

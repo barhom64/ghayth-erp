@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { getCurrencySymbol, formatDateAr } from "@/lib/formatters";
+import { getCurrencySymbol, formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,11 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
-import { formatCurrency } from "@/lib/formatters";
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight, Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check, Clock, FileText as FileTextIcon } from "lucide-react";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
@@ -141,9 +141,12 @@ export default function OpportunityDetail() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm font-medium">المرحلة</label>
-                <select value={editForm.stage} onChange={e => setEditForm(f => ({...f, stage: e.target.value}))} className="w-full border rounded-md p-2 mt-1">
-                  {[["lead", "عميل محتمل"], ["qualified", "مؤهل"], ["proposal", "عرض سعر"], ["negotiation", "تفاوض"], ["closed_won", "مغلق (ربح)"], ["closed_lost", "مغلق (خسارة)"]].map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <Select value={editForm.stage} onValueChange={(v) => setEditForm(f => ({...f, stage: v}))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[["lead", "عميل محتمل"], ["qualified", "مؤهل"], ["proposal", "عرض سعر"], ["negotiation", "تفاوض"], ["closed_won", "مغلق (ربح)"], ["closed_lost", "مغلق (خسارة)"]].map(([k, v]) => <SelectItem key={k} value={k}>{v as string}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">{`القيمة ( ${getCurrencySymbol()})`}</label>

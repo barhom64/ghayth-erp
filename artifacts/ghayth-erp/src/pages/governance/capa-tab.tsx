@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable } from "@/components/ui/data-table";
 import { CheckCircle2, Plus, Eye } from "lucide-react";
@@ -82,23 +84,23 @@ export function CAPATab() {
           <CardContent className="p-4 grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="text-xs text-gray-500 mb-1 block">الملاحظة *</label>
-              <input className="w-full border rounded px-2 py-1 text-sm" value={newForm.finding} onChange={e => setNewForm(p => ({ ...p, finding: e.target.value }))} />
+              <Input className="text-sm" value={newForm.finding} onChange={e => setNewForm(p => ({ ...p, finding: e.target.value }))} />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">المسؤول</label>
-              <input className="w-full border rounded px-2 py-1 text-sm" value={newForm.responsiblePerson} onChange={e => setNewForm(p => ({ ...p, responsiblePerson: e.target.value }))} />
+              <Input className="text-sm" value={newForm.responsiblePerson} onChange={e => setNewForm(p => ({ ...p, responsiblePerson: e.target.value }))} />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">تاريخ الاستحقاق</label>
-              <input type="date" className="w-full border rounded px-2 py-1 text-sm" value={newForm.dueDate} onChange={e => setNewForm(p => ({ ...p, dueDate: e.target.value }))} />
+              <Input type="date" className="text-sm" value={newForm.dueDate} onChange={e => setNewForm(p => ({ ...p, dueDate: e.target.value }))} />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">السبب الجذري</label>
-              <textarea className="w-full border rounded px-2 py-1 text-sm" rows={2} value={newForm.rootCause} onChange={e => setNewForm(p => ({ ...p, rootCause: e.target.value }))} />
+              <Textarea className="text-sm" rows={2} value={newForm.rootCause} onChange={e => setNewForm(p => ({ ...p, rootCause: e.target.value }))} />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">الإجراء التصحيحي</label>
-              <textarea className="w-full border rounded px-2 py-1 text-sm" rows={2} value={newForm.correctiveAction} onChange={e => setNewForm(p => ({ ...p, correctiveAction: e.target.value }))} />
+              <Textarea className="text-sm" rows={2} value={newForm.correctiveAction} onChange={e => setNewForm(p => ({ ...p, correctiveAction: e.target.value }))} />
             </div>
             <div className="col-span-2 flex gap-2">
               <Button size="sm" onClick={handleCreate}>حفظ</Button>

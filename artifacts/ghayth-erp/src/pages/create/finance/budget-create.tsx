@@ -1,53 +1,52 @@
 import { useState } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const now = new Date();
 const DRAFT_KEY = "finance_budget_create";
-const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "", date: new Date().toISOString().split("T")[0] };
+const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "", date: todayLocal() };
 
 export default function BudgetCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/budget", "POST", [["budget"]]);
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.accountCode) localErrors.accountCode = "يرجى اختيار الحساب";
+    let periodError: string | null = null;
     if (!form.period) {
-      localErrors.period = "الفترة مطلوبة";
+      periodError = "الفترة مطلوبة";
     } else {
       const year = parseInt(form.period.split("-")[0], 10);
-      if (isNaN(year) || year < 2020 || year > 2040) localErrors.period = "السنة يجب أن تكون بين 2020 و 2040";
+      if (isNaN(year) || year < 2020 || year > 2040) periodError = "السنة يجب أن تكون بين 2020 و 2040";
     }
-    if (!form.amount) {
-      localErrors.amount = "المبلغ مطلوب";
-    } else if (Number(form.amount) < 0) {
-      localErrors.amount = "المبلغ يجب أن يكون صفر أو أكثر";
-    }
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      accountCode: form.accountCode ? null : "يرجى اختيار الحساب",
+      period: periodError,
+      amount: !form.amount ? "المبلغ مطلوب" : Number(form.amount) < 0 ? "المبلغ يجب أن يكون صفر أو أكثر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -61,7 +60,8 @@ export default function BudgetCreate() {
       toast({ title: "تم إضافة بند الميزانية بنجاح" });
       setLocation("/finance/budget");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة بند الميزانية", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة بند الميزانية", description: err?.fix ?? err?.message });
     }
   };
 
@@ -75,32 +75,25 @@ export default function BudgetCreate() {
       )}
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>التاريخ</Label>
-          <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></div>
-        </div>
+        <FormFieldWrapper label="التاريخ">
+          <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />
+        </FormFieldWrapper>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label>الحساب <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="الحساب" required error={fieldErrors.accountCode}>
           <Select value={form.accountCode} onValueChange={(v) => setForm((f) => ({ ...f, accountCode: v }))}>
-            <SelectTrigger className={`mt-1 ${errCls("accountCode")}`}>
-              <SelectValue placeholder="اختر الحساب" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر الحساب" /></SelectTrigger>
             <SelectContent>
               {accounts.map((a: any) => (
                 <SelectItem key={a.code || a.id} value={String(a.code || a.id)}>{a.code} - {a.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <FieldHint field="accountCode" />
-        </div>
-        <div>
-          <Label>الفترة <span className="text-red-500">*</span></Label>
-          <Input className={`mt-1 ${errCls("period")}`} type="month" value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} />
-          <FieldHint field="period" />
-        </div>
-        <div><Label>المبلغ المخصص <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("amount")}`} type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} /><FieldHint field="amount" /></div>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفترة" required error={fieldErrors.period}>
+          <Input type="month" value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} />
+        </FormFieldWrapper>
+        <NumberField label="المبلغ المخصص" required value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} step={0.01} min={0} error={fieldErrors.amount} />
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">

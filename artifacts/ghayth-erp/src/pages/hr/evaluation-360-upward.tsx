@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -56,7 +57,7 @@ export default function Evaluation360UpwardPage() {
   const [comments, setComments] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const { data: cycleData } = useApiQuery<any>(
+  const { data: cycleData, isLoading, isError } = useApiQuery<any>(
     ["evaluation-cycle-detail", cycleId],
     `/hr/evaluation-cycles/${cycleId}`,
     { enabled: !!cycleId }
@@ -80,6 +81,9 @@ export default function Evaluation360UpwardPage() {
     ["manager", "owner", "general_manager"].includes(p.evaluatorRole) || p.evaluatorRole === "manager"
   );
   const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   function handleSubmit() {
     if (!managerId) {

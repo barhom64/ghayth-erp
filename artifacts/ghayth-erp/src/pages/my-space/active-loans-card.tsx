@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { formatCurrency } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Wallet, ChevronLeft } from "lucide-react";
@@ -6,10 +7,6 @@ import { cn } from "@/lib/utils";
 
 interface ActiveLoansCardProps {
   activeLoans: any[];
-}
-
-function formatAmount(v: any): string {
-  return Number(v ?? 0).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 const loanTypeLabels: Record<string, string> = {
@@ -37,7 +34,7 @@ export function ActiveLoansCard({ activeLoans }: ActiveLoansCardProps) {
           سلفي النشطة
           {totalRemaining > 0 && (
             <span className="text-xs font-normal text-gray-500">
-              (متبقي: {formatAmount(totalRemaining)} ر.س)
+              (متبقي: {formatCurrency(totalRemaining)})
             </span>
           )}
         </CardTitle>
@@ -61,7 +58,7 @@ export function ActiveLoansCard({ activeLoans }: ActiveLoansCardProps) {
                     {loanTypeLabels[loan.loanType] ?? loan.loanType} — {loan.loanNumber}
                   </span>
                   <span className={cn("text-xs font-semibold", isActive ? "text-orange-600" : "text-yellow-600")}>
-                    {isActive ? `${formatAmount(loan.remainingAmount)} ر.س متبقي` : "معلقة"}
+                    {isActive ? `${formatCurrency(loan.remainingAmount)} متبقي` : "معلقة"}
                   </span>
                 </div>
                 {isActive && (
@@ -73,7 +70,7 @@ export function ActiveLoansCard({ activeLoans }: ActiveLoansCardProps) {
                       />
                     </div>
                     <div className="flex items-center justify-between text-xs text-gray-400">
-                      <span>مسدد: {formatAmount(loan.paidAmount)} من {formatAmount(loan.amount)}</span>
+                      <span>مسدد: {formatCurrency(loan.paidAmount)} من {formatCurrency(loan.amount)}</span>
                       <span>{paidPct}%</span>
                     </div>
                   </>

@@ -51,10 +51,7 @@ budgetRouter.post("/budget", async (req, res) => {
     const scope = req.scope!;
     assertRole(scope, ["director", "owner"]);
     const parsed = createBudgetSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { accountCode, period, amount, branchId } = parsed.data;
     const { insertId } = await rawExecute(
       `INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used)
@@ -471,6 +468,7 @@ budgetRouter.get("/budget/variance", async (req, res) => {
                 JOIN journal_entries je ON je.id = jl."journalId"
                 WHERE je."companyId" = b."companyId"
                   AND je."deletedAt" IS NULL
+                  AND je.status = 'posted'
                   AND jl."accountCode" = b."accountCode"
                   AND je."createdAt"::date BETWEEN $2::date AND $3::date
               ), 0) AS "actualAmount"
@@ -538,7 +536,7 @@ budgetRouter.get("/fiscal-periods", async (req, res) => {
                 COALESCE(SUM(jl.debit), 0) AS "totalDebit"
          FROM journal_entries je
          LEFT JOIN journal_lines jl ON jl."journalId" = je.id
-         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2`,
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND to_char(je."createdAt", 'YYYY-MM') = $2`,
         [scope.companyId, period]
       );
 
@@ -593,7 +591,7 @@ budgetRouter.post("/fiscal-periods/:period/close", async (req, res) => {
       `SELECT COALESCE(SUM(jl.debit), 0) AS "totalDebit", COALESCE(SUM(jl.credit), 0) AS "totalCredit"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2`,
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND to_char(je."createdAt", 'YYYY-MM') = $2`,
       [scope.companyId, period]
     );
     const totalDebit = Number(debitSum?.totalDebit ?? 0);

@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -68,6 +69,22 @@ async function generateOvertimeNumber(companyId: number): Promise<string> {
 
 // ─── حساب المعدل بالساعة (يستخدم hrHelpers — المادة 98 السعودية) ────────
 const calcHourlyRate = calcHourlyRateHelper;
+
+// ─── Zod Schemas ──────────────────────────────────────────────────────────────
+
+const createOvertimeSchema = z.object({
+  assignmentId: z.number({ message: "يرجى اختيار الموظف" }),
+  overtimeDate: z.string().min(1, "تاريخ الوقت الإضافي مطلوب"),
+  startTime: z.string().min(1, "وقت البداية مطلوب"),
+  endTime: z.string().min(1, "وقت النهاية مطلوب"),
+  hours: z.number({ message: "عدد الساعات مطلوب" }).positive("عدد الساعات يجب أن يكون أكبر من صفر").max(12, "لا يمكن تسجيل أكثر من 12 ساعة إضافية في اليوم"),
+  multiplier: z.number().optional(),
+  reason: z.string().optional(),
+});
+
+const rejectOvertimeSchema = z.object({
+  reason: z.string().optional(),
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime — قائمة الطلبات
@@ -147,15 +164,11 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
-    const b = req.body as any;
+    const parsed_createOvertimeSchema = createOvertimeSchema.safeParse(req.body);
+    if (!parsed_createOvertimeSchema.success) throw new ValidationError(parsed_createOvertimeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_createOvertimeSchema.data;
 
-    if (!b.assignmentId) throw new ValidationError("يرجى اختيار الموظف", { field: "assignmentId" });
-    if (!b.overtimeDate) throw new ValidationError("تاريخ الوقت الإضافي مطلوب", { field: "overtimeDate" });
-    if (!b.startTime || !b.endTime) throw new ValidationError("وقت البداية والنهاية مطلوبان");
-    if (!b.hours || Number(b.hours) <= 0) throw new ValidationError("عدد الساعات مطلوب", { field: "hours" });
-
-    const hours = Number(b.hours);
-    if (hours > 12) throw new ValidationError("لا يمكن تسجيل أكثر من 12 ساعة إضافية في اليوم");
+    const hours = b.hours;
 
     // جلب بيانات الموظف
     const [emp] = await rawQuery<any>(
@@ -254,6 +267,8 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
+    // No body expected
+    { const _guard = z.object({}).strict().safeParse(req.body ?? {}); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     if (!["owner", "hr_manager", "general_manager", "branch_manager"].includes(scope.role)) {
       throw new ForbiddenError(
@@ -329,7 +344,9 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       throw new ForbiddenError("صلاحية رفض طلبات الوقت الإضافي محصورة بالمدير أو HR أو المالك");
     }
 
-    const b = req.body as any;
+    const parsed_rejectOvertimeSchema = rejectOvertimeSchema.safeParse(req.body);
+    if (!parsed_rejectOvertimeSchema.success) throw new ValidationError(parsed_rejectOvertimeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed_rejectOvertimeSchema.data;
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [req.params.id, scope.companyId]

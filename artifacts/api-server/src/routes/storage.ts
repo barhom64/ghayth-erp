@@ -1,3 +1,4 @@
+import { ValidationError } from "../lib/errorHandler.js";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { z } from "zod";
@@ -54,20 +55,17 @@ const uploadLimiter = rateLimit({
 });
 
 router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requirePermission("documents:write"), async (req: Request, res: Response) => {
-  const parsed = RequestUploadUrlBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.errors[0]?.message || "Missing or invalid required fields" });
-    return;
-  }
-
-  const { name, size, contentType } = parsed.data;
-
-  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    res.status(400).json({ error: `نوع الملف غير مسموح به: ${contentType}. الأنواع المسموحة: PDF، Word، Excel، الصور، النصوص` });
-    return;
-  }
-
   try {
+    const parsed = RequestUploadUrlBody.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message || "Missing or invalid required fields");
+
+    const { name, size, contentType } = parsed.data;
+
+    if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+      res.status(400).json({ error: `نوع الملف غير مسموح به: ${contentType}. الأنواع المسموحة: PDF، Word، Excel، الصور، النصوص` });
+      return;
+    }
+
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
@@ -88,6 +86,10 @@ router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requi
       }),
     );
   } catch (error) {
+    if (error instanceof ValidationError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
     req.log.error({ err: error }, "Error generating upload URL");
     res.status(500).json({ error: "Failed to generate upload URL" });
   }

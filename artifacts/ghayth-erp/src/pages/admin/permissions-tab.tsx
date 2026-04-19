@@ -3,6 +3,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Shield, UserCog, CheckCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -136,13 +137,12 @@ export function PermissionsTab() {
           <CardContent className="p-4 space-y-4">
             <div>
               <Label className="text-sm mb-1.5 block">اختر الدور</Label>
-              <select
-                className="w-full border rounded-lg p-2.5 bg-white"
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-              >
-                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             {loading ? (
               <p className="text-sm text-gray-400 text-center py-4">جاري التحميل...</p>
@@ -212,16 +212,14 @@ export function PermissionsTab() {
           <CardContent className="p-4 space-y-4">
             <div>
               <Label className="text-sm mb-1.5 block">اختر المستخدم</Label>
-              <select
-                className="w-full border rounded-lg p-2.5 bg-white"
-                value={selectedUserId ?? ""}
-                onChange={(e) => setSelectedUserId(Number(e.target.value) || null)}
-              >
-                <option value="">— اختر مستخدم —</option>
-                {users.map((u: any) => (
-                  <option key={u.id} value={u.id}>{u.employeeName || u.email} ({ROLE_OPTIONS.find(r => r.value === u.role)?.label || u.role})</option>
-                ))}
-              </select>
+              <Select value={selectedUserId?.toString() ?? ""} onValueChange={(v) => setSelectedUserId(v ? Number(v) : null)}>
+                <SelectTrigger><SelectValue placeholder="— اختر مستخدم —" /></SelectTrigger>
+                <SelectContent>
+                  {users.map((u: any) => (
+                    <SelectItem key={u.id} value={u.id.toString()}>{u.employeeName || u.email} ({ROLE_OPTIONS.find(r => r.value === u.role)?.label || u.role})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {selectedUserId && (
               <>

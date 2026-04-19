@@ -322,6 +322,16 @@ export default function ExpensesPage() {
                     entityType="expense"
                     entityId={e.id}
                     currentStatus={e.status}
+                    approveEndpoint={`/finance/expenses/${e.id}/approve`}
+                    rejectEndpoint={`/finance/expenses/${e.id}/approve`}
+                    returnEndpoint={`/finance/expenses/${e.id}/approve`}
+                    approveMethod="PATCH"
+                    rejectMethod="PATCH"
+                    returnMethod="PATCH"
+                    approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                    rejectBody={(notes) => ({ approved: false, notes })}
+                    returnBody={(notes) => ({ approved: "returned", notes })}
+                    pendingStatuses={["draft", "pending_approval", "returned"]}
                     onDone={() => setExpandedId(null)}
                     invalidateKeys={[["expenses"]]}
                   />

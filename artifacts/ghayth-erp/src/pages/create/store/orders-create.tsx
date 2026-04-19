@@ -1,16 +1,18 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface OrderItem {
   name: string;
@@ -23,8 +25,8 @@ export default function OrdersCreate() {
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const createMut = useApiMutation<unknown, Record<string, any>>("/store/orders", "POST", [["store-orders"], ["store-stats"]]);
-  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
-  const { data: productsData } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
+  const { data: clientsData, isLoading: loadingC, isError: errorC } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: productsData, isLoading: loadingP, isError: errorP } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
   const clients = clientsData?.data || [];
   const products = productsData?.data || [];
 
@@ -32,6 +34,10 @@ export default function OrdersCreate() {
     customerName: "", customerPhone: "", status: "pending", notes: "",
   });
   const [items, setItems] = useState<OrderItem[]>([]);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  if (loadingC || loadingP) return <LoadingSpinner />;
+  if (errorC || errorP) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleClientSelect = (clientId: string) => {
     const client = clients.find((c: any) => String(c.id) === clientId);
@@ -69,8 +75,11 @@ export default function OrdersCreate() {
   const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
 
   const handleSubmit = () => {
-    if (!form.customerName) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم العميل" });
+    const firstError = validate({
+      customerName: form.customerName ? null : "يرجى إدخال اسم العميل",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -82,7 +91,10 @@ export default function OrdersCreate() {
       items: items.length > 0 ? items : undefined,
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الطلب بنجاح" }); setLocation("/store"); },
-      onError: (err) => toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err.message }),
+      onError: (err: any) => {
+        setApiError(err);
+        toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.fix ?? err?.message });
+      },
     });
   };
 
@@ -91,17 +103,16 @@ export default function OrdersCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label>اختر من العملاء</Label>
+        <FormFieldWrapper label="اختر من العملاء">
           <Select value="_none" onValueChange={(v) => { if (v !== "_none") handleClientSelect(v); }}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— اختر عميل أو أدخل يدوياً —</SelectItem>
               {clients.map((c: any) => (
@@ -109,13 +120,12 @@ export default function OrdersCreate() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>اسم العميل <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.customerName} onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))} /></div>
-        <div><Label>هاتف العميل</Label><Input className="mt-1" dir="ltr" value={form.customerPhone} onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))} placeholder="05xxxxxxxx" /></div>
-        <div>
-          <Label>الحالة</Label>
+        </FormFieldWrapper>
+        <TextField label="اسم العميل" required value={form.customerName} onChange={(v) => setForm((f) => ({ ...f, customerName: v }))} error={fieldErrors.customerName} />
+        <TextField label="هاتف العميل" dir="ltr" value={form.customerPhone} onChange={(v) => setForm((f) => ({ ...f, customerPhone: v }))} placeholder="05xxxxxxxx" />
+        <FormFieldWrapper label="الحالة">
           <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="pending">قيد الانتظار</SelectItem>
               <SelectItem value="confirmed">مؤكد</SelectItem>
@@ -125,7 +135,7 @@ export default function OrdersCreate() {
               <SelectItem value="cancelled">ملغي</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </FormFieldWrapper>
       </div>
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
@@ -171,12 +181,12 @@ export default function OrdersCreate() {
         ))}
         {items.length > 0 && (
           <div className="flex justify-end mt-2 text-sm font-semibold">
-            الإجمالي: {totalAmount.toLocaleString()} {getCurrencySymbol()}
+            الإجمالي: {formatCurrency(totalAmount)}
           </div>
         )}
       </div>
 
-      <div><Label>ملاحظات</Label><Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية..." /></div>
+      <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." className="mt-4" />
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/store")}>إلغاء</Button>

@@ -1,15 +1,18 @@
 import { useState, useEffect } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Shield, Plus, Trash2, CheckCircle } from "lucide-react";
 import { roleKeyColors } from "@/contexts/app-context";
 import { MODULE_LABELS, PredefinedRole, UserRoleRow } from "./shared";
 
 export function RoleAssignmentTab() {
+  const { toast } = useToast();
   const { data: usersData, isLoading: isLoading1, isError: isError1 } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: predefinedData, isLoading: isLoading2, isError: isError2 } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -40,14 +43,14 @@ export function RoleAssignmentTab() {
         body: JSON.stringify({ userId: selectedUserId, roleKey }),
       });
       loadUserRoles(selectedUserId);
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) { toast({ title: "خطأ", description: getErrorMessage(e), variant: "destructive" }); }
   };
 
   const removeRole = async (id: number) => {
     try {
       await apiFetch(`/admin/user-roles/${id}`, { method: "DELETE" });
       if (selectedUserId) loadUserRoles(selectedUserId);
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) { toast({ title: "خطأ", description: getErrorMessage(e), variant: "destructive" }); }
   };
 
   const assignedKeys = (userRoles || []).map(r => r.roleKey);
@@ -62,16 +65,14 @@ export function RoleAssignmentTab() {
       <Card>
         <CardContent className="p-4">
           <Label className="text-sm font-medium mb-2 block">اختر المستخدم</Label>
-          <select
-            className="w-full border rounded-lg p-2.5 bg-white"
-            value={selectedUserId ?? ""}
-            onChange={(e) => setSelectedUserId(Number(e.target.value) || null)}
-          >
-            <option value="">— اختر مستخدم —</option>
-            {users.map((u: any) => (
-              <option key={u.id} value={u.id}>{u.email} ({u.role})</option>
-            ))}
-          </select>
+          <Select value={selectedUserId?.toString() ?? ""} onValueChange={(v) => setSelectedUserId(v ? Number(v) : null)}>
+            <SelectTrigger><SelectValue placeholder="— اختر مستخدم —" /></SelectTrigger>
+            <SelectContent>
+              {users.map((u: any) => (
+                <SelectItem key={u.id} value={u.id.toString()}>{u.email} ({u.role})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 

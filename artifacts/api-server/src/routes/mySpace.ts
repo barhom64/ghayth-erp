@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { handleRouteError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -563,8 +564,7 @@ router.get("/", async (req, res) => {
       role: scope.role,
     });
   } catch (err) {
-    console.error("My-space error:", err);
-    res.status(500).json({ error: "خطأ في الخادم" });
+    handleRouteError(err, res, "My-space error:");
   }
 });
 
@@ -615,8 +615,7 @@ router.get("/attendance", async (req, res) => {
 
     res.json({ data: rows, total: rows.length, monthly: monthlyStats ?? null });
   } catch (err) {
-    console.error("my-attendance error:", err);
-    res.status(500).json({ error: "خطأ في الخادم" });
+    handleRouteError(err, res, "my-attendance error:");
   }
 });
 
@@ -653,8 +652,7 @@ router.get("/payslip", async (req, res) => {
     );
     res.json({ data: ps || null });
   } catch (err) {
-    console.error("my-payslip error:", err);
-    res.status(500).json({ error: "خطأ في الخادم" });
+    handleRouteError(err, res, "my-payslip error:");
   }
 });
 
@@ -671,8 +669,7 @@ router.get("/performance", async (req, res) => {
     );
     res.json({ data: rows });
   } catch (err) {
-    console.error("my-performance error:", err);
-    res.status(500).json({ error: "خطأ في الخادم" });
+    handleRouteError(err, res, "my-performance error:");
   }
 });
 
@@ -688,8 +685,7 @@ router.get("/documents", async (req, res) => {
     );
     res.json({ data: rows });
   } catch (err) {
-    console.error("my-documents error:", err);
-    res.status(500).json({ error: "خطأ في الخادم" });
+    handleRouteError(err, res, "my-documents error:");
   }
 });
 
@@ -734,8 +730,7 @@ router.get("/requests", async (req, res) => {
 
     res.json({ data: rows, leaveRequests: leaveRows, total: rows.length });
   } catch (err) {
-    console.error("my-requests error:", err);
-    res.status(500).json({ error: "خطأ في الخادم" });
+    handleRouteError(err, res, "my-requests error:");
   }
 });
 

@@ -1,6 +1,7 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -65,8 +66,9 @@ function MiniBar({ label, value, max, color = "blue" }: { label: string; value: 
 }
 
 function HrDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-hr"], "/module-dashboards/hr");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-hr"], "/module-dashboards/hr");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -94,7 +96,7 @@ function HrDashboard() {
           <CardContent>
             <div className="text-3xl font-bold">{data.violations?.total ?? 0}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              إجمالي الخصومات: {Number(data.violations?.totalDeductions ?? 0).toLocaleString()} ر.س
+              إجمالي الخصومات: {formatCurrency(Number(data.violations?.totalDeductions ?? 0))}
             </p>
           </CardContent>
         </Card>
@@ -132,20 +134,19 @@ function HrDashboard() {
 }
 
 function FinanceDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-finance"], "/module-dashboards/finance");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-finance"], "/module-dashboards/finance");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
-
-  const fmt = (v: number) => v.toLocaleString("ar-SA");
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <KpiCard title="إجمالي الإيرادات" value={`${fmt(data.revenue?.total ?? 0)} ر.س`} icon={DollarSign} color="green" />
-        <KpiCard title="المحصّل" value={`${fmt(data.revenue?.paid ?? 0)} ر.س`} icon={CheckCircle} color="blue" />
-        <KpiCard title="مستحقات" value={`${fmt(data.revenue?.outstanding ?? 0)} ر.س`} icon={Clock} color="orange" />
+        <KpiCard title="إجمالي الإيرادات" value={formatCurrency(data.revenue?.total ?? 0)} icon={DollarSign} color="green" />
+        <KpiCard title="المحصّل" value={formatCurrency(data.revenue?.paid ?? 0)} icon={CheckCircle} color="blue" />
+        <KpiCard title="مستحقات" value={formatCurrency(data.revenue?.outstanding ?? 0)} icon={Clock} color="orange" />
         <KpiCard title="فواتير متأخرة" value={data.invoices?.overdue ?? 0} icon={AlertTriangle} color="red" />
-        <KpiCard title="مصروفات الشهر" value={`${fmt(data.expenses?.monthTotal ?? 0)} ر.س`} icon={TrendingDown} color="purple" />
+        <KpiCard title="مصروفات الشهر" value={formatCurrency(data.expenses?.monthTotal ?? 0)} icon={TrendingDown} color="purple" />
         <KpiCard title="استخدام الميزانية" value={`${data.budgets?.avgUsage ?? 0}%`} icon={BarChart3} color="cyan" />
       </div>
 
@@ -153,7 +154,7 @@ function FinanceDashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">ذمم مدينة متأخرة</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{fmt(data.receivables?.amount ?? 0)} ر.س</div>
+            <div className="text-2xl font-bold text-red-600">{formatCurrency(data.receivables?.amount ?? 0)}</div>
             <p className="text-xs text-muted-foreground mt-1">{data.receivables?.count ?? 0} فاتورة متأخرة</p>
           </CardContent>
         </Card>
@@ -190,8 +191,9 @@ function FinanceDashboard() {
 }
 
 function FleetDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-fleet"], "/module-dashboards/fleet");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-fleet"], "/module-dashboards/fleet");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -221,13 +223,13 @@ function FleetDashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{data.maintenance?.pending ?? 0}</div>
             <p className="text-xs text-muted-foreground">طلبات صيانة معلقة</p>
-            <p className="text-xs mt-2">التكلفة الإجمالية: {Number(data.maintenance?.totalCost ?? 0).toLocaleString()} ر.س</p>
+            <p className="text-xs mt-2">التكلفة الإجمالية: {formatCurrency(Number(data.maintenance?.totalCost ?? 0))}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">الوقود</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Number(data.fuel?.totalCost ?? 0).toLocaleString()} ر.س</div>
+            <div className="text-2xl font-bold">{formatCurrency(Number(data.fuel?.totalCost ?? 0))}</div>
             <p className="text-xs text-muted-foreground">إجمالي تكلفة الوقود</p>
             <p className="text-xs mt-2">{Number(data.fuel?.totalLiters ?? 0).toLocaleString()} لتر</p>
           </CardContent>
@@ -238,8 +240,9 @@ function FleetDashboard() {
 }
 
 function LegalDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-legal"], "/module-dashboards/legal");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-legal"], "/module-dashboards/legal");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -269,7 +272,7 @@ function LegalDashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">ملخص العقود</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Number(data.contracts?.totalValue ?? 0).toLocaleString()} ر.س</div>
+            <div className="text-2xl font-bold">{formatCurrency(Number(data.contracts?.totalValue ?? 0))}</div>
             <p className="text-xs text-muted-foreground">إجمالي قيمة العقود</p>
             <div className="mt-3 space-y-2">
               <MiniBar label="نشطة" value={data.contracts?.active ?? 0} max={data.contracts?.total ?? 1} color="green" />
@@ -283,8 +286,9 @@ function LegalDashboard() {
 }
 
 function PropertiesDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-properties"], "/module-dashboards/properties");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-properties"], "/module-dashboards/properties");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -293,7 +297,7 @@ function PropertiesDashboard() {
         <KpiCard title="إجمالي الوحدات" value={data.units?.total ?? 0} icon={Building2} color="blue" />
         <KpiCard title="مؤجرة" value={data.units?.rented ?? 0} icon={CheckCircle} color="green" subtitle={`نسبة الإشغال: ${data.occupancyRate ?? 0}%`} />
         <KpiCard title="شاغرة" value={data.units?.available ?? 0} icon={AlertTriangle} color="orange" />
-        <KpiCard title="دخل شهري" value={`${Number(data.contracts?.monthlyIncome ?? 0).toLocaleString()} ر.س`} icon={DollarSign} color="green" />
+        <KpiCard title="دخل شهري" value={formatCurrency(Number(data.contracts?.monthlyIncome ?? 0))} icon={DollarSign} color="green" />
         <KpiCard title="متأخرات تحصيل" value={data.payments?.overdue ?? 0} icon={Clock} color="red" />
       </div>
 
@@ -304,8 +308,8 @@ function PropertiesDashboard() {
             <div className="text-2xl font-bold text-green-600">{data.payments?.collectionRate ?? 0}%</div>
             <p className="text-xs text-muted-foreground">نسبة التحصيل</p>
             <div className="mt-2 space-y-1 text-xs">
-              <div>المستحق: {Number(data.payments?.totalDue ?? 0).toLocaleString()} ر.س</div>
-              <div>المحصّل: {Number(data.payments?.totalCollected ?? 0).toLocaleString()} ر.س</div>
+              <div>المستحق: {formatCurrency(Number(data.payments?.totalDue ?? 0))}</div>
+              <div>المحصّل: {formatCurrency(Number(data.payments?.totalCollected ?? 0))}</div>
             </div>
           </CardContent>
         </Card>
@@ -334,8 +338,9 @@ function PropertiesDashboard() {
 }
 
 function ProjectsDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-projects"], "/module-dashboards/projects");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-projects"], "/module-dashboards/projects");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -356,11 +361,11 @@ function ProjectsDashboard() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">إجمالي الميزانية</span>
-                <span className="font-medium">{Number(data.budget?.totalBudget ?? 0).toLocaleString()} ر.س</span>
+                <span className="font-medium">{formatCurrency(Number(data.budget?.totalBudget ?? 0))}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">المنصرف</span>
-                <span className="font-medium">{Number(data.budget?.totalSpent ?? 0).toLocaleString()} ر.س</span>
+                <span className="font-medium">{formatCurrency(Number(data.budget?.totalSpent ?? 0))}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">الانحراف</span>
@@ -410,11 +415,10 @@ function ProjectsDashboard() {
 }
 
 function CrmDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-crm"], "/module-dashboards/crm");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-crm"], "/module-dashboards/crm");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
-
-  const fmt = (v: number) => v.toLocaleString("ar-SA");
 
   return (
     <div className="space-y-4">
@@ -423,7 +427,7 @@ function CrmDashboard() {
         <KpiCard title="فرص مفتوحة" value={data.opportunities?.open ?? 0} icon={Briefcase} color="orange" />
         <KpiCard title="فرص مكسوبة" value={data.opportunities?.won ?? 0} icon={CheckCircle} color="green" />
         <KpiCard title="فرص خاسرة" value={data.opportunities?.lost ?? 0} icon={TrendingDown} color="red" />
-        <KpiCard title="قيمة الفرص" value={`${fmt(data.opportunities?.totalValue ?? 0)} ر.س`} icon={DollarSign} color="purple" />
+        <KpiCard title="قيمة الفرص" value={formatCurrency(data.opportunities?.totalValue ?? 0)} icon={DollarSign} color="purple" />
         <KpiCard title="جهات الاتصال" value={data.contacts?.total ?? 0} icon={Users} color="cyan" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -450,11 +454,10 @@ function CrmDashboard() {
 }
 
 function StoreDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-store"], "/module-dashboards/store");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-store"], "/module-dashboards/store");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
-
-  const fmt = (v: number) => v.toLocaleString("ar-SA");
 
   return (
     <div className="space-y-4">
@@ -463,7 +466,7 @@ function StoreDashboard() {
         <KpiCard title="طلبات معلقة" value={data.orders?.pending ?? 0} icon={Clock} color="orange" />
         <KpiCard title="طلبات مكتملة" value={data.orders?.completed ?? 0} icon={CheckCircle} color="green" />
         <KpiCard title="منتجات نشطة" value={data.products?.active ?? 0} icon={Package} color="purple" subtitle={`من ${data.products?.total ?? 0}`} />
-        <KpiCard title="إجمالي الإيرادات" value={`${fmt(data.revenue?.completed ?? 0)} ر.س`} icon={DollarSign} color="green" />
+        <KpiCard title="إجمالي الإيرادات" value={formatCurrency(data.revenue?.completed ?? 0)} icon={DollarSign} color="green" />
       </div>
       {data.monthlyOrders?.length > 0 && (
         <Card>
@@ -488,8 +491,9 @@ function StoreDashboard() {
 }
 
 function SupportDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-support"], "/module-dashboards/support");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-support"], "/module-dashboards/support");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -549,8 +553,9 @@ function SupportDashboard() {
 }
 
 function TasksDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-tasks"], "/module-dashboards/tasks");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-tasks"], "/module-dashboards/tasks");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
 
   return (
@@ -596,18 +601,17 @@ function TasksDashboard() {
 }
 
 function WarehouseDashboard() {
-  const { data, isLoading } = useApiQuery<any>(["module-dash-warehouse"], "/module-dashboards/warehouse");
-  if (isLoading) return <DashboardSkeleton />;
+  const { data, isLoading, isError } = useApiQuery<any>(["module-dash-warehouse"], "/module-dashboards/warehouse");
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (!data) return null;
-
-  const fmt = (v: number) => v.toLocaleString("ar-SA");
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
         <KpiCard title="إجمالي المنتجات" value={data.products?.total ?? 0} icon={Package} color="blue" subtitle={`نشط: ${data.products?.active ?? 0}`} />
-        <KpiCard title="إجمالي الكمية" value={fmt(data.products?.totalQty ?? 0)} icon={Layers} color="green" />
-        <KpiCard title="قيمة المخزون" value={`${fmt(data.products?.totalValue ?? 0)} ر.س`} icon={DollarSign} color="purple" />
+        <KpiCard title="إجمالي الكمية" value={formatNumber(data.products?.totalQty ?? 0)} icon={Layers} color="green" />
+        <KpiCard title="قيمة المخزون" value={formatCurrency(data.products?.totalValue ?? 0)} icon={DollarSign} color="purple" />
         <KpiCard title="مخزون منخفض" value={data.lowStock ?? 0} icon={AlertTriangle} color="red" />
         <KpiCard title="حركات الشهر" value={data.movements?.total ?? 0} icon={Activity} color="orange" subtitle={`وارد: ${data.movements?.inCount ?? 0} | صادر: ${data.movements?.outCount ?? 0}`} />
       </div>
@@ -626,11 +630,11 @@ function WarehouseDashboard() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">وارد</span>
-                <span className="font-medium text-green-600">{fmt(data.movements?.inQty ?? 0)} وحدة</span>
+                <span className="font-medium text-green-600">{formatNumber(data.movements?.inQty ?? 0)} وحدة</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">صادر</span>
-                <span className="font-medium text-red-600">{fmt(data.movements?.outQty ?? 0)} وحدة</span>
+                <span className="font-medium text-red-600">{formatNumber(data.movements?.outQty ?? 0)} وحدة</span>
               </div>
             </div>
           </CardContent>

@@ -1,21 +1,20 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { formatCurrency } from "@/lib/formatters";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { EXIT_TYPES } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
-import { LogOut, User, Calendar, Info, DollarSign, AlertTriangle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { LogOut, Info, DollarSign, AlertTriangle } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "hr_exit_create";
 
@@ -38,10 +37,10 @@ export default function ExitCreate() {
     otherDeductions: "0",
   });
 
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  if (employeesQ.isLoading) return <LoadingSpinner />;
+  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
@@ -54,38 +53,40 @@ export default function ExitCreate() {
     ? (new Date().getTime() - new Date(hireDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     : 0;
 
-  // تقدير مبدئي لمكافأة نهاية الخدمة (الحساب الدقيق يتم في الخادم)
+  // تقدير مبدئي لمكافأة نهاية الخدمة وفق نظام العمل السعودي — المادة 84 و 85
+  // الحساب الدقيق يتم في الخادم
   const estimatedGratuity = useMemo(() => {
     if (!salary || !yearsOfService) return 0;
-    let g = 0;
-    if (yearsOfService <= 5) {
-      g = (salary / 2) * yearsOfService;
-    } else {
-      g = (salary / 2) * 5 + salary * (yearsOfService - 5);
-    }
+    const first5 = Math.min(yearsOfService, 5);
+    const above5 = Math.max(yearsOfService - 5, 0);
+    let g = (salary / 2) * first5 + salary * above5;
+
     if (form.exitType === "resignation") {
+      // المادة 85: تخفيض المكافأة عند الاستقالة
       if (yearsOfService < 2) g = 0;
-      else if (yearsOfService < 5) g = g / 3;
-      else if (yearsOfService < 10) g = (g * 2) / 3;
+      else if (yearsOfService < 5) g = (salary / 2) * first5 / 3;
+      else if (yearsOfService < 10) {
+        g = ((salary / 2) * first5 * 2) / 3 + (salary * above5 * 2) / 3;
+      }
+      // 10+ سنوات: المكافأة كاملة
     }
     return Math.round(g * 100) / 100;
   }, [salary, yearsOfService, form.exitType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
-    if (!form.lastWorkingDay) localErrors.lastWorkingDay = "آخر يوم عمل مطلوب";
-    if (!form.exitType) localErrors.exitType = "نوع نهاية الخدمة مطلوب";
-    if (form.lastWorkingDay) {
-      const today = new Date().toISOString().split("T")[0];
-      if (form.lastWorkingDay < today) localErrors.lastWorkingDay = "آخر يوم عمل يجب أن يكون اليوم أو في المستقبل";
-    }
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const today = todayLocal();
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      exitType: form.exitType ? null : "نوع نهاية الخدمة مطلوب",
+      lastWorkingDay: !form.lastWorkingDay
+        ? "آخر يوم عمل مطلوب"
+        : form.lastWorkingDay < today
+          ? "آخر يوم عمل يجب أن يكون اليوم أو في المستقبل"
+          : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
 
@@ -99,7 +100,9 @@ export default function ExitCreate() {
       });
       clearDraft();
       setLocation("/hr/exit");
-    } catch {}
+    } catch (err: any) {
+      setApiError(err);
+    }
   };
 
   return (
@@ -124,18 +127,9 @@ export default function ExitCreate() {
 
         {/* بيانات الموظف */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <User className="h-4 w-4 text-gray-500" />
-              الموظف <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={form.assignmentId}
-              onValueChange={(v) => setForm({ ...form, assignmentId: v })}
-            >
-              <SelectTrigger className={errCls("assignmentId")}>
-                <SelectValue placeholder="اختر الموظف..." />
-              </SelectTrigger>
+          <FormFieldWrapper label="الموظف" required error={fieldErrors.assignmentId}>
+            <Select value={form.assignmentId} onValueChange={(v) => setForm({ ...form, assignmentId: v })}>
+              <SelectTrigger><SelectValue placeholder="اختر الموظف..." /></SelectTrigger>
               <SelectContent>
                 {employees.map((emp: any) => (
                   <SelectItem
@@ -147,56 +141,32 @@ export default function ExitCreate() {
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint field="assignmentId" />
-          </div>
+          </FormFieldWrapper>
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <LogOut className="h-4 w-4 text-gray-500" />
-              نوع نهاية الخدمة <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={form.exitType}
-              onValueChange={(v) => setForm({ ...form, exitType: v })}
-            >
-              <SelectTrigger className={errCls("exitType")}>
-                <SelectValue />
-              </SelectTrigger>
+          <FormFieldWrapper label="نوع نهاية الخدمة" required error={fieldErrors.exitType}>
+            <Select value={form.exitType} onValueChange={(v) => setForm({ ...form, exitType: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(EXIT_TYPES).map(([k, v]) => (
                   <SelectItem key={k} value={k}>{v}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint field="exitType" />
-          </div>
+          </FormFieldWrapper>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              آخر يوم عمل <span className="text-red-500">*</span>
-            </Label>
-            <div className={errCls("lastWorkingDay")}>
-              <DatePicker
-                value={form.lastWorkingDay}
-                onChange={(v) => setForm({ ...form, lastWorkingDay: v })}
-              />
-            </div>
-            <FieldHint field="lastWorkingDay" />
-          </div>
+          <FormFieldWrapper label="آخر يوم عمل" required error={fieldErrors.lastWorkingDay}>
+            <DatePicker value={form.lastWorkingDay} onChange={(v) => setForm({ ...form, lastWorkingDay: v })} />
+          </FormFieldWrapper>
 
-          <div className="space-y-2">
-            <Label>خصومات أخرى</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.otherDeductions}
-              onChange={(e) => setForm({ ...form, otherDeductions: e.target.value })}
-            />
-          </div>
+          <NumberField
+            label="خصومات أخرى"
+            value={form.otherDeductions}
+            onChange={(v) => setForm({ ...form, otherDeductions: v })}
+            step={0.01}
+            min={0}
+          />
         </div>
 
         {/* سياق الموظف: سلف نشطة + مخالفات + إجازات مستحقة */}
@@ -246,15 +216,13 @@ export default function ExitCreate() {
         )}
 
         {/* السبب */}
-        <div className="space-y-2">
-          <Label>سبب نهاية الخدمة</Label>
-          <Textarea
-            rows={3}
-            placeholder="سبب طلب إنهاء الخدمة..."
-            value={form.exitReason}
-            onChange={(e) => setForm({ ...form, exitReason: e.target.value })}
-          />
-        </div>
+        <TextAreaField
+          label="سبب نهاية الخدمة"
+          rows={3}
+          placeholder="سبب طلب إنهاء الخدمة..."
+          value={form.exitReason}
+          onChange={(v) => setForm({ ...form, exitReason: v })}
+        />
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">

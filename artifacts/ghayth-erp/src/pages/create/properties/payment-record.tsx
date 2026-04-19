@@ -3,13 +3,14 @@ import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout } from "@/components/create-page-layout";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function PaymentRecord() {
   const [, params] = useRoute("/properties/contracts/:contractId/pay/:installmentId") as [boolean, { contractId: string; installmentId: string }];
@@ -17,8 +18,9 @@ export default function PaymentRecord() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const { data: contractResp } = useApiQuery<any>(
+  const { data: contractResp, isLoading, isError } = useApiQuery<any>(
     ["property-contract-detail", params?.contractId],
     `/properties/contracts/${params?.contractId}`
   );
@@ -34,8 +36,17 @@ export default function PaymentRecord() {
     }
   }, [installment]);
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const handleSave = async () => {
-    if (!form.amount) { toast({ variant: "destructive", title: "المبلغ مطلوب" }); return; }
+    const firstError = validate({
+      amount: !form.amount || Number(form.amount) <= 0 ? "المبلغ يجب أن يكون أكبر من صفر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
     setSaving(true);
     try {
       await apiFetch(`/properties/contracts/${params?.contractId}/installments/${params?.installmentId}/pay`, {
@@ -50,7 +61,10 @@ export default function PaymentRecord() {
       qc.invalidateQueries({ queryKey: ["property-contract"] });
       qc.invalidateQueries({ queryKey: ["property-contracts"] });
       setLocation(`/properties/contracts`);
-    } catch (err: any) { toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة", description: err?.message }); }
+    } catch (err: any) {
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الدفعة", description: err?.fix ?? err?.message });
+    }
     finally { setSaving(false); }
   };
 
@@ -71,14 +85,10 @@ export default function PaymentRecord() {
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>المبلغ المدفوع <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} dir="ltr" />
-            </div>
-            <div>
-              <Label>طريقة الدفع</Label>
+            <NumberField label="المبلغ المدفوع" required value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} step={0.01} min={0.01} error={fieldErrors.amount} />
+            <FormFieldWrapper label="طريقة الدفع">
               <Select value={form.method} onValueChange={v => setForm({ ...form, method: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">نقدي</SelectItem>
                   <SelectItem value="bank_transfer">تحويل بنكي</SelectItem>
@@ -86,11 +96,8 @@ export default function PaymentRecord() {
                   <SelectItem value="online">إلكتروني</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>رقم الإيصال (اختياري)</Label>
-              <Input className="mt-1" value={form.receiptNumber} onChange={e => setForm({ ...form, receiptNumber: e.target.value })} dir="ltr" />
-            </div>
+            </FormFieldWrapper>
+            <TextField label="رقم الإيصال (اختياري)" dir="ltr" value={form.receiptNumber} onChange={(v) => setForm({ ...form, receiptNumber: v })} />
           </div>
       </div>
 

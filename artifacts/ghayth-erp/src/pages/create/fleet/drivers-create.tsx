@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "fleet_drivers_create";
 const INITIAL = { name: "", phone: "", licenseNumber: "", licenseExpiry: "", licenseType: "", employeeId: "", status: "available" };
@@ -19,11 +20,16 @@ export default function DriversCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/fleet/drivers", "POST", [["drivers"]]);
-  const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-  const employees = employeesData?.data || [];
+  const { data: employeesData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const employees = employeesData?.data || [];
 
   const handleEmployeeSelect = (empId: string) => {
     const emp = employees.find((e: any) => String(e.id) === empId);
@@ -35,8 +41,15 @@ export default function DriversCreate() {
   };
 
   const handleSubmit = async () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "اسم السائق مطلوب" });
+    const expiryInPast = form.licenseExpiry && new Date(form.licenseExpiry) < new Date();
+    const firstError = validate({
+      name: form.name.trim() ? null : "اسم السائق مطلوب",
+      phone: form.phone.trim() ? null : "رقم الهاتف مطلوب",
+      licenseNumber: form.licenseNumber.trim() ? null : "رقم الرخصة مطلوب",
+      licenseExpiry: expiryInPast ? "تاريخ انتهاء الرخصة يجب أن يكون في المستقبل" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: "الرجاء تصحيح الأخطاء في النموذج" });
       return;
     }
     try {
@@ -48,7 +61,8 @@ export default function DriversCreate() {
       toast({ title: "تم إضافة السائق بنجاح" });
       setLocation("/fleet/drivers");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السائق", description: err?.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السائق", description: err?.fix ?? err?.message });
     }
   };
 
@@ -64,10 +78,9 @@ export default function DriversCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <Label>ربط بموظف</Label>
+        <FormFieldWrapper label="ربط بموظف">
           <Select value={form.employeeId || "_none"} onValueChange={(v) => handleEmployeeSelect(v === "_none" ? "" : v)}>
-            <SelectTrigger className="mt-1">
+            <SelectTrigger>
               <SelectValue placeholder="— اختر موظف أو أدخل يدوياً —" />
             </SelectTrigger>
             <SelectContent>
@@ -82,14 +95,36 @@ export default function DriversCreate() {
               <EmployeeContextCard employeeId={form.employeeId} />
             </div>
           )}
-        </div>
-        <div><Label>الاسم <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-        <div><Label>الهاتف</Label><Input className="mt-1" dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
-        <div><Label>رقم الرخصة</Label><Input className="mt-1" value={form.licenseNumber} onChange={(e) => setForm((f) => ({ ...f, licenseNumber: e.target.value }))} /></div>
-        <div>
-          <Label>نوع الرخصة</Label>
+        </FormFieldWrapper>
+
+        <TextField
+          label="الاسم"
+          required
+          value={form.name}
+          onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+          error={fieldErrors.name}
+        />
+
+        <TextField
+          label="الهاتف"
+          required
+          dir="ltr"
+          value={form.phone}
+          onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+          error={fieldErrors.phone}
+        />
+
+        <TextField
+          label="رقم الرخصة"
+          required
+          value={form.licenseNumber}
+          onChange={(v) => setForm((f) => ({ ...f, licenseNumber: v }))}
+          error={fieldErrors.licenseNumber}
+        />
+
+        <FormFieldWrapper label="نوع الرخصة">
           <Select value={form.licenseType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, licenseType: v === "_none" ? "" : v }))}>
-            <SelectTrigger className="mt-1">
+            <SelectTrigger>
               <SelectValue placeholder="اختر النوع" />
             </SelectTrigger>
             <SelectContent>
@@ -99,26 +134,30 @@ export default function DriversCreate() {
               <SelectItem value="heavy">ثقيلة</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div><Label>انتهاء الرخصة</Label><div className="mt-1"><DatePicker value={form.licenseExpiry} onChange={(v) => setForm((f) => ({ ...f, licenseExpiry: v }))} /></div></div>
-        <div>
-          <Label>الحالة</Label>
+        </FormFieldWrapper>
+
+        <FormFieldWrapper label="انتهاء الرخصة" error={fieldErrors.licenseExpiry}>
+          <DatePicker value={form.licenseExpiry} onChange={(v) => setForm((f) => ({ ...f, licenseExpiry: v }))} />
+        </FormFieldWrapper>
+
+        <FormFieldWrapper label="الحالة">
           <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-            <SelectTrigger className="mt-1">
+            <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="available">متاح</SelectItem>
               <SelectItem value="on_trip">في رحلة</SelectItem>
               <SelectItem value="off_duty">خارج الخدمة</SelectItem>
+              <SelectItem value="suspended">موقوف</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </FormFieldWrapper>
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/fleet/drivers")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending}>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

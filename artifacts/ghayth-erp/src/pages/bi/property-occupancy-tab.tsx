@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { Building } from "lucide-react";
@@ -11,6 +12,9 @@ import {
 export function PropertyOccupancyTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["bi-property-occ"], "/bi/reports/property-occupancy");
   const rows = (data?.data || []) as any[];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-4">

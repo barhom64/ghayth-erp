@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import "@/styles/login.css";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -139,7 +140,7 @@ export default function Login() {
       const diffDays = Math.floor(diffHours / 24);
       if (diffDays === 1) return "أمس";
       if (diffDays < 7) return `منذ ${diffDays} أيام`;
-      return d.toLocaleDateString("ar-SA");
+      return formatDateAr(d);
     } catch { return ""; }
   };
 

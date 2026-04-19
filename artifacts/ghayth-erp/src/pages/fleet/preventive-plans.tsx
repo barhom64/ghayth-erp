@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wrench, Plus, AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { formatCurrency } from "@/lib/formatters";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
@@ -179,7 +180,7 @@ export default function PreventivePlansPage() {
                 <div className="grid grid-cols-3 text-xs text-gray-500 gap-2">
                   {plan.intervalKm && <div><span className="font-medium">الفترة:</span> {plan.intervalKm} كم</div>}
                   {plan.intervalDays && <div><span className="font-medium">الفترة:</span> {plan.intervalDays} يوم</div>}
-                  {plan.estimatedCost > 0 && <div><span className="font-medium">التكلفة التقديرية:</span> {plan.estimatedCost} ر.س</div>}
+                  {plan.estimatedCost > 0 && <div><span className="font-medium">التكلفة التقديرية:</span> {formatCurrency(plan.estimatedCost)}</div>}
                   {plan.lastServiceDate && <div><span className="font-medium">آخر خدمة:</span> {plan.lastServiceDate?.split("T")[0]}</div>}
                   {plan.nextServiceDate && <div><span className="font-medium">الخدمة القادمة:</span> {plan.nextServiceDate?.split("T")[0]}</div>}
                   {plan.currentMileage && <div><span className="font-medium">العداد الحالي:</span> {plan.currentMileage} كم</div>}

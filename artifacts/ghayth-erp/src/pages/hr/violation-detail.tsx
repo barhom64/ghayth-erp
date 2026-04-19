@@ -47,18 +47,50 @@ export default function ViolationDetail() {
   const { data, isLoading, isError } = useApiQuery<any>(["hr-violation-detail", id], `/hr/violations/${id}`);
   const item = data?.data ?? data;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isLoading) {
+    return (
+      <PageShell
+        title="جارٍ تحميل المخالفة..."
+        loading
+        breadcrumbs={[
+          { href: "/hr", label: "الموارد البشرية" },
+          { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        ]}
+      >
+        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
+      </PageShell>
+    );
+  }
+  if (isError) {
+    return (
+      <PageShell
+        title="تعذّر تحميل المخالفة"
+        breadcrumbs={[
+          { href: "/hr", label: "الموارد البشرية" },
+          { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        ]}
+      >
+        <ErrorState onRetry={() => window.location.reload()} />
+      </PageShell>
+    );
+  }
 
   if (!item) {
     return (
-      <PageShell title="المخالفة غير موجودة" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/violations", label: "المخالفات" }]}>
+      <PageShell
+        title="المخالفة غير موجودة"
+        breadcrumbs={[
+          { href: "/hr", label: "الموارد البشرية" },
+          { href: "/hr/violations", label: "المخالفات والجزاءات" },
+        ]}
+      >
         <Card>
-          <CardContent className="py-12 text-center text-gray-400">
+          <CardContent className="py-12 text-center text-gray-500">
             <AlertTriangle size={36} className="mx-auto mb-3 opacity-40" />
-            <p>المخالفة المطلوبة غير موجودة</p>
-            <Button variant="outline" className="mt-4" onClick={() => navigate("/hr/violations")}>
-              العودة
+            <p className="font-medium mb-1">لا توجد مخالفة بهذا الرقم</p>
+            <p className="text-sm mb-4">قد تكون المخالفة محذوفة أو غير متاحة لصلاحياتك.</p>
+            <Button variant="outline" onClick={() => navigate("/hr/violations")}>
+              العودة إلى قائمة المخالفات
             </Button>
           </CardContent>
         </Card>

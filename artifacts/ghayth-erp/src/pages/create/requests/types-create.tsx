@@ -1,13 +1,14 @@
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { Checkbox } from "@/components/ui/checkbox";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function RequestsTypeCreate() {
   const [, setLocation] = useLocation();
@@ -16,10 +17,14 @@ export default function RequestsTypeCreate() {
     name: "", category: "administrative", isActive: true, description: "",
   });
   const createMut = useApiMutation<unknown, Record<string, string | boolean | undefined>>("/requests/types", "POST", [["request-types"]]);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم نوع الطلب" });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم نوع الطلب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -29,7 +34,10 @@ export default function RequestsTypeCreate() {
       description: form.description || undefined,
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إضافة نوع الطلب بنجاح" }); setLocation("/requests/types"); },
-      onError: (err) => toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة نوع الطلب", description: err.message }),
+      onError: (err: any) => {
+        setApiError(err);
+        toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة نوع الطلب", description: err?.fix ?? err?.message });
+      },
     });
   };
 
@@ -38,16 +46,15 @@ export default function RequestsTypeCreate() {
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <button onClick={clearDraft} className="underline text-amber-600 hover:text-amber-800">تجاهل</button>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اسم النوع <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="اسم نوع الطلب" /></div>
-          <div>
-            <Label>التصنيف</Label>
+          <TextField label="اسم النوع" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم نوع الطلب" error={fieldErrors.name} />
+          <FormFieldWrapper label="التصنيف">
             <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="administrative">إداري</SelectItem>
                 <SelectItem value="financial">مالي</SelectItem>
@@ -56,19 +63,17 @@ export default function RequestsTypeCreate() {
                 <SelectItem value="maintenance">صيانة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
           <div className="flex items-center gap-2 pt-6">
-            <input
-              type="checkbox"
+            <Checkbox
               id="isActive"
               checked={form.isActive}
-              onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-              className="h-4 w-4 rounded border"
+              onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v === true }))}
             />
             <Label htmlFor="isActive">نشط</Label>
           </div>
         </div>
-        <div><Label>الوصف</Label><Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف نوع الطلب..." /></div>
+        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف نوع الطلب..." />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/requests/types")}>إلغاء</Button>
           <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الإضافة..." : "إضافة"}</Button>

@@ -66,10 +66,7 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createPostingSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = parsed.data;
     if (salaryMin !== undefined && salaryMin !== null && salaryMax !== undefined && salaryMax !== null && Number(salaryMax) < Number(salaryMin)) {
       throw new ValidationError("الحد الأعلى للراتب أقل من الحد الأدنى", {
@@ -228,10 +225,7 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
   try {
     const scope = req.scope!;
     const parsed = createApplicationSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = parsed.data;
     const [posting] = await rawQuery<{ id: number }>(
       `SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,

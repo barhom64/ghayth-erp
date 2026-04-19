@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,11 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Upload } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, roundMoney } from "@/lib/formatters";
+import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface OBLine {
   accountCode: string;
@@ -32,15 +34,15 @@ export default function OpeningBalancesCreatePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
 
   const [periodStart, setPeriodStart] = useState<string>(firstDayOfFiscalYear());
   const [lines, setLines] = useState<OBLine[]>([emptyLine(), emptyLine()]);
   const [force, setForce] = useState(false);
 
-  const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
+  const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
   const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01;
 
   const createMut = useApiMutation<unknown, any>(
@@ -62,6 +64,9 @@ export default function OpeningBalancesCreatePage() {
       onSuccess: () => setLocation("/finance/opening-balances"),
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   function updateLine(idx: number, field: keyof OBLine, value: string) {
     setLines((prev) => {
@@ -111,16 +116,14 @@ export default function OpeningBalancesCreatePage() {
     <CreatePageLayout title="أرصدة افتتاحية جديدة" backPath="/finance/opening-balances">
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>تاريخ بداية الفترة *</Label>
-          <div className="mt-1"><DatePicker value={periodStart} onChange={(v) => setPeriodStart(v)} /></div>
-        </div>
+        <FormFieldWrapper label="تاريخ بداية الفترة" required>
+          <DatePicker value={periodStart} onChange={(v) => setPeriodStart(v)} />
+        </FormFieldWrapper>
         <div className="flex items-end gap-2">
           <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={force}
-              onChange={(e) => setForce(e.target.checked)}
+              onCheckedChange={(v) => setForce(v === true)}
             />
             استبدال أي قيد موجود لنفس الفترة
           </label>

@@ -3,15 +3,15 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { ClientContextCard } from "@/components/shared/client-context-card";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "support_create";
 const INITIAL = { title: "", clientId: "", assigneeId: "", category: "", priority: "medium", status: "open", description: "" };
@@ -22,36 +22,42 @@ export default function SupportCreate() {
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const addTicket = useApiMutation("/support/tickets", "POST", [["support-tickets"], ["support-stats"]]);
-  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
-  const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const { data: clientsData, isLoading: loadingC, isError: errorC } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const { data: employeesData, isLoading: loadingE, isError: errorE } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
 
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  if (loadingC || loadingE) return <LoadingSpinner />;
+  if (errorC || errorE) return <ErrorState onRetry={() => window.location.reload()} />;
+
   const handleSubmit = async () => {
-    if (!form.title) {
-      toast({ variant: "destructive", title: "يرجى إدخال عنوان التذكرة" });
-      return;
-    }
-    if (!form.description) {
-      toast({ variant: "destructive", title: "يرجى إدخال وصف المشكلة" });
+    const firstError = validate({
+      title: form.title ? null : "يرجى إدخال عنوان التذكرة",
+      description: form.description ? null : "يرجى إدخال وصف المشكلة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
       await addTicket.mutateAsync({
+        subject: form.title,
         title: form.title,
-        clientId: form.clientId ? Number(form.clientId) : null,
-        assigneeId: form.assigneeId ? Number(form.assigneeId) : null,
+        clientId: form.clientId ? Number(form.clientId) : undefined,
+        assigneeId: form.assigneeId ? Number(form.assigneeId) : undefined,
         category: form.category || undefined,
         priority: form.priority,
-        status: form.status,
         description: form.description,
       });
       clearDraft();
       toast({ title: "تم إنشاء التذكرة بنجاح" });
       setLocation("/support");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التذكرة", description: err.message });
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التذكرة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -69,11 +75,17 @@ export default function SupportCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان التذكرة <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="عنوان التذكرة" /></div>
-          <div>
-            <Label>العميل</Label>
+          <TextField
+            label="عنوان التذكرة"
+            required
+            value={form.title}
+            onChange={(v) => setForm((f) => ({ ...f, title: v }))}
+            placeholder="عنوان التذكرة"
+            error={fieldErrors.title}
+          />
+          <FormFieldWrapper label="العميل">
             <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="بدون عميل" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="بدون عميل" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">بدون عميل</SelectItem>
                 {clients.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
@@ -84,11 +96,10 @@ export default function SupportCreate() {
                 <ClientContextCard clientId={form.clientId} section="ticket" />
               </div>
             )}
-          </div>
-          <div>
-            <Label>المسؤول عن التذكرة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="المسؤول عن التذكرة">
             <Select value={form.assigneeId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, assigneeId: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="— غير محدد —" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="— غير محدد —" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">— غير محدد —</SelectItem>
                 {employees.map((emp: any) => (
@@ -96,11 +107,10 @@ export default function SupportCreate() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الفئة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الفئة">
             <Select value={form.category || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, category: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الفئة" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر الفئة" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر الفئة</SelectItem>
                 <SelectItem value="technical">تقنية</SelectItem>
@@ -110,11 +120,10 @@ export default function SupportCreate() {
                 <SelectItem value="other">أخرى</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الأولوية</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الأولوية">
             <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="low">منخفضة</SelectItem>
                 <SelectItem value="medium">متوسطة</SelectItem>
@@ -122,19 +131,26 @@ export default function SupportCreate() {
                 <SelectItem value="urgent">عاجلة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الحالة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="open">مفتوحة</SelectItem>
                 <SelectItem value="in_progress">قيد المعالجة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
-        <div><Label>وصف المشكلة <span className="text-red-500">*</span></Label><Textarea className="mt-1" rows={4} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف تفصيلي للمشكلة..." /></div>
+        <TextAreaField
+          label="وصف المشكلة"
+          required
+          value={form.description}
+          onChange={(v) => setForm((f) => ({ ...f, description: v }))}
+          placeholder="وصف تفصيلي للمشكلة..."
+          rows={4}
+          error={fieldErrors.description}
+        />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/support")}>إلغاء</Button>

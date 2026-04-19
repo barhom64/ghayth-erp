@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, roundMoney } from "@/lib/formatters";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface TemplateLine {
   accountCode: string;
@@ -28,7 +30,7 @@ export default function RecurringJournalsCreatePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
 
   const [name, setName] = useState("");
@@ -39,8 +41,8 @@ export default function RecurringJournalsCreatePage() {
   const [active, setActive] = useState(true);
   const [lines, setLines] = useState<TemplateLine[]>([emptyLine(), emptyLine()]);
 
-  const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
+  const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
   const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01;
 
   const createMut = useApiMutation<unknown, any>(
@@ -52,6 +54,9 @@ export default function RecurringJournalsCreatePage() {
       onSuccess: () => setLocation("/finance/recurring-journals"),
     },
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   function updateLine(idx: number, field: keyof TemplateLine, value: string) {
     setLines((prev) => {
@@ -101,14 +106,10 @@ export default function RecurringJournalsCreatePage() {
     <CreatePageLayout title="قيد دوري جديد" backPath="/finance/recurring-journals">
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="md:col-span-2">
-          <Label>اسم القيد *</Label>
-          <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: إهلاك شهري للسيارات" />
-        </div>
-        <div>
-          <Label>التكرار *</Label>
+        <TextField label="اسم القيد" required value={name} onChange={setName} placeholder="مثال: إهلاك شهري للسيارات" className="md:col-span-2" />
+        <FormFieldWrapper label="التكرار" required>
           <Select value={frequency} onValueChange={setFrequency}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="daily">يومي</SelectItem>
               <SelectItem value="weekly">أسبوعي</SelectItem>
@@ -117,22 +118,15 @@ export default function RecurringJournalsCreatePage() {
               <SelectItem value="yearly">سنوي</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>تاريخ البدء *</Label>
-          <div className="mt-1"><DatePicker value={startDate} onChange={(v) => setStartDate(v)} /></div>
-        </div>
-        <div className="md:col-span-2">
-          <Label>الوصف</Label>
-          <Input className="mt-1" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div>
-          <Label>رمز المرجع للقيود المولدة</Label>
-          <Input className="mt-1" value={templateRef} onChange={(e) => setTemplateRef(e.target.value)} placeholder="مثال: REC-DEP" />
-        </div>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تاريخ البدء" required>
+          <DatePicker value={startDate} onChange={(v) => setStartDate(v)} />
+        </FormFieldWrapper>
+        <TextField label="الوصف" value={description} onChange={setDescription} className="md:col-span-2" />
+        <TextField label="رمز المرجع للقيود المولدة" value={templateRef} onChange={setTemplateRef} placeholder="مثال: REC-DEP" />
         <div className="flex items-end">
           <label className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+            <Checkbox checked={active} onCheckedChange={(v) => setActive(v === true)} />
             نشط — يُنفَّذ تلقائياً عند حلول موعد الاستحقاق
           </label>
         </div>

@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3 } from "lucide-react";
@@ -8,6 +9,9 @@ import { formatNumber } from "@/lib/formatters";
 export function VendorPerformanceTab() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-vendor-perf"], "/bi/reports/vendor-performance");
   const rows = (data?.data || []) as any[];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const columns: DataTableColumn<any>[] = [
     { key: "vendorName", header: "المورد", sortable: true, searchable: true, className: "font-medium", render: (r) => r.vendorName },

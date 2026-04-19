@@ -4,7 +4,6 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
@@ -18,6 +17,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Users2 },
@@ -41,16 +41,47 @@ export default function TenantDetail() {
     !!id
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const shellBreadcrumbs = [
+    { href: "/properties/dashboard", label: "إدارة الأملاك" },
+    { href: "/properties/tenants", label: "المستأجرون" },
+  ];
 
-  if (!tenant) return (
-    <div className="text-center py-12">
-      <Users2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">المستأجر غير موجود</p>
-      <Link href="/properties/tenants"><Button variant="outline" className="mt-4">العودة للمستأجرين</Button></Link>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <PageShell title="جاري التحميل..." breadcrumbs={shellBreadcrumbs}>
+        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
+      </PageShell>
+    );
+  }
+
+  if (isError) {
+    return (
+      <PageShell title="خطأ" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
+            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات المستأجر.</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
+
+  if (!tenant) {
+    return (
+      <PageShell title="المستأجر غير موجود" breadcrumbs={shellBreadcrumbs}>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Users2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 mb-1">المستأجر المطلوب غير موجود أو تم حذفه.</p>
+            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة المستأجرين.</p>
+            <Link href="/properties/tenants"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للمستأجرين</Button></Link>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
 
   const contracts = tenant.contracts || [];
   const payments = tenant.payments || [];
@@ -65,7 +96,7 @@ export default function TenantDetail() {
       title={tenant.name || "المستأجر"}
       subtitle={subtitleBits || undefined}
       loading={isLoading}
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { href: "/properties/tenants", label: "المستأجرون" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties/tenants", label: "المستأجرون" }]}
       actions={
         <div className="flex items-center gap-2">
           {activeContract && (
@@ -169,22 +200,17 @@ export default function TenantDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-red-50">
-                    <th className="p-2 text-right text-xs">الوحدة</th>
-                    <th className="p-2 text-right text-xs">الاستحقاق</th>
-                    <th className="p-2 text-right text-xs">المبلغ</th>
-                  </tr></thead>
-                  <tbody>
-                    {overduePayments.slice(0, 5).map((p: any) => (
-                      <tr key={p.id} className="border-b">
-                        <td className="p-2 text-xs">{p.unitNumber || "—"}</td>
-                        <td className="p-2 text-xs text-red-600">{formatDateAr(p.dueDate)}</td>
-                        <td className="p-2 text-xs font-bold">{formatCurrency(Number(p.amount || 0))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable<any>
+                  columns={[
+                    { key: "unitNumber", header: "الوحدة", render: (p) => p.unitNumber || "—" },
+                    { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
+                    { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
+                  ]}
+                  data={overduePayments.slice(0, 5)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
               </CardContent>
             </Card>
           )}
@@ -198,29 +224,25 @@ export default function TenantDetail() {
             {contracts.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد عقود</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-start">الوحدة</th>
-                  <th className="p-3 text-start">من</th>
-                  <th className="p-3 text-start">إلى</th>
-                  <th className="p-3 text-start">الإيجار</th>
-                  <th className="p-3 text-start">الحالة</th>
-                </tr></thead>
-                <tbody>
-                  {contracts.map((c: any) => (
-                    <tr key={c.id} className={cn("border-b hover:bg-gray-50", c.status === "active" && "bg-blue-50/30")}>
-                      <td className="p-3">
-                        <p className="font-medium">{c.unitNumber}</p>
-                        {c.buildingName && <p className="text-xs text-gray-400">{c.buildingName}</p>}
-                      </td>
-                      <td className="p-3 text-gray-500">{formatDateAr(c.startDate)}</td>
-                      <td className="p-3 text-gray-500">{formatDateAr(c.endDate)}</td>
-                      <td className="p-3 font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</td>
-                      <td className="p-3"><PageStatusBadge status={c.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable<any>
+                columns={[
+                  { key: "unitNumber", header: "الوحدة", render: (c) => (
+                    <div>
+                      <p className="font-medium">{c.unitNumber}</p>
+                      {c.buildingName && <p className="text-xs text-gray-400">{c.buildingName}</p>}
+                    </div>
+                  ) },
+                  { key: "startDate", header: "من", render: (c) => <span className="text-gray-500">{formatDateAr(c.startDate)}</span> },
+                  { key: "endDate", header: "إلى", render: (c) => <span className="text-gray-500">{formatDateAr(c.endDate)}</span> },
+                  { key: "monthlyRent", header: "الإيجار", render: (c) => <span className="font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</span> },
+                  { key: "status", header: "الحالة", render: (c) => <PageStatusBadge status={c.status} /> },
+                ]}
+                data={contracts}
+                rowClassName={(c) => cn(c.status === "active" && "bg-blue-50/30")}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>
@@ -233,26 +255,20 @@ export default function TenantDetail() {
             {payments.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد مدفوعات</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-start">الوحدة</th>
-                  <th className="p-3 text-start">الاستحقاق</th>
-                  <th className="p-3 text-start">المبلغ</th>
-                  <th className="p-3 text-start">المدفوع</th>
-                  <th className="p-3 text-start">الحالة</th>
-                </tr></thead>
-                <tbody>
-                  {payments.map((p: any) => (
-                    <tr key={p.id} className={cn("border-b hover:bg-gray-50", p.status !== "paid" && new Date(p.dueDate) < new Date() ? "bg-red-50/30" : "")}>
-                      <td className="p-3">{p.unitNumber || "—"}</td>
-                      <td className="p-3 text-gray-500">{formatDateAr(p.dueDate)}</td>
-                      <td className="p-3 font-bold">{formatCurrency(Number(p.amount || 0))}</td>
-                      <td className="p-3 text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</td>
-                      <td className="p-3"><PageStatusBadge status={p.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable<any>
+                columns={[
+                  { key: "unitNumber", header: "الوحدة", render: (p) => p.unitNumber || "—" },
+                  { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
+                  { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
+                  { key: "paidAmount", header: "المدفوع", render: (p) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
+                  { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+                ]}
+                data={payments}
+                rowClassName={(p) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() ? "bg-red-50/30" : "")}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
             )}
           </CardContent>
         </Card>
