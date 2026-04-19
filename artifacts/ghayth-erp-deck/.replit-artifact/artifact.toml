@@ -1,0 +1,31 @@
+kind = "slides"
+previewPath = "/ghayth-erp-deck/"
+title = "عرض غيث ERP — للمدير العام"
+version = "1.0.0"
+id = "artifacts/ghayth-erp-deck"
+router = "path"
+
+[[integratedSkills]]
+name = "slides"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/ghayth-erp-deck/" ]
+localPort = 18518
+
+[services.development]
+run = "pnpm --filter @workspace/ghayth-erp-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ghayth-erp-deck", "run", "build" ]
+publicDir = "artifacts/ghayth-erp-deck/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18518"
+BASE_PATH = "/ghayth-erp-deck/"

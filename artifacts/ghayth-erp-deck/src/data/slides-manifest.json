@@ -1,0 +1,154 @@
+[
+  {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "position": 1,
+    "filepath": "src/pages/slides/Cover.tsx",
+    "title": "الغلاف",
+    "description": "شريحة الغلاف لعرض غيث ERP",
+    "speakerNotes": ""
+  },
+  {
+    "id": "22222222-2222-4222-8222-222222222222",
+    "position": 2,
+    "filepath": "src/pages/slides/Vision.tsx",
+    "title": "الرؤية",
+    "description": "ما هو غيث ERP والرؤية والتحديات",
+    "speakerNotes": ""
+  },
+  {
+    "id": "33333333-3333-4333-8333-333333333333",
+    "position": 3,
+    "filepath": "src/pages/slides/Features.tsx",
+    "title": "المميزات",
+    "description": "المميزات الرئيسية للنظام",
+    "speakerNotes": ""
+  },
+  {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "position": 4,
+    "filepath": "src/pages/slides/Modules.tsx",
+    "title": "خريطة الوحدات",
+    "description": "خريطة شاملة للوحدات والبوابات",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+    "position": 5,
+    "filepath": "src/pages/slides/ModuleHR.tsx",
+    "title": "الموارد البشرية",
+    "description": "تفاصيل وحدة الموارد البشرية",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02",
+    "position": 6,
+    "filepath": "src/pages/slides/ModuleFinance.tsx",
+    "title": "المالية والمحاسبة",
+    "description": "تفاصيل وحدة المالية والمحاسبة",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03",
+    "position": 7,
+    "filepath": "src/pages/slides/ModuleOperations.tsx",
+    "title": "العمليات",
+    "description": "تفاصيل وحدة العمليات",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04",
+    "position": 8,
+    "filepath": "src/pages/slides/ModuleFleet.tsx",
+    "title": "الأسطول",
+    "description": "تفاصيل وحدة الأسطول",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa05",
+    "position": 9,
+    "filepath": "src/pages/slides/ModuleProperties.tsx",
+    "title": "الأملاك",
+    "description": "تفاصيل وحدة الأملاك والعقارات",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa06",
+    "position": 10,
+    "filepath": "src/pages/slides/ModuleLegal.tsx",
+    "title": "الشؤون القانونية",
+    "description": "تفاصيل الوحدة القانونية",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa07",
+    "position": 11,
+    "filepath": "src/pages/slides/ModuleProjects.tsx",
+    "title": "المشاريع",
+    "description": "تفاصيل وحدة المشاريع",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa08",
+    "position": 12,
+    "filepath": "src/pages/slides/ModuleSupport.tsx",
+    "title": "الدعم الفني",
+    "description": "تفاصيل وحدة الدعم الفني",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa09",
+    "position": 13,
+    "filepath": "src/pages/slides/ModuleCRM.tsx",
+    "title": "إدارة العملاء",
+    "description": "تفاصيل وحدة إدارة علاقات العملاء",
+    "speakerNotes": ""
+  },
+  {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
+    "position": 14,
+    "filepath": "src/pages/slides/ModulePortals.tsx",
+    "title": "البوابات",
+    "description": "تفاصيل البوابات الثلاث",
+    "speakerNotes": ""
+  },
+  {
+    "id": "55555555-5555-4555-8555-555555555555",
+    "position": 15,
+    "filepath": "src/pages/slides/HowItWorks.tsx",
+    "title": "آلية العمل",
+    "description": "دورة العمل في النظام",
+    "speakerNotes": ""
+  },
+  {
+    "id": "66666666-6666-4666-8666-666666666666",
+    "position": 16,
+    "filepath": "src/pages/slides/Intelligence.tsx",
+    "title": "الذكاء والأتمتة",
+    "description": "Cron · KPIs · Customer 360°",
+    "speakerNotes": ""
+  },
+  {
+    "id": "77777777-7777-4777-8777-777777777777",
+    "position": 17,
+    "filepath": "src/pages/slides/Benefits.tsx",
+    "title": "العائد",
+    "description": "الفوائد والعائد المتوقّع",
+    "speakerNotes": ""
+  },
+  {
+    "id": "88888888-8888-4888-8888-888888888888",
+    "position": 18,
+    "filepath": "src/pages/slides/Roadmap.tsx",
+    "title": "الحالة وخارطة الطريق",
+    "description": "الحالة الحالية والخطوات القادمة",
+    "speakerNotes": ""
+  },
+  {
+    "id": "99999999-9999-4999-8999-999999999999",
+    "position": 19,
+    "filepath": "src/pages/slides/ThankYou.tsx",
+    "title": "شكراً وتواصل",
+    "description": "شريحة الشكر ومعلومات التواصل",
+    "speakerNotes": ""
+  }
+]

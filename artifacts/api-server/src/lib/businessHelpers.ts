@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { eventBus } from "./eventBus.js";
+import { ValidationError } from "./errorHandler.js";
 
 export function haversineDistance(
   lat1: number,
@@ -215,7 +216,7 @@ export async function createJournalEntry(params: {
       ).catch(console.error);
     }
   } else if (Math.abs(imbalance) > 0.05) {
-    throw new Error(
+    throw new ValidationError(
       `قيد غير متوازن: مدين=${totalDebit.toFixed(2)} ≠ دائن=${totalCredit.toFixed(2)} (${params.ref})`
     );
   }
@@ -241,10 +242,10 @@ export async function createJournalEntry(params: {
     for (const code of uniqueCodes) {
       const acc = accountMap.get(code);
       if (!acc) {
-        throw new Error(`الحساب "${code}" غير موجود في شجرة الحسابات`);
+        throw new ValidationError(`الحساب "${code}" غير موجود في شجرة الحسابات`, { field: "accountCode", fix: "اختر حساباً موجوداً من شجرة الحسابات" });
       }
       if (acc.allowPosting === false) {
-        throw new Error(`لا يمكن الترحيل على الحساب "${code}" — هذا حساب تجميعي (رئيسي). استخدم حساباً فرعياً يقبل الحركة`);
+        throw new ValidationError(`لا يمكن الترحيل على الحساب "${code}" — هذا حساب تجميعي (رئيسي). استخدم حساباً فرعياً يقبل الحركة`, { field: "accountCode", fix: "اختر حساباً فرعياً (تفصيلياً) يقبل الحركة" });
       }
     }
   }
@@ -825,6 +826,71 @@ export async function checkFinancialPeriodOpen(
   return { open: true };
 }
 
+/**
+ * Intent map — for each known operationType we know what kind of account it
+ * SHOULD point at, expressed as (a) the chart_of_accounts.type filter and
+ * (b) Arabic keywords to look for in the name. When the configured mapping
+ * is missing AND the hardcoded fallback code doesn't exist in the company's
+ * chart, we search by intent and pick the first matching posting account.
+ *
+ * This stops "الحساب 1400 غير موجود في شجرة الحسابات" from blocking saves
+ * when the company's chart uses different codes than the legacy defaults.
+ */
+const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
+  vat_input: { type: "asset", keywords: ["ضريبة قيمة مضافة مدفوعة", "ضريبة المدخلات", "vat input", "input vat"] },
+  vat_output: { type: "liability", keywords: ["ضريبة القيمة المضافة المستحقة", "ضريبة المخرجات", "vat output", "output vat"] },
+  withholding_tax: { type: "liability", keywords: ["ضريبة الاستقطاع", "withholding"] },
+  store_revenue: { type: "revenue", keywords: ["إيرادات المتجر", "مبيعات", "إيرادات"] },
+  store_cash: { type: "asset", keywords: ["النقدية", "صندوق", "cash"] },
+  store_cogs: { type: "expense", keywords: ["تكلفة البضاعة", "تكلفة المبيعات", "cogs"] },
+  store_inventory: { type: "asset", keywords: ["المخزون", "inventory"] },
+  custody_account: { type: "asset", keywords: ["عهدة", "custody"] },
+  umrah_revenue: { type: "revenue", keywords: ["عمرة", "إيرادات"] },
+  umrah_agent_receivable: { type: "asset", keywords: ["مدينون", "عملاء", "agent"] },
+  umrah_commission: { type: "expense", keywords: ["عمولة"] },
+  fx_revaluation_ar: { type: "asset", keywords: ["مدينون", "ذمم"] },
+  fx_revaluation_ap: { type: "liability", keywords: ["دائنون", "موردون"] },
+  fx_revaluation_gain: { type: "revenue", keywords: ["أرباح فروق", "ربح صرف"] },
+  fx_revaluation_loss: { type: "expense", keywords: ["خسائر فروق", "خسارة صرف"] },
+};
+
+const _resolvedAccountCache = new Map<string, string>();
+
+async function resolveByIntent(companyId: number, operationType: string, fallbackCode: string): Promise<string> {
+  const cacheKey = `${companyId}:${operationType}`;
+  const cached = _resolvedAccountCache.get(cacheKey);
+  if (cached) return cached;
+
+  // 1. If the hardcoded fallback EXISTS and accepts posting, use it.
+  const [fb] = await rawQuery<any>(
+    `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "allowPosting"=true AND "deletedAt" IS NULL LIMIT 1`,
+    [companyId, fallbackCode]
+  );
+  if (fb) { _resolvedAccountCache.set(cacheKey, fb.code); return fb.code; }
+
+  // 2. Otherwise search by intent (type + Arabic name keywords).
+  const intent = MAPPING_INTENT[operationType];
+  if (intent) {
+    const likeClauses = intent.keywords.map((_, i) => `LOWER(name) LIKE $${i + 3}`).join(" OR ");
+    const params = [companyId, intent.type, ...intent.keywords.map(k => `%${k.toLowerCase()}%`)];
+    const rows = await rawQuery<any>(
+      `SELECT code FROM chart_of_accounts
+       WHERE "companyId"=$1 AND type=$2 AND "allowPosting"=true AND "deletedAt" IS NULL AND (${likeClauses})
+       ORDER BY length(code) ASC LIMIT 1`,
+      params
+    );
+    if (rows.length) {
+      console.warn(`[accounting_mappings] Resolved "${operationType}" → "${rows[0].code}" by intent search (fallback "${fallbackCode}" missing).`);
+      _resolvedAccountCache.set(cacheKey, rows[0].code);
+      return rows[0].code;
+    }
+  }
+
+  // 3. Last resort — return the (missing) fallback and let the caller surface
+  // a clear ValidationError. Better than picking a random account.
+  return fallbackCode;
+}
+
 export async function getAccountCodeFromMapping(
   companyId: number,
   operationType: string,
@@ -842,6 +908,8 @@ export async function getAccountCodeFromMapping(
     [companyId, operationType]
   );
   if (!mapping) {
+    const resolved = await resolveByIntent(companyId, operationType, fallbackCode);
+    if (resolved !== fallbackCode) return resolved;
     console.warn(`[accounting_mappings] No mapping for "${operationType}", company=${companyId}. Fallback: "${fallbackCode}".`);
     rawExecute(
       `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","after")
@@ -850,17 +918,9 @@ export async function getAccountCodeFromMapping(
     ).catch(console.error);
     return fallbackCode;
   }
-  if (side === "debit") {
-    const code = mapping.debitCode || mapping.debitAccountCode || fallbackCode;
-    if (!code || code === fallbackCode) {
-      console.warn(`[accounting_mappings] Debit account not set for operationType="${operationType}", company=${companyId}. Using fallback "${fallbackCode}".`);
-    }
-    return code || fallbackCode;
-  } else {
-    const code = mapping.creditCode || mapping.creditAccountCode || fallbackCode;
-    if (!code || code === fallbackCode) {
-      console.warn(`[accounting_mappings] Credit account not set for operationType="${operationType}", company=${companyId}. Using fallback "${fallbackCode}".`);
-    }
-    return code || fallbackCode;
-  }
+  const explicitCode = side === "debit"
+    ? (mapping.debitCode || mapping.debitAccountCode)
+    : (mapping.creditCode || mapping.creditAccountCode);
+  if (explicitCode) return explicitCode;
+  return await resolveByIntent(companyId, operationType, fallbackCode);
 }

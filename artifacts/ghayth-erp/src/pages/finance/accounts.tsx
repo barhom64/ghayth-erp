@@ -35,7 +35,7 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
     <div>
       <div
         className={`flex items-center gap-2 p-3 hover:bg-gray-50 border-b transition-colors text-sm group ${level > 0 ? "bg-gray-50/30" : ""} ${isMatch ? "bg-yellow-50/60 ring-1 ring-inset ring-yellow-200" : ""}`}
-        style={{ paddingInlineEnd: `${12 + level * 20}px` }}
+        style={{ paddingInlineStart: `${12 + level * 20}px` }}
       >
         {hasChildren ? (
           <button onClick={() => setExpanded(!expanded)} className="flex-shrink-0 text-gray-400 hover:text-gray-600">
@@ -45,48 +45,42 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
           <span className="w-4 flex-shrink-0" />
         )}
 
-        <span className="font-mono text-blue-600 text-xs w-16 flex-shrink-0">{node.code}</span>
+        <span className="font-mono text-blue-600 text-xs w-16 flex-shrink-0 truncate">{node.code}</span>
 
-        <Link href={`/finance/ledger/${node.code}`}>
-          <span className="font-medium text-gray-900 hover:text-blue-600 cursor-pointer flex-1 min-w-0 truncate">
-            {node.name}
-            {node.nameEn && <span className="text-gray-400 text-xs ms-2 font-normal">{node.nameEn}</span>}
-          </span>
+        <Link href={`/finance/ledger/${node.code}`} className="flex-1 min-w-0 truncate font-medium text-gray-900 hover:text-blue-600 cursor-pointer" title={node.name}>
+          {node.name}
+          {node.nameEn && <span className="text-gray-400 text-xs ms-2 font-normal">{node.nameEn}</span>}
         </Link>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Badge className={`${typeColors[node.type] || ""} text-xs`}>{typeMap[node.type] || node.type}</Badge>
+        <div className="w-20 flex-shrink-0 flex justify-center">
+          <Badge className={`${typeColors[node.type] || ""} text-xs whitespace-nowrap`}>{typeMap[node.type] || node.type}</Badge>
+        </div>
 
-          {node.isAnalytical && (
-            <Badge className="bg-indigo-100 text-indigo-700 text-xs">تحليلي</Badge>
-          )}
+        <div className="w-16 flex-shrink-0 flex justify-center">
+          {node.isAnalytical
+            ? <Badge className="bg-indigo-100 text-indigo-700 text-xs">تحليلي</Badge>
+            : !node.allowPosting
+              ? <Badge className="bg-gray-100 text-gray-500 text-xs">تجميعي</Badge>
+              : <span className="text-gray-300 text-xs">—</span>}
+        </div>
 
-          {!node.allowPosting ? (
-            <Badge className="bg-gray-100 text-gray-500 text-xs">تجميعي</Badge>
-          ) : (
-            <Badge className="bg-green-50 text-green-600 text-xs">يقبل حركة</Badge>
-          )}
+        <div className="w-16 flex-shrink-0 flex justify-center">
+          {node.isActive === false
+            ? <Badge className="bg-red-100 text-red-600 text-xs">موقوف</Badge>
+            : <Badge className="bg-green-50 text-green-600 text-xs">نشط</Badge>}
+        </div>
 
-          {node.isActive === false && (
-            <Badge className="bg-red-100 text-red-600 text-xs">غير نشط</Badge>
-          )}
+        <span className={`w-28 flex-shrink-0 font-semibold text-sm text-start tabular-nums ${Number(node.balance || node.currentBalance || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+          {formatCurrency(Number(node.balance || node.currentBalance || 0))}
+        </span>
 
-          {node.costCenter && (
-            <span className="text-xs text-gray-400 hidden lg:inline">م.تكلفة: {node.costCenter}</span>
-          )}
-
-          <span className={`font-semibold text-sm w-28 text-start ${Number(node.balance || node.currentBalance || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {formatCurrency(Number(node.balance || node.currentBalance || 0))}
-          </span>
-
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => onEdit(node)} className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600" title="تعديل">
-              <Edit2 className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={() => onDelete(node)} className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600" title="حذف">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
+        <div className="w-16 flex-shrink-0 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onEdit(node)} className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600" title="تعديل">
+            <Edit2 className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => onDelete(node)} className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600" title="حذف">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
       {expanded && hasChildren && node.children.map((child: any) => (
@@ -106,9 +100,6 @@ export default function AccountsPage() {
   // dialog owns its own loading / error / blockers state, so the page
   // only tracks which row is currently being deleted.
   const [deleteAccount, setDeleteAccount] = useState<{ id: number; code: string; name: string } | null>(null);
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const hasActiveSearch = !!(filters.search || filters.type);
 
@@ -272,6 +263,9 @@ export default function AccountsPage() {
   const handlePrint = () => {
     window.print();
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <>
