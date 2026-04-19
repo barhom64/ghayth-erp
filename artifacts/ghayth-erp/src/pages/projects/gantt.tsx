@@ -74,7 +74,7 @@ export default function GanttPage() {
     <PageShell
       title="مخطط غانت"
       subtitle="الجدول الزمني التفاعلي للمشروع"
-      breadcrumbs={[{ href: "/projects", label: "المشاريع" }, { label: "مخطط غانت" }]}
+      breadcrumbs={[{ href: "/projects", label: "إدارة المشاريع" }, { label: "مخطط غانت" }]}
       loading={isLoading}
       actions={
         <div className="flex items-center gap-2">

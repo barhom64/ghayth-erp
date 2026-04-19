@@ -78,7 +78,7 @@ export default function RisksPage() {
     <PageShell
       title="مخاطر المشاريع"
       subtitle="تسجيل وإدارة مخاطر المشاريع وخطط التخفيف"
-      breadcrumbs={[{ href: "/projects", label: "المشاريع" }, { label: "مخاطر المشاريع" }]}
+      breadcrumbs={[{ href: "/projects", label: "إدارة المشاريع" }, { label: "مخاطر المشاريع" }]}
       actions={
         <>
           {criticalCount > 0 && <Badge className="bg-red-100 text-red-700">{criticalCount} حرج</Badge>}

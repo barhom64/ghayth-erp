@@ -16,6 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
+  BarChart2, ShieldAlert, Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -221,8 +222,10 @@ const allNavSections: NavSection[] = [
     title: "العمليات",
     items: [
       { label: "المشاريع والمهام", path: "/projects", icon: Activity, module: "operations", children: [
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=projects", icon: LayoutDashboard },
-        { label: "قائمة المشاريع", path: "/projects", icon: Target },
+        { label: "نظرة عامة", path: "/projects", icon: LayoutDashboard },
+        { label: "قائمة المشاريع", path: "/projects?tab=list", icon: Target },
+        { label: "مخطط غانت", path: "/projects/gantt", icon: BarChart2 },
+        { label: "المخاطر", path: "/projects/risks", icon: ShieldAlert },
         { label: "المهام", path: "/tasks", icon: ListTodo },
       ]},
       { label: "إدارة الأسطول", path: "/fleet", icon: Truck, module: "fleet", children: [

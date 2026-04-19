@@ -969,6 +969,103 @@ router.get("/stats/summary", requirePermission("projects:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Projects stats error:"); }
 });
 
+router.get("/stats/overview", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const [counts] = await rawQuery<any>(
+      `SELECT
+         COUNT(*) as total,
+         COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
+         COUNT(*) FILTER (WHERE status='completed') as completed,
+         COUNT(*) FILTER (WHERE status='planning') as planning,
+         COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
+         COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
+         COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping
+       FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [cid]
+    );
+
+    const [budget] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(budget),0) as "totalBudget",
+              COALESCE(SUM("spentAmount"),0) as "totalSpent"
+       FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [cid]
+    );
+
+    const [taskCounts] = await rawQuery<any>(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE pt.status='done') as done,
+              COUNT(*) FILTER (WHERE pt.status='in_progress') as in_progress,
+              COUNT(*) FILTER (WHERE pt.status='blocked') as blocked,
+              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
+       FROM project_tasks pt
+       JOIN projects p ON pt."projectId"=p.id
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL`,
+      [cid]
+    );
+
+    const slippingProjects = await rawQuery<any>(
+      `SELECT id, name, status, "endDate", progress, budget, "spentAmount",
+              (SELECT name FROM employees WHERE id=p."managerId") as "managerName"
+       FROM projects p
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+         AND p.status IN ('active','in_progress') AND p."endDate" < CURRENT_DATE
+       ORDER BY p."endDate" LIMIT 10`,
+      [cid]
+    );
+
+    const recentProjects = await rawQuery<any>(
+      `SELECT id, name, status, progress, budget, "spentAmount", "endDate",
+              (SELECT name FROM employees WHERE id=p."managerId") as "managerName"
+       FROM projects p
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND p.status IN ('active','in_progress')
+       ORDER BY p."updatedAt" DESC LIMIT 8`,
+      [cid]
+    );
+
+    const upcomingMilestones = await rawQuery<any>(
+      `SELECT pm.id, pm.title, pm."targetDate", pm.status, p.name as "projectName", p.id as "projectId"
+       FROM project_milestones pm
+       JOIN projects p ON pm."projectId"=p.id
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+         AND pm.status IN ('pending','in_progress')
+         AND pm."targetDate" >= CURRENT_DATE
+       ORDER BY pm."targetDate" LIMIT 8`,
+      [cid]
+    );
+
+    const openRisks = await rawQuery<any>(
+      `SELECT pr.id, pr.title, pr."riskLevel", pr."riskScore", pr.status, p.name as "projectName", p.id as "projectId"
+       FROM project_risks pr
+       JOIN projects p ON pr."projectId"=p.id
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND pr.status IN ('open','realized')
+       ORDER BY pr."riskScore" DESC LIMIT 8`,
+      [cid]
+    );
+
+    res.json({
+      counts: {
+        total: Number(counts.total), active: Number(counts.active),
+        completed: Number(counts.completed), planning: Number(counts.planning),
+        onHold: Number(counts.on_hold), cancelled: Number(counts.cancelled),
+        slipping: Number(counts.slipping),
+      },
+      budget: { total: Number(budget.totalBudget), spent: Number(budget.totalSpent) },
+      tasks: {
+        total: Number(taskCounts.total), done: Number(taskCounts.done),
+        inProgress: Number(taskCounts.in_progress), blocked: Number(taskCounts.blocked),
+        overdue: Number(taskCounts.overdue),
+      },
+      slippingProjects,
+      recentProjects,
+      upcomingMilestones,
+      openRisks,
+    });
+  } catch (err) { handleRouteError(err, res, "Projects overview error:"); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PROJECT MILESTONES — معالم المشروع
 // ─────────────────────────────────────────────────────────────────────────────
