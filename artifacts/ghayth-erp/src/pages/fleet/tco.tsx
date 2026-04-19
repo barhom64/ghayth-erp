@@ -28,7 +28,6 @@ export default function TCOPage() {
     { name: "الوقود", value: tco.fuelCost, icon: <Fuel /> },
     { name: "الصيانة", value: tco.maintenanceCost, icon: <Wrench /> },
     { name: "التأمين", value: tco.insuranceCost, icon: <Shield /> },
-    { name: "الاستهلاك", value: tco.totalDepreciation, icon: <TrendingUp /> },
     { name: "المخالفات", value: tco.trafficFines, icon: <AlertTriangle /> },
   ].filter((d) => d.value > 0) : [];
 

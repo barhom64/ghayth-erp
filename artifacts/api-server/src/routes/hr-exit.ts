@@ -218,22 +218,22 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
 
-    // حساب مكافأة نهاية الخدمة (نظام العمل السعودي المادة 84)
+    // حساب مكافأة نهاية الخدمة — نظام العمل السعودي المادة 84 و 85
     const hireDate = emp.hireDate ? new Date(emp.hireDate) : new Date();
     const now = new Date();
     const yearsOfService = (now.getTime() - hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
     const salary = Number(emp.salary || 0);
-    let gratuity = 0;
-    if (yearsOfService <= 5) {
-      gratuity = (salary / 2) * yearsOfService;
-    } else {
-      gratuity = (salary / 2) * 5 + salary * (yearsOfService - 5);
-    }
-    // الاستقالة: يخسم ثلث المكافأة (2-5 سنوات) أو لا يستحق (<2 سنة)
+    const first5 = Math.min(yearsOfService, 5);
+    const above5 = Math.max(yearsOfService - 5, 0);
+    let gratuity = (salary / 2) * first5 + salary * above5;
+
+    // المادة 85: الاستقالة — التخفيض يُحسب على كل شريحة على حدة
     if (b.exitType === "resignation") {
       if (yearsOfService < 2) gratuity = 0;
-      else if (yearsOfService < 5) gratuity = gratuity / 3;
-      else if (yearsOfService < 10) gratuity = (gratuity * 2) / 3;
+      else if (yearsOfService < 5) gratuity = (salary / 2) * first5 / 3;
+      else if (yearsOfService < 10) {
+        gratuity = ((salary / 2) * first5 * 2) / 3 + (salary * above5 * 2) / 3;
+      }
       // 10+ سنوات: كامل المكافأة
     }
     gratuity = Math.round(gratuity * 100) / 100;

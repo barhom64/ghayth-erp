@@ -53,19 +53,22 @@ export default function ExitCreate() {
     ? (new Date().getTime() - new Date(hireDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     : 0;
 
-  // تقدير مبدئي لمكافأة نهاية الخدمة (الحساب الدقيق يتم في الخادم)
+  // تقدير مبدئي لمكافأة نهاية الخدمة وفق نظام العمل السعودي — المادة 84 و 85
+  // الحساب الدقيق يتم في الخادم
   const estimatedGratuity = useMemo(() => {
     if (!salary || !yearsOfService) return 0;
-    let g = 0;
-    if (yearsOfService <= 5) {
-      g = (salary / 2) * yearsOfService;
-    } else {
-      g = (salary / 2) * 5 + salary * (yearsOfService - 5);
-    }
+    const first5 = Math.min(yearsOfService, 5);
+    const above5 = Math.max(yearsOfService - 5, 0);
+    let g = (salary / 2) * first5 + salary * above5;
+
     if (form.exitType === "resignation") {
+      // المادة 85: تخفيض المكافأة عند الاستقالة
       if (yearsOfService < 2) g = 0;
-      else if (yearsOfService < 5) g = g / 3;
-      else if (yearsOfService < 10) g = (g * 2) / 3;
+      else if (yearsOfService < 5) g = (salary / 2) * first5 / 3;
+      else if (yearsOfService < 10) {
+        g = ((salary / 2) * first5 * 2) / 3 + (salary * above5 * 2) / 3;
+      }
+      // 10+ سنوات: المكافأة كاملة
     }
     return Math.round(g * 100) / 100;
   }, [salary, yearsOfService, form.exitType]);

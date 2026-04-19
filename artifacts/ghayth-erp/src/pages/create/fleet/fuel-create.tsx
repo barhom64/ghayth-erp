@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -62,7 +62,7 @@ export default function FuelCreate() {
     }
   };
 
-  const totalCost = (Number(form.liters) || 0) * (Number(form.costPerLiter) || 0);
+  const totalCost = roundMoney((Number(form.liters) || 0) * (Number(form.costPerLiter) || 0));
 
   return (
     <CreatePageLayout title="تسجيل تعبئة وقود" backPath="/fleet/fuel">

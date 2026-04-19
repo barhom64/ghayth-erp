@@ -2639,7 +2639,7 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
     const maintenanceTotal = Number(maintenanceCost.total);
     const insuranceTotal = Number(insuranceCost.total);
     const finesTotal = Number(trafficFines?.total || 0);
-    const totalCost = fuelTotal + maintenanceTotal + insuranceTotal + totalDepreciation + purchasePrice + finesTotal;
+    const totalCost = purchasePrice + fuelTotal + maintenanceTotal + insuranceTotal + finesTotal;
     const totalKm = Number(tripRevenue.totalKm) || Number(vehicle.currentMileage) || 1;
     const costPerKm = totalKm > 0 ? Math.round((totalCost / totalKm) * 100) / 100 : 0;
 
