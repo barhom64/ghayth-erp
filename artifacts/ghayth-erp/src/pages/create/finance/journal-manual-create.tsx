@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,8 +50,8 @@ export default function JournalManualCreatePage() {
 
   const coa = coaData?.data ?? coaData ?? [];
 
-  const totalDebit = form.lines.reduce((s, l) => s + Number(l.debit || 0), 0);
-  const totalCredit = form.lines.reduce((s, l) => s + Number(l.credit || 0), 0);
+  const totalDebit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.debit), 0));
+  const totalCredit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.credit), 0));
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
 
   function addLine() {

@@ -176,7 +176,8 @@ export default function ExpensesCreate() {
   const departments = departmentsData?.data || [];
   const projects = projectsData?.data || [];
   const expenseAccounts = accounts.filter((a: any) => a.type === "expense" || a.code?.startsWith("5"));
-  const sourceAccounts = accounts.filter((a: any) => a.type === "asset" || a.code?.startsWith("1"));
+  // خزائن وبنوك فقط (11xx = نقد، 12xx = بنوك) — لتفادي اختيار حسابات مدينة/ذمم عن طريق الخطأ
+  const sourceAccounts = accounts.filter((a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"));
 
   const expenseOptions: AutocompleteOption[] = expenseAccounts.map((a: any) => ({
     value: a.code || String(a.id),

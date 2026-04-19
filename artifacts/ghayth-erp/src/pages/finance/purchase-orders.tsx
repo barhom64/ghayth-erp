@@ -263,6 +263,11 @@ export default function PurchaseOrdersPage() {
                     entityType="purchase_order"
                     entityId={po.id}
                     currentStatus={po.status}
+                    approveEndpoint={`/finance/purchase-orders/${po.id}/approve`}
+                    rejectEndpoint={`/finance/purchase-orders/${po.id}/reject`}
+                    approveMethod="PATCH"
+                    rejectMethod="PATCH"
+                    pendingStatuses={["pending", "pending_approval", "draft"]}
                     invalidateKeys={[["purchase-orders"]]}
                   />
                 </div>

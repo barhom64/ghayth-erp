@@ -43,6 +43,17 @@ export function formatNumber(num: number | null | undefined): string {
   return toArabicNumerals(num.toLocaleString("en-US"));
 }
 
+/**
+ * Round a money value to the given number of decimals (default 2).
+ * Returns 0 for NaN/invalid input so it never pollutes accounting totals.
+ */
+export function roundMoney(n: number | string | null | undefined, decimals = 2): number {
+  const v = typeof n === "string" ? Number(n) : n;
+  if (v == null || !Number.isFinite(v)) return 0;
+  const factor = 10 ** decimals;
+  return Math.round(v * factor) / factor;
+}
+
 export function formatCurrency(num: number | null | undefined): string {
   if (num == null) return "-";
   const label = getGlobalCurrencyLabel();

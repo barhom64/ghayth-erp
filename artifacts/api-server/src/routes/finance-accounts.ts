@@ -295,7 +295,7 @@ accountsRouter.get("/ledger/:accountCode", async (req, res) => {
               jl.debit, jl.credit
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = $2
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        ORDER BY je."createdAt" ASC`,
       params
     );
@@ -328,7 +328,7 @@ accountsRouter.get("/summary", async (req, res) => {
     const [exp] = await rawQuery<any>(
       `SELECT COUNT(*) AS count, COALESCE(SUM(jl.debit),0) AS total
        FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL`,
+       WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL AND je.status = 'posted'`,
       [scope.companyId]
     );
     res.json({

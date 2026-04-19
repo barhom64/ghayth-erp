@@ -16,6 +16,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
+import { roundMoney } from "@/lib/formatters";
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -119,9 +120,9 @@ export default function InvoicesCreate() {
     setLines(updated);
   };
 
-  const subtotal = lines.reduce((sum, l) => sum + Number(l.quantity || 0) * Number(l.unitPrice || 0), 0);
-  const vatAmount = subtotal * (Number(form.vatRate) / 100);
-  const total = subtotal + vatAmount;
+  const subtotal = roundMoney(lines.reduce((sum, l) => sum + roundMoney(Number(l.quantity || 0) * Number(l.unitPrice || 0)), 0));
+  const vatAmount = roundMoney(subtotal * (Number(form.vatRate) / 100));
+  const total = roundMoney(subtotal + vatAmount);
 
   const handleSubmit = async () => {
     const firstError = validate({

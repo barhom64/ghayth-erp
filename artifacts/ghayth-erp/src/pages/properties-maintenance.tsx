@@ -56,6 +56,9 @@ export default function PropertiesMaintenance() {
           approveMethod="PATCH"
           rejectMethod="PATCH"
           returnMethod="PATCH"
+          approveBody={(notes) => ({ approved: true, notes })}
+          rejectBody={(notes) => ({ approved: false, notes })}
+          returnBody={(notes) => ({ approved: "returned", notes })}
           onDone={() => refetch()}
         />
       ),

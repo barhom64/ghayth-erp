@@ -294,6 +294,16 @@ export default function CustodiesPage() {
                     entityType="custody"
                     entityId={c.id}
                     currentStatus={c.approvalStatus}
+                    approveEndpoint={`/finance/custodies/${c.id}/approve`}
+                    rejectEndpoint={`/finance/custodies/${c.id}/approve`}
+                    returnEndpoint={`/finance/custodies/${c.id}/approve`}
+                    approveMethod="PATCH"
+                    rejectMethod="PATCH"
+                    returnMethod="PATCH"
+                    approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                    rejectBody={(notes) => ({ approved: false, notes })}
+                    returnBody={(notes) => ({ approved: "returned", notes })}
+                    pendingStatuses={["draft", "pending_approval", "returned"]}
                     onDone={() => setExpandedId(null)}
                     invalidateKeys={[["custodies"]]}
                   />

@@ -87,7 +87,8 @@ export default function VouchersCreate() {
   const accounts = accountsData?.data || [];
   const branches = branchesData?.data || [];
   const departments = departmentsData?.data || [];
-  const sourceAccounts = accounts.filter((a: any) => a.type === "asset" || a.code?.startsWith("1"));
+  // خزائن وبنوك فقط (11xx = نقد، 12xx = بنوك) — لتفادي اختيار حسابات مدينة/ذمم عن طريق الخطأ
+  const sourceAccounts = accounts.filter((a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"));
   const targetAccounts = accounts;
   const autoNumberRef = useRef(`VCH-${Date.now().toString(36).toUpperCase()}`);
 
@@ -279,9 +280,9 @@ export default function VouchersCreate() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormFieldWrapper label="الحساب المقابل" required error={fieldErrors.accountCode}>
             <Select value={form.accountCode || "_none"} onValueChange={(v) => setField("accountCode", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر الحساب..." /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="_none">{form.type === "receipt" ? "إيرادات (4000)" : "مصروفات (5000)"}</SelectItem>
+                <SelectItem value="_none">— اختر الحساب —</SelectItem>
                 {targetAccounts.map((a: any) => (
                   <SelectItem key={a.code || a.id} value={a.code}>{a.code} - {a.name}</SelectItem>
                 ))}
@@ -290,9 +291,9 @@ export default function VouchersCreate() {
           </FormFieldWrapper>
           <FormFieldWrapper label="الخزنة / البنك">
             <Select value={form.sourceAccountCode || "_none"} onValueChange={(v) => setField("sourceAccountCode", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر الخزنة أو البنك..." /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="_none">الخزنة النقدية (1100)</SelectItem>
+                <SelectItem value="_none">— اختر الخزنة —</SelectItem>
                 {sourceAccounts.map((a: any) => (
                   <SelectItem key={a.code || a.id} value={a.code}>{a.code} - {a.name}</SelectItem>
                 ))}
