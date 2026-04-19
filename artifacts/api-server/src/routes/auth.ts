@@ -1,4 +1,4 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -78,8 +78,7 @@ router.post("/login", loginLimiter, async (req, res) => {
   try {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
-      return;
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { email, password } = parsed.data;
 
@@ -204,8 +203,7 @@ router.post("/refresh", async (req, res) => {
   try {
     const parsed = refreshSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
-      return;
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { refreshToken } = parsed.data;
 
@@ -286,8 +284,7 @@ router.post("/switch-assignment", authMiddleware, async (req, res) => {
     const scope = req.scope!;
     const parsed = switchAssignmentSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
-      return;
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { assignmentId } = parsed.data;
     if (!scope.allowedAssignments.includes(Number(assignmentId))) {
@@ -350,8 +347,7 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     const scope = req.scope!;
     const parsed = changePasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "بيانات غير صالحة" });
-      return;
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { currentPassword, newPassword } = parsed.data;
     const [user] = await rawQuery<any>(`SELECT id, "passwordHash" FROM users WHERE id=$1`, [scope.userId]);

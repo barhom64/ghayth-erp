@@ -51,10 +51,7 @@ budgetRouter.post("/budget", async (req, res) => {
     const scope = req.scope!;
     assertRole(scope, ["director", "owner"]);
     const parsed = createBudgetSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten().fieldErrors });
-      return;
-    }
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { accountCode, period, amount, branchId } = parsed.data;
     const { insertId } = await rawExecute(
       `INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used)

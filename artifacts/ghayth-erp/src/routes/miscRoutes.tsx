@@ -80,7 +80,6 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/projects", component: Projects, module: "operations" },
   { path: "/projects/create", component: ProjectsCreate, module: "operations" },
   { path: "/projects/tasks", component: Tasks, module: "operations" },
-  { path: "/projects/expenses", component: Projects, module: "operations" },
   { path: "/projects/gantt", component: ProjectGantt, module: "operations" },
   { path: "/projects/risks", component: ProjectRisks, module: "operations" },
   { path: "/projects/:id", component: ProjectDetail, module: "operations" },
