@@ -1,15 +1,13 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function DocumentsCreate() {
   const [, setLocation] = useLocation();
@@ -19,9 +17,12 @@ export default function DocumentsCreate() {
     title: "", category: "", status: "draft", description: "",
   });
   const createMut = useApiMutation<unknown, Record<string, string | Attachment[] | undefined>>("/documents", "POST", [["documents"]]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = () => {
+    setFieldErrors({});
     if (!form.title) {
+      setFieldErrors({ title: "يرجى إدخال عنوان المستند" });
       toast({ variant: "destructive", title: "يرجى إدخال عنوان المستند" });
       return;
     }
@@ -33,7 +34,10 @@ export default function DocumentsCreate() {
       ...(attachments.length > 0 ? { attachments } : {}),
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إضافة المستند بنجاح" }); setLocation("/documents"); },
-      onError: (err) => toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المستند", description: err.message }),
+      onError: (err: any) => {
+        if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+        toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المستند", description: err?.fix ?? err?.message });
+      },
     });
   };
 
@@ -50,11 +54,10 @@ export default function DocumentsCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان المستند <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="عنوان المستند" /></div>
-          <div>
-            <Label>التصنيف</Label>
+          <TextField label="عنوان المستند" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="عنوان المستند" error={fieldErrors.title} />
+          <FormFieldWrapper label="التصنيف">
             <Select value={form.category || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, category: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">بدون تصنيف</SelectItem>
                 <SelectItem value="contract">عقد</SelectItem>
@@ -67,20 +70,19 @@ export default function DocumentsCreate() {
                 <SelectItem value="other">أخرى</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الحالة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="draft">مسودة</SelectItem>
                 <SelectItem value="active">نشط</SelectItem>
                 <SelectItem value="archived">مؤرشف</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
-        <div><Label>الوصف</Label><Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف المستند..." /></div>
+        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف المستند..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="رفع الملفات" />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/documents")}>إلغاء</Button>
