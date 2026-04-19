@@ -2,15 +2,13 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "governance_compliance_create";
 const INITIAL = { regulation: "", responsiblePerson: "", status: "compliant", dueDate: "", description: "", notes: "" };
@@ -21,9 +19,12 @@ export default function ComplianceCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/governance/compliance", "POST", [["governance-compliance"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async () => {
+    setFieldErrors({});
     if (!form.regulation) {
+      setFieldErrors({ regulation: "يرجى إدخال اسم اللائحة أو البند" });
       toast({ variant: "destructive", title: "يرجى إدخال اسم اللائحة أو البند" });
       return;
     }
@@ -33,7 +34,8 @@ export default function ComplianceCreate() {
       toast({ title: "تم تسجيل بند الامتثال بنجاح" });
       setLocation("/governance/compliance");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل بند الامتثال", description: err.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل بند الامتثال", description: err?.fix ?? err?.message });
     }
   };
 
@@ -50,23 +52,24 @@ export default function ComplianceCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اللائحة / البند</Label><Input className="mt-1" value={form.regulation} onChange={(e) => setForm((f) => ({ ...f, regulation: e.target.value }))} placeholder="اسم اللائحة أو البند" /></div>
-          <div><Label>المسؤول</Label><Input className="mt-1" value={form.responsiblePerson} onChange={(e) => setForm((f) => ({ ...f, responsiblePerson: e.target.value }))} placeholder="المسؤول عن الامتثال" /></div>
-          <div>
-            <Label>الحالة</Label>
+          <TextField label="اللائحة / البند" required value={form.regulation} onChange={(v) => setForm((f) => ({ ...f, regulation: v }))} placeholder="اسم اللائحة أو البند" error={fieldErrors.regulation} />
+          <TextField label="المسؤول" value={form.responsiblePerson} onChange={(v) => setForm((f) => ({ ...f, responsiblePerson: v }))} placeholder="المسؤول عن الامتثال" />
+          <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="compliant">ممتثل</SelectItem>
                 <SelectItem value="non_compliant">غير ممتثل</SelectItem>
                 <SelectItem value="in_progress">قيد المعالجة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>تاريخ الاستحقاق</Label><div className="mt-1"><DatePicker value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))} /></div></div>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="تاريخ الاستحقاق">
+            <DatePicker value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))} />
+          </FormFieldWrapper>
         </div>
-        <div><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف بند الامتثال..." /></div>
-        <div><Label>ملاحظات</Label><Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية..." /></div>
+        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف بند الامتثال..." />
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/governance/compliance")}>إلغاء</Button>

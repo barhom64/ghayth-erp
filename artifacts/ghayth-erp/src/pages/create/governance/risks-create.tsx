@@ -2,15 +2,13 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "governance_risks_create";
 const INITIAL = {
@@ -27,12 +25,15 @@ export default function RisksCreate() {
   const { data: employeesData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
+    setFieldErrors({});
     if (!form.title) {
+      setFieldErrors({ title: "عنوان الخطر مطلوب" });
       toast({ variant: "destructive", title: "عنوان الخطر مطلوب" });
       return;
     }
@@ -45,7 +46,8 @@ export default function RisksCreate() {
       toast({ title: "تم تسجيل الخطر بنجاح" });
       setLocation("/governance/risks");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الخطر", description: err.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء تسجيل الخطر", description: err?.fix ?? err?.message });
     }
   };
 
@@ -62,11 +64,10 @@ export default function RisksCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان الخطر <span className="text-red-500">*</span></Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div>
-          <div>
-            <Label>الفئة</Label>
+          <TextField label="عنوان الخطر" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} error={fieldErrors.title} />
+          <FormFieldWrapper label="الفئة">
             <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="operational">تشغيلي</SelectItem>
                 <SelectItem value="financial">مالي</SelectItem>
@@ -75,11 +76,10 @@ export default function RisksCreate() {
                 <SelectItem value="technology">تقني</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الخطورة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الخطورة">
             <Select value={form.severity} onValueChange={(v) => setForm((f) => ({ ...f, severity: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="low">منخفضة</SelectItem>
                 <SelectItem value="medium">متوسطة</SelectItem>
@@ -87,11 +87,10 @@ export default function RisksCreate() {
                 <SelectItem value="critical">حرجة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>مستوى الاحتمالية</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="مستوى الاحتمالية">
             <Select value={form.likelihood} onValueChange={(v) => setForm((f) => ({ ...f, likelihood: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="low">منخفض</SelectItem>
                 <SelectItem value="medium">متوسط</SelectItem>
@@ -99,11 +98,10 @@ export default function RisksCreate() {
                 <SelectItem value="critical">حرج</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>مستوى التأثير</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="مستوى التأثير">
             <Select value={form.impact} onValueChange={(v) => setForm((f) => ({ ...f, impact: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="low">منخفض</SelectItem>
                 <SelectItem value="medium">متوسط</SelectItem>
@@ -111,11 +109,10 @@ export default function RisksCreate() {
                 <SelectItem value="critical">حرج</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الحالة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="identified">محدد</SelectItem>
                 <SelectItem value="mitigating">قيد المعالجة</SelectItem>
@@ -123,11 +120,10 @@ export default function RisksCreate() {
                 <SelectItem value="accepted">مقبول</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>المسؤول عن المعالجة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="المسؤول عن المعالجة">
             <Select value={form.assignedTo || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, assignedTo: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">— اختياري —</SelectItem>
                 {employees.map((emp: any) => (
@@ -135,10 +131,10 @@ export default function RisksCreate() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FormFieldWrapper>
         </div>
-        <div><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="وصف الخطر..." /></div>
-        <div><Label>خطة المعالجة</Label><Textarea className="mt-1" value={form.mitigationPlan} onChange={(e) => setForm((f) => ({ ...f, mitigationPlan: e.target.value }))} placeholder="إجراءات المعالجة..." /></div>
+        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف الخطر..." />
+        <TextAreaField label="خطة المعالجة" value={form.mitigationPlan} onChange={(v) => setForm((f) => ({ ...f, mitigationPlan: v }))} placeholder="إجراءات المعالجة..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/governance/risks")}>إلغاء</Button>

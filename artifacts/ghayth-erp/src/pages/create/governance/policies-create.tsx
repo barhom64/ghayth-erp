@@ -2,15 +2,13 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "governance_policies_create";
 const INITIAL = { title: "", category: "general", status: "draft", effectiveDate: "", expiryDate: "", description: "" };
@@ -21,9 +19,12 @@ export default function PoliciesCreate() {
   const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>("/governance/policies", "POST", [["governance-policies"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async () => {
+    setFieldErrors({});
     if (!form.title) {
+      setFieldErrors({ title: "عنوان السياسة مطلوب" });
       toast({ variant: "destructive", title: "عنوان السياسة مطلوب" });
       return;
     }
@@ -33,7 +34,8 @@ export default function PoliciesCreate() {
       toast({ title: "تم إضافة السياسة بنجاح" });
       setLocation("/governance/policies");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السياسة", description: err.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السياسة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -50,11 +52,10 @@ export default function PoliciesCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان السياسة</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="عنوان السياسة" /></div>
-          <div>
-            <Label>الفئة</Label>
+          <TextField label="عنوان السياسة" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="عنوان السياسة" error={fieldErrors.title} />
+          <FormFieldWrapper label="الفئة">
             <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="general">عامة</SelectItem>
                 <SelectItem value="hr">موارد بشرية</SelectItem>
@@ -63,11 +64,10 @@ export default function PoliciesCreate() {
                 <SelectItem value="security">أمن وسلامة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>الحالة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="draft">مسودة</SelectItem>
                 <SelectItem value="active">سارية</SelectItem>
@@ -75,11 +75,15 @@ export default function PoliciesCreate() {
                 <SelectItem value="under_review">قيد المراجعة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>تاريخ السريان</Label><div className="mt-1"><DatePicker value={form.effectiveDate} onChange={(v) => setForm((f) => ({ ...f, effectiveDate: v }))} /></div></div>
-          <div><Label>تاريخ الانتهاء</Label><div className="mt-1"><DatePicker value={form.expiryDate} onChange={(v) => setForm((f) => ({ ...f, expiryDate: v }))} /></div></div>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="تاريخ السريان">
+            <DatePicker value={form.effectiveDate} onChange={(v) => setForm((f) => ({ ...f, effectiveDate: v }))} />
+          </FormFieldWrapper>
+          <FormFieldWrapper label="تاريخ الانتهاء">
+            <DatePicker value={form.expiryDate} onChange={(v) => setForm((f) => ({ ...f, expiryDate: v }))} />
+          </FormFieldWrapper>
         </div>
-        <div><Label>محتوى السياسة</Label><Textarea className="mt-1 min-h-[120px]" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="نص السياسة..." /></div>
+        <TextAreaField label="محتوى السياسة" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="نص السياسة..." rows={5} />
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات السياسة" />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/governance/policies")}>إلغاء</Button>
