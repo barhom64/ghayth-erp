@@ -27,6 +27,7 @@ import {
   type AutocompleteOption,
 } from "@/components/ui/autocomplete";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
@@ -1229,8 +1230,7 @@ function StepDocumentation({
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
+                  <Input
                     value={w.name || ""}
                     onChange={(e) => {
                       const next = [...witnesses];
@@ -1238,10 +1238,8 @@ function StepDocumentation({
                       setWitnesses(next);
                     }}
                     placeholder="الاسم"
-                    className="text-sm border rounded-md px-3 py-2"
                   />
-                  <input
-                    type="text"
+                  <Input
                     value={w.role || ""}
                     onChange={(e) => {
                       const next = [...witnesses];
@@ -1249,7 +1247,6 @@ function StepDocumentation({
                       setWitnesses(next);
                     }}
                     placeholder="الصفة"
-                    className="text-sm border rounded-md px-3 py-2"
                   />
                 </div>
               )}
@@ -1281,8 +1278,7 @@ function StepDocumentation({
         <div className="space-y-2">
           {reasons.map((r, i) => (
             <div key={i} className="flex items-center gap-2">
-              <input
-                type="text"
+              <Input
                 value={r}
                 onChange={(e) => {
                   const next = [...reasons];
@@ -1290,7 +1286,7 @@ function StepDocumentation({
                   setReasons(next);
                 }}
                 placeholder={`سبب ${i + 1}`}
-                className="flex-1 text-sm border rounded-md px-3 py-2"
+                className="flex-1"
               />
               <button
                 type="button"
@@ -1388,8 +1384,7 @@ function StepDocumentation({
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
+                  <Input
                     value={p.name || ""}
                     onChange={(e) => {
                       const next = [...relatedParties];
@@ -1397,10 +1392,8 @@ function StepDocumentation({
                       setRelatedParties(next);
                     }}
                     placeholder="الاسم"
-                    className="text-sm border rounded-md px-3 py-2"
                   />
-                  <input
-                    type="text"
+                  <Input
                     value={p.role || ""}
                     onChange={(e) => {
                       const next = [...relatedParties];
@@ -1408,7 +1401,6 @@ function StepDocumentation({
                       setRelatedParties(next);
                     }}
                     placeholder="الدور"
-                    className="text-sm border rounded-md px-3 py-2"
                   />
                 </div>
               )}
@@ -1462,9 +1454,6 @@ export default function ViolationsCreate() {
 
   // Draft defaults
   const draftDefaults = loadDraftDefaults();
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   // Memo creation mutation — successMessage: false so we show the memo number ourselves
   const createMemo = useApiMutation<
