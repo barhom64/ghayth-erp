@@ -1,6 +1,7 @@
 import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/lib/formatters";
 import { Package, Check, X } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -25,8 +26,8 @@ const columns: DataTableColumn<UmrahPackage>[] = [
   { key: "name", header: "اسم الباقة", sortable: true, searchable: true },
   { key: "seasonTitle", header: "الموسم" },
   { key: "duration", header: "المدة (أيام)" },
-  { key: "costPrice", header: "سعر التكلفة", render: (r) => r.costPrice ? `${Number(r.costPrice).toLocaleString("ar-SA")} ر.س` : "-" },
-  { key: "sellPrice", header: "سعر البيع", render: (r) => r.sellPrice ? `${Number(r.sellPrice).toLocaleString("ar-SA")} ر.س` : "-" },
+  { key: "costPrice", header: "سعر التكلفة", render: (r) => r.costPrice ? formatCurrency(Number(r.costPrice)) : "-" },
+  { key: "sellPrice", header: "سعر البيع", render: (r) => r.sellPrice ? formatCurrency(Number(r.sellPrice)) : "-" },
   { key: "includesTransport", header: "نقل", align: "center", render: (r) => <BoolIcon v={r.includesTransport} /> },
   { key: "includesHotel", header: "فندق", align: "center", render: (r) => <BoolIcon v={r.includesHotel} /> },
   { key: "includesMeals", header: "وجبات", align: "center", render: (r) => <BoolIcon v={r.includesMeals} /> },
