@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -25,7 +25,7 @@ const VIOLATION_TYPES: Record<string, string> = {
 
 export default function TrafficViolationsPage() {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
+  const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: todayLocal(), fineAmount: "", location: "", violationNumber: "", notes: "" });
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
   const violations = asList(data?.data || data);
@@ -44,7 +44,7 @@ export default function TrafficViolationsPage() {
       await apiFetch("/fleet/traffic-violations", { method: "POST", body: JSON.stringify({ ...form, vehicleId: Number(form.vehicleId), driverId: form.driverId ? Number(form.driverId) : null, fineAmount: Number(form.fineAmount || 0) }) });
       toast({ title: "تم تسجيل المخالفة" });
       setShowForm(false);
-      setForm({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
+      setForm({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: todayLocal(), fineAmount: "", location: "", violationNumber: "", notes: "" });
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };

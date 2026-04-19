@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { Vault, Plus, RotateCcw, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -17,7 +17,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 export default function DepositsPage() {
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [form, setForm] = useState({ contractId: "", amount: "", receivedDate: new Date().toISOString().split("T")[0], notes: "" });
+  const [form, setForm] = useState({ contractId: "", amount: "", receivedDate: todayLocal(), notes: "" });
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["deposits", statusFilter],
@@ -37,7 +37,7 @@ export default function DepositsPage() {
       await apiFetch("/properties/deposits", { method: "POST", body: JSON.stringify({ ...form, contractId: Number(form.contractId), amount: Number(form.amount) }) });
       toast({ title: "تم تسجيل وديعة الضمان" });
       setShowForm(false);
-      setForm({ contractId: "", amount: "", receivedDate: new Date().toISOString().split("T")[0], notes: "" });
+      setForm({ contractId: "", amount: "", receivedDate: todayLocal(), notes: "" });
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
@@ -49,7 +49,7 @@ export default function DepositsPage() {
     try {
       await apiFetch(`/properties/deposits/${id}/refund`, { method: "PATCH", body: JSON.stringify({
         refundAmount: Number(refundAmount),
-        refundDate: new Date().toISOString().split("T")[0],
+        refundDate: todayLocal(),
         refundReason: reason || "إنهاء العقد",
       }) });
       refetch();

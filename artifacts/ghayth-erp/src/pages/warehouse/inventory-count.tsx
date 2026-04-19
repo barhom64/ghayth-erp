@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ export default function InventoryCountPage() {
   const [expandedCount, setExpandedCount] = useState<number | null>(null);
   const [countItems, setCountItems] = useState<Record<number, any[]>>({});
   const [physicalCounts, setPhysicalCounts] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ countDate: new Date().toISOString().split("T")[0], notes: "", warehouseLocation: "" });
+  const [form, setForm] = useState({ countDate: todayLocal(), notes: "", warehouseLocation: "" });
 
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["inventory-counts"], "/warehouse/inventory-counts");
   const counts = asList(data?.data || data);
@@ -29,7 +30,7 @@ export default function InventoryCountPage() {
       await apiFetch("/warehouse/inventory-counts", { method: "POST", body: JSON.stringify(form) });
       toast({ title: "تم إنشاء جلسة الجرد" });
       setShowForm(false);
-      setForm({ countDate: new Date().toISOString().split("T")[0], notes: "", warehouseLocation: "" });
+      setForm({ countDate: todayLocal(), notes: "", warehouseLocation: "" });
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };

@@ -12,7 +12,7 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -97,7 +97,7 @@ export default function VouchersCreate() {
     type: "receipt",
     operationType: "receipt",
     description: "",
-    date: new Date().toISOString().split("T")[0],
+    date: todayLocal(),
     amount: "",
     accountCode: "",
     sourceAccountCode: "",

@@ -9,7 +9,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { EXIT_TYPES } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
 import { LogOut, Info, DollarSign, AlertTriangle } from "lucide-react";
@@ -75,7 +75,7 @@ export default function ExitCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayLocal();
     const firstError = validate({
       assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
       exitType: form.exitType ? null : "نوع نهاية الخدمة مطلوب",

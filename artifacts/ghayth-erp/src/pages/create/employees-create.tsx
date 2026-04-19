@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, ApiError, buildErrorToast } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -51,7 +52,7 @@ export default function EmployeesCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("employees_create", {
     name: "", phone: "", email: "", jobTitle: "", role: "employee", salary: "",
-    hireDate: new Date().toISOString().split("T")[0],
+    hireDate: todayLocal(),
     nationalId: "", nationality: "سعودي", gender: "male", dateOfBirth: "",
     department: "", contractType: "full_time", branchId: selectedBranchId ? String(selectedBranchId) : "",
     companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
@@ -187,7 +188,7 @@ export default function EmployeesCreate() {
             setShowManagerDropdown(false);
             setForm({
               name: "", phone: "", email: "", jobTitle: "", role: "employee", salary: "",
-              hireDate: new Date().toISOString().split("T")[0],
+              hireDate: todayLocal(),
               nationalId: "", nationality: "سعودي", gender: "male", dateOfBirth: "",
               department: "", contractType: "full_time",
               branchId: selectedBranchId ? String(selectedBranchId) : "",

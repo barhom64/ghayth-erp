@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Upload, CheckCircle, XCircle, RefreshCw, Landmark, Link2 } from "lucide-react";
 import { Link } from "wouter";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -87,7 +87,7 @@ export default function BankReconciliationPage() {
       const text = await file.text();
       const rows = parseCSV(text);
       if (rows.length === 0) { setImportError("الملف لا يحتوي على بيانات"); setImporting(false); return; }
-      const result = await importMutation.mutateAsync({ rows, accountCode, statementDate: new Date().toISOString().split("T")[0] });
+      const result = await importMutation.mutateAsync({ rows, accountCode, statementDate: todayLocal() });
       setImportSuccess(`تم استيراد ${result.imported} سطر — رقم الدفعة: ${result.batchId}`);
       setActiveBatch(result.batchId);
       refetchBatches();

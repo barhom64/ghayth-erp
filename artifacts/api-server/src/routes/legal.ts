@@ -8,6 +8,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -104,7 +105,7 @@ const VALID_CASE_TRANSITIONS: Record<string, readonly string[]> = {
 
 const CASE_STATUSES = ["open", "in_progress", "judgment", "execution", "closed"] as const;
 
-router.get("/contracts", async (req, res) => {
+router.get("/contracts", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -117,7 +118,7 @@ router.get("/contracts", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal contracts error:"); }
 });
 
-router.post("/contracts", async (req, res) => {
+router.post("/contracts", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createContractSchema.safeParse(req.body);
@@ -187,7 +188,7 @@ router.post("/contracts", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create legal contract error:"); }
 });
 
-router.get("/contracts/renewal-alerts", async (req, res) => {
+router.get("/contracts/renewal-alerts", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -227,7 +228,7 @@ router.get("/contracts/renewal-alerts", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Renewal alerts error:"); }
 });
 
-router.get("/contracts/:id", async (req, res) => {
+router.get("/contracts/:id", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
@@ -236,7 +237,7 @@ router.get("/contracts/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
 
-router.patch("/contracts/:id", async (req, res) => {
+router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -334,7 +335,7 @@ router.patch("/contracts/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
 });
 
-router.delete("/contracts/:id", async (req, res) => {
+router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -370,7 +371,7 @@ router.delete("/contracts/:id", async (req, res) => {
 // Lifecycle endpoints: renew and terminate
 // ---------------------------------------------------------------------------
 
-router.post("/contracts/:id/renew", async (req, res) => {
+router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -432,7 +433,7 @@ router.post("/contracts/:id/renew", async (req, res) => {
   }
 });
 
-router.post("/contracts/:id/terminate", async (req, res) => {
+router.post("/contracts/:id/terminate", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -471,7 +472,7 @@ router.post("/contracts/:id/terminate", async (req, res) => {
   }
 });
 
-router.get("/cases", async (req, res) => {
+router.get("/cases", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -484,7 +485,7 @@ router.get("/cases", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal cases error:"); }
 });
 
-router.post("/cases", async (req, res) => {
+router.post("/cases", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createCaseSchema.safeParse(req.body);
@@ -557,7 +558,7 @@ router.post("/cases", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create legal case error:"); }
 });
 
-router.get("/cases/:id", async (req, res) => {
+router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
@@ -569,7 +570,7 @@ router.get("/cases/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get case error:"); }
 });
 
-router.patch("/cases/:id", async (req, res) => {
+router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -647,7 +648,7 @@ router.patch("/cases/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Update case error:"); }
 });
 
-router.delete("/cases/:id", async (req, res) => {
+router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -680,7 +681,7 @@ router.delete("/cases/:id", async (req, res) => {
 });
 
 /** Close a legal case — cancels all outstanding obligations and emits event */
-router.post("/cases/:id/close", async (req, res) => {
+router.post("/cases/:id/close", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -728,7 +729,7 @@ router.post("/cases/:id/close", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Close case error:"); }
 });
 
-router.get("/cases/:caseId/sessions", async (req, res) => {
+router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
@@ -739,7 +740,7 @@ router.get("/cases/:caseId/sessions", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
 });
 
-router.post("/cases/:caseId/sessions", async (req, res) => {
+router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createSessionSchema.safeParse(req.body);
@@ -889,7 +890,7 @@ router.post("/cases/:caseId/sessions", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
 
-router.get("/stats", async (req, res) => {
+router.get("/stats", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -907,7 +908,7 @@ router.get("/stats", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal stats error:"); }
 });
 
-router.get("/cases/:caseId/correspondence", async (req, res) => {
+router.get("/cases/:caseId/correspondence", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
@@ -918,7 +919,7 @@ router.get("/cases/:caseId/correspondence", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
 });
 
-router.post("/cases/:caseId/correspondence", async (req, res) => {
+router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
@@ -936,7 +937,7 @@ router.post("/cases/:caseId/correspondence", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create correspondence error:"); }
 });
 
-router.get("/cases/:caseId/judgments", async (req, res) => {
+router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
@@ -947,7 +948,7 @@ router.get("/cases/:caseId/judgments", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
 });
 
-router.post("/cases/:caseId/judgments", async (req, res) => {
+router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = Number(req.params.caseId);
@@ -1025,7 +1026,7 @@ router.post("/cases/:caseId/judgments", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create judgment error:"); }
 });
 
-router.patch("/cases/:caseId/judgments/:id", async (req, res) => {
+router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -1075,7 +1076,7 @@ router.patch("/cases/:caseId/judgments/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Update judgment error:"); }
 });
 
-router.patch("/cases/:id/financial-risk", async (req, res) => {
+router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -1120,7 +1121,7 @@ router.patch("/cases/:id/financial-risk", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }
 });
 
-router.get("/sessions/upcoming", async (req, res) => {
+router.get("/sessions/upcoming", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 14;
@@ -1141,7 +1142,7 @@ router.get("/sessions/upcoming", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Upcoming sessions error:"); }
 });
 
-router.get("/judgments/financial-report", async (req, res) => {
+router.get("/judgments/financial-report", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1171,7 +1172,7 @@ router.get("/judgments/financial-report", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
-router.get("/financial-report", async (req, res) => {
+router.get("/financial-report", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cases = await rawQuery<any>(

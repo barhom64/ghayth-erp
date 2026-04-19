@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
@@ -31,7 +31,7 @@ export default function ProjectCostingPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showAddCost, setShowAddCost] = useState(false);
-  const [costForm, setCostForm] = useState({ projectId: "", amount: "", description: "", date: new Date().toISOString().split("T")[0], category: "direct" });
+  const [costForm, setCostForm] = useState({ projectId: "", amount: "", description: "", date: todayLocal(), category: "direct" });
 
   const addCostMutation = useApiMutation<any, any>(
     (body) => `/finance/projects/${body.projectId}/costs`,
@@ -41,7 +41,7 @@ export default function ProjectCostingPage() {
       successMessage: "تم تسجيل التكلفة بنجاح",
       onSuccess: () => {
         setShowAddCost(false);
-        setCostForm({ projectId: "", amount: "", description: "", date: new Date().toISOString().split("T")[0], category: "direct" });
+        setCostForm({ projectId: "", amount: "", description: "", date: todayLocal(), category: "direct" });
       },
     },
   );

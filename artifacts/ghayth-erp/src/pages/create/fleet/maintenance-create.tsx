@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/compo
 const DRAFT_KEY = "fleet_maintenance_create";
 const INITIAL = {
   vehicleId: "", type: "", description: "", cost: "",
-  mileageAtService: "", serviceDate: new Date().toISOString().split("T")[0],
+  mileageAtService: "", serviceDate: todayLocal(),
   nextServiceDate: "", nextServiceKm: "", performedBy: "", status: "pending",
 };
 

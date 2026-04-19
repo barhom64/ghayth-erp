@@ -63,3 +63,8 @@ export function formatCurrency(num: number | null | undefined): string {
 export function getCurrencySymbol(): string {
   return getGlobalCurrencyLabel();
 }
+
+export function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

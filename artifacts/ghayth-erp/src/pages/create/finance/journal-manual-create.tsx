@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, roundMoney } from "@/lib/formatters";
+import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +24,7 @@ export default function JournalManualCreatePage() {
 
   const [form, setForm] = useState({
     description: "",
-    date: new Date().toISOString().split("T")[0],
+    date: todayLocal(),
     costCenter: "",
     notes: "",
     lines: [emptyLine(), emptyLine()],

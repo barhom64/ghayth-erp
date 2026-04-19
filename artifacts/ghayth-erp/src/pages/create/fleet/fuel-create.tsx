@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
-import { formatCurrency, roundMoney } from "@/lib/formatters";
+import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -16,7 +16,7 @@ import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/fo
 const DRAFT_KEY = "fleet_fuel_create";
 const INITIAL = {
   vehicleId: "", driverId: "", liters: "", costPerLiter: "",
-  mileageAtFuel: "", fuelDate: new Date().toISOString().split("T")[0], stationName: "",
+  mileageAtFuel: "", fuelDate: todayLocal(), stationName: "",
 };
 
 export default function FuelCreate() {

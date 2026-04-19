@@ -11,7 +11,7 @@ import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import {
   FileText,
   User,
@@ -238,7 +238,7 @@ export default function ContractDetailPage() {
           variant: "default",
           onClick: async () => {
             try {
-              const oldEnd = contract?.endDate || new Date().toISOString().split("T")[0];
+              const oldEnd = contract?.endDate || todayLocal();
               const newStart = oldEnd;
               const endDate = new Date(oldEnd);
               endDate.setFullYear(endDate.getFullYear() + 1);
@@ -277,7 +277,7 @@ export default function ContractDetailPage() {
                 method: "PATCH",
                 body: JSON.stringify({
                   status: "terminated",
-                  terminationDate: new Date().toISOString().split("T")[0],
+                  terminationDate: todayLocal(),
                 }),
               });
               queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });

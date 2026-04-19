@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField } from "@/components/shared/form-field-wrapper";
-import { roundMoney, formatCurrency } from "@/lib/formatters";
+import { roundMoney, formatCurrency , todayLocal } from "@/lib/formatters";
 
 interface JournalLine {
   accountCode: string;
@@ -27,7 +27,7 @@ interface JournalLine {
 }
 
 const DRAFT_KEY = "finance_journal_create";
-const INITIAL = { description: "", date: new Date().toISOString().split("T")[0] };
+const INITIAL = { description: "", date: todayLocal() };
 
 export default function JournalCreate() {
   const [, setLocation] = useLocation();

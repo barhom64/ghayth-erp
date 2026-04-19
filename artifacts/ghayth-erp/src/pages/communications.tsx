@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr , todayLocal } from "@/lib/formatters";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -157,7 +157,7 @@ function PushNotificationsCard() {
 }
 
 function MonitorTab() {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayLocal();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo);
   const [dateTo, setDateTo] = useState(today);

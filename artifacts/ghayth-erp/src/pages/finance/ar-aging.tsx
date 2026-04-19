@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { Download, AlertTriangle, Clock, Users } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 
 function csvEscape(val: string): string {
@@ -40,7 +40,7 @@ const BUCKETS = [
 ];
 
 export default function ArAgingPage() {
-  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split("T")[0]);
+  const [asOfDate, setAsOfDate] = useState(todayLocal());
   const [expanded, setExpanded] = useState<number | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(

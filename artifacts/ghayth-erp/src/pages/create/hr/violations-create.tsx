@@ -55,7 +55,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
+import { getCurrencySymbol, formatCurrency , todayLocal } from "@/lib/formatters";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -187,7 +187,7 @@ const STEP_LABELS = [
 
 const violationSchema = z.object({
   incidentDate: z.string().min(1, "تاريخ الواقعة مطلوب").refine(
-    (val) => !val || val <= new Date().toISOString().split("T")[0],
+    (val) => !val || val <= todayLocal(),
     "لا يمكن اختيار تاريخ مستقبلي",
   ),
   incidentType: z.string().min(1, "نوع الواقعة مطلوب"),

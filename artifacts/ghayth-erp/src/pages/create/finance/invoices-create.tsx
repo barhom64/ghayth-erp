@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -17,7 +17,6 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
-import { roundMoney } from "@/lib/formatters";
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -71,7 +70,7 @@ export default function InvoicesCreate() {
   const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("invoice-create", {
     clientId: copyDefaults?.clientId ? String(copyDefaults.clientId) : "",
     description: copyDefaults?.description || "",
-    date: new Date().toISOString().split("T")[0],
+    date: todayLocal(),
     dueDate: "",
     vatRate: copyDefaults?.vatRate ? String(copyDefaults.vatRate) : "15",
     branchId: selectedBranchId ? String(selectedBranchId) : "",

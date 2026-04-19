@@ -4,7 +4,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDateAr as formatDate , todayLocal } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Link } from "wouter";
@@ -18,7 +18,7 @@ export default function IntercompanyPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ toCompanyId: "", amount: "", description: "", transactionDate: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ toCompanyId: "", amount: "", description: "", transactionDate: todayLocal() });
 
   const { data, isLoading, isError } = useApiQuery<any>(
     ["intercompany"],
@@ -38,7 +38,7 @@ export default function IntercompanyPage() {
       successMessage: "تم تسجيل المعاملة البينية وإنشاء القيدين المحاسبيين",
       onSuccess: () => {
         setShowCreate(false);
-        setForm({ toCompanyId: "", amount: "", description: "", transactionDate: new Date().toISOString().split("T")[0] });
+        setForm({ toCompanyId: "", amount: "", description: "", transactionDate: todayLocal() });
       },
     },
   );

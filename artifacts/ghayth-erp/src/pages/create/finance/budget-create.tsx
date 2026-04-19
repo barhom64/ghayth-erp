@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -15,7 +16,7 @@ import { NumberField, FormFieldWrapper } from "@/components/shared/form-field-wr
 
 const now = new Date();
 const DRAFT_KEY = "finance_budget_create";
-const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "", date: new Date().toISOString().split("T")[0] };
+const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "", date: todayLocal() };
 
 export default function BudgetCreate() {
   const [, setLocation] = useLocation();

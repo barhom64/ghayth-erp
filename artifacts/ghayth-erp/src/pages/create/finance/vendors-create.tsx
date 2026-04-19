@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "finance_vendors_create";
-const INITIAL = { name: "", contactPerson: "", phone: "", email: "", taxNumber: "", address: "", paymentTerms: "", category: "", date: new Date().toISOString().split("T")[0] };
+const INITIAL = { name: "", contactPerson: "", phone: "", email: "", taxNumber: "", address: "", paymentTerms: "", category: "", date: todayLocal() };
 
 export default function VendorsCreate() {
   const [, setLocation] = useLocation();

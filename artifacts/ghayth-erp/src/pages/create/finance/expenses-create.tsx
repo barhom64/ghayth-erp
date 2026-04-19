@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect } from "@/components/shared/entity-selects";
@@ -194,7 +194,7 @@ export default function ExpensesCreate() {
     sourceAccountCode: "",
     amount: "",
     description: "",
-    date: new Date().toISOString().split("T")[0],
+    date: todayLocal(),
     period: new Date().toISOString().slice(0, 7),
     operationType: "expense",
     expenseType: "operational",

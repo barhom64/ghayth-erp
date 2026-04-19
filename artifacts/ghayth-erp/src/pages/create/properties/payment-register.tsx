@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Save, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -29,7 +29,7 @@ export default function PaymentRegisterPage() {
 
   const [form, setForm] = useState({
     paidAmount: "",
-    paymentDate: new Date().toISOString().split("T")[0],
+    paymentDate: todayLocal(),
     paymentMethod: "bank_transfer",
     notes: "",
   });
