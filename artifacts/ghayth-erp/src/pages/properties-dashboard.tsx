@@ -11,6 +11,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@/components/page-shell";
 
 export default function PropertiesDashboard() {
   const { scopeQueryString } = useAppContext();
@@ -19,8 +20,8 @@ export default function PropertiesDashboard() {
     `/properties/stats?${scopeQueryString || ""}`
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isLoading) return <PageShell title="إدارة الأملاك" breadcrumbs={[{ label: "العقارات" }]}><Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card></PageShell>;
+  if (isError) return <PageShell title="إدارة الأملاك" breadcrumbs={[{ label: "العقارات" }]}><ErrorState onRetry={() => window.location.reload()} /></PageShell>;
 
   const s = stats as any || {};
   const occupancyRate = s.occupancyRate || 0;
@@ -98,25 +99,21 @@ export default function PropertiesDashboard() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">لوحة تحكم الأملاك</h1>
-          <p className="text-gray-500 text-sm mt-1">نظرة شاملة على أداء المحفظة العقارية</p>
-        </div>
+    <PageShell
+      title="إدارة الأملاك"
+      subtitle="نظرة شاملة على أداء المحفظة العقارية"
+      breadcrumbs={[{ label: "العقارات" }]}
+      actions={
         <div className="flex items-center gap-2">
           <Link href="/properties/buildings/create">
-            <Button variant="outline" size="sm" className="gap-1">
-              <Plus className="h-4 w-4" /> مبنى جديد
-            </Button>
+            <Button variant="outline" size="sm" className="gap-1"><Plus className="h-4 w-4" /> مبنى جديد</Button>
           </Link>
           <Link href="/properties/create">
-            <Button size="sm" className="gap-1">
-              <Plus className="h-4 w-4" /> وحدة جديدة
-            </Button>
+            <Button size="sm" className="gap-1"><Plus className="h-4 w-4" /> وحدة جديدة</Button>
           </Link>
         </div>
-      </div>
+      }
+    >
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-0">
@@ -357,6 +354,6 @@ export default function PropertiesDashboard() {
           </Link>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

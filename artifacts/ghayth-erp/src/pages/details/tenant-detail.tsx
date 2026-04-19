@@ -65,7 +65,7 @@ export default function TenantDetail() {
       title={tenant.name || "المستأجر"}
       subtitle={subtitleBits || undefined}
       loading={isLoading}
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { href: "/properties/tenants", label: "المستأجرون" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties/tenants", label: "المستأجرون" }]}
       actions={
         <div className="flex items-center gap-2">
           {activeContract && (

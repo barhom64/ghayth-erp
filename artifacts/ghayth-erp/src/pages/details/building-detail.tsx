@@ -56,7 +56,7 @@ export default function BuildingDetail() {
       title={building.name}
       subtitle={subtitleParts || undefined}
       loading={isLoading}
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { href: "/properties/buildings", label: "المباني" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties/buildings", label: "المباني" }]}
       actions={
         <div className="flex items-center gap-2">
           <Badge variant="outline">

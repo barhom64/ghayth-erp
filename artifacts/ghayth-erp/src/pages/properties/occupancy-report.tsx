@@ -71,7 +71,7 @@ export default function OccupancyReportPage() {
     <PageShell
       title="تقرير الإشغال العقاري"
       subtitle="نظرة شاملة على حالة الوحدات العقارية"
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { label: "تقرير الإشغال العقاري" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "تقرير الإشغال العقاري" }]}
       loading={isLoading}
     >
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

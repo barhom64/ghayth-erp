@@ -135,7 +135,7 @@ export default function UnitDetail() {
       title={`وحدة ${unit.unitNumber}`}
       subtitle={`${unit.buildingName || "-"}${unit.address ? ` — ${unit.address}` : ""}`}
       loading={isLoading}
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties", label: "الوحدات" }]}
       actions={
         <div className="flex items-center gap-2">
           <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-gray-100 text-gray-700")}>

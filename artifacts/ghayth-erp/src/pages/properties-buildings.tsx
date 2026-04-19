@@ -11,6 +11,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
 
 export default function PropertiesBuildings() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
@@ -26,25 +27,22 @@ export default function PropertiesBuildings() {
     !search || b.name?.includes(search) || b.address?.includes(search) || b.city?.includes(search)
   );
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <PageShell title="المباني والمجمعات" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المباني والمجمعات" }]}><LoadingSpinner /></PageShell>;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">المباني والمجمعات</h1>
-          <p className="text-gray-500 text-sm mt-1">{buildings.length} مبنى مسجل</p>
-        </div>
-        {canManage && (
-          <Link href="/properties/buildings/create">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" /> إضافة مبنى
-            </Button>
-          </Link>
-        )}
-      </div>
-
+    <PageShell
+      title="المباني والمجمعات"
+      subtitle={`${buildings.length} مبنى مسجل`}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المباني والمجمعات" }]}
+      actions={canManage && (
+        <Link href="/properties/buildings/create">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" /> إضافة مبنى
+          </Button>
+        </Link>
+      )}
+    >
       <div className="relative max-w-sm">
         <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input className="ps-9" placeholder="بحث بالاسم أو العنوان..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -124,6 +122,6 @@ export default function PropertiesBuildings() {
           })}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

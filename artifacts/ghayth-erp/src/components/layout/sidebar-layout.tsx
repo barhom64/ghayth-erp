@@ -253,7 +253,7 @@ const allNavSections: NavSection[] = [
         { label: "الطلبات", path: "/store/orders", icon: ShoppingCart },
       ]},
       { label: "إدارة الأملاك", path: "/properties/dashboard", icon: Home, module: "property", children: [
-        { label: "لوحة التحكم", path: "/properties/dashboard", icon: LayoutDashboard },
+        { label: "نظرة عامة", path: "/properties/dashboard", icon: LayoutDashboard },
         { label: "المباني والمجمعات", path: "/properties/buildings", icon: Building2 },
         { label: "الوحدات العقارية", path: "/properties", icon: Building },
         { label: "المستأجرون", path: "/properties/tenants", icon: Users2 },

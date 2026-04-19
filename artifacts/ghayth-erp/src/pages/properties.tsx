@@ -91,7 +91,7 @@ export default function Properties() {
     <PageShell
       title="الوحدات العقارية"
       subtitle="إدارة وتتبع الوحدات العقارية"
-      breadcrumbs={[{ label: "العقارات" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "الوحدات العقارية" }]}
       actions={
         canManage ? (
           <Link href="/properties/create">

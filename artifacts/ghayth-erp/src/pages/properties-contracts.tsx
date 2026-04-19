@@ -20,6 +20,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { PageShell } from "@/components/page-shell";
 
 const FREQ_LABELS: Record<string, string> = {
   monthly: "شهري", quarterly: "ربع سنوي", semi_annual: "نصف سنوي", annual: "سنوي",
@@ -259,7 +260,7 @@ export default function PropertiesContracts() {
   }, [searchStr]);
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("contract");
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <PageShell title="عقود الإيجار" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "عقود الإيجار" }]}><LoadingSpinner /></PageShell>;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const preFiltered = applyFilters(contracts, filters, {
@@ -303,17 +304,16 @@ export default function PropertiesContracts() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">عقود الإيجار</h1>
-          <p className="text-gray-500 text-sm mt-1">إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار</p>
-        </div>
+    <PageShell
+      title="عقود الإيجار"
+      subtitle="إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار"
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "عقود الإيجار" }]}
+      actions={
         <Link href="/properties/contracts/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة عقد</Button>
         </Link>
-      </div>
-
+      }
+    >
       <KpiGrid items={[
         { label: "إجمالي العقود", value: contracts.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
         { label: "نشط", value: contracts.filter((c: any) => c.status === "active").length, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },
@@ -414,6 +414,6 @@ export default function PropertiesContracts() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

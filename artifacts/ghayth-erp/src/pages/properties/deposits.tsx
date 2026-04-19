@@ -64,7 +64,7 @@ export default function DepositsPage() {
     <PageShell
       title="ودائع الضمان"
       subtitle="إدارة ودائع ضمان المستأجرين"
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { label: "ودائع الضمان" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "ودائع الضمان" }]}
       actions={
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> تسجيل وديعة

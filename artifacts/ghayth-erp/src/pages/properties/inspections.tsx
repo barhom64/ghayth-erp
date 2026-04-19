@@ -73,7 +73,7 @@ export default function InspectionsPage() {
     <PageShell
       title="فحص الوحدات العقارية"
       subtitle="جدولة وتتبع عمليات فحص الوحدات"
-      breadcrumbs={[{ href: "/properties", label: "العقارات" }, { label: "فحص الوحدات العقارية" }]}
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "فحص الوحدات العقارية" }]}
       actions={
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> جدولة فحص

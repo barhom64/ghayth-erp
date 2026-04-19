@@ -8,6 +8,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 
 export default function PropertiesOwners() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
@@ -36,7 +37,7 @@ export default function PropertiesOwners() {
     deleteMut.mutate({ id });
   };
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <PageShell title="الملاك" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "الملاك" }]}><LoadingSpinner /></PageShell>;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const columns: DataTableColumn<any>[] = [
@@ -117,21 +118,18 @@ export default function PropertiesOwners() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">الملاك</h1>
-          <p className="text-gray-500 text-sm mt-1">سجل ملاك العقارات — للعقارات المُدارة لصالح الغير</p>
-        </div>
-        {canManage && (
-          <Link href="/properties/owners/create">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" /> إضافة مالك
-            </Button>
-          </Link>
-        )}
-      </div>
-
+    <PageShell
+      title="الملاك"
+      subtitle="سجل ملاك العقارات — للعقارات المُدارة لصالح الغير"
+      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "الملاك" }]}
+      actions={canManage && (
+        <Link href="/properties/owners/create">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" /> إضافة مالك
+          </Button>
+        </Link>
+      )}
+    >
       <AdvancedFilters
         config={{ searchPlaceholder: "بحث بالاسم أو الهاتف أو رقم الهوية...", showDateRange: false }}
         values={filters}
@@ -166,6 +164,6 @@ export default function PropertiesOwners() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
