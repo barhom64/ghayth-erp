@@ -4,7 +4,6 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface OBLine {
   accountCode: string;
@@ -116,10 +116,9 @@ export default function OpeningBalancesCreatePage() {
     <CreatePageLayout title="أرصدة افتتاحية جديدة" backPath="/finance/opening-balances">
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>تاريخ بداية الفترة *</Label>
-          <div className="mt-1"><DatePicker value={periodStart} onChange={(v) => setPeriodStart(v)} /></div>
-        </div>
+        <FormFieldWrapper label="تاريخ بداية الفترة" required>
+          <DatePicker value={periodStart} onChange={(v) => setPeriodStart(v)} />
+        </FormFieldWrapper>
         <div className="flex items-end gap-2">
           <label className="inline-flex items-center gap-2 text-sm">
             <Checkbox

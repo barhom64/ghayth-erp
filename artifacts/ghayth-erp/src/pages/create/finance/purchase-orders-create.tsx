@@ -15,6 +15,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
 
@@ -38,6 +39,7 @@ export default function PurchaseOrdersCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [items, setItems] = useState([{ productId: "", quantity: "1", unitPrice: "" }]);
   const [copied, setCopied] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (copySource && !copied) {
@@ -71,17 +73,15 @@ export default function PurchaseOrdersCreate() {
   const totalAmount = items.reduce((sum, i) => sum + Number(i.quantity || 0) * Number(i.unitPrice || 0), 0);
 
   const handleSubmit = async () => {
-    if (!form.supplierId) {
-      toast({ variant: "destructive", title: "المورد مطلوب" });
-      return;
-    }
-    if (!form.branchId) {
-      toast({ variant: "destructive", title: "الفرع مطلوب" });
-      return;
-    }
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.supplierId) localErrors.supplierId = "المورد مطلوب";
+    if (!form.branchId) localErrors.branchId = "الفرع مطلوب";
     const validItems = items.filter((i) => Number(i.unitPrice) > 0 && i.productId);
-    if (validItems.length === 0) {
-      toast({ variant: "destructive", title: "يرجى إضافة بند واحد على الأقل" });
+    if (validItems.length === 0) localErrors.items = "يرجى إضافة بند واحد على الأقل";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     try {
@@ -104,7 +104,8 @@ export default function PurchaseOrdersCreate() {
       toast({ title: "تم إنشاء طلب الشراء بنجاح" });
       setLocation("/finance/purchase-orders");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء طلب الشراء", description: err?.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء طلب الشراء", description: err?.fix ?? err?.message });
     }
   };
 
@@ -118,16 +119,13 @@ export default function PurchaseOrdersCreate() {
       )}
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>التاريخ</Label>
-          <div className="mt-1"><DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></div>
-        </div>
+        <FormFieldWrapper label="التاريخ">
+          <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />
+        </FormFieldWrapper>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <Label>المورد <span className="text-red-500">*</span></Label>
+        <FormFieldWrapper label="المورد" required error={fieldErrors.supplierId}>
           <Autocomplete
-            className="mt-1"
             value={form.supplierId}
             onChange={(v) => setForm((f) => ({ ...f, supplierId: String(v) }))}
             options={suppliers.map((s: any) => ({ value: String(s.id), label: s.name }))}
@@ -139,29 +137,25 @@ export default function PurchaseOrdersCreate() {
               <SupplierContextCard supplierId={form.supplierId} />
             </div>
           )}
-        </div>
-        <div>
-          <Label>الفرع <span className="text-red-500">*</span></Label>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفرع" required error={fieldErrors.branchId}>
           <Select value={form.branchId} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v }))}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="اختر الفرع" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
             <SelectContent>
               {branches.map((b: any) => (
                 <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </FormFieldWrapper>
         <CostCenterSelect
           value={form.costCenter}
           onChange={(v) => setForm((f) => ({ ...f, costCenter: v }))}
         />
-        <div>
-          <Label>تاريخ التسليم المتوقع</Label>
-          <div className="mt-1"><DatePicker value={form.expectedDelivery} onChange={(v) => setForm((f) => ({ ...f, expectedDelivery: v }))} /></div>
-        </div>
-        <div className="md:col-span-2"><Label>ملاحظات</Label><Input className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></div>
+        <FormFieldWrapper label="تاريخ التسليم المتوقع">
+          <DatePicker value={form.expectedDelivery} onChange={(v) => setForm((f) => ({ ...f, expectedDelivery: v }))} />
+        </FormFieldWrapper>
+        <TextField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} className="md:col-span-2" />
       </div>
 
       <div className="mb-4">

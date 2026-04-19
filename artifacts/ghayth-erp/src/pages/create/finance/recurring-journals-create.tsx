@@ -4,7 +4,6 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +15,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface TemplateLine {
   accountCode: string;
@@ -106,14 +106,10 @@ export default function RecurringJournalsCreatePage() {
     <CreatePageLayout title="قيد دوري جديد" backPath="/finance/recurring-journals">
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="md:col-span-2">
-          <Label>اسم القيد *</Label>
-          <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: إهلاك شهري للسيارات" />
-        </div>
-        <div>
-          <Label>التكرار *</Label>
+        <TextField label="اسم القيد" required value={name} onChange={setName} placeholder="مثال: إهلاك شهري للسيارات" className="md:col-span-2" />
+        <FormFieldWrapper label="التكرار" required>
           <Select value={frequency} onValueChange={setFrequency}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="daily">يومي</SelectItem>
               <SelectItem value="weekly">أسبوعي</SelectItem>
@@ -122,19 +118,12 @@ export default function RecurringJournalsCreatePage() {
               <SelectItem value="yearly">سنوي</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <Label>تاريخ البدء *</Label>
-          <div className="mt-1"><DatePicker value={startDate} onChange={(v) => setStartDate(v)} /></div>
-        </div>
-        <div className="md:col-span-2">
-          <Label>الوصف</Label>
-          <Input className="mt-1" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div>
-          <Label>رمز المرجع للقيود المولدة</Label>
-          <Input className="mt-1" value={templateRef} onChange={(e) => setTemplateRef(e.target.value)} placeholder="مثال: REC-DEP" />
-        </div>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تاريخ البدء" required>
+          <DatePicker value={startDate} onChange={(v) => setStartDate(v)} />
+        </FormFieldWrapper>
+        <TextField label="الوصف" value={description} onChange={setDescription} className="md:col-span-2" />
+        <TextField label="رمز المرجع للقيود المولدة" value={templateRef} onChange={setTemplateRef} placeholder="مثال: REC-DEP" />
         <div className="flex items-end">
           <label className="inline-flex items-center gap-2 text-sm">
             <Checkbox checked={active} onCheckedChange={(v) => setActive(v === true)} />
