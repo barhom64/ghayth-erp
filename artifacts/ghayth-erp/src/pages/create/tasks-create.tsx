@@ -85,7 +85,12 @@ export default function TasksCreate() {
       return;
     }
     const payload: any = { ...form, assignedTo: user?.name || "" };
-    if (!payload.linkedEntityType) { delete payload.linkedEntityType; delete payload.linkedEntityId; }
+    if (!payload.linkedEntityType) {
+      delete payload.linkedEntityType;
+      delete payload.linkedEntityId;
+    } else {
+      payload.linkedEntityId = payload.linkedEntityId ? Number(payload.linkedEntityId) : undefined;
+    }
     try {
       await createMut.mutateAsync(payload);
       clearDraft();

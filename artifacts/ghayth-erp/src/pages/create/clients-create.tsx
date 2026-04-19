@@ -9,6 +9,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Globe } from "lucide-react";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -28,20 +29,25 @@ export default function ClientsCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [createPortalAccount, setCreatePortalAccount] = useState(false);
   const [portalPassword, setPortalPassword] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
-    setFieldErrors({});
-    const localErrors: Record<string, string> = {};
-    if (!form.name) localErrors.name = "يرجى إدخال اسم العميل";
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) localErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
-    if (form.phone && form.phone.replace(/\D/g, "").length < 9) localErrors.phone = "رقم الجوال يجب أن يحتوي على 9 أرقام على الأقل";
-    if (createPortalAccount && !form.email) localErrors.email = "يرجى إدخال البريد الإلكتروني لإنشاء حساب البوابة";
-    if (createPortalAccount && portalPassword.length < 6) localErrors.portalPassword = "كلمة مرور البوابة يجب أن تكون 6 أحرف على الأقل";
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      const firstKey = Object.keys(localErrors)[0];
-      toast({ variant: "destructive", title: localErrors[firstKey] });
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم العميل",
+      email: form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
+        ? "صيغة البريد الإلكتروني غير صحيحة"
+        : createPortalAccount && !form.email
+          ? "يرجى إدخال البريد الإلكتروني لإنشاء حساب البوابة"
+          : null,
+      phone: form.phone && form.phone.replace(/\D/g, "").length < 9
+        ? "رقم الجوال يجب أن يحتوي على 9 أرقام على الأقل"
+        : null,
+      portalPassword: createPortalAccount && portalPassword.length < 6
+        ? "كلمة مرور البوابة يجب أن تكون 6 أحرف على الأقل"
+        : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -62,6 +68,7 @@ export default function ClientsCreate() {
       clearDraft();
       setLocation("/clients");
     } catch (err: any) {
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة العميل", description: err?.message });
     }
   };

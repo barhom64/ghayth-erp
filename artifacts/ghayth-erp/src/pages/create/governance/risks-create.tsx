@@ -40,7 +40,7 @@ export default function RisksCreate() {
     try {
       await createMut.mutateAsync({
         ...form,
-        assignedTo: form.assignedTo || undefined,
+        assignedTo: form.assignedTo ? Number(form.assignedTo) : undefined,
       });
       clearDraft();
       toast({ title: "تم تسجيل الخطر بنجاح" });
@@ -122,12 +122,12 @@ export default function RisksCreate() {
             </Select>
           </FormFieldWrapper>
           <FormFieldWrapper label="المسؤول عن المعالجة">
-            <Select value={form.assignedTo || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, assignedTo: v === "_none" ? "" : v }))}>
+            <Select value={form.assignedTo ? String(form.assignedTo) : "_none"} onValueChange={(v) => setForm((f) => ({ ...f, assignedTo: v === "_none" ? "" : v }))}>
               <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">— اختياري —</SelectItem>
                 {employees.map((emp: any) => (
-                  <SelectItem key={emp.id} value={emp.name}>{emp.name} - {emp.jobTitle || emp.department || ""}</SelectItem>
+                  <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || emp.department || ""}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

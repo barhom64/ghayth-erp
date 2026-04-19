@@ -81,6 +81,8 @@ export default function OvertimeCreate() {
     const localErrors: Record<string, string> = {};
     if (!form.assignmentId) localErrors.assignmentId = "يرجى اختيار الموظف";
     if (!form.overtimeDate) localErrors.overtimeDate = "تاريخ الوقت الإضافي مطلوب";
+    if (!form.startTime) localErrors.startTime = "وقت البدء مطلوب";
+    if (!form.endTime) localErrors.endTime = "وقت الانتهاء مطلوب";
     if (hours <= 0) localErrors.hours = "عدد الساعات يجب أن يكون أكبر من صفر";
     if (hours > 12) localErrors.hours = "لا يمكن تسجيل أكثر من 12 ساعة في اليوم";
     if (Object.keys(localErrors).length > 0) {
