@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useAuth } from "@/lib/auth";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { useSettings } from "@/contexts/settings-context";
@@ -14,13 +14,14 @@ import {
   TrendingDown, CreditCard, Activity, Building, Briefcase, Clock,
   ClipboardList, ArrowDownLeft, ArrowUpRight, Plus, MessageCircle,
   ListTodo, AlertCircle, CheckCircle, Timer, Zap, Bell, Lightbulb,
-  User,
+  User, LogOut,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -192,6 +193,130 @@ const priorityColors: Record<string, string> = {
   urgent: "bg-red-200 text-red-800",
 };
 
+function AttendanceWidget() {
+  const { toast } = useToast();
+  const { data: mySpace, refetch } = useApiQuery<any>(["my-space"], "/my-space");
+  const checkInMut = useApiMutation("/hr/check-in", "POST", [["my-space"], ["dashboard-cmd"]]);
+  const checkOutMut = useApiMutation("/hr/check-out", "POST", [["my-space"], ["dashboard-cmd"]]);
+
+  const attendance = mySpace?.attendance;
+  const hasCheckedIn = !!attendance?.checkIn;
+  const hasCheckedOut = !!attendance?.checkOut;
+
+  const handleCheckIn = async () => {
+    try {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            await checkInMut.mutateAsync({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+            toast({ title: "تم تسجيل الحضور بنجاح" });
+            refetch();
+          },
+          async () => {
+            await checkInMut.mutateAsync({});
+            toast({ title: "تم تسجيل الحضور بنجاح" });
+            refetch();
+          },
+          { timeout: 5000 }
+        );
+      } else {
+        await checkInMut.mutateAsync({});
+        toast({ title: "تم تسجيل الحضور بنجاح" });
+        refetch();
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: err?.message || "حدث خطأ أثناء تسجيل الحضور" });
+    }
+  };
+
+  const handleCheckOut = async () => {
+    try {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            await checkOutMut.mutateAsync({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+            toast({ title: "تم تسجيل الانصراف بنجاح" });
+            refetch();
+          },
+          async () => {
+            await checkOutMut.mutateAsync({});
+            toast({ title: "تم تسجيل الانصراف بنجاح" });
+            refetch();
+          },
+          { timeout: 5000 }
+        );
+      } else {
+        await checkOutMut.mutateAsync({});
+        toast({ title: "تم تسجيل الانصراف بنجاح" });
+        refetch();
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: err?.message || "حدث خطأ أثناء تسجيل الانصراف" });
+    }
+  };
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <Card className="border-2 border-emerald-200 bg-gradient-to-l from-emerald-50/60 to-white">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "w-12 h-12 rounded-xl flex items-center justify-center",
+              hasCheckedOut ? "bg-gray-100" : hasCheckedIn ? "bg-emerald-100" : "bg-blue-100"
+            )}>
+              <Clock className={cn(
+                "w-6 h-6",
+                hasCheckedOut ? "text-gray-500" : hasCheckedIn ? "text-emerald-600" : "text-blue-600"
+              )} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-800">تسجيل الحضور والانصراف</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {hasCheckedOut
+                  ? `تم الانصراف — ${attendance.checkOut?.slice(11, 16) || ""}`
+                  : hasCheckedIn
+                  ? `تم الحضور ${attendance.checkIn?.slice(11, 16) || ""} — بانتظار الانصراف`
+                  : `الوقت الحالي: ${timeStr}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {!hasCheckedIn && !hasCheckedOut && (
+              <Button
+                onClick={handleCheckIn}
+                disabled={checkInMut.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+              >
+                <Clock className="w-4 h-4" />
+                {checkInMut.isPending ? "جاري..." : "تسجيل حضور"}
+              </Button>
+            )}
+            {hasCheckedIn && !hasCheckedOut && (
+              <Button
+                onClick={handleCheckOut}
+                disabled={checkOutMut.isPending}
+                variant="outline"
+                className="border-red-200 text-red-600 hover:bg-red-50 gap-1.5"
+              >
+                <LogOut className="w-4 h-4" />
+                {checkOutMut.isPending ? "جاري..." : "تسجيل انصراف"}
+              </Button>
+            )}
+            {hasCheckedOut && (
+              <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-600">
+                <CheckCircle2 className="w-3.5 h-3.5 me-1 text-emerald-500" />
+                مكتمل
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -325,6 +450,8 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <AttendanceWidget />
+
       {roleLevel < 40 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Link href="/my-space">
@@ -348,7 +475,7 @@ export default function Dashboard() {
           <Link href="/hr/attendance">
             <div className="bg-white rounded-xl border border-purple-100 p-4 hover:shadow-md transition-all cursor-pointer text-center">
               <Clock className="w-6 h-6 text-purple-500 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-800">تسجيل حضور</p>
+              <p className="text-sm font-medium text-gray-800">سجل الحضور</p>
             </div>
           </Link>
         </div>

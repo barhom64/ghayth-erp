@@ -86,21 +86,29 @@ const allNavSections: NavSection[] = [
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
-  // 3. الموارد البشرية
+  // 3. الموارد البشرية (مرتبة حسب دورة حياة الموظف)
   // ══════════════════════════════════════════════════════════════════════
   {
     title: "الموارد البشرية",
     items: [
       { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr" },
+      { label: "التوظيف", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
+        { label: "الوظائف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
+        { label: "التوظيف المتقدم", path: "/hr/recruitment/advanced", icon: BarChart3, subKey: "recruitment" },
+        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
+      ]},
       { label: "الموظفون", path: "/employees", icon: Users, module: "hr", children: [
         { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
-        { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
         { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
         { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
+      ]},
+      { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, module: "hr", children: [
+        { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
+        { label: "إدارة الورديات", path: "/hr/shifts/management", icon: Cog, subKey: "shifts" },
       ]},
       { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, module: "hr", children: [
         { label: "السجل اليومي", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
@@ -116,23 +124,11 @@ const allNavSections: NavSection[] = [
         { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch, subKey: "leaves" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
       ]},
-      { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, module: "hr", children: [
-        { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
-        { label: "إدارة الورديات", path: "/hr/shifts/management", icon: Cog, subKey: "shifts" },
-      ]},
       { label: "الرواتب والمستحقات", path: "/hr/payroll", icon: DollarSign, module: "hr", children: [
         { label: "مسيرات الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
         { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
         { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
-      ]},
-      { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
-        { label: "المخالفات", path: "/hr/violations", icon: AlertTriangle, subKey: "violations" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
-        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
-        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
-        { label: "محاضر الاستفسار", path: "/hr/discipline/memos", icon: FileText, subKey: "violations" },
-        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
       ]},
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
@@ -146,11 +142,15 @@ const allNavSections: NavSection[] = [
         { label: "البرامج التدريبية", path: "/hr/training", icon: GraduationCap, subKey: "training" },
         { label: "التدريب المتقدم", path: "/hr/training/advanced", icon: BarChart3, subKey: "training" },
       ]},
-      { label: "التوظيف", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
-        { label: "الوظائف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
-        { label: "التوظيف المتقدم", path: "/hr/recruitment/advanced", icon: BarChart3, subKey: "recruitment" },
-        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
+      { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
+        { label: "المخالفات", path: "/hr/violations", icon: AlertTriangle, subKey: "violations" },
+        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
+        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
+        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
+        { label: "محاضر الاستفسار", path: "/hr/discipline/memos", icon: FileText, subKey: "violations" },
+        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
       ]},
+      { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, module: "hr", subKey: "employees" },
       { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, module: "hr", subKey: "employees" },
     ],
   },
@@ -297,26 +297,11 @@ const allNavSections: NavSection[] = [
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
-  // 7. الإدارة والحوكمة
+  // 7. الإدارة والحوكمة (من اليومي → الرسمي → الامتثال)
   // ══════════════════════════════════════════════════════════════════════
   {
     title: "الإدارة والحوكمة",
     items: [
-      { label: "الإقفال اليومي", path: "/daily-close", icon: Shield, minRoleLevel: 40 },
-      { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
-        { label: "القضايا", path: "/legal/cases", icon: Briefcase },
-        { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
-        { label: "الجلسات القادمة", path: "/legal/sessions", icon: Calendar },
-        { label: "الأحكام القضائية", path: "/legal/judgments", icon: CheckCircle },
-        { label: "المراسلات", path: "/legal/correspondence", icon: Mail },
-      ]},
-      { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
-        { label: "السياسات", path: "/governance/policies", icon: FileCheck },
-        { label: "المخاطر", path: "/governance/risks", icon: AlertTriangle },
-        { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },
-        { label: "الامتثال", path: "/governance/compliance", icon: CheckCircle },
-        { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
-      ]},
       { label: "مركز الطلبات", path: "/requests", icon: ClipboardCheck, module: "requests", children: [
         { label: "تقديم طلب", path: "/requests", icon: ClipboardCheck },
         { label: "أنواع الطلبات", path: "/requests/types", icon: ListTodo },
@@ -333,6 +318,21 @@ const allNavSections: NavSection[] = [
         { label: "الخطابات والمراسلات", path: "/letters", icon: Mail },
         { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap },
       ]},
+      { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
+        { label: "القضايا", path: "/legal/cases", icon: Briefcase },
+        { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
+        { label: "الجلسات القادمة", path: "/legal/sessions", icon: Calendar },
+        { label: "الأحكام القضائية", path: "/legal/judgments", icon: CheckCircle },
+        { label: "المراسلات", path: "/legal/correspondence", icon: Mail },
+      ]},
+      { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
+        { label: "السياسات", path: "/governance/policies", icon: FileCheck },
+        { label: "المخاطر", path: "/governance/risks", icon: AlertTriangle },
+        { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },
+        { label: "الامتثال", path: "/governance/compliance", icon: CheckCircle },
+        { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
+      ]},
+      { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 40 },
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
