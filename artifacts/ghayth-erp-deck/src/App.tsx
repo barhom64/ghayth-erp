@@ -2,12 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { slides } from "@/slideLoader";
+import { deepSlides } from "@/deepSlideLoader";
 
 function getSlideIndex(pathname: string): number {
   const match = pathname.match(/^\/slide(\d+)$/);
   if (!match) return -1;
   const position = parseInt(match[1], 10);
   return slides.findIndex((s) => s.position === position);
+}
+
+function getDeepSlideIndex(pathname: string): number {
+  const match = pathname.match(/^\/deep\/slide(\d+)$/);
+  if (!match) return -1;
+  const position = parseInt(match[1], 10);
+  return deepSlides.findIndex((s) => s.position === position);
 }
 
 function SlideEditor() {
@@ -143,6 +151,106 @@ function AllSlides() {
   );
 }
 
+function DeepSlideEditor() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentIndex = getDeepSlideIndex(location.pathname);
+  const navigationDisabledRef = useRef(window.parent !== window.parent.parent);
+
+  useEffect(() => {
+    if (currentIndex === -1) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (navigationDisabledRef.current) return;
+      if (event.key === " ") event.preventDefault();
+      if ((event.key === "ArrowLeft" || event.key === "ArrowUp") && currentIndex > 0) {
+        navigate(`/deep/slide${deepSlides[currentIndex - 1].position}`);
+      }
+      if (
+        (event.key === "ArrowRight" || event.key === "ArrowDown" || event.key === " ") &&
+        currentIndex < deepSlides.length - 1
+      ) {
+        navigate(`/deep/slide${deepSlides[currentIndex + 1].position}`);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [currentIndex, navigate]);
+
+  return (
+    <div className="select-none">
+      {deepSlides.map((slide, index) => (
+        <div key={slide.id} style={{ display: index === currentIndex ? "block" : "none" }}>
+          <slide.Component />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DeepAllSlides() {
+  return (
+    <div className="bg-black">
+      {deepSlides.map((slide) => (
+        <div
+          key={slide.id}
+          className="slide relative aspect-video overflow-hidden"
+          style={{ width: "1920px", height: "1080px" }}
+        >
+          <div className="h-full w-full [&_.h-screen]:!h-full [&_.w-screen]:!w-full">
+            <slide.Component />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DeepSlideViewer() {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [dims, setDims] = useState(() => ({
+    width: Math.min(window.innerWidth, window.innerHeight * (16 / 9)),
+    height: Math.min(window.innerHeight, window.innerWidth * (9 / 16)),
+  }));
+  useEffect(() => {
+    const update = () => {
+      setDims({
+        width: Math.min(window.innerWidth, window.innerHeight * (16 / 9)),
+        height: Math.min(window.innerHeight, window.innerWidth * (9 / 16)),
+      });
+    };
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== " ") return;
+      if (event.key === " ") event.preventDefault();
+      iframeRef.current?.contentWindow?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: event.key, code: event.code, bubbles: true }),
+      );
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const firstPosition = deepSlides.length > 0 ? deepSlides[0].position : 1;
+  return (
+    <div
+      className="slide-viewer h-screen w-screen overflow-hidden bg-black flex items-center justify-center"
+      onClick={() => iframeRef.current?.focus()}
+    >
+      <iframe
+        ref={iframeRef}
+        src={`${base}/deep/slide${firstPosition}`}
+        style={{ width: dims.width, height: dims.height, border: "none" }}
+        onLoad={() => iframeRef.current?.focus()}
+        title="Deep-dive slide viewer"
+      />
+    </div>
+  );
+}
+
 // This component is used for the deployed view at `/`
 function SlideViewer() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -203,7 +311,10 @@ export default function App() {
     if (
       location.pathname !== "/" &&
       location.pathname !== "/allslides" &&
-      getSlideIndex(location.pathname) === -1
+      location.pathname !== "/deep" &&
+      location.pathname !== "/deep/allslides" &&
+      getSlideIndex(location.pathname) === -1 &&
+      getDeepSlideIndex(location.pathname) === -1
     ) {
       if (slides.length > 0) {
         navigate(`/slide${slides[0].position}`, { replace: true });
@@ -231,5 +342,8 @@ export default function App() {
 
   if (location.pathname === "/") return <SlideViewer />;
   if (location.pathname === "/allslides") return <AllSlides />;
+  if (location.pathname === "/deep") return <DeepSlideViewer />;
+  if (location.pathname === "/deep/allslides") return <DeepAllSlides />;
+  if (getDeepSlideIndex(location.pathname) !== -1) return <DeepSlideEditor />;
   return <SlideEditor />;
 }
