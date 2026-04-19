@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { getCurrencySymbol, formatDateAr } from "@/lib/formatters";
+import { getCurrencySymbol, formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -15,7 +15,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
-import { formatCurrency } from "@/lib/formatters";
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight, Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check, Clock, FileText as FileTextIcon } from "lucide-react";
 import { EntityTimeline } from "@/components/shared/entity-timeline";

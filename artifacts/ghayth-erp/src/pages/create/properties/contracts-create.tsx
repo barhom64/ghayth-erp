@@ -15,8 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Users2, FileText, Calendar, Banknote, Shield, ScrollText, Zap } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
-import { getCurrencySymbol } from "@/lib/formatters";
+import { formatCurrency, getCurrencySymbol } from "@/lib/formatters";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { fieldErrorClass, TextField, NumberField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
