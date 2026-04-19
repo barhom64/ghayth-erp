@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -117,17 +118,20 @@ export default function RecruitmentCreate() {
           </div>
           <div>
             <Label>القسم</Label>
-            <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.department} onChange={(e) => set("department", e.target.value)}>
-              <option value="">اختر القسم</option>
-              {departments.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
-              {departments.length === 0 && <>
-                <option value="الإدارة">الإدارة</option>
-                <option value="الموارد البشرية">الموارد البشرية</option>
-                <option value="المالية">المالية</option>
-                <option value="تقنية المعلومات">تقنية المعلومات</option>
-                <option value="العمليات">العمليات</option>
-              </>}
-            </select>
+            <Select value={form.department || "_none"} onValueChange={(v) => set("department", v === "_none" ? "" : v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">اختر القسم</SelectItem>
+                {departments.map((d: any) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                {departments.length === 0 && <>
+                  <SelectItem value="الإدارة">الإدارة</SelectItem>
+                  <SelectItem value="الموارد البشرية">الموارد البشرية</SelectItem>
+                  <SelectItem value="المالية">المالية</SelectItem>
+                  <SelectItem value="تقنية المعلومات">تقنية المعلومات</SelectItem>
+                  <SelectItem value="العمليات">العمليات</SelectItem>
+                </>}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> الموقع</Label>
@@ -139,17 +143,23 @@ export default function RecruitmentCreate() {
           </div>
           <div>
             <Label>مستوى الخبرة</Label>
-            <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.experienceLevel} onChange={(e) => set("experienceLevel", e.target.value)}>
-              <option value="">اختر المستوى</option>
-              {EXPERIENCE_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
+            <Select value={form.experienceLevel || "_none"} onValueChange={(v) => set("experienceLevel", v === "_none" ? "" : v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المستوى" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">اختر المستوى</SelectItem>
+                {EXPERIENCE_LEVELS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>المؤهل العلمي</Label>
-            <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.education} onChange={(e) => set("education", e.target.value)}>
-              <option value="">اختر المؤهل</option>
-              {EDUCATION_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
+            <Select value={form.education || "_none"} onValueChange={(v) => set("education", v === "_none" ? "" : v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المؤهل" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">اختر المؤهل</SelectItem>
+                {EDUCATION_LEVELS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

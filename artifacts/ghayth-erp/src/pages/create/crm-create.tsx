@@ -4,9 +4,6 @@ import { useApiMutation, useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +12,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ClientContextCard } from "@/components/shared/client-context-card";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "crm_create";
 const INITIAL = {
@@ -38,9 +36,6 @@ export default function CrmCreate() {
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const errCls = (field: string) => fieldErrors[field] ? "border-red-500 ring-1 ring-red-300" : "";
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
     setFieldErrors({});
@@ -74,7 +69,8 @@ export default function CrmCreate() {
       toast({ title: "تمت إضافة الفرصة بنجاح" });
       setLocation("/crm");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الفرصة", description: err.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الفرصة", description: err?.fix ?? err?.message });
     }
   };
 
@@ -92,11 +88,10 @@ export default function CrmCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>عنوان الفرصة <span className="text-red-500">*</span></Label><Input className={`mt-1 ${errCls("title")}`} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="عنوان الفرصة" /><FieldHint field="title" /></div>
-          <div>
-            <Label>العميل</Label>
+          <TextField label="عنوان الفرصة" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="عنوان الفرصة" error={fieldErrors.title} />
+          <FormFieldWrapper label="العميل">
             <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="بدون عميل" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="بدون عميل" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">بدون عميل</SelectItem>
                 {clients.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
@@ -107,11 +102,10 @@ export default function CrmCreate() {
                 <ClientContextCard clientId={form.clientId} section="opportunity" />
               </div>
             )}
-          </div>
-          <div>
-            <Label>المرحلة</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="المرحلة">
             <Select value={form.stage} onValueChange={(v) => setForm((f) => ({ ...f, stage: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="lead">فرصة أولية</SelectItem>
                 <SelectItem value="qualified">مؤهلة</SelectItem>
@@ -121,24 +115,22 @@ export default function CrmCreate() {
                 <SelectItem value="closed_lost">خاسرة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label>المسند إليه</Label>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="المسند إليه">
             <Select value={form.assignedTo || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, assignedTo: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر الموظف</SelectItem>
                 {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>جهة الاتصال</Label><Input className="mt-1" value={form.contactName} onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))} placeholder="اسم جهة الاتصال" /></div>
-          <div><Label>الهاتف</Label><Input className="mt-1" dir="ltr" value={form.contactPhone} onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))} placeholder="05xxxxxxxx" /></div>
-          <div><Label>البريد الإلكتروني</Label><Input className="mt-1" dir="ltr" value={form.contactEmail} onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))} placeholder="email@example.com" /></div>
-          <div>
-            <Label>المصدر</Label>
+          </FormFieldWrapper>
+          <TextField label="جهة الاتصال" value={form.contactName} onChange={(v) => setForm((f) => ({ ...f, contactName: v }))} placeholder="اسم جهة الاتصال" />
+          <TextField label="الهاتف" dir="ltr" value={form.contactPhone} onChange={(v) => setForm((f) => ({ ...f, contactPhone: v }))} placeholder="05xxxxxxxx" />
+          <TextField label="البريد الإلكتروني" dir="ltr" value={form.contactEmail} onChange={(v) => setForm((f) => ({ ...f, contactEmail: v }))} placeholder="email@example.com" />
+          <FormFieldWrapper label="المصدر">
             <Select value={form.source || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, source: v === "_none" ? "" : v }))}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر المصدر</SelectItem>
                 <SelectItem value="website">الموقع</SelectItem>
@@ -149,13 +141,17 @@ export default function CrmCreate() {
                 <SelectItem value="other">أخرى</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>{`القيمة المتوقعة (${getCurrencySymbol()})`}</Label><Input className={`mt-1 ${errCls("value")}`} type="number" step="0.01" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))} placeholder="٠" /><FieldHint field="value" /></div>
-          <div><Label>نسبة الاحتمال (%)</Label><Input className={`mt-1 ${errCls("probability")}`} type="number" min="0" max="100" value={form.probability} onChange={(e) => setForm((f) => ({ ...f, probability: e.target.value }))} placeholder="50" /><FieldHint field="probability" /></div>
-          <div><Label>تاريخ الإغلاق المتوقع</Label><div className="mt-1"><DatePicker value={form.expectedCloseDate} onChange={(v) => setForm((f) => ({ ...f, expectedCloseDate: v }))} /></div></div>
-          <div><Label>المتابعة القادمة</Label><div className="mt-1"><DatePicker value={form.nextFollowUp} onChange={(v) => setForm((f) => ({ ...f, nextFollowUp: v }))} /></div></div>
+          </FormFieldWrapper>
+          <NumberField label={`القيمة المتوقعة (${getCurrencySymbol()})`} value={form.value} onChange={(v) => setForm((f) => ({ ...f, value: v }))} placeholder="٠" step={0.01} min={0} error={fieldErrors.value} />
+          <NumberField label="نسبة الاحتمال (%)" value={form.probability} onChange={(v) => setForm((f) => ({ ...f, probability: v }))} placeholder="50" min={0} max={100} error={fieldErrors.probability} />
+          <FormFieldWrapper label="تاريخ الإغلاق المتوقع">
+            <DatePicker value={form.expectedCloseDate} onChange={(v) => setForm((f) => ({ ...f, expectedCloseDate: v }))} />
+          </FormFieldWrapper>
+          <FormFieldWrapper label="المتابعة القادمة">
+            <DatePicker value={form.nextFollowUp} onChange={(v) => setForm((f) => ({ ...f, nextFollowUp: v }))} />
+          </FormFieldWrapper>
         </div>
-        <div><Label>ملاحظات</Label><Textarea className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات حول الفرصة..." /></div>
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات حول الفرصة..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/crm")}>إلغاء</Button>

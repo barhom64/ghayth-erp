@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
@@ -94,12 +95,15 @@ export default function ApplicantsCreate() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> الوظيفة <span className="text-red-500">*</span></Label>
-            <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.postingId} onChange={(e) => set("postingId", e.target.value)}>
-              <option value="">اختر الوظيفة</option>
-              {jobs.map((job: any) => (
-                <option key={job.id} value={job.id}>{job.title} {job.department ? `— ${job.department}` : ""}</option>
-              ))}
-            </select>
+            <Select value={form.postingId || "_none"} onValueChange={(v) => set("postingId", v === "_none" ? "" : v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الوظيفة" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">اختر الوظيفة</SelectItem>
+                {jobs.map((job: any) => (
+                  <SelectItem key={job.id} value={String(job.id)}>{job.title} {job.department ? `— ${job.department}` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {selectedJob && (
             <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -136,10 +140,13 @@ export default function ApplicantsCreate() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>المؤهل العلمي</Label>
-              <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.education} onChange={(e) => set("education", e.target.value)}>
-                <option value="">اختر المؤهل</option>
-                {EDUCATION_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-              </select>
+              <Select value={form.education || "_none"} onValueChange={(v) => set("education", v === "_none" ? "" : v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المؤهل" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">اختر المؤهل</SelectItem>
+                  {EDUCATION_LEVELS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>سنوات الخبرة</Label>
@@ -155,10 +162,13 @@ export default function ApplicantsCreate() {
             </div>
             <div>
               <Label>مصدر التقديم</Label>
-              <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.source} onChange={(e) => set("source", e.target.value)}>
-                <option value="">اختر المصدر</option>
-                {APPLICANT_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
+              <Select value={form.source || "_none"} onValueChange={(v) => set("source", v === "_none" ? "" : v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">اختر المصدر</SelectItem>
+                  {APPLICANT_SOURCES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="flex items-center gap-1"><Star className="h-3.5 w-3.5" /> التقييم المبدئي (1-5)</Label>

@@ -282,25 +282,26 @@ export default function InvoicesCreate() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
             <div>
               <Label>نوع الفاتورة الضريبية</Label>
-              <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.invoiceTypeCode}
-                onChange={(e) => setForm({ ...form, invoiceTypeCode: e.target.value })}>
-                {INVOICE_TYPE_CODES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <Select value={form.invoiceTypeCode} onValueChange={(v) => setForm((f) => ({ ...f, invoiceTypeCode: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {INVOICE_TYPE_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>فئة الضريبة</Label>
-              <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.taxCategoryCode}
-                onChange={(e) => setForm({ ...form, taxCategoryCode: e.target.value })}>
-                {TAX_CATEGORY_CODES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <Select value={form.taxCategoryCode} onValueChange={(v) => setForm((f) => ({ ...f, taxCategoryCode: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TAX_CATEGORY_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             {(form.taxCategoryCode === "E" || form.taxCategoryCode === "Z") && (
               <div>
                 <Label>سبب الإعفاء / النسبة الصفرية</Label>
-                <input type="text" className="w-full border rounded-md p-2 mt-1 text-sm"
-                  value={form.exemptionReason}
-                  onChange={(e) => setForm({ ...form, exemptionReason: e.target.value })}
-                  placeholder="أدخل سبب الإعفاء..." />
+                <Input className="mt-1" value={form.exemptionReason} onChange={(e) => setForm((f) => ({ ...f, exemptionReason: e.target.value }))} placeholder="أدخل سبب الإعفاء..." />
               </div>
             )}
             <div className="md:col-span-3 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-md">

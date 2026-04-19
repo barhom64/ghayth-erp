@@ -422,14 +422,17 @@ export default function EmployeesCreate() {
         <div><Label>رقم التأشيرة</Label><Input className="mt-1" dir="ltr" value={form.visaNumber} onChange={(e) => setForm({ ...form, visaNumber: e.target.value })} placeholder="رقم التأشيرة" /></div>
         <div>
           <Label>نوع التأشيرة</Label>
-          <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.visaType} onChange={(e) => setForm({ ...form, visaType: e.target.value })}>
-            <option value="">— اختياري —</option>
-            <option value="work">عمل</option>
-            <option value="visit">زيارة</option>
-            <option value="family">تابع / عائلة</option>
-            <option value="student">طالب</option>
-            <option value="umrah">عمرة</option>
-          </select>
+          <Select value={form.visaType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, visaType: v === "_none" ? "" : v }))}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">— اختياري —</SelectItem>
+              <SelectItem value="work">عمل</SelectItem>
+              <SelectItem value="visit">زيارة</SelectItem>
+              <SelectItem value="family">تابع / عائلة</SelectItem>
+              <SelectItem value="student">طالب</SelectItem>
+              <SelectItem value="umrah">عمرة</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div><Label>تاريخ انتهاء التأشيرة</Label><div className="mt-1"><DatePicker value={form.visaExpiry} onChange={(v) => setForm({ ...form, visaExpiry: v })} /></div></div>
         <div><Label>رقم الكفيل / المنشأة</Label><Input className="mt-1" dir="ltr" value={form.sponsorNumber} onChange={(e) => setForm({ ...form, sponsorNumber: e.target.value })} placeholder="رقم المنشأة أو الكفيل" /></div>
@@ -437,11 +440,14 @@ export default function EmployeesCreate() {
         <div><Label>تاريخ انتهاء رخصة العمل</Label><div className="mt-1"><DatePicker value={form.workPermitExpiry} onChange={(v) => setForm({ ...form, workPermitExpiry: v })} /></div></div>
         <div>
           <Label>حالة الإقامة</Label>
-          <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.iqamaStatus} onChange={(e) => setForm({ ...form, iqamaStatus: e.target.value })}>
-            <option value="active">سارية</option>
-            <option value="expired">منتهية</option>
-            <option value="renewal_pending">قيد التجديد</option>
-          </select>
+          <Select value={form.iqamaStatus} onValueChange={(v) => setForm((f) => ({ ...f, iqamaStatus: v }))}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">سارية</SelectItem>
+              <SelectItem value="expired">منتهية</SelectItem>
+              <SelectItem value="renewal_pending">قيد التجديد</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="md:col-span-2 border-t pt-4 mt-2">

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -133,10 +134,13 @@ export default function TrainingCreate() {
           </div>
           <div>
             <Label>التصنيف</Label>
-            <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.category} onChange={(e) => set("category", e.target.value)}>
-              <option value="">اختر التصنيف</option>
-              {TRAINING_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
+            <Select value={form.category || "_none"} onValueChange={(v) => set("category", v === "_none" ? "" : v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر التصنيف" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">اختر التصنيف</SelectItem>
+                {TRAINING_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> جهة التدريب</Label>
@@ -168,11 +172,14 @@ export default function TrainingCreate() {
             </div>
             <div>
               <Label>وحدة المدة</Label>
-              <select className="w-full border rounded-md p-2 mt-1 text-sm" value={form.durationUnit} onChange={(e) => set("durationUnit", e.target.value)}>
-                <option value="hours">ساعات</option>
-                <option value="days">أيام</option>
-                <option value="weeks">أسابيع</option>
-              </select>
+              <Select value={form.durationUnit} onValueChange={(v) => set("durationUnit", v)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hours">ساعات</SelectItem>
+                <SelectItem value="days">أيام</SelectItem>
+                <SelectItem value="weeks">أسابيع</SelectItem>
+              </SelectContent>
+            </Select>
             </div>
             <div>
               <Label>تاريخ البدء</Label>

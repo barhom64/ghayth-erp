@@ -263,12 +263,15 @@ export default function ContractsCreate() {
               </div>
               <div>
                 <Label>الوحدة <span className="text-red-500">*</span></Label>
-                <select className={`w-full border rounded-md p-2 mt-1 text-sm ${errCls("unitId")}`} value={form.unitId} onChange={e => set("unitId", e.target.value)}>
-                  <option value="">اختر الوحدة</option>
-                  {units.map((u: any) => (
-                    <option key={u.id} value={u.id}>{u.unitNumber} - {u.buildingName || ""} ({u.type || ""})</option>
-                  ))}
-                </select>
+                <Select value={form.unitId || "_none"} onValueChange={(v) => set("unitId", v === "_none" ? "" : v)}>
+                  <SelectTrigger className={`mt-1 ${errCls("unitId")}`}><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">اختر الوحدة</SelectItem>
+                    {units.map((u: any) => (
+                      <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber} - {u.buildingName || ""} ({u.type || ""})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FieldHint field="unitId" />
               </div>
               {form.unitId && (

@@ -1,15 +1,13 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function ProductsCreate() {
   const [, setLocation] = useLocation();
@@ -21,10 +19,16 @@ export default function ProductsCreate() {
   });
   const createMut = useApiMutation<unknown, Record<string, string | number | undefined>>("/store/products", "POST", [["store-products"], ["store-stats"]]);
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!form.name) {
-      toast({ variant: "destructive", title: "يرجى إدخال اسم المنتج" });
+    setFieldErrors({});
+    const localErrors: Record<string, string> = {};
+    if (!form.name) localErrors.name = "يرجى إدخال اسم المنتج";
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      toast({ variant: "destructive", title: localErrors[Object.keys(localErrors)[0]] });
       return;
     }
     try {
@@ -42,7 +46,8 @@ export default function ProductsCreate() {
       toast({ title: "تمت إضافة المنتج بنجاح" });
       setLocation("/store");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المنتج", description: err.message });
+      if (err?.field) setFieldErrors((prev) => ({ ...prev, [err.field]: err.message ?? "خطأ" }));
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المنتج", description: err?.fix ?? err?.message });
     }
   };
 
@@ -60,24 +65,24 @@ export default function ProductsCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اسم المنتج</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم المنتج" /></div>
-          <div><Label>رمز المنتج</Label><Input className="mt-1" dir="ltr" value={form.sku} onChange={(e) => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="رمز المنتج" /></div>
-          <div><Label>التصنيف</Label><Input className="mt-1" value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))} placeholder="تصنيف المنتج" /></div>
-          <div><Label>الحالة</Label>
+          <TextField label="اسم المنتج" required value={form.name} onChange={(v) => setForm(f => ({ ...f, name: v }))} placeholder="اسم المنتج" error={fieldErrors.name} />
+          <TextField label="رمز المنتج" dir="ltr" value={form.sku} onChange={(v) => setForm(f => ({ ...f, sku: v }))} placeholder="رمز المنتج" />
+          <TextField label="التصنيف" value={form.category} onChange={(v) => setForm(f => ({ ...f, category: v }))} placeholder="تصنيف المنتج" />
+          <FormFieldWrapper label="الحالة">
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">نشط</SelectItem>
                 <SelectItem value="inactive">غير نشط</SelectItem>
                 <SelectItem value="out_of_stock">نفد المخزون</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>السعر</Label><Input className="mt-1" type="number" step="0.01" value={form.price} onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))} placeholder="٠" /></div>
-          <div><Label>سعر التكلفة</Label><Input className="mt-1" type="number" step="0.01" value={form.costPrice} onChange={(e) => setForm(f => ({ ...f, costPrice: e.target.value }))} placeholder="٠" /></div>
-          <div><Label>الكمية</Label><Input className="mt-1" type="number" value={form.quantity} onChange={(e) => setForm(f => ({ ...f, quantity: e.target.value }))} placeholder="٠" /></div>
+          </FormFieldWrapper>
+          <NumberField label="السعر" value={form.price} onChange={(v) => setForm(f => ({ ...f, price: v }))} placeholder="٠" step={0.01} min={0} />
+          <NumberField label="سعر التكلفة" value={form.costPrice} onChange={(v) => setForm(f => ({ ...f, costPrice: v }))} placeholder="٠" step={0.01} min={0} />
+          <NumberField label="الكمية" value={form.quantity} onChange={(v) => setForm(f => ({ ...f, quantity: v }))} placeholder="٠" min={0} />
         </div>
-        <div><Label>الوصف</Label><Textarea className="mt-1" value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف المنتج..." /></div>
+        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm(f => ({ ...f, description: v }))} placeholder="وصف المنتج..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/store")}>إلغاء</Button>

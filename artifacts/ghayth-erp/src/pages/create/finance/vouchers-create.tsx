@@ -231,18 +231,13 @@ export default function VouchersCreate() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>النوع الرئيسي <span className="text-red-500">*</span></Label>
-            <div className="flex gap-3 mt-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="type" value="receipt" checked={form.type === "receipt"}
-                  onChange={() => setField("type", "receipt")} />
-                <span className="text-sm">سند قبض</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="type" value="payment" checked={form.type === "payment"}
-                  onChange={() => setField("type", "payment")} />
-                <span className="text-sm">سند صرف</span>
-              </label>
-            </div>
+            <Select value={form.type} onValueChange={(v) => setField("type", v)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="receipt">سند قبض</SelectItem>
+                <SelectItem value="payment">سند صرف</SelectItem>
+              </SelectContent>
+            </Select>
             <FieldHint field="type" />
           </div>
           <div>
