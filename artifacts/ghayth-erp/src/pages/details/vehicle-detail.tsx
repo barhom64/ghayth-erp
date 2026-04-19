@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ArrowRight, Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, CheckCircle, XCircle, Info, Banknote, FileText, Clock } from "lucide-react";
-import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";

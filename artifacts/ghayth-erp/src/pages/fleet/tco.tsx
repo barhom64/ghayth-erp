@@ -7,10 +7,9 @@ import { BarChart3, Car, TrendingUp, DollarSign, Fuel, Wrench, Shield, AlertTria
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { formatCurrency } from "@/lib/formatters";
 
 const COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
-
-const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
 
 export default function TCOPage() {
   const [vehicleId, setVehicleId] = useState("");
@@ -70,13 +69,13 @@ export default function TCOPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="border-2 border-primary/20">
               <CardContent className="pt-4 text-center">
-                <div className="text-2xl font-bold text-primary">{fmt(tco.totalCost)}</div>
+                <div className="text-2xl font-bold text-primary">{formatCurrency(tco.totalCost)}</div>
                 <div className="text-xs text-gray-500 mt-1">إجمالي تكلفة التملك</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 text-center">
-                <div className="text-xl font-bold">{fmt(tco.costPerKm)}</div>
+                <div className="text-xl font-bold">{formatCurrency(tco.costPerKm)}</div>
                 <div className="text-xs text-gray-500">التكلفة لكل كيلومتر</div>
               </CardContent>
             </Card>
@@ -105,7 +104,7 @@ export default function TCOPage() {
                         <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={70}>
                           {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
-                        <Tooltip formatter={(v: any) => [fmt(v)]} />
+                        <Tooltip formatter={(v: any) => [formatCurrency(v)]} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-2 flex-1">
@@ -115,7 +114,7 @@ export default function TCOPage() {
                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                             <span>{d.name}</span>
                           </div>
-                          <span className="font-medium">{fmt(d.value)}</span>
+                          <span className="font-medium">{formatCurrency(d.value)}</span>
                         </div>
                       ))}
                     </div>
@@ -140,12 +139,12 @@ export default function TCOPage() {
                       <item.icon className={`w-4 h-4 ${item.color}`} />
                       <span className="text-sm">{item.label}</span>
                     </div>
-                    <span className="font-medium text-sm">{fmt(item.value || 0)}</span>
+                    <span className="font-medium text-sm">{formatCurrency(item.value || 0)}</span>
                   </div>
                 ))}
                 <div className="flex items-center justify-between py-2 border-t-2 font-bold">
                   <span>الإجمالي</span>
-                  <span className="text-primary">{fmt(tco.totalCost)}</span>
+                  <span className="text-primary">{formatCurrency(tco.totalCost)}</span>
                 </div>
               </CardContent>
             </Card>

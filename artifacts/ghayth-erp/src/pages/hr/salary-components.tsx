@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { SALARY_COMPONENT_TYPES, SALARY_CATEGORIES } from "@/lib/hr-type-maps";
 import { Card, CardContent } from "@/components/ui/card";

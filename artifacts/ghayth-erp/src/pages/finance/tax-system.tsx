@@ -7,6 +7,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCircle, XCircle, Clock, AlertTriangle, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -267,18 +268,17 @@ export default function TaxSystemPage() {
               <CardTitle className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2"><FileText className="h-5 w-5" />سجل الإرسال للهيئة</span>
                 <div className="flex items-center gap-2">
-                  <select
-                    className="text-sm border rounded-md p-1.5"
-                    value={submissionStatus}
-                    onChange={(e) => { setSubmissionStatus(e.target.value); setSubmissionPage(1); }}
-                  >
-                    <option value="">جميع الحالات</option>
-                    <option value="accepted">مقبولة</option>
-                    <option value="submitted">مرسلة</option>
-                    <option value="pending">معلقة</option>
-                    <option value="rejected">مرفوضة</option>
-                    <option value="error">خطأ</option>
-                  </select>
+                  <Select value={submissionStatus || "_all"} onValueChange={(v) => { setSubmissionStatus(v === "_all" ? "" : v); setSubmissionPage(1); }}>
+                    <SelectTrigger className="text-sm w-[140px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_all">جميع الحالات</SelectItem>
+                      <SelectItem value="accepted">مقبولة</SelectItem>
+                      <SelectItem value="submitted">مرسلة</SelectItem>
+                      <SelectItem value="pending">معلقة</SelectItem>
+                      <SelectItem value="rejected">مرفوضة</SelectItem>
+                      <SelectItem value="error">خطأ</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button variant="outline" size="sm" onClick={() => refetchSubmissions()}>تحديث</Button>
                 </div>
               </CardTitle>

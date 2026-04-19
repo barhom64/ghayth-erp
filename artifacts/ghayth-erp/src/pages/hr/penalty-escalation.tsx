@@ -1,6 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, TrendingUp, Scale, Shield } from "lucide-react";

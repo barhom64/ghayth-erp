@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -192,54 +193,50 @@ export default function ViolationsReportPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label className="text-xs">النوع</Label>
-              <select
-                className="w-full border rounded-lg p-2 bg-white text-sm"
-                value={filters.type}
-                onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-              >
-                <option value="">الكل</option>
-                {Object.entries(TYPE_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
+              <Select value={filters.type} onValueChange={(v) => setFilters({ ...filters, type: v === "_all" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">الكل</SelectItem>
+                  {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">القسم</Label>
-              <select
-                className="w-full border rounded-lg p-2 bg-white text-sm"
-                value={filters.department}
-                onChange={(e) => setFilters({ ...filters, department: e.target.value })}
-              >
-                <option value="">الكل</option>
-                {Object.entries(DEPARTMENT_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
+              <Select value={filters.department} onValueChange={(v) => setFilters({ ...filters, department: v === "_all" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">الكل</SelectItem>
+                  {Object.entries(DEPARTMENT_LABELS).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">الأولوية</Label>
-              <select
-                className="w-full border rounded-lg p-2 bg-white text-sm"
-                value={filters.priority}
-                onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
-              >
-                <option value="">الكل</option>
-                {Object.entries(PRIORITY_CONFIG).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
+              <Select value={filters.priority} onValueChange={(v) => setFilters({ ...filters, priority: v === "_all" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">الكل</SelectItem>
+                  {Object.entries(PRIORITY_CONFIG).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">الحالة</Label>
-              <select
-                className="w-full border rounded-lg p-2 bg-white text-sm"
-                value={filters.status}
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              >
-                <option value="">الكل</option>
-                <option value="open">مفتوحة</option>
-                <option value="resolved">تم حلها</option>
-              </select>
+              <Select value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v === "_all" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">الكل</SelectItem>
+                  <SelectItem value="open">مفتوحة</SelectItem>
+                  <SelectItem value="resolved">تم حلها</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>

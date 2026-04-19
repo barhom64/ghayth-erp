@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   KeyRound,
@@ -370,18 +371,16 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label>الموظف</Label>
-            <select
-              className="w-full border rounded-md p-2 mt-1"
-              value={form.assignmentId}
-              onChange={(e) => setForm({ ...form, assignmentId: e.target.value })}
-            >
-              <option value="">اختر الموظف...</option>
-              {employees.map((e: any) => (
-                <option key={e.assignmentId || e.id} value={e.assignmentId || e.id}>
-                  {e.name}
-                </option>
-              ))}
-            </select>
+            <Select value={form.assignmentId} onValueChange={(v) => setForm({ ...form, assignmentId: v })}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الموظف..." /></SelectTrigger>
+              <SelectContent>
+                {employees.map((e: any) => (
+                  <SelectItem key={e.assignmentId || e.id} value={(e.assignmentId || e.id).toString()}>
+                    {e.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>المبلغ</Label>
@@ -394,18 +393,17 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
           </div>
           <div>
             <Label>مصدر الصرف</Label>
-            <select
-              className="w-full border rounded-md p-2 mt-1"
-              value={form.sourceAccountCode}
-              onChange={(e) => setForm({ ...form, sourceAccountCode: e.target.value })}
-            >
-              <option value="">الخزنة النقدية (1100)</option>
-              {sourceAccounts.map((a: any) => (
-                <option key={a.code || a.id} value={a.code}>
-                  {a.code} - {a.name}
-                </option>
-              ))}
-            </select>
+            <Select value={form.sourceAccountCode || "_default"} onValueChange={(v) => setForm({ ...form, sourceAccountCode: v === "_default" ? "" : v })}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="الخزنة النقدية (1100)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_default">الخزنة النقدية (1100)</SelectItem>
+                {sourceAccounts.map((a: any) => (
+                  <SelectItem key={a.code || a.id} value={a.code}>
+                    {a.code} - {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>الوصف</Label>

@@ -9,6 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
+import { formatCurrency } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
@@ -33,7 +34,6 @@ export default function TurnoverReportPage() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
-  const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
 
   const monthlyData = (data?.byMonth || []).map((m: any) => ({
     name: MONTHS_AR[m.month - 1],
@@ -86,7 +86,7 @@ export default function TurnoverReportPage() {
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2 text-orange-500 mb-1"><DollarSign className="w-4 h-4" /><span className="text-xs text-gray-500">التكلفة التقديرية</span></div>
-            <div className="text-lg font-bold">{fmt(data?.totalEstimatedCost || 0)}</div>
+            <div className="text-lg font-bold">{formatCurrency(data?.totalEstimatedCost || 0)}</div>
           </CardContent>
         </Card>
       </div>

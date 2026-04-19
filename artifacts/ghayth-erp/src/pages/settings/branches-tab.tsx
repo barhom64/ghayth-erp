@@ -3,6 +3,7 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -113,16 +114,14 @@ export function BranchesTab() {
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>الشركة <span className="text-red-500">*</span></Label>
-              <select
-                className="w-full border rounded-md p-2"
-                value={form.companyId}
-                onChange={(e) => setForm({ ...form, companyId: e.target.value })}
-              >
-                <option value="">اختر شركة</option>
-                {companies.map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <Select value={form.companyId} onValueChange={(v) => setForm({ ...form, companyId: v })}>
+                <SelectTrigger><SelectValue placeholder="اختر شركة" /></SelectTrigger>
+                <SelectContent>
+                  {companies.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>اسم الفرع (عربي) <span className="text-red-500">*</span></Label>
@@ -150,16 +149,15 @@ export function BranchesTab() {
       {companies.length > 1 && (
         <div className="flex items-center gap-2">
           <Label className="shrink-0">تصفية بالشركة:</Label>
-          <select
-            className="border rounded-md p-1.5 text-sm"
-            value={filterCompanyId}
-            onChange={(e) => setFilterCompanyId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">جميع الشركات</option>
-            {companies.map((c: any) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <Select value={filterCompanyId ? filterCompanyId.toString() : "_all"} onValueChange={(v) => setFilterCompanyId(v === "_all" ? "" : Number(v))}>
+            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all">جميع الشركات</SelectItem>
+              {companies.map((c: any) => (
+                <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 
