@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, KeyRound, ScrollText, UserCog, Lock, FileSearch, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/page-shell";
 import { UsersTab } from "./admin/users-tab";
 import { RoleAssignmentTab } from "./admin/role-assignment-tab";
 import { RolesTab } from "./admin/roles-tab";
@@ -12,7 +13,7 @@ import { AuditExplorerTab } from "./admin/audit-explorer-tab";
 
 export default function AdminPage() {
   return (
-    <div className="space-y-6">
+    <PageShell title="لوحة الإدارة" breadcrumbs={[{ label: "الإدارة" }]}>
       <div className="grid grid-cols-3 md:grid-cols-7 gap-4">
         {[
           { label: "المستخدمين", icon: Users, color: "text-blue-600 bg-blue-50" },
@@ -51,6 +52,6 @@ export default function AdminPage() {
         <TabsContent value="security"><SecurityLogTab /></TabsContent>
         <TabsContent value="audit"><AuditExplorerTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
