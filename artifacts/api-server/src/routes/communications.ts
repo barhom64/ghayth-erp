@@ -23,6 +23,7 @@ const sendCommunicationSchema = z.object({
   subject: z.string().optional(),
   relatedType: z.string().optional(),
   relatedId: z.number().optional(),
+  attachments: z.array(z.any()).optional(),
 });
 
 const convertLogSchema = z.object({

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { todayLocal } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
+import { PageShell } from "@/components/page-shell";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -84,19 +86,17 @@ export default function InventoryCountPage() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ClipboardCheck className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">جرد المخزن</h1>
-            <p className="text-sm text-gray-500">إجراء جلسات الجرد الدوري ومطابقة المخزون الفعلي</p>
-          </div>
-        </div>
+    <PageShell
+      title="جرد المخزن"
+      subtitle="إجراء جلسات الجرد الدوري ومطابقة المخزون الفعلي"
+      breadcrumbs={[{ href: "/warehouse", label: "المخزن" }]}
+      actions={
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> جلسة جرد جديدة
         </Button>
-      </div>
+      }
+    >
+      <WarehouseTabsNav />
 
       {showForm && (
         <Card className="border-2 border-primary/20">
@@ -227,6 +227,6 @@ export default function InventoryCountPage() {
           </Card>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

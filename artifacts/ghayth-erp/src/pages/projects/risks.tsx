@@ -13,6 +13,7 @@ import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 
 const RISK_LEVEL_COLORS: Record<string, string> = {
   low: "bg-green-100 text-green-700",
@@ -92,6 +93,7 @@ export default function RisksPage() {
         </>
       }
     >
+      <ProjectsTabsNav />
       <div className="flex items-center gap-2">
         <Label>المشروع:</Label>
         <Select value={projectId} onValueChange={setProjectId}>

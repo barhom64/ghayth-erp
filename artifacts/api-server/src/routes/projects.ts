@@ -130,7 +130,7 @@ const createCostSchema = z.object({
   sourceType: z.string().optional(),
 });
 
-const closeProjectSchema = z.object({}).passthrough();
+const closeProjectSchema = z.object({});
 
 const router = Router();
 router.use(authMiddleware);
@@ -1833,6 +1833,31 @@ router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) =>
       rows: ganttRows,
     });
   } catch (err) { handleRouteError(err, res, "Gantt data error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT-LINKED LETTERS — المراسلات المرتبطة بالمشروع
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/:id/letters", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = Number(req.params.id);
+    await assertProjectAccess(projectId, scope);
+    const rows = await rawQuery<any>(
+      `SELECT l.id, l.subject, l.type, l.direction, l.status, l."letterDate",
+              l."fromEntity", l."toEntity", l."createdAt"
+       FROM letters l
+       WHERE l."companyId" = $1
+         AND l."relatedType" = 'project'
+         AND l."relatedId" = $2
+         AND l."deletedAt" IS NULL
+       ORDER BY l."letterDate" DESC NULLS LAST, l."createdAt" DESC
+       LIMIT 50`,
+      [scope.companyId, projectId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Project letters error:"); }
 });
 
 export default router;

@@ -47,6 +47,7 @@ export default function LettersCreate() {
       toNumber: form.toNumber,
       body: form.body || undefined,
       ...(form.relatedProjectId ? { relatedType: "project", relatedId: Number(form.relatedProjectId) } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/letters"); },
       onError: (err: any) => {

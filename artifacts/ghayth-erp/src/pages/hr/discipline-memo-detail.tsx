@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowRight, Clock, CheckCircle, XCircle, FileText, Ban, Gavel } from "lucide-react";
+import { ArrowRight, Clock, CheckCircle, XCircle, FileText, Ban, Gavel, Scale, Lock, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -42,6 +42,8 @@ export default function DisciplineMemoDetailPage() {
   const [managerComment, setManagerComment] = useState("");
   const [gmDecision, setGmDecision] = useState<"approved" | "rejected" | "other">("approved");
   const [gmComment, setGmComment] = useState("");
+  const [appealReason, setAppealReason] = useState("");
+  const [showAppeal, setShowAppeal] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const invalidate = () => {
@@ -381,7 +383,7 @@ export default function DisciplineMemoDetailPage() {
         </Card>
       )}
 
-      {!["approved", "rejected", "cancelled"].includes(memo.status) && (
+      {!["approved", "rejected", "cancelled", "closed", "appeal_pending", "appeal_accepted"].includes(memo.status) && (
         <Card>
           <CardContent className="pt-6">
             <Button
@@ -396,6 +398,82 @@ export default function DisciplineMemoDetailPage() {
               <Ban className="w-4 h-4 me-2" />
               إلغاء المحضر
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Appeal — الاستئناف */}
+      {memo.status === "approved" && (
+        <Card className="border-blue-200">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Scale className="w-4 h-4 text-blue-600" /> استئناف القرار
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!showAppeal ? (
+              <Button variant="outline" onClick={() => setShowAppeal(true)}>
+                <Scale className="w-4 h-4 me-2" />تقديم استئناف
+              </Button>
+            ) : (
+              <>
+                <Textarea
+                  value={appealReason}
+                  onChange={(e) => setAppealReason(e.target.value)}
+                  placeholder="اكتب مبررات الاستئناف..."
+                  rows={4}
+                />
+                <div className="flex gap-2">
+                  <Button onClick={() => act("/appeal", { reason: appealReason }, "تم تقديم الاستئناف")} disabled={busy || !appealReason.trim()}>
+                    إرسال الاستئناف
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowAppeal(false)}>إلغاء</Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Appeal Decision */}
+      {memo.status === "appeal_pending" && (
+        <Card className="border-orange-200">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Scale className="w-4 h-4 text-orange-600" /> البت في الاستئناف
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {memo.appealReason && (
+              <div className="bg-blue-50 rounded p-3 text-sm">
+                <div className="text-xs text-muted-foreground mb-1">سبب الاستئناف</div>
+                {memo.appealReason}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button className="bg-green-600 hover:bg-green-700" disabled={busy} onClick={() => act("/appeal-decision", { decision: "accepted", comment: "" }, "تم قبول الاستئناف")}>
+                قبول الاستئناف
+              </Button>
+              <Button variant="destructive" disabled={busy} onClick={() => act("/appeal-decision", { decision: "rejected", comment: "" }, "تم رفض الاستئناف")}>
+                رفض الاستئناف
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Close + Generate Letter — إقفال + خطاب */}
+      {["approved", "rejected", "appeal_accepted", "cancelled"].includes(memo.status) && memo.status !== "closed" && (
+        <Card>
+          <CardContent className="pt-6 flex items-center gap-3 flex-wrap">
+            <Button variant="outline" onClick={() => act("/close", { note: "إقفال عادي" }, "تم إقفال المحضر")} disabled={busy}>
+              <Lock className="w-4 h-4 me-2" /> إقفال المحضر
+            </Button>
+            <Link href={`/communications/letters/create?relatedType=discipline_memo&relatedId=${memo.id}&subject=${encodeURIComponent(`إخطار تأديبي — ${memo.memoNumber}`)}`}>
+              <Button variant="outline">
+                <Mail className="w-4 h-4 me-2" /> إصدار خطاب تأديبي
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       )}

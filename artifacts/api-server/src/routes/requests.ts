@@ -11,6 +11,7 @@ import { createAuditLog, createNotification, emitEvent, getLegalResponsible } fr
 const createRequestSchema = z.object({
   typeId: z.number({ invalid_type_error: "نوع الطلب يجب أن يكون رقماً" }).optional(),
   requesterName: z.string().optional(),
+  requester: z.string().optional(),
   title: z.string({ required_error: "عنوان الطلب مطلوب" }).min(1, "عنوان الطلب مطلوب"),
   description: z.string({ required_error: "وصف الطلب مطلوب" }).min(1, "وصف الطلب مطلوب"),
   priority: z.enum(["low", "medium", "high", "critical"], { invalid_type_error: "أولوية غير صالحة" }).optional(),
@@ -181,7 +182,8 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
     const parsed = createRequestSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const { typeId, requesterName, title, description, priority, data, attachments } = req.body;
+    const { typeId, requesterName, requester, title, description, priority, data, attachments } = req.body;
+    const resolvedRequesterName = requesterName || requester;
 
     if (!title || !String(title).trim()) {
       throw new ValidationError("عنوان الطلب مطلوب", {
@@ -225,12 +227,12 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
     }
     const r = await rawExecute(
       `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [typeId ? Number(typeId) : null, enforcedRequesterId, requesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments)]
+      [typeId ? Number(typeId) : null, enforcedRequesterId, resolvedRequesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments)]
     );
     await logCommunication(
       scope.companyId, 'inbound',
       `طلب جديد: ${title}`,
-      `تم إنشاء طلب جديد بواسطة ${requesterName || 'مستخدم'} - الأولوية: ${priority || 'متوسطة'} - ${description || ''}`,
+      `تم إنشاء طلب جديد بواسطة ${resolvedRequesterName || 'مستخدم'} - الأولوية: ${priority || 'متوسطة'} - ${description || ''}`,
       'request', r.insertId
     );
     await createAuditLog({

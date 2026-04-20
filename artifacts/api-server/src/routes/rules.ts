@@ -36,7 +36,7 @@ const patchRuleSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-const toggleRuleSchema = z.object({}).passthrough().optional();
+const toggleRuleSchema = z.object({}).optional();
 
 const router = Router();
 router.use(authMiddleware);

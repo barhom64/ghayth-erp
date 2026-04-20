@@ -16,6 +16,7 @@ import { useAppContext } from "@/contexts/app-context";
 // expanded-row stage rendering, and the KPI cards stay as-is for this
 // pilot pass; they'll move in P3 follow-ups.
 import { PageShell } from "@/components/page-shell";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { textColumn, dateColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 import { LEAVE_TYPES, APPROVAL_ROLES } from "@/lib/hr-type-maps";
@@ -239,6 +240,7 @@ export default function LeavesPage() {
         />
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <BulkActionsBar

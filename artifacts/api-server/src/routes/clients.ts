@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -13,9 +13,12 @@ const createClientSchema = z.object({
   name: z.string().min(1, "اسم العميل مطلوب"),
   phone: z.string().optional().nullable(),
   email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
-  classification: z.enum(["regular", "vip", "prospect", "wholesale"]).optional().default("regular"),
+  classification: z.enum(["regular", "vip", "prospect", "wholesale", "new", "inactive"]).optional().default("regular"),
   source: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  type: z.enum(["individual", "company", "government"]).optional().default("individual"),
+  nationality: z.string().optional().nullable(),
+  language: z.enum(["ar", "en"]).optional().default("ar"),
 });
 
 const router = Router();
@@ -79,12 +82,15 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       classification,
       source,
       notes,
+      type,
+      nationality,
+      language,
     } = parsed.data;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO clients (name, phone, email, classification, source, notes, "companyId", "isBlacklisted")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, false)`,
-      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, scope.companyId]
+      `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)`,
+      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId]
     );
 
     const [client] = await rawQuery<any>(
@@ -121,8 +127,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
     );
 
     if (!client) {
-      res.status(404).json({ error: "العميل غير موجود" });
-      return;
+      throw new NotFoundError("العميل غير موجود");
     }
 
     const [invoices, opportunities, tickets, projects, financials, conversations, timeline] = await Promise.all([
@@ -232,7 +237,7 @@ router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "العميل غير موجود" }); return; }
+    if (!existing) { throw new NotFoundError("العميل غير موجود"); }
 
     const b = req.body;
     const sets: string[] = [];
@@ -259,8 +264,7 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
     const scope = req.scope!;
     const { phone, name, source = "auto" } = req.body as any;
     if (!phone) {
-      res.status(400).json({ error: "رقم الهاتف مطلوب" });
-      return;
+      throw new ValidationError("رقم الهاتف مطلوب");
     }
 
     const existing = await rawQuery<any>(
@@ -308,7 +312,7 @@ router.delete("/:id", requirePermission("crm:delete"), async (req, res) => {
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "العميل غير موجود" }); return; }
+    if (!existing) { throw new NotFoundError("العميل غير موجود"); }
     await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     res.json({ message: "تم حذف العميل بنجاح" });
   } catch (err) {
@@ -324,7 +328,7 @@ router.get("/:id/portal-account", requirePermission("crm:read"), async (req, res
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "العميل غير موجود" }); return; }
+    if (!existing) { throw new NotFoundError("العميل غير موجود"); }
     const [account] = await rawQuery<any>(
       `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt"
        FROM client_portal_accounts
@@ -344,12 +348,10 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
     const { email: rawEmail, password } = req.body as { email: string; password: string };
 
     if (!rawEmail || !password) {
-      res.status(400).json({ error: "البريد الإلكتروني وكلمة المرور مطلوبان" });
-      return;
+      throw new ValidationError("البريد الإلكتروني وكلمة المرور مطلوبان");
     }
     if (password.length < 6) {
-      res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
-      return;
+      throw new ValidationError("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
     }
     const email = rawEmail.trim().toLowerCase();
 
@@ -357,15 +359,14 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
-    if (!client) { res.status(404).json({ error: "العميل غير موجود" }); return; }
+    if (!client) { throw new NotFoundError("العميل غير موجود"); }
 
     const [existing] = await rawQuery<any>(
       `SELECT id FROM client_portal_accounts WHERE "clientId" = $1 AND "companyId" = $2`,
       [Number(id), scope.companyId]
     );
     if (existing) {
-      res.status(409).json({ error: "يوجد حساب بوابة لهذا العميل مسبقاً" });
-      return;
+      throw new ConflictError("يوجد حساب بوابة لهذا العميل مسبقاً");
     }
 
     const [emailTaken] = await rawQuery<any>(
@@ -373,8 +374,7 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
       [email]
     );
     if (emailTaken) {
-      res.status(409).json({ error: "هذا البريد الإلكتروني مستخدم بالفعل في بوابة العملاء" });
-      return;
+      throw new ConflictError("هذا البريد الإلكتروني مستخدم بالفعل في بوابة العملاء");
     }
 
     const passwordHash = await hashPassword(password);
@@ -405,7 +405,7 @@ router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, 
        WHERE cpa."clientId" = $1 AND cpa."companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!account) { res.status(404).json({ error: "حساب البوابة غير موجود" }); return; }
+    if (!account) { throw new NotFoundError("حساب البوابة غير موجود"); }
 
     const sets: string[] = [];
     const params: any[] = [];
@@ -416,8 +416,7 @@ router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, 
     }
     if (password) {
       if (password.length < 6) {
-        res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
-        return;
+        throw new ValidationError("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
       }
       const hash = await hashPassword(password);
       params.push(hash);

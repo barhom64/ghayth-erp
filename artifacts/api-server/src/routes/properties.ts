@@ -3357,4 +3357,24 @@ router.get("/occupancy-report", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Occupancy report error:"); }
 });
 
+router.get("/tenants/:id/letters", requirePermission("property:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const tenantId = Number(req.params.id);
+    const rows = await rawQuery<any>(
+      `SELECT l.id, l.subject, l.type, l.direction, l.status, l."letterDate",
+              l."fromEntity", l."toEntity", l."createdAt"
+       FROM letters l
+       WHERE l."companyId" = $1
+         AND l."relatedType" = 'tenant'
+         AND l."relatedId" = $2
+         AND l."deletedAt" IS NULL
+       ORDER BY l."letterDate" DESC NULLS LAST, l."createdAt" DESC
+       LIMIT 50`,
+      [scope.companyId, tenantId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Tenant letters error:"); }
+});
+
 export default router;

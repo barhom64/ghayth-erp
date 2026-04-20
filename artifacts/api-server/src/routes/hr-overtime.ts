@@ -267,8 +267,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
-    // No body expected
-    { const _guard = z.object({}).strict().safeParse(req.body ?? {}); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
+    const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
     if (!["owner", "hr_manager", "general_manager", "branch_manager"].includes(scope.role)) {
       throw new ForbiddenError(
@@ -287,6 +286,27 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     // منع الموظف من اعتماد طلبه الخاص
     if (item.assignmentId === scope.activeAssignmentId) {
       throw new ForbiddenError("لا يمكنك اعتماد طلبك الخاص");
+    }
+
+    const rejectionReason = reason || notes;
+    if (!approved) {
+      await rawExecute(
+        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
+        [rejectionReason || null, item.id]
+      );
+      processApprovalStep({
+        companyId: scope.companyId, branchId: scope.branchId,
+        refType: "hr_overtime_request", refId: item.id,
+        approved: false, decidedBy: scope.activeAssignmentId, reason: rejectionReason,
+      }).catch(console.error);
+      createNotification({
+        companyId: scope.companyId, assignmentId: item.assignmentId,
+        type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
+        body: `تم رفض الطلب ${item.requestNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
+        priority: "normal", refType: "hr_overtime_request", refId: item.id,
+      }).catch(console.error);
+      res.json({ success: true, message: "تم رفض الطلب" });
+      return;
     }
 
     // ── معالجة خطوة الموافقة في السلسلة ──

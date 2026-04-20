@@ -32,6 +32,7 @@ const createInvoiceSchema = z.object({
     quantity: z.number().optional(),
     unitPrice: z.number().optional(),
     accountCode: z.string().optional(),
+    total: z.number().optional(),
   })).min(1, "يجب إضافة بند واحد على الأقل").optional(),
   vatRate: z.number().optional(),
   dueDate: z.string().optional(),
@@ -42,7 +43,12 @@ const createInvoiceSchema = z.object({
   notes: z.string().optional(),
   paymentTermsDays: z.number().optional(),
   branchId: z.number().optional(),
-}).passthrough();
+  companyId: z.number().optional(),
+  isTaxLinked: z.boolean().optional(),
+  invoiceTypeCode: z.string().optional(),
+  taxCategoryCode: z.string().optional(),
+  exemptionReason: z.string().optional(),
+});
 
 const createPaymentSchema = z.object({
   amount: z.number().positive("المبلغ مطلوب"),

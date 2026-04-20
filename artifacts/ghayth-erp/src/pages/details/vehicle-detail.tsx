@@ -793,7 +793,7 @@ export default function VehicleDetail() {
 
       {id && (
         <div className="space-y-4">
-          <EntityObligations entityType="vehicle" entityId={id} hideWhenEmpty />
+          <EntityObligations entityType="fleet_vehicle,fleet_maintenance,fleet_insurance" entityId={id} hideWhenEmpty />
           <EntityDocuments entityType="vehicle" entityId={id} />
         </div>
       )}
