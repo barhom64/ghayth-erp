@@ -12,6 +12,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 
 export default function PropertiesBuildings() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
@@ -43,6 +44,7 @@ export default function PropertiesBuildings() {
         </Link>
       )}
     >
+      <PropertyTabsNav />
       <div className="relative max-w-sm">
         <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input className="ps-9" placeholder="بحث بالاسم أو العنوان..." value={search} onChange={(e) => setSearch(e.target.value)} />

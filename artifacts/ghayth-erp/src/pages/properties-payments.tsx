@@ -12,6 +12,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 
 export default function PropertiesPayments() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
@@ -84,6 +85,7 @@ export default function PropertiesPayments() {
         </Link>
       )}
     >
+      <PropertyTabsNav />
       <KpiGrid items={[
         { label: "إجمالي المدفوعات", value: payments.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
         { label: "مدفوع", value: payments.filter((p: any) => p.status === "paid").length, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },

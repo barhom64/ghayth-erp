@@ -68,6 +68,7 @@ const allNavSections: NavSection[] = [
       { label: "لوحة المدير", path: "/manager-board", icon: Users, minRoleLevel: 40 },
       { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 60 },
       { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
+      { label: "مركز الالتزامات", path: "/obligations", icon: Clock, minRoleLevel: 30 },
     ],
   },
   // ══════════════════════════════════════════════════════════════════════

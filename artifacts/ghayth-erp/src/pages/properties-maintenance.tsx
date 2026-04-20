@@ -12,6 +12,7 @@ import { ApprovalActions } from "@/components/approval-actions";
 import { Wrench, Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 
 export default function PropertiesMaintenance() {
   const { data: requestsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -77,6 +78,7 @@ export default function PropertiesMaintenance() {
         </Link>
       }
     >
+      <PropertyTabsNav />
       <div className="flex items-center gap-4">
         <div className="flex-1 flex flex-col gap-2">
           <Input placeholder="بحث سريع..." value={maintSearch} onChange={(e) => setMaintSearch(e.target.value)} />

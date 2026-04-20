@@ -16,6 +16,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 
 export default function PropertiesTenants() {
   const { scopeQueryString } = useAppContext();
@@ -153,6 +154,7 @@ export default function PropertiesTenants() {
         </Link>
       }
     >
+      <PropertyTabsNav />
       <KpiGrid items={[
         { label: "إجمالي المستأجرين", value: tenants.length, icon: Users, color: "text-blue-600 bg-blue-50" },
         { label: "نشط", value: tenants.filter((t: any) => t.activeContracts > 0).length, icon: UserCheck, color: "text-emerald-600 bg-emerald-50" },
