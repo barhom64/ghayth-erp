@@ -21,6 +21,7 @@ import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 
 const OPERATION_TYPES = [
   { value: "expense", label: "مصروف عام" },
@@ -702,6 +703,20 @@ export default function ExpensesCreate() {
         )}
 
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
+
+        {form.amount && Number(form.amount) > 0 && (
+          <ImpactPreviewButton
+            endpoint="/finance/expenses/impact-preview"
+            payload={{
+              amount: Number(form.amount),
+              expenseType: form.expenseType,
+              paymentMethod: form.paymentMethod,
+              costCenter: form.costCenter,
+              supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+            }}
+            label="معاينة أثر المصروف"
+          />
+        )}
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">

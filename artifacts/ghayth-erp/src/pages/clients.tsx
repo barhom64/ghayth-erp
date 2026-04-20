@@ -15,6 +15,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
 
 export default function Clients() {
   const { roleLevel, scopeQueryString } = useAppContext();
@@ -149,6 +150,7 @@ export default function Clients() {
         )
       }
     >
+      <CrmTabsNav />
       <KpiGrid items={[
         { label: "إجمالي العملاء", value: total || 0, icon: Building2, color: "text-blue-600 bg-blue-50" },
         { label: "نشط", value: (clients || []).filter((c: any) => c.status === "active").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },

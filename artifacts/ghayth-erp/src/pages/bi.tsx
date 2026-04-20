@@ -10,10 +10,12 @@ import { PropertyOccupancyTab } from "./bi/property-occupancy-tab";
 import { TrainingROITab } from "./bi/training-roi-tab";
 import { AIInsightsTab } from "./bi/ai-insights-tab";
 import { AlertFatigueTab } from "./bi/alert-fatigue-tab";
+import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
 
 export default function BIPage() {
   return (
     <PageShell title="ذكاء الأعمال" breadcrumbs={[{ label: "التحليلات" }]}>
+      <BiTabsNav />
       <Tabs defaultValue="ceo" dir="rtl">
         <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10 gap-1 h-auto flex-wrap">
           <TabsTrigger value="ceo" className="text-xs">لوحة الرئيس التنفيذي</TabsTrigger>

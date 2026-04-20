@@ -19,6 +19,7 @@ import {
   Activity, Timer, Printer, Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
 
 function useChartExport() {
   const { toast } = useToast();
@@ -468,6 +469,7 @@ export default function BiOperationsPage() {
         </Button>
       }
     >
+      <BiTabsNav />
       <Card className="border-0 shadow-sm print:hidden">
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

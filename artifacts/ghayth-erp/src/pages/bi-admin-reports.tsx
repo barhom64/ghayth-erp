@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -356,6 +357,7 @@ export default function BiAdminReportsPage() {
         </Button>
       }
     >
+      <BiTabsNav />
       <Tabs defaultValue="daily" dir="rtl">
         <TabsList className="grid w-full grid-cols-3 print:hidden">
           <TabsTrigger value="daily" className="gap-1"><Calendar className="w-4 h-4" /> يومي</TabsTrigger>
