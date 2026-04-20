@@ -17,6 +17,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -249,6 +250,21 @@ export default function InvoicesCreate() {
         <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(total)}</span></div>
       </div>
       {fieldErrors.totalAmount && <p className="text-xs text-red-600 mt-1">{fieldErrors.totalAmount}</p>}
+
+      {form.clientId && subtotal > 0 && (
+        <ImpactPreviewButton
+          endpoint="/finance/invoices/impact-preview"
+          payload={{
+            clientId: Number(form.clientId),
+            taxRate: Number(form.vatRate),
+            lines: lines.map((l) => ({
+              quantity: Number(l.quantity || 0),
+              unitPrice: Number(l.unitPrice || 0),
+            })),
+          }}
+          label="معاينة أثر الفاتورة"
+        />
+      )}
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
 

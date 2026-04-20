@@ -117,6 +117,95 @@ const COLLECTION_STAGES = [
   { stage: 6, name: "legal_churned", label: "إشعار القانونية + تصنيف churned", daysOverdue: 60 },
 ];
 
+// Impact preview — lets the create form show exactly what will happen
+invoicesRouter.post("/invoices/impact-preview", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = req.body as any;
+
+    let clientName = "";
+    if (clientId) {
+      const [client] = await rawQuery<any>(
+        `SELECT name FROM clients WHERE id = $1 AND "companyId" = $2`,
+        [Number(clientId), scope.companyId]
+      );
+      clientName = client?.name || "";
+    }
+
+    const subtotal = (Array.isArray(lines) ? lines : []).reduce((sum: number, l: any) => {
+      const qty = Number(l?.quantity || 0);
+      const price = Number(l?.unitPrice || 0);
+      return sum + qty * price;
+    }, 0);
+    const tax = subtotal * (Number(taxRate) / 100);
+    const total = subtotal + tax;
+
+    const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
+
+    items.push({
+      category: "مالي",
+      label: "المبلغ الإجمالي",
+      value: `${total.toLocaleString("ar-SA")} ر.س (${subtotal.toLocaleString("ar-SA")} + ضريبة ${tax.toLocaleString("ar-SA")})`,
+      severity: "info",
+    });
+
+    items.push({
+      category: "محاسبي",
+      label: "قيد يومية",
+      value: `قيد جديد: مدين ذمم العملاء ${total.toLocaleString("ar-SA")} / دائن إيرادات ${subtotal.toLocaleString("ar-SA")} + ضريبة مخرجة ${tax.toLocaleString("ar-SA")}`,
+      severity: "info",
+    });
+
+    if (clientName) {
+      const [[openInvoices]] = await Promise.all([
+        rawQuery<any>(
+          `SELECT COUNT(*)::int AS c, COALESCE(SUM(total - COALESCE("paidAmount",0)),0)::numeric AS outstanding
+           FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND status NOT IN ('paid','cancelled') AND "deletedAt" IS NULL`,
+          [Number(clientId), scope.companyId]
+        ),
+      ]);
+      const outstanding = Number(openInvoices?.outstanding || 0);
+      if (outstanding > 0) {
+        items.push({
+          category: "ذمم العميل",
+          label: `${clientName} — فواتير مفتوحة`,
+          value: `${openInvoices.c} فاتورة بمبلغ ${outstanding.toLocaleString("ar-SA")} ر.س قبل هذه الفاتورة`,
+          severity: outstanding > total * 3 ? "warning" : "info",
+        });
+      }
+    }
+
+    if (dueInDays) {
+      items.push({
+        category: "التزامات",
+        label: "موعد الاستحقاق",
+        value: `سيتم تسجيل التزام مطالبة خلال ${dueInDays} يوم من تاريخ الإصدار`,
+        severity: "info",
+      });
+    }
+
+    items.push({
+      category: "تقارير",
+      label: "الميزانية والتقارير",
+      value: "سيتم تحديث تقارير الإيرادات، ضريبة القيمة المضافة، وذمم العملاء",
+      severity: "info",
+    });
+
+    const hasWarning = items.some((i) => i.severity === "warning");
+    res.json({
+      actionType: "create_invoice",
+      employeeId: 0,
+      employeeName: clientName,
+      items,
+      summary: hasWarning
+        ? `فاتورة بمبلغ ${total.toLocaleString("ar-SA")} ر.س — راجع رصيد العميل قبل الإصدار`
+        : `فاتورة بمبلغ ${total.toLocaleString("ar-SA")} ر.س جاهزة للإصدار`,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة أثر الفاتورة");
+  }
+});
+
 invoicesRouter.get("/invoices", async (req, res) => {
   try {
     const scope = req.scope!;

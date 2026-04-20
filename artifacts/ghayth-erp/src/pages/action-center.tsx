@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { UpcomingEventsWidget } from "@/components/shared/upcoming-events-widget";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -390,6 +391,8 @@ export default function ActionCenter() {
           <p className="text-sm text-gray-500 mt-1">تنبيهات حرجة</p>
         </div>
       </div>
+
+      <UpcomingEventsWidget days={14} limit={6} title="أحداث قادمة خلال 14 يوم" />
 
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">

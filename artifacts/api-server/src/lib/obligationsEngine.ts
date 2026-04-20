@@ -308,6 +308,40 @@ export async function scanObligations(): Promise<{
         details: `تصعيد L2: ${o.title}`,
       });
     }
+
+    // 4) pending & due within 24h & not yet reminded → emit reminder
+    const reminders = await client.query(
+      `UPDATE obligations
+         SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"reminder24hSent": true}'::jsonb,
+             "lastScannedAt"=NOW(),
+             "updatedAt"=NOW()
+       WHERE status='pending'
+         AND "dueAt" > NOW()
+         AND "dueAt" <= NOW() + INTERVAL '24 hours'
+         AND COALESCE((metadata->>'reminder24hSent')::boolean, false) = false
+       RETURNING id, "companyId", "entityType", "entityId", title, "assignedTo", "dueAt"`
+    );
+
+    for (const o of reminders.rows) {
+      await emitEvent({
+        companyId: o.companyId,
+        userId: 0,
+        action: "system.obligation.reminder",
+        entity: o.entityType,
+        entityId: o.entityId,
+        details: `تذكير قبل 24 ساعة: ${o.title}`,
+      });
+      if (o.assignedTo) {
+        await createNotification({
+          companyId: o.companyId,
+          assignmentId: o.assignedTo,
+          type: "obligation_reminder",
+          title: "تذكير: التزام يستحق خلال 24 ساعة",
+          body: o.title,
+          priority: "medium",
+        });
+      }
+    }
   });
 
   return { breachedCount, escalatedL1, escalatedL2 };

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { Calendar as CalendarIcon, Flag, Clock, FileText, ListTodo, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
@@ -16,6 +16,11 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any 
   obligation: { label: "التزام", color: "bg-red-100 text-red-700", icon: Clock },
   contract_expiry: { label: "انتهاء عقد", color: "bg-purple-100 text-purple-700", icon: FileText },
   task: { label: "مهمة", color: "bg-blue-100 text-blue-700", icon: ListTodo },
+  training: { label: "تدريب", color: "bg-cyan-100 text-cyan-700", icon: GraduationCap },
+  document_expiry: { label: "وثيقة", color: "bg-yellow-100 text-yellow-700", icon: IdCard },
+  vehicle_expiry: { label: "مركبة", color: "bg-slate-100 text-slate-700", icon: Car },
+  vehicle_maintenance: { label: "صيانة", color: "bg-stone-100 text-stone-700", icon: Car },
+  insurance_expiry: { label: "تأمين", color: "bg-emerald-100 text-emerald-700", icon: Shield },
 };
 
 function groupByDate(events: any[]): Record<string, any[]> {
@@ -80,6 +85,10 @@ export default function CalendarPage() {
               <SelectItem value="obligation">الالتزامات</SelectItem>
               <SelectItem value="contract_expiry">انتهاء العقود</SelectItem>
               <SelectItem value="task">المهام</SelectItem>
+              <SelectItem value="training">التدريب</SelectItem>
+              <SelectItem value="document_expiry">الوثائق</SelectItem>
+              <SelectItem value="vehicle_expiry">المركبات</SelectItem>
+              <SelectItem value="insurance_expiry">التأمين</SelectItem>
             </SelectContent>
           </Select>
           <Select value={days} onValueChange={setDays}>
@@ -100,6 +109,10 @@ export default function CalendarPage() {
         { label: "التزامات", value: summary.obligations || 0, icon: Clock, color: "text-red-600 bg-red-50" },
         { label: "عقود تنتهي", value: summary.contractExpirations || 0, icon: FileText, color: "text-purple-600 bg-purple-50" },
         { label: "مهام مستحقة", value: summary.tasks || 0, icon: ListTodo, color: "text-blue-600 bg-blue-50" },
+        { label: "تدريبات", value: summary.trainings || 0, icon: GraduationCap, color: "text-cyan-600 bg-cyan-50" },
+        { label: "وثائق تنتهي", value: summary.documentExpiries || 0, icon: IdCard, color: "text-yellow-600 bg-yellow-50" },
+        { label: "أحداث مركبات", value: summary.vehicleExpiries || 0, icon: Car, color: "text-slate-600 bg-slate-50" },
+        { label: "تأمينات تنتهي", value: summary.insuranceExpiries || 0, icon: Shield, color: "text-emerald-600 bg-emerald-50" },
       ]} />
 
       {sortedDates.length === 0 ? (
