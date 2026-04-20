@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { BookOpen } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 
 interface KBArticle {
   id: number;
@@ -42,6 +43,7 @@ export default function KnowledgeBase() {
       breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "قاعدة المعرفة" }]}
       loading={isLoading}
     >
+      <SupportTabsNav />
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>
   );

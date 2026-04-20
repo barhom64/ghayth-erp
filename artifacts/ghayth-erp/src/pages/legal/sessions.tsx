@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 
 interface Session {
   id: number;
@@ -53,6 +54,7 @@ export default function LegalSessions() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الجلسات القادمة" }]}
       loading={isLoading}
     >
+      <LegalTabsNav />
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>
   );

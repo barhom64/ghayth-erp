@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 
 interface Reply {
   id: number;
@@ -62,6 +63,7 @@ export default function SupportReplies() {
       breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "ردود الدعم الفني" }]}
       loading={isLoading}
     >
+      <SupportTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => {
           const Icon = c.icon;

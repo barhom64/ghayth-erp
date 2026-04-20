@@ -187,6 +187,98 @@ const RISK_TRANSITIONS: Record<string, readonly string[]> = {
   closed:    [],
 };
 
+// Impact preview — shows exactly what will happen when the project is created
+router.post("/impact-preview", requirePermission("projects:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { managerId, budget, startDate, endDate, type } = req.body as any;
+
+    const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
+
+    if (budget && Number(budget) > 0) {
+      items.push({
+        category: "مالي",
+        label: "الميزانية المخصصة",
+        value: `${Number(budget).toLocaleString("ar-SA")} ر.س سيتم حجزها في مركز تكلفة المشروع`,
+        severity: "info",
+      });
+    }
+
+    if (startDate && endDate) {
+      const days = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000);
+      items.push({
+        category: "زمني",
+        label: "المدة الإجمالية",
+        value: `${days} يوم (${(days / 30).toFixed(1)} شهر)`,
+        severity: days > 365 ? "warning" : "info",
+      });
+      items.push({
+        category: "التزامات",
+        label: "معلم إغلاق تلقائي",
+        value: `سيتم تسجيل التزام إغلاق المشروع في ${new Date(endDate).toLocaleDateString("ar-SA")}`,
+        severity: "info",
+      });
+    }
+
+    if (managerId) {
+      const [manager] = await rawQuery<any>(
+        `SELECT name FROM employees WHERE id = $1`, [Number(managerId)]
+      );
+      const [[active]] = await Promise.all([
+        rawQuery<any>(
+          `SELECT COUNT(*)::int AS c FROM projects
+           WHERE "managerId" = $1 AND "companyId" = $2
+             AND "deletedAt" IS NULL AND status NOT IN ('completed','cancelled')`,
+          [Number(managerId), scope.companyId]
+        ),
+      ]);
+      const activeCount = Number(active?.c || 0);
+      items.push({
+        category: "الموارد",
+        label: "مدير المشروع",
+        value: `${manager?.name || "مدير"} يدير حالياً ${activeCount} مشروع آخر${activeCount >= 5 ? " — عبء كبير" : ""}`,
+        severity: activeCount >= 5 ? "warning" : "info",
+      });
+    }
+
+    items.push({
+      category: "تقارير",
+      label: "لوحات التحكم",
+      value: "سيظهر المشروع في لوحة PMO والتقارير التنفيذية فوراً",
+      severity: "info",
+    });
+
+    items.push({
+      category: "التقويم",
+      label: "الأحداث المجدولة",
+      value: "ستُدرج المعالم والمهام تلقائياً في التقويم الموحد",
+      severity: "info",
+    });
+
+    if (type === "construction" || type === "infrastructure") {
+      items.push({
+        category: "امتثال",
+        label: "متطلبات تنظيمية",
+        value: "قد يتطلب هذا النوع تصاريح بلدية / هيئة السلامة — تحقق قبل البدء",
+        severity: "warning",
+      });
+    }
+
+    const hasWarning = items.some((i) => i.severity === "warning");
+    res.json({
+      actionType: "create_project",
+      employeeId: 0,
+      employeeName: "",
+      items,
+      summary: hasWarning
+        ? "المشروع جاهز — راجع التحذيرات قبل الإنشاء"
+        : "جميع المؤشرات خضراء — المشروع جاهز للإنشاء",
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة أثر المشروع");
+  }
+});
+
 router.get("/", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
