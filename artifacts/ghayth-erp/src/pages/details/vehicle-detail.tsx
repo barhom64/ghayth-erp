@@ -15,6 +15,7 @@ import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
@@ -790,7 +791,12 @@ export default function VehicleDetail() {
         </Card>
       )}
 
-      {id && <EntityDocuments entityType="vehicle" entityId={id} />}
+      {id && (
+        <div className="space-y-4">
+          <EntityObligations entityType="vehicle" entityId={id} hideWhenEmpty />
+          <EntityDocuments entityType="vehicle" entityId={id} />
+        </div>
+      )}
 
     </PageShell>
   );
