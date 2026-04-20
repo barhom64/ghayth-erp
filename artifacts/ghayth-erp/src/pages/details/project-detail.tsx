@@ -206,6 +206,9 @@ export default function ProjectDetail() {
           <Link href={`/projects/risks?projectId=${id}`}>
             <Button variant="outline" size="sm"><ShieldAlert className="h-4 w-4 me-1" />المخاطر</Button>
           </Link>
+          <Link href="/calendar">
+            <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />التقويم</Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
           {deleting ? (
             <div className="flex gap-2">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -176,7 +177,11 @@ export default function ViolationsReportPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="تقرير المخالفات"
+      subtitle="تحليل وتتبع المخالفات الإدارية"
+      breadcrumbs={[{ href: "/hr/violations", label: "المخالفات" }, { label: "التقرير" }]}
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {summaryCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -335,6 +340,6 @@ export default function ViolationsReportPage() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
