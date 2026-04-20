@@ -45,9 +45,7 @@ router.use(authMiddleware);
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function badRequest(_res: any, message: string, field = "body"): never {
-  throw new ValidationError(message, { field });
-}
+
 
 async function logMemoEvent(params: {
   memoId: number;
@@ -300,7 +298,7 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
         sets.push(`"${k}" = $${params.length}`);
       }
     }
-    if (sets.length === 0) { badRequest(res, "لا يوجد حقل للتحديث"); return; }
+    if (sets.length === 0) throw new ValidationError("لا يوجد حقل للتحديث");
     sets.push(`"updatedAt" = NOW()`);
     params.push(id, scope.companyId);
     await rawExecute(
@@ -444,7 +442,7 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       [assignmentId]
     );
     if (!assignment || assignment.companyId !== scope.companyId) {
-      badRequest(res, "التعيين غير موجود أو خارج نطاق الشركة"); return;
+      throw new NotFoundError("التعيين غير موجود أو خارج نطاق الشركة");
     }
 
     // استخراج المادة والجزاء إن لم تُحدد يدوياً
@@ -543,10 +541,10 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
       throw new ForbiddenError("لا تملك صلاحية تقديم التبرير على هذا المحضر");
     }
     if (memo.status !== "pending_employee") {
-      badRequest(res, `لا يمكن تقديم التبرير في الحالة ${memo.status}`); return;
+      throw new ConflictError(`لا يمكن تقديم التبرير في الحالة ${memo.status}`, { field: "status" });
     }
     if (!declined && !justification) {
-      badRequest(res, "التبرير مطلوب أو يجب الإقرار برفض التبرير"); return;
+      throw new ValidationError("التبرير مطلوب أو يجب الإقرار برفض التبرير", { field: "justification" });
     }
 
     await rawExecute(
@@ -604,7 +602,7 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (memo.status !== "pending_manager") {
-      badRequest(res, `لا يمكن تسجيل التوصية في الحالة ${memo.status}`); return;
+      throw new ConflictError(`لا يمكن تسجيل التوصية في الحالة ${memo.status}`, { field: "status" });
     }
 
     await rawExecute(
@@ -653,7 +651,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (memo.status !== "pending_gm") {
-      badRequest(res, `لا يمكن اعتماد المحضر في الحالة ${memo.status}`); return;
+      throw new ConflictError(`لا يمكن اعتماد المحضر في الحالة ${memo.status}`, { field: "status" });
     }
 
     await withTransaction(async (client) => {
@@ -675,6 +673,12 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
 
       if (decision === "rejected") {
         newStatus = "rejected";
+        if (memo.violationId) {
+          await client.query(
+            `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2`,
+            [memo.violationId, scope.companyId]
+          );
+        }
       } else {
         // Re-resolve penalty at decision time (اللائحة قد تكون تحدّثت)
         const dailyWage = Number(assignment.salary ?? 0) > 0 ? Number(assignment.salary) / 30 : 0;
@@ -801,7 +805,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (["approved", "rejected", "cancelled", "closed", "appeal_pending", "appeal_accepted"].includes(memo.status)) {
-      badRequest(res, `لا يمكن إلغاء المحضر في الحالة ${memo.status}`); return;
+      throw new ConflictError(`لا يمكن إلغاء المحضر في الحالة ${memo.status}`, { field: "status" });
     }
     await rawExecute(
       `UPDATE hr_inquiry_memos SET status = 'cancelled', "updatedAt" = NOW()
@@ -840,7 +844,7 @@ router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) 
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (memo.status !== "approved") {
-      badRequest(res, "لا يمكن الاستئناف إلا على محضر معتمد"); return;
+      throw new ConflictError("لا يمكن الاستئناف إلا على محضر معتمد", { field: "status" });
     }
     await rawExecute(
       `UPDATE hr_inquiry_memos SET status = 'appeal_pending', "appealReason" = $1, "appealDate" = NOW(), "updatedAt" = NOW()
@@ -873,7 +877,7 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (memo.status !== "appeal_pending") {
-      badRequest(res, "المحضر ليس في حالة استئناف معلق"); return;
+      throw new ConflictError("المحضر ليس في حالة استئناف معلق", { field: "status" });
     }
     const newStatus = decision === "accepted" ? "appeal_accepted" : "approved";
     await rawExecute(
@@ -913,13 +917,19 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     if (!["approved", "rejected", "appeal_accepted", "cancelled"].includes(memo.status)) {
-      badRequest(res, "لا يمكن إقفال المحضر في هذه الحالة — يجب أن يكون مقرراً أو ملغى"); return;
+      throw new ConflictError("لا يمكن إقفال المحضر في هذه الحالة — يجب أن يكون مقرراً أو ملغى", { field: "status" });
     }
     await rawExecute(
       `UPDATE hr_inquiry_memos SET status = 'closed', "closedAt" = NOW(), "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
+    if (memo.violationId) {
+      await rawExecute(
+        `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2`,
+        [memo.violationId, scope.companyId]
+      );
+    }
     await logMemoEvent({
       memoId: id, companyId: scope.companyId, actorId: scope.userId,
       actorRole: "hr", action: "closed", note: req.body.note ?? undefined,
@@ -941,7 +951,7 @@ router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) =
       [assignmentId]
     );
     if (!assignment || assignment.companyId !== scope.companyId) {
-      badRequest(res, "التعيين غير موجود"); return;
+      throw new NotFoundError("التعيين غير موجود");
     }
     const dailyWage = await getDailyWage(assignmentId);
     const resolution = await resolvePenalty({
