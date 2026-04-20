@@ -829,6 +829,108 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// APPEAL — استئناف الموظف على قرار الجزاء
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { reason } = req.body;
+    if (!reason || typeof reason !== "string" || !reason.trim()) {
+      throw new ValidationError("سبب الاستئناف مطلوب", { field: "reason", fix: "أدخل مبررات الاستئناف" });
+    }
+    const memo = await getMemo(scope.companyId, id);
+    if (!memo) throw new NotFoundError("المحضر غير موجود");
+    if (memo.status !== "approved") {
+      badRequest(res, "لا يمكن الاستئناف إلا على محضر معتمد"); return;
+    }
+    await rawExecute(
+      `UPDATE hr_inquiry_memos SET status = 'appeal_pending', "appealReason" = $1, "appealDate" = NOW(), "updatedAt" = NOW()
+       WHERE id = $2 AND "companyId" = $3`,
+      [reason.trim(), id, scope.companyId]
+    );
+    await logMemoEvent({
+      memoId: id, companyId: scope.companyId, actorId: scope.userId,
+      actorRole: "employee", action: "appeal_submitted", note: reason.trim(),
+    });
+    createNotification({
+      companyId: scope.companyId, assignmentId: memo.managerId ?? null,
+      type: "inquiry_memo_appeal",
+      title: `استئناف على محضر ${memo.memoNumber}`,
+      body: `قدّم الموظف استئنافاً على قرار الجزاء`,
+      priority: "high", refType: "hr_inquiry_memo", refId: id,
+    }).catch(console.error);
+    res.json({ ok: true, status: "appeal_pending" });
+  } catch (err) { handleRouteError(err, res, "Appeal error:"); }
+});
+
+router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:approve"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { decision, comment } = req.body;
+    if (!decision || !["accepted", "rejected"].includes(decision)) {
+      throw new ValidationError("القرار مطلوب (accepted أو rejected)");
+    }
+    const memo = await getMemo(scope.companyId, id);
+    if (!memo) throw new NotFoundError("المحضر غير موجود");
+    if (memo.status !== "appeal_pending") {
+      badRequest(res, "المحضر ليس في حالة استئناف معلق"); return;
+    }
+    const newStatus = decision === "accepted" ? "appeal_accepted" : "approved";
+    await rawExecute(
+      `UPDATE hr_inquiry_memos SET status = $1, "appealDecision" = $2, "appealComment" = $3, "appealDecidedAt" = NOW(), "updatedAt" = NOW()
+       WHERE id = $4 AND "companyId" = $5`,
+      [newStatus, decision, comment || null, id, scope.companyId]
+    );
+    if (decision === "accepted" && memo.violationId) {
+      await rawExecute(
+        `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2`,
+        [memo.violationId, scope.companyId]
+      );
+    }
+    await logMemoEvent({
+      memoId: id, companyId: scope.companyId, actorId: scope.userId,
+      actorRole: "gm", action: decision === "accepted" ? "appeal_accepted" : "appeal_rejected",
+      note: comment ?? undefined,
+    });
+    createNotification({
+      companyId: scope.companyId, assignmentId: memo.assignmentId,
+      type: "inquiry_memo_appeal_result",
+      title: decision === "accepted" ? "تم قبول الاستئناف" : "تم رفض الاستئناف",
+      body: `نتيجة استئنافك على المحضر ${memo.memoNumber}: ${decision === "accepted" ? "قُبل" : "رُفض"}`,
+      priority: "high", refType: "hr_inquiry_memo", refId: id,
+    }).catch(console.error);
+    res.json({ ok: true, status: newStatus });
+  } catch (err) { handleRouteError(err, res, "Appeal decision error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLOSE — إقفال المحضر وأرشفته
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const memo = await getMemo(scope.companyId, id);
+    if (!memo) throw new NotFoundError("المحضر غير موجود");
+    if (!["approved", "rejected", "appeal_accepted", "cancelled"].includes(memo.status)) {
+      badRequest(res, "لا يمكن إقفال المحضر في هذه الحالة — يجب أن يكون مقرراً أو ملغى"); return;
+    }
+    await rawExecute(
+      `UPDATE hr_inquiry_memos SET status = 'closed', "closedAt" = NOW(), "updatedAt" = NOW()
+       WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    await logMemoEvent({
+      memoId: id, companyId: scope.companyId, actorId: scope.userId,
+      actorRole: "hr", action: "closed", note: req.body.note ?? undefined,
+    });
+    res.json({ ok: true, status: "closed" });
+  } catch (err) { handleRouteError(err, res, "Close memo error:"); }
+});
+
 // Preview penalty without creating a memo (for UI)
 router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) => {
   try {
