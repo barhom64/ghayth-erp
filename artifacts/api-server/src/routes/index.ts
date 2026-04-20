@@ -82,6 +82,7 @@ import digitalSignatureRouter from "./digital-signature.js";
 import { eventsRouter } from "./events.js";
 import { execDashboardRouter } from "./execDashboard.js";
 import { obligationsRouter } from "./obligations.js";
+import { calendarRouter } from "./calendar.js";
 
 const router: IRouter = Router();
 
@@ -224,5 +225,6 @@ router.use("/digital-signature", digitalSignatureRouter);
 router.use("/events", eventsRouter);
 router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
 router.use("/obligations", obligationsRouter);
+router.use("/calendar", calendarRouter);
 
 export default router;
