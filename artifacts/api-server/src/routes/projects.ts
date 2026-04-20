@@ -130,7 +130,7 @@ const createCostSchema = z.object({
   sourceType: z.string().optional(),
 });
 
-const closeProjectSchema = z.object({}).passthrough();
+const closeProjectSchema = z.object({});
 
 const router = Router();
 router.use(authMiddleware);

@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -90,13 +90,11 @@ router.post("/login", loginLimiter, async (req, res) => {
     );
 
     if (!user) {
-      res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
-      return;
+      throw new ForbiddenError("بيانات الدخول غير صحيحة");
     }
 
     if (!user.isActive) {
-      res.status(403).json({ error: "الحساب موقوف" });
-      return;
+      throw new ForbiddenError("الحساب موقوف");
     }
 
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
@@ -139,7 +137,7 @@ router.post("/login", loginLimiter, async (req, res) => {
           action: "login_failed", entity: "users", entityId: user.id,
           after: { email, reason: "invalid_password", attempts },
         }).catch(console.error);
-        res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
+        throw new ForbiddenError("بيانات الدخول غير صحيحة");
       }
       return;
     }
@@ -166,8 +164,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     );
 
     if (!assignments.length) {
-      res.status(403).json({ error: "لا يوجد تعيين نشط لهذا المستخدم" });
-      return;
+      throw new ForbiddenError("لا يوجد تعيين نشط لهذا المستخدم");
     }
 
     const userRoles = await rawQuery<any>(
@@ -216,23 +213,19 @@ router.post("/refresh", async (req, res) => {
     );
 
     if (!rt) {
-      res.status(401).json({ error: "رمز التحديث غير صالح" });
-      return;
+      throw new ForbiddenError("رمز التحديث غير صالح");
     }
 
     if (rt.revokedAt) {
-      res.status(401).json({ error: "رمز التحديث ملغي" });
-      return;
+      throw new ForbiddenError("رمز التحديث ملغي");
     }
 
     if (new Date(rt.expiresAt) < new Date()) {
-      res.status(401).json({ error: "انتهت صلاحية رمز التحديث" });
-      return;
+      throw new ForbiddenError("انتهت صلاحية رمز التحديث");
     }
 
     if (!rt.isActive) {
-      res.status(403).json({ error: "الحساب موقوف" });
-      return;
+      throw new ForbiddenError("الحساب موقوف");
     }
 
     const [primaryAssignment] = await rawQuery<any>(
@@ -243,8 +236,7 @@ router.post("/refresh", async (req, res) => {
     );
 
     if (!primaryAssignment) {
-      res.status(403).json({ error: "لا يوجد تعيين نشط" });
-      return;
+      throw new ForbiddenError("لا يوجد تعيين نشط");
     }
 
     const newToken = signToken({
@@ -288,16 +280,14 @@ router.post("/switch-assignment", authMiddleware, async (req, res) => {
     }
     const { assignmentId } = parsed.data;
     if (!scope.allowedAssignments.includes(Number(assignmentId))) {
-      res.status(403).json({ error: "غير مسموح بالتبديل إلى هذا التعيين" });
-      return;
+      throw new ForbiddenError("غير مسموح بالتبديل إلى هذا التعيين");
     }
     const [assignment] = await rawQuery<any>(
       `SELECT ea.id, ea."companyId", ea."branchId", ea.role FROM employee_assignments ea WHERE ea.id = $1 AND ea.status = 'active'`,
       [assignmentId]
     );
     if (!assignment) {
-      res.status(404).json({ error: "التعيين غير موجود أو غير نشط" });
-      return;
+      throw new NotFoundError("التعيين غير موجود أو غير نشط");
     }
     const token = signToken({ userId: scope.userId, assignmentId: Number(assignmentId), role: assignment.role });
     res.json({ token });
@@ -327,8 +317,7 @@ router.get("/me", authMiddleware, async (req, res) => {
     );
 
     if (!employee) {
-      res.status(404).json({ error: "المستخدم غير موجود" });
-      return;
+      throw new NotFoundError("المستخدم غير موجود");
     }
 
     const userRoles = await rawQuery<any>(
@@ -351,9 +340,9 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     }
     const { currentPassword, newPassword } = parsed.data;
     const [user] = await rawQuery<any>(`SELECT id, "passwordHash" FROM users WHERE id=$1`, [scope.userId]);
-    if (!user) { res.status(404).json({ error: "المستخدم غير موجود" }); return; }
+    if (!user) { throw new NotFoundError("المستخدم غير موجود"); }
     const valid = await verifyPassword(currentPassword, user.passwordHash);
-    if (!valid) { res.status(401).json({ error: "كلمة المرور الحالية غير صحيحة" }); return; }
+    if (!valid) { throw new ForbiddenError("كلمة المرور الحالية غير صحيحة"); }
     const hashed = await hashPassword(newPassword);
     await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, scope.userId]);
     try {

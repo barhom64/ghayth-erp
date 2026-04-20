@@ -29,7 +29,7 @@ const patchLinkSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-const testIntegrationSchema = z.object({}).passthrough().optional();
+const testIntegrationSchema = z.object({}).optional();
 
 function isPrivateIP(ip: string): boolean {
   if (ip === "127.0.0.1" || ip === "::1" || ip === "0.0.0.0" || ip === "::") return true;

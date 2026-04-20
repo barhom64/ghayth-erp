@@ -91,7 +91,7 @@ const patchOnboardingTaskSchema = z.object({
   status: z.string().min(1),
 });
 
-const seedObligationsSchema = z.object({}).passthrough().optional();
+const seedObligationsSchema = z.object({}).optional();
 
 // Register document expiry obligations for an employee.
 // Called on create/update — idempotent via dedupeKey.

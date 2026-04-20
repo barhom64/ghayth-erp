@@ -52,13 +52,23 @@ const createPilgrimSchema = z.object({
   seasonId: z.number().optional(),
   agentId: z.number().optional(),
   packageId: z.number().optional(),
-}).passthrough();
+  nationality: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+});
 
 const createTransportSchema = z.object({
   type: z.string().optional(),
   provider: z.string().optional(),
   pilgrimsCount: z.number().optional(),
-}).passthrough();
+  vehicleNumber: z.string().optional(),
+  driverName: z.string().optional(),
+  departureDate: z.string().optional(),
+  arrivalDate: z.string().optional(),
+  notes: z.string().optional(),
+});
 
 router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
   try {

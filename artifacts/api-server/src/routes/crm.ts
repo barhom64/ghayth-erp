@@ -63,7 +63,7 @@ const createActivitySchema = z.object({
   scheduledAt: z.string({ required_error: "تاريخ النشاط المجدول مطلوب" }).min(1, "تاريخ النشاط المجدول مطلوب"),
 });
 
-const followupCheckSchema = z.object({}).passthrough();
+const followupCheckSchema = z.object({});
 
 // Compute the due date for the CRM follow-up obligation.
 // Preference order:
