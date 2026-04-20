@@ -344,9 +344,6 @@ router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res
 // إعادة استنساخ اللائحة الافتراضية (للشركات التي لم تُبذر)
 router.post("/regulation/reseed", requirePermission("hr:create"), async (req, res) => {
   try {
-    // No body expected — validate to reject unexpected payloads
-    { const _guard = z.object({}).strict().safeParse(req.body ?? {});
-    if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     const [row] = await rawQuery<{ count: string }>(
       `SELECT hr_clone_default_regulation($1) AS count`,

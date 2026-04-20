@@ -352,11 +352,8 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
-    // No body expected
-    { const _guard = z.object({}).strict().safeParse(req.body ?? {});
-    if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
+    const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
-    // نهاية الخدمة تتطلب مستوى أعلى: HR أو المدير العام أو المالك
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية اعتماد نهاية الخدمة محصورة بمدير HR أو المدير العام أو المالك",
@@ -373,6 +370,27 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
+
+    const rejectionReason = reason || notes;
+    if (!approved) {
+      await rawExecute(
+        `UPDATE hr_exit_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
+        [rejectionReason || null, item.id]
+      );
+      processApprovalStep({
+        companyId: scope.companyId, branchId: scope.branchId,
+        refType: "hr_exit_request", refId: item.id,
+        approved: false, decidedBy: scope.activeAssignmentId, reason: rejectionReason,
+      }).catch(console.error);
+      createNotification({
+        companyId: scope.companyId, assignmentId: item.assignmentId,
+        type: "exit_rejected", title: "تم رفض طلب نهاية الخدمة",
+        body: `تم رفض الطلب ${item.exitNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
+        priority: "normal", refType: "hr_exit_request", refId: item.id,
+      }).catch(console.error);
+      res.json({ success: true, message: "تم رفض طلب نهاية الخدمة" });
+      return;
+    }
 
     // ── معالجة خطوة الموافقة في السلسلة ──
     const chainResult = await processApprovalStep({
@@ -460,9 +478,6 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, res) => {
   try {
-    // No body expected
-    { const _guard = z.object({}).strict().safeParse(req.body ?? {});
-    if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,

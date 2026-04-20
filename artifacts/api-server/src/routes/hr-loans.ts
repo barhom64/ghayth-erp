@@ -303,10 +303,8 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
-    // No body expected
-    { const _guard = z.object({}).strict().safeParse(req.body ?? {}); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
+    const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
-    // التحقق من الأدوار: المدير المباشر، مدير HR، المدير العام، المالك، المدير المالي
     if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية اعتماد السلف محصورة بالمدير أو HR أو المدير المالي أو المالك",
@@ -327,6 +325,27 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     // منع الموظف من اعتماد سلفته الخاصة
     if (loan.assignmentId === scope.activeAssignmentId) {
       throw new ForbiddenError("لا يمكنك اعتماد سلفتك الخاصة");
+    }
+
+    const rejectionReason = reason || notes;
+    if (!approved) {
+      await rawExecute(
+        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
+        [rejectionReason || null, loan.id]
+      );
+      processApprovalStep({
+        companyId: scope.companyId, branchId: scope.branchId,
+        refType: "hr_employee_loan", refId: loan.id,
+        approved: false, decidedBy: scope.activeAssignmentId, reason: rejectionReason,
+      }).catch(console.error);
+      createNotification({
+        companyId: scope.companyId, assignmentId: loan.assignmentId,
+        type: "loan_rejected", title: "تم رفض طلب السلفة",
+        body: `تم رفض السلفة ${loan.loanNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
+        priority: "normal", refType: "hr_employee_loan", refId: loan.id,
+      }).catch(console.error);
+      res.json({ success: true, message: "تم رفض السلفة" });
+      return;
     }
 
     // ── معالجة خطوة الموافقة في سلسلة الموافقات ──

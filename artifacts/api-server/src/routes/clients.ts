@@ -13,9 +13,12 @@ const createClientSchema = z.object({
   name: z.string().min(1, "اسم العميل مطلوب"),
   phone: z.string().optional().nullable(),
   email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
-  classification: z.enum(["regular", "vip", "prospect", "wholesale"]).optional().default("regular"),
+  classification: z.enum(["regular", "vip", "prospect", "wholesale", "new", "inactive"]).optional().default("regular"),
   source: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  type: z.enum(["individual", "company", "government"]).optional().default("individual"),
+  nationality: z.string().optional().nullable(),
+  language: z.enum(["ar", "en"]).optional().default("ar"),
 });
 
 const router = Router();
@@ -79,12 +82,15 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       classification,
       source,
       notes,
+      type,
+      nationality,
+      language,
     } = parsed.data;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO clients (name, phone, email, classification, source, notes, "companyId", "isBlacklisted")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, false)`,
-      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, scope.companyId]
+      `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)`,
+      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId]
     );
 
     const [client] = await rawQuery<any>(

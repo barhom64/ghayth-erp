@@ -53,6 +53,11 @@ const createEmployeeSchema = z.object({
   workPermitExpiry: z.string().optional().nullable(),
   iqamaStatus: z.string().optional().nullable(),
   jobTitleId: z.number().optional().nullable(),
+  bankName: z.string().optional().nullable(),
+  bankAccount: z.string().optional().nullable(),
+  iban: z.string().optional().nullable(),
+  emergencyContact: z.string().optional().nullable(),
+  emergencyPhone: z.string().optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -227,6 +232,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       iqamaNumber, iqamaExpiry, passportNumber, passportExpiry,
       borderNumber, visaNumber, visaType, visaExpiry,
       sponsorNumber, workPermitNumber, workPermitExpiry, iqamaStatus,
+      bankName, bankAccount, iban, emergencyContact, emergencyPhone,
     } = body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
@@ -366,14 +372,17 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", gender, nationality, "dateOfBirth", status,
          "iqamaNumber","iqamaExpiry","passportNumber","passportExpiry",
          "borderNumber","visaNumber","visaType","visaExpiry",
-         "sponsorNumber","workPermitNumber","workPermitExpiry","iqamaStatus")
+         "sponsorNumber","workPermitNumber","workPermitExpiry","iqamaStatus",
+         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active',
-         $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+         $21,$22,$23,$24,$25)
          RETURNING id`,
         [name, phone || null, email || null, finalEmpNumber, nationalId || null, gender || null, nationality || null, dateOfBirth || null,
          iqamaNumber || null, iqamaExpiry || null, passportNumber || null, passportExpiry || null,
          borderNumber || null, visaNumber || null, visaType || null, visaExpiry || null,
-         sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active']
+         sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active',
+         bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null]
       );
       const empId = empRes.rows[0].id;
 
