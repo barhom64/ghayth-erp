@@ -18,6 +18,7 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 
 const statusOptions = [
   { value: "pending", label: "معلق", color: "bg-amber-100 text-amber-700" },
@@ -147,6 +148,7 @@ export default function Tasks() {
         </Link>
       }
     >
+      <ProjectsTabsNav />
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
         {[
           { label: "إجمالي المهام", value: tasks?.length || 0, color: "text-blue-600" },

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { BarChart2, Flag, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-gray-300",
@@ -91,6 +92,7 @@ export default function GanttPage() {
         </div>
       }
     >
+      <ProjectsTabsNav />
       {!projectId && (
         <Card><CardContent className="py-12 text-center text-gray-400">اختر مشروعاً لعرض مخطط غانت</CardContent></Card>
       )}

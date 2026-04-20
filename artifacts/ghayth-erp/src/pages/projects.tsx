@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
@@ -381,6 +382,7 @@ export default function Projects() {
         ) : null
       }
     >
+      <ProjectsTabsNav />
       <Tabs defaultValue={defaultTab} dir="rtl">
         <TabsList>
           <TabsTrigger value="overview">نظرة عامة</TabsTrigger>

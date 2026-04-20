@@ -12,16 +12,16 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo,
   CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle,
-  BookOpen, CheckSquare, FileText, Clock, Plus, Flag,
-  BarChart2, ShieldAlert,
+  BookOpen, FileText, Clock, Plus, Flag,
+  BarChart2, ShieldAlert, Users2, Mail, Lock,
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
+import { EntityComments } from "@/components/shared/entity-comments";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
-import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
@@ -32,8 +32,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 const PROJECT_TABS = [
   { key: "overview", label: "نظرة عامة", icon: FolderKanban },
   { key: "tasks", label: "المهام", icon: ListTodo },
-  { key: "linked_tasks", label: "المهام المرتبطة", icon: CheckSquare },
+  { key: "team", label: "الفريق", icon: Users2 },
+  { key: "costs", label: "التكاليف", icon: DollarSign },
   { key: "finance", label: "المالية", icon: BookOpen },
+  { key: "letters", label: "المراسلات", icon: Mail },
   { key: "documents", label: "المستندات", icon: FileText },
   { key: "timeline", label: "السجل الزمني", icon: Clock },
 ] as const;
@@ -63,10 +65,16 @@ export default function ProjectDetail() {
   const [phaseForm, setPhaseForm] = useState({ name: "", startDate: "", endDate: "" });
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [taskForm, setTaskForm] = useState({ title: "", priority: "medium", dueDate: "" });
+  const [showCostForm, setShowCostForm] = useState(false);
+  const [costForm, setCostForm] = useState({ description: "", amount: "", category: "labor", costDate: "" });
+  const [closingProject, setClosingProject] = useState(false);
 
   const { data: project, isLoading, isError, error } = useApiQuery<any>(["project-detail", id || ""], `/projects/${id}`, !!id);
   const { data: risksResp } = useApiQuery<any>(["project-risks", id || ""], `/projects/${id}/risks`, !!id);
   const { data: milestonesResp } = useApiQuery<any>(["project-milestones", id || ""], `/projects/${id}/milestones`, !!id);
+  const { data: resourcesResp } = useApiQuery<any>(["project-resources", id || ""], `/projects/${id}/resources`, !!id);
+  const { data: costsResp, refetch: refetchCosts } = useApiQuery<any>(["project-costs", id || ""], `/projects/${id}/costs`, !!id);
+  const { data: lettersResp } = useApiQuery<any>(["project-letters", id || ""], `/projects/${id}/letters`, !!id);
   const risks: any[] = risksResp?.data || risksResp || [];
   const milestones: any[] = milestonesResp?.data || milestonesResp || [];
   const openRisks = risks.filter((r: any) => r.status === "open" || r.status === "realized");
@@ -131,6 +139,11 @@ export default function ProjectDetail() {
   const budget = Number(project.budget) || 0;
   const spent = Number(project.spentAmount) || 0;
   const progress = project.progressPct ?? (project.progress || 0);
+  const resources: any[] = resourcesResp?.data || resourcesResp || [];
+  const costs: any[] = costsResp?.data || costsResp || [];
+  const costsTotalActual = costsResp?.totalActual ?? 0;
+  const costsVariance = costsResp?.variance ?? 0;
+  const letters: any[] = lettersResp?.data || lettersResp || [];
 
   const startEdit = () => {
     setEditForm({ name: project.name || "", status: project.status || "planning", budget: String(budget) });
@@ -182,6 +195,34 @@ export default function ProjectDetail() {
     }
   };
 
+  const addCost = async () => {
+    try {
+      await apiFetch(`/projects/${id}/costs`, {
+        method: "POST",
+        body: JSON.stringify({ description: costForm.description, amount: Number(costForm.amount), category: costForm.category, costDate: costForm.costDate || undefined }),
+      });
+      toast({ title: "تم إضافة التكلفة" });
+      setShowCostForm(false);
+      setCostForm({ description: "", amount: "", category: "labor", costDate: "" });
+      refetchCosts();
+      qc.invalidateQueries({ queryKey: ["project-detail", id] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const closeProject = async () => {
+    try {
+      await apiFetch(`/projects/${id}/close`, { method: "POST", body: JSON.stringify({ reason: "إقفال المشروع" }) });
+      toast({ title: "تم إقفال المشروع وتحويل التكاليف" });
+      setClosingProject(false);
+      qc.invalidateQueries({ queryKey: ["project-detail", id] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
   return (
     <PageShell
       title={project.name || "المشروع"}
@@ -210,6 +251,17 @@ export default function ProjectDetail() {
           <Link href="/calendar">
             <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />التقويم</Button>
           </Link>
+          {project.status !== "completed" && !closingProject && (
+            <Button variant="outline" size="sm" className="text-emerald-600" onClick={() => setClosingProject(true)}>
+              <Lock className="h-4 w-4 me-1" />إقفال المشروع
+            </Button>
+          )}
+          {closingProject && (
+            <div className="flex gap-2">
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={closeProject}>تأكيد الإقفال</Button>
+              <Button variant="outline" size="sm" onClick={() => setClosingProject(false)}>إلغاء</Button>
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
           {deleting ? (
             <div className="flex gap-2">
@@ -404,6 +456,8 @@ export default function ProjectDetail() {
               </CardContent>
             </Card>
           </div>
+
+          {id && <EntityComments entityType="project" entityId={id} />}
         </>
       )}
 
@@ -471,8 +525,94 @@ export default function ProjectDetail() {
         </Card>
       )}
 
-      {activeTab === "linked_tasks" && id && (
-        <LinkedTasks entityType="project" entityId={id} />
+      {activeTab === "team" && id && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2"><Users2 className="w-5 h-5 text-muted-foreground" /> فريق المشروع ({resources.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {resources.length === 0 ? (
+              <p className="text-center text-gray-400 py-8">لم يتم تعيين أعضاء للفريق بعد</p>
+            ) : (
+              <DataTable<any>
+                columns={[
+                  { key: "employeeName", header: "الموظف", render: (r) => <span className="font-medium">{r.employeeName || `#${r.employeeId}`}</span> },
+                  { key: "employeeJobTitle", header: "المنصب", render: (r) => <span className="text-gray-500">{r.employeeJobTitle || "-"}</span> },
+                  { key: "role", header: "الدور في المشروع", render: (r) => <Badge variant="outline">{r.role || "عضو"}</Badge> },
+                  { key: "allocatedHours", header: "الساعات المخصصة", render: (r) => <span>{r.allocatedHours || 0} ساعة</span> },
+                  { key: "budgetAllocated", header: "الميزانية المخصصة", render: (r) => <span>{r.budgetAllocated ? formatCurrency(Number(r.budgetAllocated)) : "-"}</span> },
+                  { key: "period", header: "الفترة", render: (r) => <span className="text-xs text-gray-500">{r.startDate ? formatDateAr(r.startDate) : ""}{r.endDate ? ` – ${formatDateAr(r.endDate)}` : ""}</span> },
+                ]}
+                data={resources}
+                noToolbar
+                pageSize={0}
+                emptyMessage="لا يوجد أعضاء"
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "costs" && id && (
+        <div className="space-y-4">
+          <KpiGrid items={[
+            { label: "الميزانية", value: formatCurrency(budget), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
+            { label: "المنصرف الفعلي", value: formatCurrency(costsTotalActual), icon: DollarSign, color: "text-orange-600 bg-orange-50" },
+            { label: "المتبقي", value: formatCurrency(costsVariance), icon: DollarSign, color: costsVariance >= 0 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50" },
+          ]} />
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">سجل التكاليف</CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setShowCostForm(!showCostForm)}>
+                  <Plus className="h-3 w-3 me-1" /> تكلفة جديدة
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {showCostForm && (
+                <div className="p-3 rounded-lg border-2 border-primary/20 space-y-2 mb-4">
+                  <Input placeholder="وصف التكلفة *" value={costForm.description} onChange={(e) => setCostForm(f => ({ ...f, description: e.target.value }))} />
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input type="number" placeholder="المبلغ *" value={costForm.amount} onChange={(e) => setCostForm(f => ({ ...f, amount: e.target.value }))} dir="ltr" />
+                    <Select value={costForm.category} onValueChange={(v) => setCostForm(f => ({ ...f, category: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="labor">عمالة</SelectItem>
+                        <SelectItem value="materials">مواد</SelectItem>
+                        <SelectItem value="equipment">معدات</SelectItem>
+                        <SelectItem value="subcontractor">مقاولات</SelectItem>
+                        <SelectItem value="overhead">نفقات عامة</SelectItem>
+                        <SelectItem value="other">أخرى</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <DatePicker value={costForm.costDate} onChange={(v) => setCostForm(f => ({ ...f, costDate: v }))} />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" disabled={!costForm.description || !costForm.amount} onClick={addCost}>حفظ</Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowCostForm(false)}>إلغاء</Button>
+                  </div>
+                </div>
+              )}
+              {costs.length === 0 && !showCostForm ? (
+                <p className="text-center text-gray-400 py-8">لا توجد تكاليف مسجلة</p>
+              ) : (
+                <DataTable<any>
+                  columns={[
+                    { key: "description", header: "الوصف", render: (c) => <span className="font-medium">{c.description}</span> },
+                    { key: "amount", header: "المبلغ", render: (c) => <span className="font-bold">{formatCurrency(Number(c.amount))}</span> },
+                    { key: "category", header: "التصنيف", render: (c) => <Badge variant="outline">{c.category}</Badge> },
+                    { key: "costDate", header: "التاريخ", render: (c) => <span className="text-gray-500">{c.costDate ? formatDateAr(c.costDate) : "-"}</span> },
+                    { key: "enteredByName", header: "أدخلها", render: (c) => <span className="text-gray-500">{c.enteredByName || "-"}</span> },
+                  ]}
+                  data={costs}
+                  noToolbar
+                  emptyMessage="لا توجد تكاليف"
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "finance" && id && (
@@ -490,6 +630,37 @@ export default function ProjectDetail() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {activeTab === "letters" && id && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2"><Mail className="w-5 h-5 text-muted-foreground" /> المراسلات المرتبطة ({letters.length})</CardTitle>
+              <Link href={`/communications/letters/create?relatedType=project&relatedId=${id}`}>
+                <Button size="sm" variant="outline"><Plus className="h-3 w-3 me-1" /> خطاب جديد</Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {letters.length === 0 ? (
+              <p className="text-center text-gray-400 py-8">لا توجد مراسلات مرتبطة بهذا المشروع</p>
+            ) : (
+              <DataTable<any>
+                columns={[
+                  { key: "subject", header: "الموضوع", render: (l) => <span className="font-medium">{l.subject}</span> },
+                  { key: "direction", header: "الاتجاه", render: (l) => <Badge variant="outline">{l.direction === "outgoing" ? "صادر" : "وارد"}</Badge> },
+                  { key: "type", header: "النوع", render: (l) => <span className="text-gray-500">{l.type || "-"}</span> },
+                  { key: "letterDate", header: "التاريخ", render: (l) => <span className="text-gray-500">{l.letterDate ? formatDateAr(l.letterDate) : "-"}</span> },
+                  { key: "status", header: "الحالة", render: (l) => <Badge className="bg-gray-100 text-gray-700">{l.status || "مسودة"}</Badge> },
+                ]}
+                data={letters}
+                noToolbar
+                emptyMessage="لا توجد مراسلات"
+              />
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === "documents" && id && (
