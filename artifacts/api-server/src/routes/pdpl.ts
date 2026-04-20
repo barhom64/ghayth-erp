@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -75,8 +75,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
     const isHROrAbove = ["hr_manager", "general_manager", "owner"].includes(scope.role);
 
     if (!isOwnData && !isHROrAbove) {
-      res.status(403).json({ error: "يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تكون مسؤول موارد بشرية" });
-      return;
+      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تكون مسؤول موارد بشرية");
     }
 
     const [employee] = await rawQuery<any>(
@@ -89,8 +88,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
     );
 
     if (!employee) {
-      res.status(404).json({ error: "الموظف غير موجود" });
-      return;
+      throw new NotFoundError("الموظف غير موجود");
     }
 
     const [assignments, attendanceSummary, leaveRequests] = await Promise.all([
@@ -160,8 +158,7 @@ router.post("/data-request", authMiddleware, requirePermission("admin:write"), a
 
     const validTypes = ["access", "rectification", "erasure", "portability", "objection"];
     if (!requestType || !validTypes.includes(requestType)) {
-      res.status(400).json({ error: "نوع الطلب غير صحيح", validTypes });
-      return;
+      throw new ValidationError("نوع الطلب غير صحيح");
     }
 
     const dueDate = new Date();

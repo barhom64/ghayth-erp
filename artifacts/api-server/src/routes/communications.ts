@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, IntegrationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -107,15 +107,17 @@ async function sendWhatsAppMessage(to: string, message: string): Promise<boolean
 }
 
 router.get("/whatsapp/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
+  try {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
 
-  if (mode === "subscribe" && token === WA_VERIFY_TOKEN) {
-    res.status(200).send(challenge);
-  } else {
-    res.status(403).json({ error: "Verification failed" });
-  }
+    if (mode === "subscribe" && token === WA_VERIFY_TOKEN) {
+      res.status(200).send(challenge);
+    } else {
+      throw new ForbiddenError("Verification failed");
+    }
+  } catch (err) { handleRouteError(err, res, "WhatsApp webhook verify error:"); }
 });
 
 router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
@@ -350,7 +352,7 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
 router.post("/pbx/status", async (req, res): Promise<void> => {
   try {
     const { callId, status, answeredBy } = req.body;
-    if (!callId) res.status(400).json({ error: "callId مطلوب" }); return;
+    if (!callId) throw new ValidationError("callId مطلوب", { field: "callId" });
 
     await rawExecute(
       `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE "callId"=$3`,
@@ -467,13 +469,13 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
     if (subject !== undefined) { sets.push(`subject = $${idx++}`); params.push(subject); }
     if (direction !== undefined) { sets.push(`direction = $${idx++}`); params.push(direction); }
     if (status !== undefined) { sets.push(`status = $${idx++}`); params.push(status); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات" }); return; }
+    if (sets.length === 0) { throw new ValidationError("لا توجد بيانات"); }
     params.push(Number(req.params.id), scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE communications_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "السجل غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("السجل غير موجود"); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "communications_log", entityId: Number(req.params.id) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -488,15 +490,14 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
     const { targetType } = req.body;
 
     if (!["task", "ticket", "request"].includes(targetType)) {
-      res.status(400).json({ error: "نوع التحويل غير صالح. المتاح: task, ticket, request" });
-      return;
+      throw new ValidationError("نوع التحويل غير صالح. المتاح: task, ticket, request", { field: "targetType" });
     }
 
     const [logEntry] = await rawQuery<any>(
       `SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`,
       [logId, scope.companyId]
     );
-    if (!logEntry) { res.status(404).json({ error: "سجل الاتصال غير موجود" }); return; }
+    if (!logEntry) { throw new NotFoundError("سجل الاتصال غير موجود"); }
 
     let createdId: number | null = null;
     let targetPath = "";
@@ -564,7 +565,7 @@ router.delete("/log/:id", requirePermission("communications:write"), async (req,
       `UPDATE communications_log SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "السجل غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("السجل غير موجود"); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "communications_log", entityId: id, before }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -654,12 +655,13 @@ router.get("/queue-stats", requirePermission("communications:read"), async (req,
 });
 
 router.get("/push/vapid-key", async (_req, res): Promise<void> => {
-  const key = getVapidPublicKey();
-  if (!key) {
-    res.status(503).json({ error: "VAPID keys not configured" });
-    return;
-  }
-  res.json({ publicKey: key });
+  try {
+    const key = getVapidPublicKey();
+    if (!key) {
+      throw new IntegrationError("VAPID keys not configured");
+    }
+    res.json({ publicKey: key });
+  } catch (err) { handleRouteError(err, res, "VAPID key error:"); }
 });
 
 router.post("/push/subscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
@@ -673,8 +675,7 @@ router.post("/push/subscribe", requirePermission("communications:write"), async 
     };
 
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
-      res.status(400).json({ error: "بيانات الاشتراك غير مكتملة" });
-      return;
+      throw new ValidationError("بيانات الاشتراك غير مكتملة");
     }
 
     const userAgent = req.headers["user-agent"]?.substring(0, 200) ?? null;
@@ -705,8 +706,7 @@ router.delete("/push/unsubscribe", requirePermission("communications:write"), as
     const { endpoint } = req.body as { endpoint: string };
 
     if (!endpoint) {
-      res.status(400).json({ error: "endpoint مطلوب" });
-      return;
+      throw new ValidationError("endpoint مطلوب", { field: "endpoint" });
     }
 
     const endpointHash = hashPushEndpoint(endpoint);

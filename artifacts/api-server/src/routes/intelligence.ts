@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -523,7 +523,7 @@ router.get("/clients/:clientId/rfm", requireRole("branch_manager", "general_mana
     const scope = req.scope!;
     const { clientId } = req.params;
     const rfm = await calculateClientRFM(scope.companyId, Number(clientId));
-    if (!rfm) { res.status(404).json({ error: "العميل غير موجود" }); return; }
+    if (!rfm) throw new NotFoundError("العميل غير موجود");
     const contactTime = await getBestContactTime(scope.companyId, Number(clientId));
     res.json({ ...rfm, bestContactTime: contactTime });
   } catch (err) { handleRouteError(err, res, "Client RFM error:"); }
@@ -578,8 +578,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
     );
 
     if (!result) {
-      res.status(404).json({ error: "لا يوجد موظف متاح لهذه المهمة" });
-      return;
+      throw new NotFoundError("لا يوجد موظف متاح لهذه المهمة");
     }
 
     const [emp] = await rawQuery<any>(

@@ -53,8 +53,7 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
     const scope = (req as any).scope!;
     const { entityType, entityId, action } = body;
     if (!entityType || !entityId || !action) {
-      res.status(400).json({ error: "entityType و entityId و action مطلوبة" });
-      return;
+      throw new ValidationError("entityType و entityId و action مطلوبة");
     }
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -95,8 +94,7 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
     const scope = (req as any).scope!;
     const { otp, entityType, entityId, action } = body;
     if (!otp || !entityType || !entityId || !action) {
-      res.status(400).json({ error: "جميع الحقول مطلوبة: otp, entityType, entityId, action" });
-      return;
+      throw new ValidationError("جميع الحقول مطلوبة: otp, entityType, entityId, action");
     }
 
     const ip = getClientIP(req);

@@ -91,7 +91,7 @@ router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
+    if (!row) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -115,10 +115,10 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
     if (b.salaryMax !== undefined) { params.push(b.salaryMax); sets.push(`"salaryMax"=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.closingDate !== undefined) { params.push(b.closingDate); sets.push(`"closingDate"=$${params.length}`); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE job_postings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch(console.error);
     res.json(row);
@@ -131,10 +131,7 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
     const scope = req.scope!;
     const id = Number(req.params.id);
     const reason = (req.body?.reason as string | undefined)?.trim();
-    if (!reason) {
-      res.status(400).json({ error: "سبب الإغلاق مطلوب", field: "reason" });
-      return;
-    }
+    if (!reason) throw new ValidationError("سبب الإغلاق مطلوب", { field: "reason" });
     const updated = await applyTransition({
       entity: "job_postings",
       id,
@@ -202,7 +199,7 @@ router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) =
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!before) { res.status(404).json({ error: "الإعلان الوظيفي غير موجود" }); return; }
+    if (!before) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف الإعلان الوظيفي بنجاح" });
@@ -249,7 +246,7 @@ router.get("/applications/:id", requirePermission("hr:read"), async (req, res) =
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
+    if (!row) throw new NotFoundError("طلب التوظيف غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -259,7 +256,7 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("طلب التوظيف غير موجود");
     const parsed = updateApplicationSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -269,7 +266,7 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.rating !== undefined) { params.push(b.rating); sets.push(`rating=$${params.length}`); }
     if (b.interviewDate !== undefined) { params.push(b.interviewDate); sets.push(`"interviewDate"=$${params.length}`); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id);
     await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1`, [id]);
@@ -283,7 +280,7 @@ router.delete("/applications/:id", requirePermission("hr:write"), async (req, re
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
-    if (!before) { res.status(404).json({ error: "طلب التوظيف غير موجود" }); return; }
+    if (!before) throw new NotFoundError("طلب التوظيف غير موجود");
     await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف طلب التوظيف بنجاح" });

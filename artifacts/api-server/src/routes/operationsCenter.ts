@@ -3,7 +3,7 @@ import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 // ── Zod validation schemas ──────────────────────────────────────────
@@ -533,8 +533,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
     const scope = req.scope!;
     const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];
     if (!allowedRoles.includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح — يتطلب صلاحية مدير على الأقل" });
-      return;
+      throw new ForbiddenError("غير مصرح — يتطلب صلاحية مدير على الأقل");
     }
 
     const today = new Date().toISOString().split("T")[0];
@@ -549,16 +548,10 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       const checklistItems = await buildChecklistItems(scope, where, params, companies, today);
       const allPassed = checklistItems.every((i: any) => i.passed);
       if (!allPassed) {
-        res.status(400).json({
-          error: "لا يمكن إقفال اليوم — توجد بنود لم تكتمل",
-          failedItems: checklistItems.filter((i: any) => !i.passed).map((i: any) => i.label),
-          hint: "يمكن للمالك أو المدير العام أو المدير التنفيذي تجاوز هذا القيد باستخدام force: true",
-        });
-        return;
+        throw new ValidationError("لا يمكن إقفال اليوم — توجد بنود لم تكتمل");
       }
     } else if (!overrideRoles.includes(scope.role)) {
-      res.status(403).json({ error: "التجاوز القسري متاح فقط للمالك أو المدير العام أو المدير التنفيذي" });
-      return;
+      throw new ForbiddenError("التجاوز القسري متاح فقط للمالك أو المدير العام أو المدير التنفيذي");
     }
 
     await rawQuery(
@@ -579,8 +572,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       [cid, today]
     );
     if (existing) {
-      res.status(409).json({ error: "تم إقفال هذا اليوم مسبقاً" });
-      return;
+      throw new ConflictError("تم إقفال هذا اليوم مسبقاً");
     }
 
     const notes = req.body?.notes || "";

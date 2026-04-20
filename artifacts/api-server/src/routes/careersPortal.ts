@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -88,8 +88,7 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
       [email.trim().toLowerCase()]
     );
     if (existing.length > 0) {
-      res.status(409).json({ error: "البريد الإلكتروني مسجّل مسبقاً" });
-      return;
+      throw new ConflictError("البريد الإلكتروني مسجّل مسبقاً");
     }
 
     const hash = await hashPassword(password);
@@ -131,8 +130,7 @@ router.post("/auth/login", portalLimiter, async (req: Request, res: Response) =>
 
     const account = rows[0];
     if (!account.isActive) {
-      res.status(403).json({ error: "الحساب معطّل" });
-      return;
+      throw new ForbiddenError("الحساب معطّل");
     }
 
     const valid = await verifyPassword(password, account.passwordHash);
@@ -182,8 +180,7 @@ router.get("/jobs/:id", portalLimiter, async (req: Request, res: Response) => {
       [req.params.id]
     );
     if (rows.length === 0) {
-      res.status(404).json({ error: "الوظيفة غير موجودة" });
-      return;
+      throw new NotFoundError("الوظيفة غير موجودة");
     }
     res.json({ data: rows[0] });
   } catch (err) {
@@ -200,8 +197,7 @@ router.get("/me", careersAuth, async (req: Request, res: Response) => {
       [(req as any).applicantId]
     );
     if (rows.length === 0) {
-      res.status(404).json({ error: "الحساب غير موجود" });
-      return;
+      throw new NotFoundError("الحساب غير موجود");
     }
     res.json({ data: rows[0] });
   } catch (err) {
@@ -299,8 +295,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
       [postingId]
     );
     if (posting.length === 0) {
-      res.status(404).json({ error: "الوظيفة غير متاحة أو مغلقة" });
-      return;
+      throw new NotFoundError("الوظيفة غير متاحة أو مغلقة");
     }
 
     const existing = await rawQuery(
@@ -308,8 +303,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
       [postingId, applicantId]
     );
     if (existing.length > 0) {
-      res.status(409).json({ error: "سبق لك التقديم على هذه الوظيفة" });
-      return;
+      throw new ConflictError("سبق لك التقديم على هذه الوظيفة");
     }
 
     const account = await rawQuery(

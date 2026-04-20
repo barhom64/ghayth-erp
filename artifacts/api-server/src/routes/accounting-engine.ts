@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -71,12 +71,10 @@ router.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-function requireFinance(scope: any, res: any): boolean {
+function requireFinance(scope: any): void {
   if (!FINANCE_ROLES.includes(scope.role)) {
-    res.status(403).json({ error: "هذه العملية مخصصة لموظفي المالية فقط" });
-    return false;
+    throw new ForbiddenError("هذه العملية مخصصة لموظفي المالية فقط");
   }
-  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,7 +156,7 @@ router.get("/accounting-mappings/:operationType", requirePermission("finance:rea
        WHERE am."companyId" = $1 AND am."operationType" = $2`,
       [scope.companyId, req.params.operationType]
     );
-    if (!row) { res.status(404).json({ error: "التوجيه غير موجود" }); return; }
+    if (!row) throw new NotFoundError("التوجيه غير موجود");
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Get accounting mapping error:");
@@ -171,7 +169,7 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
     if (!parsed_updateAccountingMappingSchema.success) throw new ValidationError(parsed_updateAccountingMappingSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateAccountingMappingSchema.data;
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    requireFinance(scope);
     const { operationType } = req.params;
     const {
       debitAccountId, creditAccountId,
@@ -237,7 +235,7 @@ router.post("/accounting-mappings/batch", requirePermission("finance:write"), as
     if (!parsed_batchAccountingMappingsSchema.success) throw new ValidationError(parsed_batchAccountingMappingsSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const parsedBody = parsed_batchAccountingMappingsSchema.data;
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    requireFinance(scope);
     const { mappings } = parsedBody;
 
     for (const m of mappings) {
@@ -324,7 +322,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
     if (!parsed_createJournalTemplateSchema.success) throw new ValidationError(parsed_createJournalTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_createJournalTemplateSchema.data;
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    requireFinance(scope);
     const { name, operationType, description, branchId, activityType, lines = [] } = body;
 
     const result = await withTransaction(async (client) => {
@@ -372,7 +370,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
     if (!parsed_updateJournalTemplateSchema.success) throw new ValidationError(parsed_updateJournalTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateJournalTemplateSchema.data;
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    requireFinance(scope);
     const { id } = req.params;
     const { name, description, branchId, activityType, isActive, lines } = body;
 
@@ -380,7 +378,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`,
       [Number(id), scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("القالب غير موجود");
 
     await rawExecute(
       `UPDATE journal_entry_templates SET
@@ -422,12 +420,12 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
 router.delete("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    requireFinance(scope);
     const [existing] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: Number(req.params.id), before: existing }).catch(console.error);
     res.json({ message: "تم حذف القالب" });
@@ -489,7 +487,7 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
     if (!parsed_createSubsidiaryAccountSchema.success) throw new ValidationError(parsed_createSubsidiaryAccountSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_createSubsidiaryAccountSchema.data;
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    requireFinance(scope);
     const { entityType, entityId, accountType, accountId } = body;
 
     const { insertId } = await rawExecute(
@@ -516,7 +514,7 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
 router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    requireFinance(scope);
     const [before] = await rawQuery<any>(
       `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
       [Number(req.params.id), scope.companyId]

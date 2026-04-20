@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
@@ -200,7 +200,7 @@ router.get("/:id", requirePermission("tasks:read"), async (req, res) => {
        WHERE t.id = $1${scopeCondition} AND t."deletedAt" IS NULL`,
       params
     );
-    if (rows.length === 0) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
+    if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Get task error:");
@@ -339,7 +339,7 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
       sets.push(`"completedAt" = NOW()`);
     }
 
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); }
 
     params.push(req.params.id);
     let whereClause = `id = $${idx}`;
@@ -360,7 +360,7 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
       params
     );
 
-    if (rows.length === 0) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
+    if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "tasks", entityId: Number(req.params.id), after: { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } }).catch(console.error);
 
@@ -385,8 +385,7 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 
     res.json(rows[0]);
   } catch (err) {
-    console.error("Update task error:", err);
-    res.status(500).json({ error: "خطأ في تحديث المهمة" });
+    handleRouteError(err, res, "Update task error:");
   }
 });
 
@@ -400,7 +399,7 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
       beforeParams.push(scope.activeAssignmentId);
     }
     const [before] = await rawQuery<any>(`SELECT * FROM tasks WHERE ${beforeWhere}`, beforeParams);
-    if (!before) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
+    if (!before) { throw new NotFoundError("المهمة غير موجودة"); }
 
     const params: any[] = [req.params.id, scope.companyId];
     let whereClause = `id = $1 AND "companyId" = $2`;
@@ -414,12 +413,11 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
       `UPDATE tasks SET "deletedAt" = NOW() WHERE ${whereClause} AND "deletedAt" IS NULL RETURNING id`,
       params
     );
-    if (rows.length === 0) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
+    if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "tasks", entityId: Number(req.params.id), before }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
-    console.error("Delete task error:", err);
-    res.status(500).json({ error: "خطأ في حذف المهمة" });
+    handleRouteError(err, res, "Delete task error:");
   }
 });
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -11,8 +11,7 @@ router.get("/overrides/report", async (req, res) => {
     const scope = req.scope!;
     const allowedRoles = ["owner", "general_manager", "hr_manager", "finance_manager", "compliance", "audit"];
     if (!allowedRoles.includes(scope.role)) {
-      res.status(403).json({ error: "غير مصرح لك بالاطلاع على تقرير المخالفات" });
-      return;
+      throw new ForbiddenError("غير مصرح لك بالاطلاع على تقرير المخالفات");
     }
     const { from, to } = req.query as { from?: string; to?: string };
     let dateFilter = "";

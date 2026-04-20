@@ -3,7 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 
 const createPolicySchema = z.object({
@@ -81,7 +81,7 @@ router.get("/policies/:id", requirePermission("governance:read"), async (req, re
       `SELECT * FROM governance_policies WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "السياسة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("السياسة غير موجودة");
     const links = await rawQuery<any>(
       `SELECT module FROM policy_module_links WHERE "policyId"=$1`,
       [row.id]
@@ -109,13 +109,13 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.effectiveDate !== undefined) { params.push(b.effectiveDate || null); sets.push(`"effectiveDate"=$${params.length}`); }
     if (b.expiryDate !== undefined) { params.push(b.expiryDate || null); sets.push(`"expiryDate"=$${params.length}`); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(
       `UPDATE governance_policies SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
       params
     );
-    if (result.affectedRows === 0) { res.status(404).json({ error: "السياسة غير موجودة" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("السياسة غير موجودة");
 
     if (b.modules && Array.isArray(b.modules)) {
       await rawExecute(`DELETE FROM policy_module_links WHERE "policyId"=$1`, [id]);
@@ -141,7 +141,7 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
       `SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`,
       [parentId, scope.companyId]
     );
-    if (!parent) { res.status(404).json({ error: "السياسة غير موجودة" }); return; }
+    if (!parent) throw new NotFoundError("السياسة غير موجودة");
 
     const [maxVersion] = await rawQuery<any>(
       `SELECT COALESCE(MAX(version), 0) + 1 as next FROM governance_policies WHERE "parentId"=$1 OR id=$1`,
@@ -193,7 +193,7 @@ router.get("/policies/:id/module-links", requirePermission("governance:read"), a
       `SELECT id FROM governance_policies WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [policyId, scope.companyId]
     );
-    if (!policy) { res.status(404).json({ error: "السياسة غير موجودة" }); return; }
+    if (!policy) throw new NotFoundError("السياسة غير موجودة");
     const rows = await rawQuery(
       `SELECT * FROM policy_module_links WHERE "policyId"=$1`,
       [policyId]
@@ -226,7 +226,7 @@ router.delete("/policies/:id", requirePermission("governance:write"), async (req
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_policies SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "السياسة غير موجودة" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("السياسة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_policies", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف السياسة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
@@ -263,7 +263,7 @@ router.get("/risks/:id", requirePermission("governance:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المخاطرة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -282,10 +282,10 @@ router.patch("/risks/:id", requirePermission("governance:write"), async (req, re
     if (b.impact !== undefined) { params.push(b.impact); sets.push(`impact=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.mitigationPlan !== undefined) { params.push(b.mitigationPlan); sets.push(`"mitigationPlan"=$${params.length}`); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id }).catch(console.error);
     res.json(row);
@@ -298,7 +298,7 @@ router.delete("/risks/:id", requirePermission("governance:write"), async (req, r
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_risks SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "المخاطرة غير موجودة" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_risks", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف المخاطرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
@@ -329,7 +329,7 @@ router.get("/audits/:id", requirePermission("governance:read"), async (req, res)
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المراجعة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المراجعة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -346,10 +346,10 @@ router.patch("/audits/:id", requirePermission("governance:write"), async (req, r
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.auditorName !== undefined) { params.push(b.auditorName); sets.push(`"auditorName"=$${params.length}`); }
     if (b.findings !== undefined) { params.push(b.findings); sets.push(`findings=$${params.length}`); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE governance_audits SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "المراجعة غير موجودة" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_audits", entityId: id }).catch(console.error);
     res.json(row);
@@ -362,7 +362,7 @@ router.delete("/audits/:id", requirePermission("governance:write"), async (req, 
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_audits SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "المراجعة غير موجودة" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_audits", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف المراجعة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
@@ -393,7 +393,7 @@ router.get("/compliance/:id", requirePermission("governance:read"), async (req, 
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "بند الامتثال غير موجود" }); return; }
+    if (!row) throw new NotFoundError("بند الامتثال غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -411,10 +411,10 @@ router.patch("/compliance/:id", requirePermission("governance:write"), async (re
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     if (b.responsiblePerson !== undefined) { params.push(b.responsiblePerson); sets.push(`"responsiblePerson"=$${params.length}`); }
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE governance_compliance SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "بند الامتثال غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_compliance", entityId: id }).catch(console.error);
     res.json(row);
@@ -427,7 +427,7 @@ router.delete("/compliance/:id", requirePermission("governance:write"), async (r
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_compliance SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "بند الامتثال غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_compliance", entityId: id, before }).catch(console.error);
     res.json({ message: "تم حذف بند الامتثال بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import {
   submitWorkflow,
@@ -344,7 +344,7 @@ router.get("/definitions/:id", requirePermission("admin:read"), async (req, res)
       `SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!def) { res.status(404).json({ error: "التعريف غير موجود" }); return; }
+    if (!def) throw new NotFoundError("التعريف غير موجود");
     const steps = await rawQuery<any>(
       `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`,
       [def.id]

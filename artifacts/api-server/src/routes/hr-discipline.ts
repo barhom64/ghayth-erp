@@ -977,8 +977,7 @@ router.get("/employee/:employeeId/summary", requirePermission("hr:read"), async 
     const scope = req.scope!;
     const employeeId = Number(req.params.employeeId);
     if (!Number.isFinite(employeeId)) {
-      res.status(400).json({ error: "معرف الموظف غير صالح" });
-      return;
+      throw new ValidationError("معرف الموظف غير صالح");
     }
     const yearStart = `${new Date().getFullYear()}-01-01`;
     const [stats] = await rawQuery<any>(

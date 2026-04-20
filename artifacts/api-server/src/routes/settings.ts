@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -122,8 +122,7 @@ router.get("/resolve", requirePermission("settings:read"), async (req, res) => {
     const scope = req.scope!;
     const { key } = req.query as { key: string };
     if (!key) {
-      res.status(400).json({ error: "key مطلوب" });
-      return;
+      throw new ValidationError("key مطلوب");
     }
     const value = await resolveSettings(key, scope.companyId, scope.branchId);
     res.json({ key, value: value ?? null });
@@ -142,8 +141,7 @@ router.get("/", requirePermission("settings:read"), async (req, res) => {
     if (requestedScope === "company") scopeId = scope.companyId;
     else if (requestedScope === "branch") scopeId = scope.branchId;
     else if (requestedScope === "system" && !scope.isOwner) {
-      res.status(403).json({ error: "فقط المالك يمكنه قراءة إعدادات النظام" });
-      return;
+      throw new ForbiddenError("فقط المالك يمكنه قراءة إعدادات النظام");
     }
 
     const settings = await getSettingsByScope(requestedScope, scopeId);
@@ -167,8 +165,7 @@ router.put("/", requirePermission("settings:write"), async (req, res) => {
     if (requestedScope === "company") scopeId = scope.companyId;
     else if (requestedScope === "branch") scopeId = scope.branchId;
     else if (requestedScope === "system" && !scope.isOwner) {
-      res.status(403).json({ error: "فقط المالك يمكنه تعديل إعدادات النظام" });
-      return;
+      throw new ForbiddenError("فقط المالك يمكنه تعديل إعدادات النظام");
     }
 
     await upsertSetting(requestedScope, scopeId, key, value);
@@ -192,8 +189,7 @@ router.delete("/", requirePermission("settings:write"), async (req, res) => {
     };
 
     if (!key) {
-      res.status(400).json({ error: "key مطلوب" });
-      return;
+      throw new ValidationError("key مطلوب");
     }
 
     const requestedScope: SettingScope = scopeOverride ?? "company";
@@ -202,8 +198,7 @@ router.delete("/", requirePermission("settings:write"), async (req, res) => {
     if (requestedScope === "company") scopeId = scope.companyId;
     else if (requestedScope === "branch") scopeId = scope.branchId;
     else if (requestedScope === "system" && !scope.isOwner) {
-      res.status(403).json({ error: "فقط المالك يمكنه حذف إعدادات النظام" });
-      return;
+      throw new ForbiddenError("فقط المالك يمكنه حذف إعدادات النظام");
     }
 
     await deleteSetting(requestedScope, scopeId, key);
@@ -307,7 +302,7 @@ router.get("/branches/:id", requirePermission("settings:read"), async (req, res)
       `SELECT * FROM branches WHERE id = $1 AND "companyId" = ANY($2)`,
       [Number(req.params.id), scope.allowedCompanies]
     );
-    if (!row) { res.status(404).json({ error: "الفرع غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("الفرع غير موجود"); }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -374,7 +369,7 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery(`SELECT id, "companyId" FROM branches WHERE id=$1 AND "companyId" = ANY($2)`, [id, scope.allowedCompanies]);
-    if (!existing) { res.status(404).json({ error: "الفرع غير موجود" }); return; }
+    if (!existing) { throw new NotFoundError("الفرع غير موجود"); }
     const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText } = body;
     const sets: string[] = [];
     const params: any[] = [];
@@ -425,11 +420,7 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
       blockers.push(`يوجد ${openOrders.cnt} أمر شراء مفتوح مرتبط بهذا الفرع`);
     }
     if (blockers.length > 0) {
-      res.status(422).json({
-        error: "لا يمكن حذف الفرع — يوجد بيانات مرتبطة نشطة",
-        blockers,
-      });
-      return;
+      throw new ValidationError("لا يمكن حذف الفرع — يوجد بيانات مرتبطة نشطة", { meta: { blockers } });
     }
 
     const [beforeBranch] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
@@ -486,8 +477,7 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
       [id]
     );
     if (empCheck && Number(empCheck.cnt) > 0) {
-      res.status(400).json({ error: "لا يمكن حذف القسم لأن هناك موظفين مرتبطين به" });
-      return;
+      throw new ValidationError("لا يمكن حذف القسم لأن هناك موظفين مرتبطين به");
     }
     const scope = req.scope!;
     const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1`, [id]);

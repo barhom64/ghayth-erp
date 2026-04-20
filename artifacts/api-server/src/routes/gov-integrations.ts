@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -53,16 +53,14 @@ const GOV_READ_ROLES = [...GOV_ADMIN_ROLES, "finance_manager", "branch_manager",
 
 function requireGovAdmin(scope: any, res: any): boolean {
   if (!scope || !GOV_ADMIN_ROLES.includes(scope.role)) {
-    res.status(403).json({ error: "ليس لديك صلاحية الوصول لإعدادات التكاملات الحكومية" });
-    return false;
+    throw new ForbiddenError("ليس لديك صلاحية الوصول لإعدادات التكاملات الحكومية");
   }
   return true;
 }
 
 function requireGovRead(scope: any, res: any): boolean {
   if (!scope || !GOV_READ_ROLES.includes(scope.role)) {
-    res.status(403).json({ error: "ليس لديك صلاحية عرض التكاملات الحكومية" });
-    return false;
+    throw new ForbiddenError("ليس لديك صلاحية عرض التكاملات الحكومية");
   }
   return true;
 }
@@ -123,15 +121,14 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
     const { config, enabled, status } = body;
 
     if (config !== undefined && (typeof config !== "object" || config === null || Array.isArray(config))) {
-      res.status(400).json({ error: "config must be a JSON object" });
-      return;
+      throw new ValidationError("config must be a JSON object");
     }
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "التكامل غير موجود" }); return; }
+    if (!existing) { throw new NotFoundError("التكامل غير موجود"); }
 
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
@@ -181,7 +178,7 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
       `SELECT * FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
-    if (!integration) { res.status(404).json({ error: "التكامل غير موجود" }); return; }
+    if (!integration) { throw new NotFoundError("التكامل غير موجود"); }
 
     const config = integration.config || {};
     const hasApiKey = config.apiKey && String(config.apiKey).length > 3;
@@ -361,15 +358,14 @@ router.post("/links", requirePermission("admin:write"), async (req, res) => {
     const { integrationId, entityType, entityId, externalRef, enabled, notes } = body;
 
     if (!integrationId || !entityType || !entityId) {
-      res.status(400).json({ error: "integrationId و entityType و entityId مطلوبة" });
-      return;
+      throw new ValidationError("integrationId و entityType و entityId مطلوبة");
     }
 
     const [integration] = await rawQuery<any>(
       `SELECT id FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
       [integrationId, scope.companyId]
     );
-    if (!integration) { res.status(404).json({ error: "التكامل غير موجود" }); return; }
+    if (!integration) { throw new NotFoundError("التكامل غير موجود"); }
 
     const { insertId } = await rawExecute(
       `INSERT INTO gov_integration_links ("integrationId","companyId","entityType","entityId","externalRef",enabled,notes,"syncStatus")
@@ -410,7 +406,7 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
       `SELECT gl.id FROM gov_integration_links gl WHERE gl.id = $1 AND gl."companyId" = $2`,
       [id, scope.companyId]
     );
-    if (!existing) { res.status(404).json({ error: "الربط غير موجود" }); return; }
+    if (!existing) { throw new NotFoundError("الربط غير موجود"); }
 
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];

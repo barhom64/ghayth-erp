@@ -705,7 +705,7 @@ router.get("/contracts/:id", requirePermission("properties:read"), async (req, r
        WHERE c.id = $1 AND c."companyId" = $2 AND c."deletedAt" IS NULL`,
       [contractId, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "العقد غير موجود" }); return; }
+    if (!row) throw new NotFoundError("العقد غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });

@@ -1,4 +1,4 @@
-import { ValidationError } from "../lib/errorHandler.js";
+import { ValidationError, NotFoundError, ForbiddenError, isTypedError } from "../lib/errorHandler.js";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { z } from "zod";
@@ -62,8 +62,7 @@ router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requi
     const { name, size, contentType } = parsed.data;
 
     if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-      res.status(400).json({ error: `نوع الملف غير مسموح به: ${contentType}. الأنواع المسموحة: PDF، Word، Excel، الصور، النصوص` });
-      return;
+      throw new ValidationError(`نوع الملف غير مسموح به: ${contentType}. الأنواع المسموحة: PDF، Word، Excel، الصور، النصوص`);
     }
 
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
@@ -86,8 +85,8 @@ router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requi
       }),
     );
   } catch (error) {
-    if (error instanceof ValidationError) {
-      res.status(400).json({ error: error.message });
+    if (isTypedError(error)) {
+      res.status(error.status).json(error.toResponse());
       return;
     }
     req.log.error({ err: error }, "Error generating upload URL");
@@ -101,8 +100,7 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
     const filePath = Array.isArray(raw) ? raw.join("/") : raw;
     const file = await objectStorageService.searchPublicObject(filePath);
     if (!file) {
-      res.status(404).json({ error: "File not found" });
-      return;
+      throw new NotFoundError("File not found");
     }
 
     const response = await objectStorageService.downloadObject(file);
@@ -116,6 +114,10 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
       res.end();
     }
   } catch (error) {
+    if (isTypedError(error)) {
+      res.status(error.status).json(error.toResponse());
+      return;
+    }
     req.log.error({ err: error }, "Error serving public object");
     res.status(500).json({ error: "Failed to serve public object" });
   }
@@ -140,8 +142,7 @@ router.get("/storage/objects/*path", authMiddleware, requirePermission("document
         [objectPath, scope.companyId]
       );
       if (docs.length === 0 && versions.length === 0) {
-        res.status(403).json({ error: "Access denied" });
-        return;
+        throw new ForbiddenError("Access denied");
       }
     }
 
@@ -160,7 +161,12 @@ router.get("/storage/objects/*path", authMiddleware, requirePermission("document
   } catch (error) {
     if (error instanceof ObjectNotFoundError) {
       req.log.warn({ err: error }, "Object not found");
-      res.status(404).json({ error: "Object not found" });
+      const typed = new NotFoundError("Object not found");
+      res.status(typed.status).json(typed.toResponse());
+      return;
+    }
+    if (isTypedError(error)) {
+      res.status(error.status).json(error.toResponse());
       return;
     }
     req.log.error({ err: error }, "Error serving object");

@@ -519,7 +519,7 @@ router.post("/webhooks", requirePermission("admin:write"), async (req: Request, 
 
     const parsedUrl = new URL(url);
     if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-      return res.status(400).json({ error: "Webhook URL must use http or https" });
+      throw new ValidationError("Webhook URL must use http or https");
     }
 
     const rows = await rawQuery<{ id: number }>(
@@ -554,7 +554,7 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
     if (url) {
       const parsedUrl = new URL(url);
       if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-        return res.status(400).json({ error: "Webhook URL must use http or https" });
+        throw new ValidationError("Webhook URL must use http or https");
       }
     }
 

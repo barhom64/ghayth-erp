@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
 import {
   EVENT_CATALOG,
   countEventsByDomain,
@@ -33,7 +33,7 @@ eventsRouter.get("/catalog", (req, res) => {
 
 eventsRouter.get("/catalog/:name", (req, res) => {
   const def = getEventDefinition(req.params.name);
-  if (!def) { res.status(404).json({ error: "الحدث غير موجود في الفهرس" }); return; }
+  if (!def) throw new NotFoundError("الحدث غير موجود في الفهرس");
   res.json({ data: def });
 });
 

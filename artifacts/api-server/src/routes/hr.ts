@@ -2431,7 +2431,7 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
        WHERE ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`,
       [req.params.id, scope.companyId]
     );
-    if (!item) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    if (!item) throw new NotFoundError("المخالفة غير موجودة");
 
     // جلب محضر التحقيق المرتبط إن وجد
     const memos = await rawQuery<any>(

@@ -1,4 +1,4 @@
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -32,7 +32,7 @@ router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (r
     const scope = req.scope!;
     const { id } = req.params;
     const [job] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [Number(id)]);
-    if (!job) { res.status(404).json({ error: "المهمة غير موجودة" }); return; }
+    if (!job) throw new NotFoundError("المهمة غير موجودة");
 
     const result = await triggerJobByName(job.name);
 
@@ -105,10 +105,7 @@ router.post("/proactive-rules/:id/toggle", requirePermission("admin:write"), asy
       `SELECT * FROM proactive_rules WHERE id=$1 AND "companyId"=$2`,
       [Number(id), scope.companyId]
     );
-    if (!row) {
-      res.status(404).json({ error: "القاعدة غير موجودة" });
-      return;
-    }
+    if (!row) throw new NotFoundError("القاعدة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "proactive_rules", entityId: Number(id), after: { isActive: row?.isActive } }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Toggle proactive rule error:"); }

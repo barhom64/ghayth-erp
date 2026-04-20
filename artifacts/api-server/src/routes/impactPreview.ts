@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -18,8 +18,7 @@ router.post("/", async (req, res): Promise<void> => {
     const scope = req.scope!;
     const { entityType, entityId, action } = req.body;
     if (!entityType || !entityId) {
-      res.status(400).json({ error: "entityType and entityId are required" });
-      return;
+      throw new ValidationError("entityType and entityId are required");
     }
 
     const impacts: ImpactItem[] = [];

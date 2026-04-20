@@ -3,7 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import {
   createJournalEntry,
   getAccountCodeFromMapping,
@@ -102,7 +102,7 @@ router.get("/products/:id", requirePermission("store:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المنتج غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get store product"); }
 });
@@ -112,7 +112,7 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المنتج غير موجود");
     const parsed = updateStoreProductSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -141,7 +141,7 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "المنتج غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("المنتج غير موجود");
     await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_products", entityId: id, before: existing }).catch(console.error);
     res.json({ message: "تم حذف المنتج بنجاح" });
@@ -207,7 +207,7 @@ router.get("/orders/:id", requirePermission("store:read"), async (req, res) => {
        WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!row) throw new NotFoundError("الطلب غير موجود");
     const orderItems = await rawQuery<any>(`SELECT oi.*, sp.name AS "productNameFromCatalog" FROM store_order_items oi LEFT JOIN store_products sp ON sp.id = oi."productId" WHERE oi."orderId" = $1 ORDER BY oi.id`, [row.id]);
     let parsedItems: any[] = [];
     try { parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []); } catch {}
@@ -221,7 +221,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("الطلب غير موجود");
     const parsed = updateStoreOrderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -255,7 +255,7 @@ router.delete("/orders/:id", requirePermission("store:write"), async (req, res) 
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("الطلب غير موجود");
     await rawExecute(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_orders", entityId: id, before: existing }).catch(console.error);
     res.json({ message: "تم حذف الطلب بنجاح" });

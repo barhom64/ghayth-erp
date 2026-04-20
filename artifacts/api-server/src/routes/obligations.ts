@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { rawExecute, rawQuery } from "../lib/rawdb.js";
 import {
   ensureObligationsTable,
@@ -107,7 +107,7 @@ obligationsRouter.post("/:id/met", async (req, res) => {
        WHERE id=$1 AND "companyId"=$2 RETURNING id, status`,
       [id, scope.companyId]
     );
-    if (rows.length === 0) { res.status(404).json({ error: "الالتزام غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الالتزام غير موجود");
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Mark obligation met error:");
@@ -143,7 +143,7 @@ obligationsRouter.post("/:id/cancel", async (req, res) => {
        WHERE id=$1 AND "companyId"=$2 RETURNING id, status`,
       [id, scope.companyId]
     );
-    if (rows.length === 0) { res.status(404).json({ error: "الالتزام غير موجود" }); return; }
+    if (rows.length === 0) throw new NotFoundError("الالتزام غير موجود");
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Cancel obligation error:");

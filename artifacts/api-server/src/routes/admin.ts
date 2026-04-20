@@ -49,22 +49,20 @@ const resetPasswordLimiter = rateLimit({
 const ADMIN_ROLES = ["owner", "admin", "general_manager"];
 const ADMIN_ROLE_LEVEL = 90;
 
-async function requireAdmin(req: any, res: any): Promise<boolean> {
+async function assertAdmin(req: any): Promise<void> {
   const scope = req.scope;
   if (!scope) {
-    res.status(403).json({ error: "غير مصرح: صلاحيات المسؤول مطلوبة" });
-    return false;
+    throw new ForbiddenError("غير مصرح: صلاحيات المسؤول مطلوبة");
   }
   try {
     const rows = await rawQuery<{ level: number }>(
       `SELECT MAX(level) AS level FROM user_roles WHERE "userId" = $1 AND "companyId" = $2`,
       [scope.userId, scope.companyId]
     );
-    if (rows.length > 0 && rows[0].level >= ADMIN_ROLE_LEVEL) return true;
+    if (rows.length > 0 && rows[0].level >= ADMIN_ROLE_LEVEL) return;
   } catch {}
-  if (ADMIN_ROLES.includes(scope.role)) return true;
-  res.status(403).json({ error: "غير مصرح: صلاحيات المسؤول مطلوبة" });
-  return false;
+  if (ADMIN_ROLES.includes(scope.role)) return;
+  throw new ForbiddenError("غير مصرح: صلاحيات المسؤول مطلوبة");
 }
 
 async function userBelongsToCompany(userId: number, companyId: number): Promise<boolean> {
@@ -80,7 +78,7 @@ async function userBelongsToCompany(userId: number, companyId: number): Promise<
 
 router.get("/users", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const rows = await rawQuery(`
       SELECT DISTINCT u.id, u.email, u.role, u."isActive", u."lastLoginAt", u."createdAt", u."employeeId",
@@ -99,7 +97,7 @@ router.get("/users", requirePermission("admin:read"), async (req, res) => {
 
 router.post("/users", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const parsed = createUserSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -168,7 +166,7 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
 
 router.patch("/users/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [userBelongs] = await rawQuery(
@@ -225,7 +223,7 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
 
 router.delete("/users/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const id = Number(req.params.id);
     if (id === scope.userId) { throw new ValidationError("لا يمكنك حذف حسابك الخاص"); }
@@ -261,7 +259,7 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
 
 router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [userBelongs] = await rawQuery(
@@ -293,7 +291,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
 
 router.get("/roles", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const rows = await rawQuery(`SELECT * FROM roles ORDER BY name`);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (e: any) { console.error("Get roles error:", e); handleRouteError(e, res, "خطأ غير متوقع"); }
@@ -301,7 +299,7 @@ router.get("/roles", requirePermission("admin:read"), async (req, res) => {
 
 router.post("/roles", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const parsed = createRoleSchema.safeParse({
       name: req.body?.label,
@@ -365,7 +363,7 @@ const PREDEFINED_ROLES = [
 
 router.get("/predefined-roles", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const customRows = await rawQuery<any>(
       `SELECT "roleKey", label, level, modules FROM custom_roles WHERE "companyId"=$1 ORDER BY level DESC`,
@@ -390,7 +388,7 @@ router.get("/predefined-roles", requirePermission("admin:read"), async (req, res
 
 router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const userId = Number(req.params.userId);
     if (!userId || isNaN(userId)) { throw new ValidationError("معرف غير صالح"); }
@@ -407,7 +405,7 @@ router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, r
 
 router.post("/user-roles", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const { userId, roleKey } = req.body;
     if (!userId || !roleKey || typeof userId !== "number") {
@@ -448,7 +446,7 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
 
 router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const id = Number(req.params.id);
     if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); }
@@ -469,7 +467,7 @@ router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, r
 
 router.get("/integrations", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const rows = await rawQuery(
       `SELECT * FROM integrations WHERE "companyId"=$1 ORDER BY "createdAt" DESC`,
@@ -481,7 +479,7 @@ router.get("/integrations", requirePermission("admin:read"), async (req, res) =>
 
 router.post("/integrations", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const parsed = createIntegrationSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -505,7 +503,7 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
 
 router.patch("/integrations/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body;
@@ -535,7 +533,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
 
 router.delete("/integrations/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const result = await rawExecute(
       `DELETE FROM integrations WHERE id=$1 AND "companyId"=$2`,
@@ -552,7 +550,7 @@ router.delete("/integrations/:id", requirePermission("admin:write"), async (req,
 
 router.post("/integrations/:id/test", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const [integration] = await rawQuery<any>(
       `SELECT * FROM integrations WHERE id=$1 AND "companyId"=$2`,
@@ -574,7 +572,7 @@ router.post("/integrations/:id/test", requirePermission("admin:write"), async (r
 
 router.get("/integration-logs", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const { channel, status, integrationId } = req.query as any;
     const conditions = [`"companyId"=$1`];
@@ -592,7 +590,7 @@ router.get("/integration-logs", requirePermission("admin:read"), async (req, res
 
 router.post("/integration-logs/retry", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const result = await integrationService.retryFailed(scope.companyId);
     createAuditLog({
@@ -605,7 +603,7 @@ router.post("/integration-logs/retry", requirePermission("admin:write"), async (
 
 router.get("/system-health", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
 
     const dbStart = Date.now();
     let dbStatus = "healthy";
@@ -723,7 +721,7 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
 
 router.get("/violations-report", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const { type, priority, status, department, from, to } = req.query as any;
 
@@ -790,7 +788,7 @@ router.get("/violations-report", requirePermission("admin:read"), async (req, re
 
 router.patch("/violations/:id/resolve", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const id = Number(req.params.id);
 
@@ -819,7 +817,7 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
 
 router.get("/security-log", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const { userId, reason, from, to, page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page), 1);
@@ -884,7 +882,7 @@ router.get("/security-log", requirePermission("admin:read"), async (req, res) =>
 
 router.get("/role-permissions", requirePermission("admin:read"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const { role } = req.query as any;
     const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
@@ -900,7 +898,7 @@ router.get("/role-permissions", requirePermission("admin:read"), async (req, res
 
 router.post("/role-permissions", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const { role, permission } = req.body as any;
     if (!role || !permission) {
@@ -922,7 +920,7 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
 
 router.delete("/role-permissions/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const id = Number(req.params.id);
     const result = await rawExecute(
@@ -941,7 +939,7 @@ router.delete("/role-permissions/:id", requirePermission("admin:write"), async (
 
 router.put("/role-permissions/bulk", requirePermission("admin:write"), async (req, res) => {
   try {
-    if (!await requireAdmin(req, res)) return;
+    await assertAdmin(req);
     const scope = req.scope!;
     const { role, permissions } = req.body as { role: string; permissions: string[] };
     if (!role || !Array.isArray(permissions)) {

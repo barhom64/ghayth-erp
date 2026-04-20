@@ -10,7 +10,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 
 export const execDashboardRouter = Router();
@@ -18,12 +18,10 @@ execDashboardRouter.use(authMiddleware);
 
 const EXEC_ROLES = ["owner", "general_manager", "finance_manager", "director"];
 
-function requireExec(scope: any, res: any): boolean {
+function requireExec(scope: any): void {
   if (!EXEC_ROLES.includes(scope.role)) {
-    res.status(403).json({ error: "لوحة القيادة التنفيذية مخصصة للإدارة العليا فقط" });
-    return false;
+    throw new ForbiddenError("لوحة القيادة التنفيذية مخصصة للإدارة العليا فقط");
   }
-  return true;
 }
 
 // Safe query helper — swallows errors (missing tables) and returns default
@@ -34,7 +32,7 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
 execDashboardRouter.get("/overview", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireExec(scope, res)) return;
+    requireExec(scope);
     const companyId = scope.companyId;
 
     // ─── 1. CASH POSITION ─────────────────────────────────────────────────
@@ -305,7 +303,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 execDashboardRouter.get("/overdue-invoices", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireExec(scope, res)) return;
+    requireExec(scope);
     const rows = await rawQuery<any>(
       `SELECT i.id, i."invoiceNumber", i."dueDate",
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
@@ -333,7 +331,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
 execDashboardRouter.get("/critical-obligations", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireExec(scope, res)) return;
+    requireExec(scope);
     const rows = await rawQuery<any>(
       `SELECT id, "entityType", "entityId", "obligationType", title, "dueAt",
               status, "escalationLevel", "assignedTo"

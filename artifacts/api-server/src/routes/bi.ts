@@ -152,7 +152,7 @@ router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, r
     if (to) { params.push(to); conditions.push(`t."scheduledDate" <= $${params.length}::date`); }
     if (departmentId) {
       const depId = Number(departmentId);
-      if (isNaN(depId)) { res.status(400).json({ error: "رقم القسم غير صالح" }); return; }
+      if (isNaN(depId)) { throw new ValidationError("رقم القسم غير صالح"); }
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
@@ -211,7 +211,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
     if (to) { params.push(to); conditions.push(`t."createdAt" <= $${params.length}::date`); }
     if (departmentId) {
       const depId = Number(departmentId);
-      if (isNaN(depId)) { res.status(400).json({ error: "رقم القسم غير صالح" }); return; }
+      if (isNaN(depId)) { throw new ValidationError("رقم القسم غير صالح"); }
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
@@ -269,7 +269,7 @@ router.get("/operations/employee-productivity", requirePermission("bi:read"), as
     if (to) { params.push(to); conditions.push(`t."completedAt" <= $${params.length}::date`); }
     if (departmentId) {
       const depId = Number(departmentId);
-      if (isNaN(depId)) { res.status(400).json({ error: "رقم القسم غير صالح" }); return; }
+      if (isNaN(depId)) { throw new ValidationError("رقم القسم غير صالح"); }
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
@@ -318,7 +318,7 @@ router.get("/operations/approval-timeliness", requirePermission("bi:read"), asyn
     if (to) { params.push(to); conditions.push(`lr."createdAt" <= $${params.length}::date`); }
     if (departmentId) {
       const depId = Number(departmentId);
-      if (isNaN(depId)) { res.status(400).json({ error: "رقم القسم غير صالح" }); return; }
+      if (isNaN(depId)) { throw new ValidationError("رقم القسم غير صالح"); }
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
@@ -351,7 +351,7 @@ router.get("/operations/avg-completion-time", requirePermission("bi:read"), asyn
     if (to) { params.push(to); conditions.push(`t."completedAt" <= $${params.length}::date`); }
     if (departmentId) {
       const depId = Number(departmentId);
-      if (isNaN(depId)) { res.status(400).json({ error: "رقم القسم غير صالح" }); return; }
+      if (isNaN(depId)) { throw new ValidationError("رقم القسم غير صالح"); }
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
@@ -382,7 +382,7 @@ router.get("/operations/trend", requirePermission("bi:read"), async (req, res) =
     if (to) { params.push(to); conditions.push(`t."scheduledDate" <= $${params.length}::date`); }
     if (departmentId) {
       const depId = Number(departmentId);
-      if (isNaN(depId)) { res.status(400).json({ error: "رقم القسم غير صالح" }); return; }
+      if (isNaN(depId)) { throw new ValidationError("رقم القسم غير صالح"); }
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 

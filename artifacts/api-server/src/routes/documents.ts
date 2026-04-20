@@ -5,7 +5,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
 import { createAuditLog } from "../lib/businessHelpers.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { z } from "zod";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
@@ -182,8 +182,7 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
     if (entityLinks && Array.isArray(entityLinks)) {
       for (const link of entityLinks) {
         if (!link.entityType || !ALLOWED_ENTITY_TYPES.includes(link.entityType) || !Number.isInteger(Number(link.entityId))) {
-          res.status(400).json({ error: `Invalid entity link: type must be one of ${ALLOWED_ENTITY_TYPES.join(", ")} and entityId must be an integer` });
-          return;
+          throw new ValidationError(`Invalid entity link: type must be one of ${ALLOWED_ENTITY_TYPES.join(", ")} and entityId must be an integer`);
         }
       }
     }
@@ -224,11 +223,10 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
       `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!doc) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (!doc) throw new NotFoundError("المستند غير موجود");
 
     if (!doc.storageKey) {
-      res.status(404).json({ error: "لا يوجد ملف مرفق" });
-      return;
+      throw new NotFoundError("لا يوجد ملف مرفق");
     }
 
     try {
@@ -246,7 +244,7 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
         res.end();
       }
     } catch {
-      res.status(404).json({ error: "الملف غير موجود في التخزين" });
+      throw new NotFoundError("الملف غير موجود في التخزين");
     }
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -275,7 +273,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
       `SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`,
       [docId, scope.companyId]
     );
-    if (!doc) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (!doc) throw new NotFoundError("المستند غير موجود");
 
     const newVersion = (doc.currentVersion || 1) + 1;
 
@@ -303,7 +301,7 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
       `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [docId, scope.companyId]
     );
-    if (!doc) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (!doc) throw new NotFoundError("المستند غير موجود");
 
     const versions = await rawQuery(
       `SELECT * FROM document_versions WHERE "documentId"=$1 ORDER BY "versionNumber" DESC`,
@@ -323,18 +321,17 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
     const { status } = body;
 
     if (status === "approved" && !scope.isOwner && !APPROVE_ROLES.includes(scope.role || "")) {
-      res.status(403).json({ error: "ليس لديك صلاحية اعتماد المستندات" });
-      return;
+      throw new ForbiddenError("ليس لديك صلاحية اعتماد المستندات");
     }
 
     const [beforeDoc] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [docId, scope.companyId]);
-    if (!beforeDoc) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (!beforeDoc) throw new NotFoundError("المستند غير موجود");
 
     const result = await rawExecute(
       `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL)`,
       [status, docId, scope.companyId]
     );
-    if (result.affectedRows === 0) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
 
     const CATEGORY_EFFECTS: Record<string, string> = {
       contracts: "التزام قانوني/مالي",
@@ -371,7 +368,7 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
       `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [docId, scope.companyId]
     );
-    if (!doc) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (!doc) throw new NotFoundError("المستند غير موجود");
 
     await rawExecute(
       `INSERT INTO document_entity_links ("documentId", "entityType", "entityId") VALUES ($1, $2, $3)
@@ -391,7 +388,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
       `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [docId, scope.companyId]
     );
-    if (!doc) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (!doc) throw new NotFoundError("المستند غير موجود");
 
     const links = await rawQuery(
       `SELECT * FROM document_entity_links WHERE "documentId"=$1`,
@@ -457,7 +454,7 @@ router.get("/templates/:id", requirePermission("documents:read"), async (req, re
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "القالب غير موجود" }); return; }
+    if (!row) throw new NotFoundError("القالب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -516,10 +513,10 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
     const body = parsed_updateTemplateSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
-    if (isNaN(id) || id <= 0) { res.status(400).json({ error: "معرف القالب غير صالح" }); return; }
+    if (isNaN(id) || id <= 0) throw new ValidationError("معرف القالب غير صالح");
     const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl, isActive } = body;
     const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(
       `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11 AND "companyId"=$12`,
       [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id, scope.companyId]
@@ -533,9 +530,9 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    if (isNaN(id) || id <= 0) { res.status(400).json({ error: "معرف القالب غير صالح" }); return; }
+    if (isNaN(id) || id <= 0) throw new ValidationError("معرف القالب غير صالح");
     const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "القالب غير موجود" }); return; }
+    if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ message: "تم حذف القالب بنجاح" });
   } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء حذف القالب" }); }
@@ -568,7 +565,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [template] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
-    if (!template) { res.status(404).json({ error: "القالب غير موجود" }); return; }
+    if (!template) throw new NotFoundError("القالب غير موجود");
 
     const parsed_generateTemplate = generateTemplateSchema.safeParse(req.body);
     if (!parsed_generateTemplate.success) throw new ValidationError(parsed_generateTemplate.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -701,7 +698,7 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [template] = await rawQuery<any>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
-    if (!template) { res.status(404).json({ error: "القالب غير موجود" }); return; }
+    if (!template) throw new NotFoundError("القالب غير موجود");
     let variables = [];
     try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch { variables = []; }
     res.json({ variables });
@@ -731,7 +728,7 @@ router.get("/:id", requirePermission("documents:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (!row) throw new NotFoundError("المستند غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -752,10 +749,10 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     if (b.fileUrl !== undefined) { params.push(b.fileUrl); sets.push(`"fileUrl"=$${params.length}`); }
     if (b.folderId !== undefined) { params.push(b.folderId); sets.push(`"folderId"=$${params.length}`); }
     if (b.tags !== undefined) { params.push(b.tags); sets.push(`tags=$${params.length}`); }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -766,7 +763,7 @@ router.delete("/:id", requirePermission("documents:delete"), async (req, res) =>
     const scope = req.scope!;
     const id = Number(req.params.id);
     const result = await rawExecute(`UPDATE documents SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "المستند غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
     res.json({ message: "تم حذف المستند بنجاح" });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -102,8 +102,7 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
     const scope = req.scope!;
 
     if (!b.name || !b.triggerEvent || !b.actionType) {
-      res.status(400).json({ error: "الاسم ونوع الحدث ونوع الإجراء مطلوبة" });
-      return;
+      throw new ValidationError("الاسم ونوع الحدث ونوع الإجراء مطلوبة");
     }
 
     const { insertId } = await rawExecute(
@@ -144,8 +143,7 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
       [id, scope.companyId]
     );
     if (!existing) {
-      res.status(404).json({ error: "القاعدة غير موجودة أو لا يمكن تعديل القواعد الافتراضية" });
-      return;
+      throw new NotFoundError("القاعدة غير موجودة أو لا يمكن تعديل القواعد الافتراضية");
     }
 
     const sets: string[] = [`"updatedAt" = NOW()`];
@@ -190,8 +188,7 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
       [id, scope.companyId]
     );
     if (!existing) {
-      res.status(404).json({ error: "القاعدة غير موجودة أو لا يمكن حذف القواعد الافتراضية" });
-      return;
+      throw new NotFoundError("القاعدة غير موجودة أو لا يمكن حذف القواعد الافتراضية");
     }
     await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "deletedAt" IS NULL`, [id]);
 
@@ -217,8 +214,7 @@ router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) =
       [id, scope.companyId]
     );
     if (!existing) {
-      res.status(404).json({ error: "القاعدة غير موجودة" });
-      return;
+      throw new NotFoundError("القاعدة غير موجودة");
     }
     const newActive = !existing.isActive;
     await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND ("companyId" IS NULL OR "companyId" = $3)`, [newActive, id, scope.companyId]);

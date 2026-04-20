@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -50,7 +50,7 @@ router.post("/comments/:entityType/:entityId", requirePermission("admin:write"),
     const { entityType, entityId } = req.params;
     const { body } = validatedBody;
     if (!body || !body.trim()) {
-      res.status(400).json({ error: "نص التعليق مطلوب" }); return;
+      throw new ValidationError("نص التعليق مطلوب");
     }
     const rows = await rawQuery(
       `INSERT INTO entity_comments ("entityType", "entityId", "companyId", "userId", "userName", body)
@@ -121,7 +121,7 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
     const { entityType, entityId } = req.params;
     const { tag, color } = validatedBody;
     if (!tag || !tag.trim()) {
-      res.status(400).json({ error: "اسم الوسم مطلوب" }); return;
+      throw new ValidationError("اسم الوسم مطلوب");
     }
     const rows = await rawQuery(
       `INSERT INTO entity_tags ("entityType", "entityId", "companyId", tag, color, "createdBy")
@@ -131,7 +131,7 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
       [entityType, Number(entityId), scope.companyId, tag.trim(), color || "blue", scope.userId]
     );
     if (rows.length === 0) {
-      res.status(409).json({ error: "الوسم موجود بالفعل" }); return;
+      throw new ConflictError("الوسم موجود بالفعل");
     }
 
     createAuditLog({
@@ -177,7 +177,7 @@ router.get("/tags-filter/:entityType", async (req, res): Promise<void> => {
     const { entityType } = req.params;
     const { tag } = req.query as any;
     if (!tag) {
-      res.status(400).json({ error: "الوسم مطلوب للفلترة" }); return;
+      throw new ValidationError("الوسم مطلوب للفلترة");
     }
     const rows = await rawQuery(
       `SELECT "entityId" FROM entity_tags
@@ -216,16 +216,16 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
     const scope = req.scope!;
     const { entityType, entityIds, action } = validatedBody;
     if (!entityType || !Array.isArray(entityIds) || entityIds.length === 0 || !action) {
-      res.status(400).json({ error: "بيانات غير مكتملة" }); return;
+      throw new ValidationError("بيانات غير مكتملة");
     }
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager") {
-      res.status(403).json({ error: "لا تملك صلاحية تنفيذ الإجراءات الجماعية" }); return;
+      throw new ForbiddenError("لا تملك صلاحية تنفيذ الإجراءات الجماعية");
     }
 
     const validIds = entityIds.filter((id: any) => typeof id === "number" && Number.isInteger(id) && id > 0);
     if (validIds.length === 0) {
-      res.status(400).json({ error: "معرفات غير صالحة" }); return;
+      throw new ValidationError("معرفات غير صالحة");
     }
 
     const tableMap: Record<string, { table: string; extraWhere?: string }> = {
@@ -238,14 +238,14 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
 
     const mapping = tableMap[entityType];
     if (!mapping) {
-      res.status(400).json({ error: "نوع الكيان غير مدعوم" }); return;
+      throw new ValidationError("نوع الكيان غير مدعوم");
     }
 
     const { table, extraWhere = "" } = mapping;
 
     const validActions = ["approve", "reject", "delete", "close"];
     if (!validActions.includes(action)) {
-      res.status(400).json({ error: "إجراء غير مدعوم" }); return;
+      throw new ValidationError("إجراء غير مدعوم");
     }
 
     const actionLabelMap: Record<string, string> = {

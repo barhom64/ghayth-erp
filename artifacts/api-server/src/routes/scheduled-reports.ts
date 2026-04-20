@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 
 export const scheduledReportsRouter = Router();
@@ -75,12 +75,12 @@ scheduledReportsRouter.patch("/:id", async (req, res) => {
     if (recipients !== undefined) { vals.push(JSON.stringify(recipients)); updates.push(`recipients = $${vals.length}`); }
     if (params !== undefined) { vals.push(JSON.stringify(params)); updates.push(`params = $${vals.length}`); }
     if (isActive !== undefined) { vals.push(isActive); updates.push(`"isActive" = $${vals.length}`); }
-    if (updates.length === 0) { res.status(400).json({ error: "No fields to update" }); return; }
+    if (updates.length === 0) throw new ValidationError("No fields to update");
     const [row] = await rawQuery<any>(
       `UPDATE scheduled_reports SET ${updates.join(", ")} WHERE id = $1 AND "companyId" = $2 RETURNING *`,
       vals
     );
-    if (!row) { res.status(404).json({ error: "Not found" }); return; }
+    if (!row) throw new NotFoundError("Not found");
     res.json({ data: row });
   } catch (err) {
     handleRouteError(err, res, "Update scheduled report error:");

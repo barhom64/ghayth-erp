@@ -3,7 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, isTypedError } from "../lib/errorHandler.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
@@ -96,12 +96,15 @@ async function portalAuthMiddleware(req: Request & { portalScope?: PortalScope }
       return;
     }
     if (!account.isActive) {
-      res.status(403).json({ error: "الحساب موقوف، يرجى التواصل مع الدعم" });
-      return;
+      throw new ForbiddenError("الحساب موقوف، يرجى التواصل مع الدعم");
     }
     req.portalScope = payload;
     next();
-  } catch {
+  } catch (err) {
+    if (isTypedError(err)) {
+      res.status(err.status).json(err.toResponse());
+      return;
+    }
     res.status(401).json({ error: "توكن غير صالح أو منتهي" });
   }
 }
@@ -188,8 +191,7 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
       return;
     }
     if (!account.isActive) {
-      res.status(403).json({ error: "الحساب موقوف، يرجى التواصل مع الدعم" });
-      return;
+      throw new ForbiddenError("الحساب موقوف، يرجى التواصل مع الدعم");
     }
     const valid = await verifyPassword(password, account.passwordHash);
     if (!valid) {
@@ -235,10 +237,7 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
        WHERE ${where}`,
       params
     );
-    if (!client) {
-      res.status(404).json({ error: "العميل غير موجود" });
-      return;
-    }
+    if (!client) throw new NotFoundError("العميل غير موجود");
     res.json(client);
   } catch (err) {
     handleRouteError(err, res, "Portal me error:");
@@ -348,10 +347,7 @@ protectedRouter.get("/invoices/:id", withPortalScope(async (req, res) => {
        GROUP BY i.id`,
       [scope.clientId, scope.companyId, Number(id)]
     );
-    if (!invoice) {
-      res.status(404).json({ error: "الفاتورة غير موجودة" });
-      return;
-    }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(invoice);
   } catch (err) {
     handleRouteError(err, res, "Portal invoice detail error:");
@@ -406,10 +402,7 @@ protectedRouter.get("/tickets/:id", withPortalScope(async (req, res) => {
        WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [scope.clientId, scope.companyId, Number(id)]
     );
-    if (!ticket) {
-      res.status(404).json({ error: "الطلب غير موجود" });
-      return;
-    }
+    if (!ticket) throw new NotFoundError("الطلب غير موجود");
     res.json(ticket);
   } catch (err) {
     handleRouteError(err, res, "Portal ticket detail error:");
@@ -424,10 +417,7 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
       `SELECT id FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [scope.clientId, scope.companyId, Number(id)]
     );
-    if (!ticket) {
-      res.status(404).json({ error: "الطلب غير موجود" });
-      return;
-    }
+    if (!ticket) throw new NotFoundError("الطلب غير موجود");
     const replies = await rawQuery<any>(
       `SELECT tr.id, tr.message, tr."senderType", tr."senderName", tr."createdAt"
        FROM ticket_replies tr
@@ -456,13 +446,9 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
       `SELECT id, status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [scope.clientId, scope.companyId, Number(id)]
     );
-    if (!ticket) {
-      res.status(404).json({ error: "الطلب غير موجود" });
-      return;
-    }
+    if (!ticket) throw new NotFoundError("الطلب غير موجود");
     if (ticket.status === "closed" || ticket.status === "resolved") {
-      res.status(400).json({ error: "لا يمكن الرد على طلب مغلق أو محلول" });
-      return;
+      throw new ValidationError("لا يمكن الرد على طلب مغلق أو محلول");
     }
     await rawExecute(
       `INSERT INTO ticket_replies ("ticketId", message, "senderType", "senderName")
@@ -515,10 +501,7 @@ protectedRouter.patch("/profile/password", withPortalScope(async (req, res) => {
       `SELECT "passwordHash" FROM client_portal_accounts WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [clientId, companyId, accountId]
     );
-    if (!account) {
-      res.status(404).json({ error: "الحساب غير موجود" });
-      return;
-    }
+    if (!account) throw new NotFoundError("الحساب غير موجود");
     const valid = await verifyPassword(currentPassword, account.passwordHash);
     if (!valid) {
       res.status(401).json({ error: "كلمة المرور الحالية غير صحيحة" });
@@ -548,8 +531,8 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
       `SELECT id, ref, total, "paidAmount", status FROM invoices WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, Number(id)]
     );
-    if (!invoice) { res.status(404).json({ error: "الفاتورة غير موجودة" }); return; }
-    if (invoice.status === 'paid') { res.status(400).json({ error: "الفاتورة مدفوعة بالكامل مسبقاً" }); return; }
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+    if (invoice.status === 'paid') throw new ValidationError("الفاتورة مدفوعة بالكامل مسبقاً");
 
     const payAmt = Math.min(Number(amount), Number(invoice.total) - Number(invoice.paidAmount));
     const newPaid = Number(invoice.paidAmount) + payAmt;
@@ -590,8 +573,8 @@ protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
       `SELECT id, "assigneeId", status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [scope.clientId, scope.companyId, Number(id)]
     );
-    if (!ticket) { res.status(404).json({ error: "التذكرة غير موجودة" }); return; }
-    if (!['resolved', 'closed'].includes(ticket.status)) { res.status(400).json({ error: "لا يمكن تقييم تذكرة مفتوحة" }); return; }
+    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
+    if (!['resolved', 'closed'].includes(ticket.status)) throw new ValidationError("لا يمكن تقييم تذكرة مفتوحة");
     await rawExecute(
       `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
       [Number(id), scope.companyId, ticket.assigneeId, score, comment || null]
@@ -628,7 +611,7 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
       `SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND status='published'`,
       [id, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المقالة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المقالة غير موجودة");
     await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(() => {});
     res.json(row);
   } catch (err) {

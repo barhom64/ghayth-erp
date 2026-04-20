@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -54,8 +54,7 @@ router.patch("/:id/read", requirePermission("notifications:write"), async (req, 
     );
 
     if (!affectedRows) {
-      res.status(404).json({ error: "الإشعار غير موجود" });
-      return;
+      throw new NotFoundError("الإشعار غير موجود");
     }
 
     createAuditLog({

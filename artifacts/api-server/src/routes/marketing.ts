@@ -3,7 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 
 // P02-S3-CRIT — `marketing:*` permissions are seeded for the
@@ -102,7 +102,7 @@ router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, re
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "الحملة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("الحملة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
@@ -114,7 +114,7 @@ router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الحملة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الحملة غير موجودة");
     const b = req.body;
     const sets: string[] = [];
     const params: any[] = [];
@@ -141,7 +141,7 @@ router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (re
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) { res.status(404).json({ error: "الحملة غير موجودة" }); return; }
+    if (!existing) throw new NotFoundError("الحملة غير موجودة");
     await rawExecute(`UPDATE marketing_campaigns SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ message: "تم حذف الحملة بنجاح" });
   } catch (err) { handleRouteError(err, res, "marketing"); }
@@ -180,7 +180,7 @@ router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (re
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [campaign] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!campaign) { res.status(404).json({ error: "الحملة غير موجودة" }); return; }
+    if (!campaign) throw new NotFoundError("الحملة غير موجودة");
     const spent = Number(campaign.spent || 0);
     const revenue = Number(campaign.revenue || 0);
     const roas = spent > 0 ? revenue / spent : null;
