@@ -316,6 +316,76 @@ export default function PropertiesContracts() {
       }
     >
       <PropertyTabsNav />
+
+      {/* Renewal Pipeline — contracts expiring within 90 days */}
+      {(() => {
+        const now = new Date();
+        const in30 = new Date(now.getTime() + 30 * 86400000);
+        const in60 = new Date(now.getTime() + 60 * 86400000);
+        const in90 = new Date(now.getTime() + 90 * 86400000);
+        const expiring = contracts
+          .filter((c: any) => c.status === "active" && c.endDate)
+          .filter((c: any) => new Date(c.endDate) <= in90)
+          .sort((a: any, b: any) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
+        if (expiring.length === 0) return null;
+        const urgent = expiring.filter((c: any) => new Date(c.endDate) <= in30);
+        const soon = expiring.filter((c: any) => new Date(c.endDate) > in30 && new Date(c.endDate) <= in60);
+        const later = expiring.filter((c: any) => new Date(c.endDate) > in60);
+        return (
+          <Card className="border-orange-200 bg-orange-50/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-orange-600" />
+                خط أنابيب التجديد — {expiring.length} عقد ينتهي خلال 90 يوم
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {urgent.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-red-600">⚠ خلال 30 يوم ({urgent.length})</p>
+                  {urgent.map((c: any) => (
+                    <div key={c.id} className="flex items-center justify-between p-2 rounded bg-red-50 border border-red-100">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium">{c.tenantName || "—"}</span>
+                        <span className="text-xs text-gray-500 ms-2">وحدة {c.unitNumber || c.unitId}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-red-600 font-medium">{formatDateAr(c.endDate)}</span>
+                        <Link href={`/properties/contracts/${c.id}`}>
+                          <Button size="sm" variant="outline" className="h-7 text-xs">تجديد / إنهاء</Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {soon.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-orange-600">خلال 60 يوم ({soon.length})</p>
+                  {soon.slice(0, 3).map((c: any) => (
+                    <div key={c.id} className="flex items-center justify-between p-2 rounded bg-orange-50/50 border border-orange-100">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium">{c.tenantName || "—"}</span>
+                        <span className="text-xs text-gray-500 ms-2">وحدة {c.unitNumber || c.unitId}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-orange-600">{formatDateAr(c.endDate)}</span>
+                        <Link href={`/properties/contracts/${c.id}`}>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs">عرض</Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {later.length > 0 && (
+                <p className="text-xs text-gray-500">+ {later.length} عقد ينتهي خلال 61-90 يوم</p>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       <KpiGrid items={[
         { label: "إجمالي العقود", value: contracts.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
         { label: "نشط", value: contracts.filter((c: any) => c.status === "active").length, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },

@@ -1,18 +1,21 @@
+import { useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { Banknote, CheckCircle, DollarSign, AlertTriangle, FileText } from "lucide-react";
+import { Banknote, CheckCircle, DollarSign, AlertTriangle, FileText, ShieldAlert } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { PageShell } from "@/components/page-shell";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
+import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function PropertiesPayments() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
@@ -25,6 +28,27 @@ export default function PropertiesPayments() {
   const payments = asList(paymentsResp);
   const [filters, setFilters] = useFilters();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
+  const queryClient = useQueryClient();
+  const [escalateConfirm, setEscalateConfirm] = useState(false);
+  const [escalating, setEscalating] = useState(false);
+
+  const handleEscalate = async () => {
+    if (!escalateConfirm) {
+      setEscalateConfirm(true);
+      return;
+    }
+    setEscalating(true);
+    try {
+      await apiFetch("/properties/late-rent/escalate", { method: "POST" });
+      toast({ title: "تم التصعيد بنجاح" });
+      queryClient.invalidateQueries({ queryKey: ["rent-payments"] });
+    } catch {
+      toast({ title: "فشل التصعيد", variant: "destructive" });
+    } finally {
+      setEscalating(false);
+      setEscalateConfirm(false);
+    }
+  };
 
   if (isLoading) return <PageShell title="المدفوعات" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المدفوعات" }]}><LoadingSpinner /></PageShell>;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -78,11 +102,23 @@ export default function PropertiesPayments() {
       subtitle="متابعة وتسجيل مدفوعات الإيجار"
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المدفوعات" }]}
       actions={canManage && (
-        <Link href="/properties/payments/new/pay">
-          <Button className="gap-2">
-            <Banknote className="h-4 w-4" /> تسجيل دفعة
+        <div className="flex items-center gap-2">
+          <Button
+            variant={escalateConfirm ? "destructive" : "outline"}
+            className="gap-2"
+            onClick={handleEscalate}
+            disabled={escalating}
+            onBlur={() => setEscalateConfirm(false)}
+          >
+            <ShieldAlert className="h-4 w-4" />
+            {escalateConfirm ? "تأكيد التصعيد" : "تصعيد متأخرات"}
           </Button>
-        </Link>
+          <Link href="/properties/payments/new/pay">
+            <Button className="gap-2">
+              <Banknote className="h-4 w-4" /> تسجيل دفعة
+            </Button>
+          </Link>
+        </div>
       )}
     >
       <PropertyTabsNav />

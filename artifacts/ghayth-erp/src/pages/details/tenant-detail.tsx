@@ -25,6 +25,7 @@ const TABS = [
   { key: "contracts", label: "العقود", icon: FileText },
   { key: "payments", label: "المدفوعات", icon: Banknote },
   { key: "finance", label: "الملف المالي", icon: BookOpen },
+  { key: "letters", label: "المراسلات", icon: Mail },
   { key: "documents", label: "المستندات", icon: CreditCard },
   { key: "timeline", label: "السجل الزمني", icon: Clock },
 ] as const;
@@ -299,6 +300,8 @@ export default function TenantDetail() {
         </div>
       )}
 
+      {activeTab === "letters" && <TenantLettersTab tenantId={id!} />}
+
       {activeTab === "documents" && (
         !isNaN(Number(id)) && Number(id) > 0
           ? (
@@ -316,5 +319,48 @@ export default function TenantDetail() {
           : <div className="text-center py-8 text-gray-400 text-sm">السجل الزمني غير متاح لمستأجري العقود القديمة</div>
       )}
     </PageShell>
+  );
+}
+
+function TenantLettersTab({ tenantId }: { tenantId: string }) {
+  const { data: lettersResp, isLoading } = useApiQuery<any>(
+    ["tenant-letters", tenantId],
+    `/letters?relatedType=tenant&relatedId=${tenantId}`,
+    !!tenantId
+  );
+  const letters = Array.isArray(lettersResp?.data) ? lettersResp.data : Array.isArray(lettersResp) ? lettersResp : [];
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "subject", header: "الموضوع", render: (l) => l.subject || "—" },
+    { key: "direction", header: "الاتجاه", render: (l) => l.direction === "outgoing" ? "صادر" : "وارد" },
+    { key: "type", header: "النوع", render: (l) => l.type || "—" },
+    { key: "letterDate", header: "التاريخ", render: (l) => formatDateAr(l.letterDate) },
+    { key: "status", header: "الحالة", render: (l) => <PageStatusBadge status={l.status} /> },
+  ];
+
+  if (isLoading) return <LoadingSpinner />;
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base flex items-center gap-2"><Mail className="h-4 w-4" /> المراسلات ({letters.length})</CardTitle>
+        <Link href={`/communications/letters/create?relatedType=tenant&relatedId=${tenantId}`}>
+          <Button size="sm" className="gap-1"><Mail className="h-3 w-3" /> خطاب جديد</Button>
+        </Link>
+      </CardHeader>
+      <CardContent className="p-0">
+        {letters.length === 0 ? (
+          <p className="text-center text-gray-400 py-8">لا توجد مراسلات</p>
+        ) : (
+          <DataTable<any>
+            columns={columns}
+            data={letters}
+            noToolbar
+            pageSize={0}
+            searchPlaceholder={null}
+          />
+        )}
+      </CardContent>
+    </Card>
   );
 }
