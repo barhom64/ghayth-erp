@@ -69,6 +69,92 @@ const executePaymentRunSchema = z.object({
   bankAccount: z.string().optional(),
 });
 
+// Impact preview — shows what will happen when the purchase request is created
+purchaseRouter.post("/purchase-requests/impact-preview", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { supplierId, items = [], costCenter } = req.body as any;
+
+    let supplierName = "";
+    let outstanding = 0;
+    if (supplierId) {
+      const [supplier] = await rawQuery<any>(
+        `SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+        [Number(supplierId), scope.companyId]
+      );
+      supplierName = supplier?.name || "";
+      const [row] = await rawQuery<any>(
+        `SELECT COALESCE(SUM(total - COALESCE("paidAmount",0)),0)::numeric AS outstanding
+         FROM purchase_orders
+         WHERE "supplierId" = $1 AND "companyId" = $2
+           AND status NOT IN ('paid','cancelled','completed')`,
+        [Number(supplierId), scope.companyId]
+      );
+      outstanding = Number(row?.outstanding || 0);
+    }
+
+    const totalAmount = (Array.isArray(items) ? items : []).reduce(
+      (sum: number, l: any) => sum + Number(l?.quantity || 0) * Number(l?.unitPrice || 0),
+      0
+    );
+
+    const impactItems: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
+
+    impactItems.push({
+      category: "مالي",
+      label: "الالتزام المالي",
+      value: `${totalAmount.toLocaleString("ar-SA")} ر.س${supplierName ? ` للمورد ${supplierName}` : ""}`,
+      severity: "info",
+    });
+
+    impactItems.push({
+      category: "مسار الاعتماد",
+      label: "الموافقات المطلوبة",
+      value: totalAmount >= 50000
+        ? "اعتماد مالي + مدير عام (مبلغ كبير)"
+        : totalAmount >= 5000
+        ? "اعتماد مالي"
+        : "اعتماد مباشر من المدير",
+      severity: totalAmount >= 50000 ? "warning" : "info",
+    });
+
+    if (outstanding > 0) {
+      impactItems.push({
+        category: "المورد",
+        label: "التزامات قائمة",
+        value: `${outstanding.toLocaleString("ar-SA")} ر.س مستحق للمورد قبل هذا الطلب`,
+        severity: outstanding > totalAmount * 5 ? "warning" : "info",
+      });
+    }
+
+    if (costCenter) {
+      impactItems.push({
+        category: "الميزانية",
+        label: "مركز التكلفة",
+        value: `سيتم خصم المبلغ من ميزانية ${costCenter}`,
+        severity: "info",
+      });
+    }
+
+    impactItems.push({
+      category: "ما بعد الاعتماد",
+      label: "أمر شراء",
+      value: "سيتم إنشاء أمر شراء تلقائياً بعد اعتماد الطلب",
+      severity: "info",
+    });
+
+    res.json({
+      actionType: "create_purchase_request",
+      employeeId: 0,
+      employeeName: supplierName,
+      items: impactItems,
+      summary: `طلب شراء بقيمة ${totalAmount.toLocaleString("ar-SA")} ر.س جاهز للتقديم`,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة أثر الطلب");
+  }
+});
+
 purchaseRouter.get("/purchase-requests", async (req, res) => {
   try {
     const scope = req.scope!;

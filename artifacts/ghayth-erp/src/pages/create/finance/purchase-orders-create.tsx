@@ -18,6 +18,7 @@ import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
 
@@ -186,6 +187,21 @@ export default function PurchaseOrdersCreate() {
       <div className="bg-muted/50 p-4 rounded-md text-sm">
         <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(totalAmount)}</span></div>
       </div>
+
+      {form.supplierId && totalAmount > 0 && (
+        <ImpactPreviewButton
+          endpoint="/finance/purchase-requests/impact-preview"
+          payload={{
+            supplierId: Number(form.supplierId),
+            costCenter: form.costCenter || undefined,
+            items: items.map((i) => ({
+              quantity: Number(i.quantity || 0),
+              unitPrice: Number(i.unitPrice || 0),
+            })),
+          }}
+          label="معاينة أثر الطلب"
+        />
+      )}
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
