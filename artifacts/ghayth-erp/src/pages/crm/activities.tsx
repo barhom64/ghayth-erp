@@ -1,11 +1,12 @@
 import { useMemo } from "react";
 import { formatDateAr } from "@/lib/formatters";
+import { PageShell } from "@/components/page-shell";
+import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Calendar, CheckCircle2, Clock, type LucideIcon } from "lucide-react";
+import { Phone, Calendar, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -68,9 +69,11 @@ export default function CrmActivities() {
   ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">أنشطة إدارة العملاء</h1>
-
+    <PageShell
+      title="أنشطة إدارة العملاء"
+      breadcrumbs={[{ href: "/crm", label: "إدارة العملاء" }]}
+    >
+      <CrmTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => {
           const Icon = c.icon;
@@ -96,6 +99,6 @@ export default function CrmActivities() {
         searchPlaceholder="بحث في الأنشطة..."
         emptyMessage="لا توجد أنشطة"
       />
-    </div>
+    </PageShell>
   );
 }

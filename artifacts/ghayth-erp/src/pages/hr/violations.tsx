@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { PageShell } from "@/components/page-shell";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -142,6 +143,7 @@ export default function ViolationsPage() {
         </div>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <Tabs value={activeTab} onValueChange={setTab} dir="rtl" className="space-y-4">

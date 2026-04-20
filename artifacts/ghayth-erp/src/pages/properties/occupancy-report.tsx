@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { Building2, Home, Wrench, TrendingUp, DollarSign } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
@@ -74,6 +75,7 @@ export default function OccupancyReportPage() {
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "تقرير الإشغال العقاري" }]}
       loading={isLoading}
     >
+      <PropertyTabsNav />
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="border-2 border-primary/20">
           <CardContent className="pt-4 text-center">

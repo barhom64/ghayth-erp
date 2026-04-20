@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 // Phase A — HR training on unified primitives.
 import { PageShell } from "@/components/page-shell";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, GraduationCap, Users, BookOpen, Award } from "lucide-react";
@@ -115,6 +116,7 @@ export default function TrainingPage() {
         </Link>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <AdvancedFilters

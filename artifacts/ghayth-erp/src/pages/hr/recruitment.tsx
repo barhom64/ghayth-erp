@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 // Phase A — HR recruitment on unified primitives.
 import { PageShell } from "@/components/page-shell";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Briefcase, Users, UserCheck, FileText } from "lucide-react";
@@ -161,6 +162,7 @@ export default function RecruitmentPage() {
       subtitle="إدارة الوظائف المفتوحة وطلبات التوظيف"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">

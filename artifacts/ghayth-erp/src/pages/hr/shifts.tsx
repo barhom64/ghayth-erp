@@ -13,6 +13,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { PageShell } from "@/components/page-shell";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function ShiftsPage() {
@@ -77,6 +78,7 @@ export default function ShiftsPage() {
         </Link>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <BulkActionsBar

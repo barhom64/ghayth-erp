@@ -352,7 +352,7 @@ export async function scanObligations(): Promise<{
  */
 export interface QueryObligationsInput {
   companyId: number;
-  entityType?: string;
+  entityType?: string | string[];
   entityId?: number;
   status?: ObligationStatus | ObligationStatus[];
   assignedTo?: number;
@@ -365,7 +365,18 @@ export async function queryObligations(input: QueryObligationsInput): Promise<an
   await ensureObligationsTable();
   const params: any[] = [input.companyId];
   let where = `"companyId" = $1`;
-  if (input.entityType) { params.push(input.entityType); where += ` AND "entityType"=$${params.length}`; }
+  if (input.entityType) {
+    const types = Array.isArray(input.entityType)
+      ? input.entityType
+      : String(input.entityType).split(",").map((s) => s.trim()).filter(Boolean);
+    if (types.length === 1) {
+      params.push(types[0]);
+      where += ` AND "entityType"=$${params.length}`;
+    } else if (types.length > 1) {
+      params.push(types);
+      where += ` AND "entityType" = ANY($${params.length}::text[])`;
+    }
+  }
   if (input.entityId) { params.push(input.entityId); where += ` AND "entityId"=$${params.length}`; }
   if (input.status) {
     const statuses = Array.isArray(input.status) ? input.status : [input.status];

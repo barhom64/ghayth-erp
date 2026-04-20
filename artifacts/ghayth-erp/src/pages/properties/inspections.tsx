@@ -12,6 +12,7 @@ import { ClipboardList, Plus, CheckCircle, Clock, Star } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -80,6 +81,7 @@ export default function InspectionsPage() {
         </Button>
       }
     >
+      <PropertyTabsNav />
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">جدولة فحص جديد</CardTitle></CardHeader>

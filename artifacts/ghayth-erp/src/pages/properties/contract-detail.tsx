@@ -191,7 +191,7 @@ export default function ContractDetailPage() {
       icon: FolderOpen,
       content: () => (
         <div className="space-y-4">
-          <EntityObligations entityType="contract" entityId={id} hideWhenEmpty />
+          <EntityObligations entityType="rental_contract" entityId={id} hideWhenEmpty />
           <EntityDocuments entityType="contract" entityId={id} />
         </div>
       ),

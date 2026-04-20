@@ -141,17 +141,13 @@ function RequestCatalog() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">مركز الطلبات</h1>
-          <p className="text-sm text-gray-500 mt-1">اختر نوع الطلب للتقديم مباشرة</p>
-        </div>
-        {data?.jobTitle && (
+      {data?.jobTitle && (
+        <div className="flex items-center justify-end">
           <Badge variant="outline" className="text-sm">
             {data.jobTitle}
           </Badge>
-        )}
-      </div>
+        </div>
+      )}
       {Object.entries(grouped).map(([category, items]) => (
         <div key={category}>
           <h4 className="text-sm font-semibold text-gray-500 mb-3">

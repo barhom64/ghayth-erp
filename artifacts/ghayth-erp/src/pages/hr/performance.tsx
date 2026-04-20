@@ -5,6 +5,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 // Phase A — HR performance on unified primitives.
 import { PageShell } from "@/components/page-shell";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, Star, Target, TrendingUp, Users, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,7 @@ export default function PerformancePage() {
         </Link>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <AdvancedFilters

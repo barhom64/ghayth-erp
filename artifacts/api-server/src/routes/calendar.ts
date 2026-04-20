@@ -27,6 +27,8 @@ calendarRouter.get("/upcoming", async (req, res) => {
       empDocs,
       vehicleExpiries,
       propertyInsurance,
+      leaves,
+      interviews,
     ] = await Promise.all([
       safe(() => rawQuery<any>(
         `SELECT pm.id, pm.title, pm."dueDate" as "date", pm.status, p.name as "projectName", p.id as "projectId"
@@ -102,6 +104,31 @@ calendarRouter.get("/upcoming", async (req, res) => {
          WHERE "companyId" = $1 AND "insuranceExpiry" BETWEEN $2 AND $3
          ORDER BY "insuranceExpiry" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
+      safe(() => rawQuery<any>(
+        `SELECT lr.id, lr."startDate" as "date", lr."endDate", lr.status, lr.days,
+                lr."employeeId", e."firstName" || ' ' || e."lastName" as "employeeName",
+                lt.name as "leaveTypeName"
+         FROM hr_leave_requests lr
+         JOIN employees e ON e.id = lr."employeeId"
+         LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+         WHERE lr."companyId" = $1
+           AND lr.status IN ('approved','pending')
+           AND lr."startDate" BETWEEN $2 AND $3
+         ORDER BY lr."startDate" LIMIT 50`,
+        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
+      safe(() => rawQuery<any>(
+        `SELECT a.id, a."interviewDate" as "date", a.name as "candidateName",
+                a.status, jp.title as "jobTitle", a."postingId"
+         FROM job_applications a
+         LEFT JOIN job_postings jp ON jp.id = a."postingId"
+         WHERE (jp."companyId" = $1 OR jp."companyId" IS NULL)
+           AND a."interviewDate" IS NOT NULL
+           AND a."interviewDate" BETWEEN $2 AND $3
+           AND a."deletedAt" IS NULL
+         ORDER BY a."interviewDate" LIMIT 30`,
+        [cid, now, cutoff]
       ), []),
     ]);
 
@@ -187,6 +214,22 @@ calendarRouter.get("/upcoming", async (req, res) => {
       link: `/properties/units/${pu.id}`,
     }));
 
+    leaves.forEach((lv: any) => events.push({
+      id: `leave-${lv.id}`, date: lv.date,
+      title: `إجازة: ${lv.employeeName}`,
+      category: "leave", status: lv.status,
+      context: `${lv.leaveTypeName || "إجازة"} · ${lv.days || 1} يوم`,
+      link: `/hr/leaves`,
+    }));
+
+    interviews.forEach((iv: any) => events.push({
+      id: `interview-${iv.id}`, date: iv.date,
+      title: `مقابلة: ${iv.candidateName}`,
+      category: "interview", status: iv.status,
+      context: iv.jobTitle || "",
+      link: iv.postingId ? `/hr/recruitment/${iv.postingId}` : "/hr/recruitment",
+    }));
+
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const summary = {
@@ -199,6 +242,8 @@ calendarRouter.get("/upcoming", async (req, res) => {
       documentExpiries: empDocs.length,
       vehicleExpiries: vehicleEvents.length,
       insuranceExpiries: propertyInsurance.length,
+      leaves: leaves.length,
+      interviews: interviews.length,
     };
 
     res.json({ events, summary });

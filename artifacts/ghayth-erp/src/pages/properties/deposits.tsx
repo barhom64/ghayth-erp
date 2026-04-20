@@ -12,6 +12,7 @@ import { Vault, Plus, RotateCcw, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function DepositsPage() {
@@ -71,6 +72,7 @@ export default function DepositsPage() {
         </Button>
       }
     >
+      <PropertyTabsNav />
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{deposits.length}</div><div className="text-xs text-gray-500">إجمالي الودائع</div></CardContent></Card>
         <Card className="border-blue-200 bg-blue-50/30">
