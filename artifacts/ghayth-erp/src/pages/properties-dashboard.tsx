@@ -12,6 +12,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 
 export default function PropertiesDashboard() {
   const { scopeQueryString } = useAppContext();
@@ -114,6 +115,7 @@ export default function PropertiesDashboard() {
         </div>
       }
     >
+      <PropertyTabsNav />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-0">

@@ -9,6 +9,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 
 export default function PropertiesOwners() {
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
@@ -130,6 +131,7 @@ export default function PropertiesOwners() {
         </Link>
       )}
     >
+      <PropertyTabsNav />
       <AdvancedFilters
         config={{ searchPlaceholder: "بحث بالاسم أو الهاتف أو رقم الهوية...", showDateRange: false }}
         values={filters}
