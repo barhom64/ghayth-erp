@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import {
@@ -300,7 +301,12 @@ export default function TenantDetail() {
 
       {activeTab === "documents" && (
         !isNaN(Number(id)) && Number(id) > 0
-          ? <EntityDocuments entityType="tenant" entityId={Number(id)} />
+          ? (
+            <div className="space-y-4">
+              <EntityObligations entityType="tenant" entityId={Number(id)} hideWhenEmpty />
+              <EntityDocuments entityType="tenant" entityId={Number(id)} />
+            </div>
+          )
           : <div className="text-center py-8 text-gray-400 text-sm">المستندات غير متاحة لمستأجري العقود القديمة</div>
       )}
 
