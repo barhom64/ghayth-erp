@@ -398,7 +398,20 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
     const id = Number(req.params.id);
     const b = req.body;
 
-    let previousStatus: string | null = null;
+    const [existing] = await rawQuery<any>(
+      `SELECT id, status FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("الطلب غير موجود");
+
+    if (["closed", "rejected"].includes(existing.status) && b.status === undefined) {
+      throw new ConflictError(
+        `لا يمكن تعديل طلب في حالة "${existing.status}"`,
+        { field: "status" }
+      );
+    }
+
+    let previousStatus: string | null = existing.status;
     let patchIsOverride = false;
     if (b.status !== undefined) {
       const request = await validateRequestTransition(id, scope.companyId, b.status, scope);

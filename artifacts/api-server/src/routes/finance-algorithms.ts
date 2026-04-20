@@ -16,12 +16,12 @@ financeAlgorithmsRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-function requireFinance(scope: any, res: any): boolean {
+function assertFinanceRole(scope: any): void {
   if (!FINANCE_ROLES.includes(scope.role)) {
-    res.status(403).json({ error: "هذه العملية مخصصة لموظفي المالية فقط" });
-    return false;
+    throw new ForbiddenError("هذه العملية مخصصة لموظفي المالية فقط", {
+      fix: `الأدوار المسموحة: ${FINANCE_ROLES.join(", ")}`,
+    });
   }
-  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ financeAlgorithmsRouter.get("/ap-aging", async (req, res) => {
 financeAlgorithmsRouter.post("/bank-reconciliation/import", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
 
     const { rows, accountCode = "1120", statementDate } = req.body as any;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -299,7 +299,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", async (req, res) => 
 financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
 
     const { batchId, accountCode = "1120", toleranceDays = 3 } = req.body as any;
     if (!batchId) {
@@ -407,7 +407,7 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", async (req, res) =>
 financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
     const { bankStatementId, journalLineId } = req.body as any;
     if (!bankStatementId || !journalLineId) {
       throw new ValidationError("bankStatementId و journalLineId مطلوبان");
@@ -426,10 +426,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", async (req, re
          AND NOT EXISTS (SELECT 1 FROM bank_statements bs2 WHERE bs2."matchedJournalLineId"=jl.id)`,
       [journalLineId, scope.companyId, bs.accountCode]
     );
-    if (!jl) {
-      res.status(403).json({ error: "سطر القيد غير موجود أو لا يتبع نفس الشركة/الحساب أو تمت مطابقته" });
-      return;
-    }
+    if (!jl) throw new NotFoundError("سطر القيد غير موجود أو لا يتبع نفس الشركة/الحساب أو تمت مطابقته");
 
     await rawExecute(
       `UPDATE bank_statements SET "matchStatus"='matched', "matchedJournalLineId"=$1 WHERE id=$2`,
@@ -518,7 +515,7 @@ financeAlgorithmsRouter.get("/fixed-assets", async (req, res) => {
 financeAlgorithmsRouter.post("/fixed-assets", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
     const b = req.body as any;
     if (!b.name || !b.purchaseCost || !b.purchaseDate) {
       throw new ValidationError("الاسم والتكلفة وتاريخ الشراء مطلوبة");
@@ -572,7 +569,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id", async (req, res) => {
 financeAlgorithmsRouter.patch("/fixed-assets/:id", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
     const id = Number(req.params.id);
     const b = req.body as any;
     const sets: string[] = [`"updatedAt"=NOW()`];
@@ -726,7 +723,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", async (req, res) => {
 financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
     const id = Number(req.params.id);
     const { period, unitsThisPeriod } = req.body as any;
     if (!period) {
@@ -809,7 +806,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) =>
 financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
     const { period } = req.body as any;
     if (!period) {
       throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
@@ -990,7 +987,7 @@ financeAlgorithmsRouter.get("/rounding-account", async (req, res) => {
 financeAlgorithmsRouter.post("/rounding-account/setup", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999'`,
@@ -1016,7 +1013,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", async (req, res) => {
 financeAlgorithmsRouter.post("/rounding-differences/apply", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
 
     const { journalEntryId, roundingAmount, description } = req.body as any;
     if (!journalEntryId || Math.abs(Number(roundingAmount ?? 0)) === 0) {
@@ -1039,10 +1036,7 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", async (req, res) => 
       `SELECT id FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [journalEntryId, scope.companyId]
     );
-    if (!je) {
-      res.status(403).json({ error: "القيد اليومي غير موجود أو لا يتبع هذه الشركة" });
-      return;
-    }
+    if (!je) throw new NotFoundError("القيد اليومي غير موجود أو لا يتبع هذه الشركة");
 
     await rawExecute(
       `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description)
@@ -1131,7 +1125,7 @@ financeAlgorithmsRouter.get("/fx/rates", async (req, res) => {
 financeAlgorithmsRouter.post("/fx/rates", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
     const { rateDate, fromCurrency, toCurrency = "SAR", rate, type = "spot" } = req.body as any;
     if (!rateDate || !fromCurrency || !rate || Number(rate) <= 0) {
       throw new ValidationError("rateDate / fromCurrency / rate مطلوبة", { field: "rate", fix: "أدخل قيمة موجبة للسعر والعملة والتاريخ" });
@@ -1155,7 +1149,7 @@ financeAlgorithmsRouter.post("/fx/rates", async (req, res) => {
 financeAlgorithmsRouter.get("/fx/revaluation/preview", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
     const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
@@ -1279,7 +1273,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", async (req, res) => {
 financeAlgorithmsRouter.post("/fx/revaluation/post", async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!requireFinance(scope, res)) return;
+    assertFinanceRole(scope);
     const period = (req.body?.period as string) ?? new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
@@ -1558,10 +1552,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as { entityType: string; entityId: string };
-    if (!entityType || !entityId) {
-      res.status(400).json({ error: "entityType و entityId مطلوبان" });
-      return;
-    }
+    if (!entityType || !entityId) throw new ValidationError("entityType و entityId مطلوبان");
     const eid = Number(entityId);
     const cid = scope.companyId;
 
@@ -1578,10 +1569,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
     };
     const safeCol = safeColumns[entityType];
 
-    if (!safeCol) {
-      res.status(400).json({ error: "نوع الكيان غير مدعوم" });
-      return;
-    }
+    if (!safeCol) throw new ValidationError("نوع الكيان غير مدعوم", { field: "entityType" });
 
     const [subsidiaryAccounts, transactions, costBreakdown, totalSummary] = await Promise.all([
       rawQuery<any>(

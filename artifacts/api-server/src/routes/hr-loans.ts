@@ -466,7 +466,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans/my — سلف الموظف الحالي (Self-Service)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans/my", async (req, res) => {
+router.get("/loans/my", requirePermission("hr:read"), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;

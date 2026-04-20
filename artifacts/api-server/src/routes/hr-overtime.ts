@@ -401,7 +401,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/my — طلباتي (Self-Service)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/my", async (req, res) => {
+router.get("/overtime/my", requirePermission("hr:read"), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
