@@ -14,6 +14,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 
 export default function Warehouse() {
   const [tab, setTab] = useState("products");
@@ -39,6 +40,7 @@ export default function Warehouse() {
         </div>
       }
     >
+      <WarehouseTabsNav />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="products" className="gap-2"><Package className="h-4 w-4" /> المنتجات</TabsTrigger>

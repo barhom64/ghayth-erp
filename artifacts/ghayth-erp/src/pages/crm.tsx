@@ -18,6 +18,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
 
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
@@ -36,6 +37,7 @@ export default function CRM() {
       subtitle="متابعة فرص البيع وخط الأنابيب"
       breadcrumbs={[{ label: "المبيعات والعملاء" }]}
     >
+      <CrmTabsNav />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="opportunities" className="gap-2"><Target className="h-4 w-4" /> الفرص</TabsTrigger>

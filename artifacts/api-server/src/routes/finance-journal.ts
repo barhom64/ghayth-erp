@@ -117,6 +117,110 @@ journalRouter.get("/expenses", async (req, res) => {
   }
 });
 
+// Impact preview — shows what will happen when the expense is created
+journalRouter.post("/expenses/impact-preview", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId } = req.body as any;
+    const amt = Number(amount || 0);
+
+    const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
+
+    items.push({
+      category: "مالي",
+      label: "المبلغ",
+      value: `${amt.toLocaleString("ar-SA")} ر.س ${expenseType ? `(${expenseType})` : ""}`.trim(),
+      severity: "info",
+    });
+
+    items.push({
+      category: "محاسبي",
+      label: "قيد مصروف",
+      value: paymentMethod === "cash"
+        ? `مدين حساب المصروف ${amt.toLocaleString("ar-SA")} / دائن النقدية`
+        : paymentMethod === "bank"
+        ? `مدين حساب المصروف ${amt.toLocaleString("ar-SA")} / دائن البنك`
+        : `مدين حساب المصروف ${amt.toLocaleString("ar-SA")} / دائن الذمم الدائنة`,
+      severity: "info",
+    });
+
+    if (costCenter) {
+      const [budget] = await rawQuery<any>(
+        `SELECT name, "allocatedAmount", "usedAmount"
+         FROM cost_centers WHERE name = $1 AND "companyId" = $2 LIMIT 1`,
+        [costCenter, scope.companyId]
+      );
+      if (budget) {
+        const allocated = Number(budget.allocatedAmount || 0);
+        const used = Number(budget.usedAmount || 0);
+        const remaining = allocated - used;
+        const afterThis = remaining - amt;
+        items.push({
+          category: "الميزانية",
+          label: `مركز تكلفة ${budget.name}`,
+          value: `المتاح ${remaining.toLocaleString("ar-SA")} — بعد هذا المصروف ${afterThis.toLocaleString("ar-SA")} ر.س`,
+          severity: afterThis < 0 ? "danger" : afterThis < allocated * 0.1 ? "warning" : "info",
+        });
+        if (afterThis < 0) {
+          items.push({
+            category: "الميزانية",
+            label: "تجاوز ميزانية",
+            value: `سيتم تجاوز ميزانية مركز التكلفة بـ ${Math.abs(afterThis).toLocaleString("ar-SA")} ر.س — يتطلب اعتماد إضافي`,
+            severity: "danger",
+          });
+        }
+      }
+    }
+
+    if (amt >= 10000) {
+      items.push({
+        category: "مسار الاعتماد",
+        label: "الموافقات",
+        value: amt >= 50000 ? "مدير عام + مدير مالي" : "مدير مالي",
+        severity: amt >= 50000 ? "warning" : "info",
+      });
+    }
+
+    if (supplierId) {
+      const [supplier] = await rawQuery<any>(
+        `SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+        [Number(supplierId), scope.companyId]
+      );
+      if (supplier) {
+        items.push({
+          category: "المورد",
+          label: "إضافة دفعة",
+          value: `ستُسجل كـ "مستحقة" على حساب ${supplier.name} إذا لم تكن نقدية`,
+          severity: "info",
+        });
+      }
+    }
+
+    items.push({
+      category: "تقارير",
+      label: "تقارير الأداء",
+      value: "سيظهر المصروف في التقارير المالية وتحليل المصروفات",
+      severity: "info",
+    });
+
+    const hasDanger = items.some((i) => i.severity === "danger");
+    const hasWarning = items.some((i) => i.severity === "warning");
+    res.json({
+      actionType: "create_expense",
+      employeeId: 0,
+      employeeName: "",
+      items,
+      summary: hasDanger
+        ? "مصروف يتجاوز الميزانية — مطلوب اعتماد إضافي"
+        : hasWarning
+        ? `مصروف ${amt.toLocaleString("ar-SA")} ر.س — راجع الاعتمادات`
+        : `مصروف ${amt.toLocaleString("ar-SA")} ر.س جاهز للتسجيل`,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة أثر المصروف");
+  }
+});
+
 journalRouter.post("/expenses", async (req, res) => {
   try {
     const scope = req.scope!;
