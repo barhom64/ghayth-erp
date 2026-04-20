@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { EntityObligations } from "@/components/shared/entity-obligations";
 
 
 const STEP_IMPACTS: Record<string, { icon: string; title: string; description: string; severity: "info" | "warning" | "danger" | "success" }> = {
@@ -434,6 +435,7 @@ export default function LegalCaseDetail() {
         <div className="space-y-4">
           <StepImpactPanel caseStatus={caseData.status} />
           <RiskPanel caseData={caseData} sessions={sessions} />
+          {id && <EntityObligations entityType="legal_case" entityId={Number(id)} hideWhenEmpty />}
           <Card>
             <CardHeader><CardTitle className="text-sm">سجل الأحداث</CardTitle></CardHeader>
             <CardContent>
