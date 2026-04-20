@@ -19,11 +19,11 @@ const createTicketSchema = z.object({
   title: z.string().optional(),
   subject: z.string().min(1, "موضوع التذكرة مطلوب"),
   description: z.string().min(1, "وصف المشكلة مطلوب"),
-  clientId: z.number().optional(),
+  clientId: z.coerce.number().optional(),
   category: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   slaDeadline: z.string().optional(),
-  assigneeId: z.number().optional(),
+  assigneeId: z.coerce.number().optional(),
 });
 
 const createReplySchema = z.object({
@@ -33,7 +33,7 @@ const createReplySchema = z.object({
 });
 
 const createCSATSchema = z.object({
-  score: z.number().min(1).max(5, "التقييم يجب أن يكون بين 1 و 5"),
+  score: z.coerce.number().min(1).max(5, "التقييم يجب أن يكون بين 1 و 5"),
   comment: z.string().optional(),
 });
 

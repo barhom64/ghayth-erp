@@ -73,12 +73,12 @@ const calcHourlyRate = calcHourlyRateHelper;
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
 const createOvertimeSchema = z.object({
-  assignmentId: z.number({ message: "يرجى اختيار الموظف" }),
+  assignmentId: z.coerce.number({ message: "يرجى اختيار الموظف" }),
   overtimeDate: z.string().min(1, "تاريخ الوقت الإضافي مطلوب"),
   startTime: z.string().min(1, "وقت البداية مطلوب"),
   endTime: z.string().min(1, "وقت النهاية مطلوب"),
-  hours: z.number({ message: "عدد الساعات مطلوب" }).positive("عدد الساعات يجب أن يكون أكبر من صفر").max(12, "لا يمكن تسجيل أكثر من 12 ساعة إضافية في اليوم"),
-  multiplier: z.number().optional(),
+  hours: z.coerce.number({ message: "عدد الساعات مطلوب" }).positive("عدد الساعات يجب أن يكون أكبر من صفر").max(12, "لا يمكن تسجيل أكثر من 12 ساعة إضافية في اليوم"),
+  multiplier: z.coerce.number().optional(),
   reason: z.string().optional(),
 });
 

@@ -8,6 +8,7 @@ import { AppProvider, useAppContext } from "@/contexts/app-context";
 import { SettingsProvider } from "@/contexts/settings-context";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { PageErrorBoundary } from "@/components/page-error-boundary";
 import type { ModuleType } from "@/contexts/app-context";
 
 import { hrRoutes } from "@/routes/hrRoutes";
@@ -89,7 +90,11 @@ function ModuleRoute({ Component, module, subKey, minRoleLevel }: { Component: R
     (minRoleLevel !== undefined && roleLevel < minRoleLevel);
 
   if (blocked) return <AccessDenied />;
-  return <Component />;
+  return (
+    <PageErrorBoundary>
+      <Component />
+    </PageErrorBoundary>
+  );
 }
 
 function ProtectedRoutes() {

@@ -23,8 +23,8 @@ const portalCreateTicketSchema = z.object({
   description: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
   priority: z.string().optional(),
-  invoiceId: z.number().optional().nullable(),
-  contractId: z.number().optional().nullable(),
+  invoiceId: z.coerce.number().optional().nullable(),
+  contractId: z.coerce.number().optional().nullable(),
 });
 
 const portalChangePasswordSchema = z.object({

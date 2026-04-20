@@ -26,6 +26,7 @@ export default function RequestsItemCreate() {
   const handleSubmit = () => {
     const firstError = validate({
       title: form.title ? null : "يرجى إدخال عنوان الطلب",
+      description: form.description ? null : "يرجى إدخال وصف الطلب",
     });
     if (firstError) {
       toast({ variant: "destructive", title: firstError });

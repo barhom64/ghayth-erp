@@ -30,7 +30,7 @@ const createRoutingRuleSchema = z.object({
   channels: z.array(z.string().min(1)),
   priority: z.string().optional(),
   description: z.string().optional(),
-  fallbackChainId: z.number().nullable().optional(),
+  fallbackChainId: z.coerce.number().nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -38,7 +38,7 @@ const updateRoutingRuleSchema = z.object({
   channels: z.array(z.string().min(1)).optional(),
   priority: z.string().optional(),
   description: z.string().optional(),
-  fallbackChainId: z.number().nullable().optional(),
+  fallbackChainId: z.coerce.number().nullable().optional(),
   isActive: z.boolean().optional(),
 });
 

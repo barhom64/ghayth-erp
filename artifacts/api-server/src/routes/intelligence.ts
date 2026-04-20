@@ -35,7 +35,7 @@ const aiTranslateSchema = z.object({
 
 const aiSummarizeSchema = z.object({
   content: z.string().min(1),
-  maxLength: z.number().optional(),
+  maxLength: z.coerce.number().optional(),
 });
 
 const aiEvaluateRulesSchema = z.object({
@@ -47,32 +47,32 @@ const aiEvaluateRulesSchema = z.object({
 const aiForecastSchema = z.object({
   metricName: z.string().min(1),
   historicalData: z.any(),
-  forecastPeriods: z.number().optional(),
+  forecastPeriods: z.coerce.number().optional(),
 });
 
 const haversineSchema = z.object({
-  lat1: z.number(),
-  lon1: z.number(),
-  lat2: z.number(),
-  lon2: z.number(),
+  lat1: z.coerce.number(),
+  lon1: z.coerce.number(),
+  lat2: z.coerce.number(),
+  lon2: z.coerce.number(),
 });
 
 const movingAverageSchema = z.object({
-  values: z.array(z.number()),
-  periods: z.number(),
+  values: z.array(z.coerce.number()),
+  periods: z.coerce.number(),
 });
 
 const loadBalanceSchema = z.object({
   resources: z.array(z.any()),
-  targetLat: z.number().optional(),
-  targetLon: z.number().optional(),
-  maxWorkload: z.number().optional(),
+  targetLat: z.coerce.number().optional(),
+  targetLon: z.coerce.number().optional(),
+  maxWorkload: z.coerce.number().optional(),
 });
 
 const smartAssignSchema = z.object({
   taskType: z.string().optional(),
-  targetLat: z.number().optional(),
-  targetLon: z.number().optional(),
+  targetLat: z.coerce.number().optional(),
+  targetLon: z.coerce.number().optional(),
   requiredSpecialty: z.string().optional(),
   taskTitle: z.string().optional(),
 });

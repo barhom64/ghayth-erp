@@ -17,7 +17,7 @@ const createUserSchema = z.object({
   email: z.string().min(1, "البريد الإلكتروني مطلوب"),
   role: z.string().optional(),
   password: z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").optional(),
-  employeeId: z.number().optional(),
+  employeeId: z.coerce.number().optional(),
 });
 
 const resetPasswordSchema = z.object({

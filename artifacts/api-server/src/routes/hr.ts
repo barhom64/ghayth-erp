@@ -37,14 +37,14 @@ import { z } from "zod";
 // ── Zod request-body schemas ──
 
 const checkInSchema = z.object({
-  lat: z.number().optional(),
-  lon: z.number().optional(),
+  lat: z.coerce.number().optional(),
+  lon: z.coerce.number().optional(),
   notes: z.string().optional(),
   workType: z.string().optional(),
 });
 
 const leaveRequestSchema = z.object({
-  leaveTypeId: z.number().optional(),
+  leaveTypeId: z.coerce.number().optional(),
   leaveType: z.string().optional(),
   startDate: z.string().min(1, "تاريخ البداية مطلوب"),
   endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
@@ -53,14 +53,14 @@ const leaveRequestSchema = z.object({
 });
 
 const violationSchema = z.object({
-  assignmentId: z.number({ required_error: "يرجى اختيار الموظف" }),
+  assignmentId: z.coerce.number({ required_error: "يرجى اختيار الموظف" }),
   type: z.string().min(1, "نوع المخالفة مطلوب"),
   description: z.string().min(1, "وصف المخالفة مطلوب"),
   severity: z.enum(["minor", "major", "critical"]).optional(),
-  deduction: z.number().optional(),
+  deduction: z.coerce.number().optional(),
   period: z.string().optional(),
   incidentDate: z.string().optional(),
-  regulationId: z.number().optional(),
+  regulationId: z.coerce.number().optional(),
 });
 
 const shiftSchema = z.object({
@@ -78,10 +78,10 @@ const shiftSchema = z.object({
 });
 
 const performanceSchema = z.object({
-  employeeId: z.number().optional(),
-  assignmentId: z.number().optional(),
+  employeeId: z.coerce.number().optional(),
+  assignmentId: z.coerce.number().optional(),
   period: z.string().optional(),
-  overallScore: z.number().optional(),
+  overallScore: z.coerce.number().optional(),
   scores: z.any().optional(),
   categories: z.any().optional(),
   comments: z.string().optional(),
@@ -93,31 +93,31 @@ const salaryComponentSchema = z.object({
   name: z.string().min(1, "اسم مكوّن الراتب مطلوب"),
   type: z.enum(["fixed", "percentage"]).optional(),
   category: z.enum(["allowance", "deduction", "bonus"]).optional(),
-  value: z.number().optional(),
+  value: z.coerce.number().optional(),
   taxable: z.boolean().optional(),
 });
 
 const approvalChainSchema = z.object({
   name: z.string().min(1, "اسم السلسلة مطلوب"),
   chainType: z.enum(["leaves", "purchases", "expenses", "advances", "letters", "loans", "overtime", "exit"], { required_error: "نوع السلسلة مطلوب" }),
-  minAmount: z.number().optional(),
-  maxAmount: z.number().optional(),
+  minAmount: z.coerce.number().optional(),
+  maxAmount: z.coerce.number().optional(),
   steps: z.array(z.object({
     requiredRole: z.string().optional(),
-    timeoutHours: z.number().optional(),
+    timeoutHours: z.coerce.number().optional(),
     autoApproveOnTimeout: z.boolean().optional(),
   })).optional(),
 });
 
 const shiftAssignmentSchema = z.object({
-  assignmentId: z.number({ required_error: "يرجى اختيار الموظف" }),
-  shiftId: z.number({ required_error: "يرجى اختيار الوردية" }),
+  assignmentId: z.coerce.number({ required_error: "يرجى اختيار الموظف" }),
+  shiftId: z.coerce.number({ required_error: "يرجى اختيار الوردية" }),
   startDate: z.string().min(1, "تاريخ بداية الوردية مطلوب"),
   endDate: z.string().optional(),
 });
 
 const officialLetterSchema = z.object({
-  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
   type: z.string().optional(),
   subject: z.string().min(1, "موضوع الخطاب مطلوب"),
   content: z.string().min(1, "محتوى الخطاب مطلوب"),
@@ -128,19 +128,19 @@ const publicHolidaySchema = z.object({
   name: z.string().min(1, "اسم العطلة مطلوب"),
   startDate: z.string().min(1, "تاريخ البداية مطلوب"),
   endDate: z.string().optional(),
-  year: z.number().optional(),
+  year: z.coerce.number().optional(),
   type: z.string().optional(),
   description: z.string().optional(),
   isRecurring: z.boolean().optional(),
 });
 
 const transferSchema = z.object({
-  employeeId: z.number({ required_error: "الموظف مطلوب" }),
-  toBranchId: z.number({ required_error: "الفرع المستقبل مطلوب" }),
+  employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
+  toBranchId: z.coerce.number({ required_error: "الفرع المستقبل مطلوب" }),
 });
 
 const idpSchema = z.object({
-  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
   title: z.string().optional(),
   goals: z.any().optional(),
   skills: z.any().optional(),
@@ -156,43 +156,43 @@ const companyDocumentSchema = z.object({
   issueDate: z.string().optional(),
   expiryDate: z.string().optional(),
   issuingAuthority: z.string().optional(),
-  reminderDays: z.number().optional(),
+  reminderDays: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
 
 const employeeDocumentSchema = z.object({
-  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
   documentType: z.string().min(1, "نوع الوثيقة مطلوب"),
   documentNumber: z.string().optional(),
   issueDate: z.string().optional(),
   expiryDate: z.string().optional(),
   issuingAuthority: z.string().optional(),
-  reminderDays: z.number().optional(),
+  reminderDays: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
 
 const excuseRequestSchema = z.object({
-  assignmentId: z.number().optional(),
+  assignmentId: z.coerce.number().optional(),
   excuseDate: z.string().min(1, "تاريخ الاستئذان مطلوب"),
   excuseType: z.string().min(1, "نوع الاستئذان مطلوب"),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
-  estimatedMinutes: z.number().optional(),
+  estimatedMinutes: z.coerce.number().optional(),
   reason: z.string().optional(),
 });
 
 const evaluationCycleSchema = z.object({
-  employeeId: z.number({ required_error: "الموظف مطلوب" }),
+  employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
   period: z.string().min(1, "الفترة مطلوبة"),
   notes: z.string().optional(),
   participants: z.array(z.object({
-    evaluatorId: z.number(),
+    evaluatorId: z.coerce.number(),
     evaluatorRole: z.enum(["manager", "peer"]),
   })).optional(),
 });
 
 const delegationSchema = z.object({
-  delegateId: z.number({ required_error: "يرجى اختيار المفوَّض إليه" }),
+  delegateId: z.coerce.number({ required_error: "يرجى اختيار المفوَّض إليه" }),
   scope: z.string().optional(),
   reason: z.string().min(1, "سبب التفويض مطلوب"),
   startDate: z.string().optional(),

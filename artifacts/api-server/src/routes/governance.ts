@@ -24,7 +24,7 @@ const createRiskSchema = z.object({
   impact: z.string().optional().nullable(),
   status: z.string().optional().nullable(),
   mitigationPlan: z.string().optional().nullable(),
-  assignedTo: z.number().optional().nullable(),
+  assignedTo: z.coerce.number().optional().nullable(),
 });
 
 const router = Router();

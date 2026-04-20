@@ -21,8 +21,8 @@ const createKpiSchema = z.object({
   description: z.string().optional().nullable(),
   module: z.string().min(1, "الوحدة مطلوبة"),
   formula: z.string().min(1, "الصيغة مطلوبة"),
-  target: z.number().optional().nullable(),
-  currentValue: z.number().optional().nullable(),
+  target: z.coerce.number().optional().nullable(),
+  currentValue: z.coerce.number().optional().nullable(),
   unit: z.string().optional().nullable(),
   frequency: z.string().optional(),
 });

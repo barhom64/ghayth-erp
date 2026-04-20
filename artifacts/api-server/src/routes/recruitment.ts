@@ -14,21 +14,21 @@ const createPostingSchema = z.object({
   type: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   requirements: z.string().optional().nullable(),
-  salaryMin: z.number().optional().nullable(),
-  salaryMax: z.number().optional().nullable(),
+  salaryMin: z.coerce.number().optional().nullable(),
+  salaryMax: z.coerce.number().optional().nullable(),
   status: z.enum(["open", "closed", "draft", "paused"]).default("open"),
   closingDate: z.string().optional().nullable(),
 });
 
 const createApplicationSchema = z.object({
-  postingId: z.number({ required_error: "الإعلان الوظيفي مطلوب" }),
+  postingId: z.coerce.number({ required_error: "الإعلان الوظيفي مطلوب" }),
   applicantName: z.string().min(1, "اسم المتقدم مطلوب"),
   email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
   phone: z.string().optional().nullable(),
   resumeUrl: z.string().optional().nullable(),
   status: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  rating: z.number().optional().nullable(),
+  rating: z.coerce.number().optional().nullable(),
 });
 
 const updatePostingSchema = z.object({
@@ -38,8 +38,8 @@ const updatePostingSchema = z.object({
   type: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   requirements: z.string().optional().nullable(),
-  salaryMin: z.number().optional().nullable(),
-  salaryMax: z.number().optional().nullable(),
+  salaryMin: z.coerce.number().optional().nullable(),
+  salaryMax: z.coerce.number().optional().nullable(),
   status: z.enum(["open", "closed", "draft", "paused"]).optional(),
   closingDate: z.string().optional().nullable(),
 });
@@ -47,7 +47,7 @@ const updatePostingSchema = z.object({
 const updateApplicationSchema = z.object({
   status: z.string().optional(),
   notes: z.string().optional().nullable(),
-  rating: z.number().optional().nullable(),
+  rating: z.coerce.number().optional().nullable(),
   interviewDate: z.string().optional().nullable(),
 });
 

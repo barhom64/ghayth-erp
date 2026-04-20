@@ -22,38 +22,38 @@ const STAGE_ORDER = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won
 // ── Zod validation schemas ──────────────────────────────────────────
 const createOpportunitySchema = z.object({
   title: z.string({ required_error: "عنوان الفرصة مطلوب" }).min(1, "عنوان الفرصة مطلوب"),
-  clientId: z.number({ invalid_type_error: "معرّف العميل يجب أن يكون رقماً" }).optional().nullable(),
+  clientId: z.coerce.number({ invalid_type_error: "معرّف العميل يجب أن يكون رقماً" }).optional().nullable(),
   contactName: z.string({ invalid_type_error: "اسم جهة الاتصال يجب أن يكون نصاً" }).optional().nullable(),
   contactPhone: z.string({ invalid_type_error: "رقم الهاتف يجب أن يكون نصاً" }).optional().nullable(),
   contactEmail: z.string({ invalid_type_error: "البريد الإلكتروني يجب أن يكون نصاً" }).optional().nullable(),
   source: z.string({ invalid_type_error: "المصدر يجب أن يكون نصاً" }).optional().nullable(),
   stage: z.string({ invalid_type_error: "المرحلة يجب أن تكون نصاً" }).optional(),
-  value: z.number({ invalid_type_error: "قيمة الفرصة يجب أن تكون رقماً" }).min(0, "قيمة الفرصة يجب أن تكون رقماً موجباً").optional().nullable(),
-  probability: z.number({ invalid_type_error: "الاحتمالية يجب أن تكون رقماً" }).min(0, "الاحتمالية يجب أن تكون بين 0 و 100").max(100, "الاحتمالية يجب أن تكون بين 0 و 100").optional().nullable(),
+  value: z.coerce.number({ invalid_type_error: "قيمة الفرصة يجب أن تكون رقماً" }).min(0, "قيمة الفرصة يجب أن تكون رقماً موجباً").optional().nullable(),
+  probability: z.coerce.number({ invalid_type_error: "الاحتمالية يجب أن تكون رقماً" }).min(0, "الاحتمالية يجب أن تكون بين 0 و 100").max(100, "الاحتمالية يجب أن تكون بين 0 و 100").optional().nullable(),
   expectedCloseDate: z.string({ invalid_type_error: "تاريخ الإغلاق المتوقع يجب أن يكون نصاً" }).optional().nullable(),
-  assignedTo: z.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
+  assignedTo: z.coerce.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
   notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
 });
 
 const updateOpportunitySchema = z.object({
   title: z.string({ invalid_type_error: "عنوان الفرصة يجب أن يكون نصاً" }).optional(),
-  clientId: z.number({ invalid_type_error: "معرّف العميل يجب أن يكون رقماً" }).optional().nullable(),
+  clientId: z.coerce.number({ invalid_type_error: "معرّف العميل يجب أن يكون رقماً" }).optional().nullable(),
   contactName: z.string({ invalid_type_error: "اسم جهة الاتصال يجب أن يكون نصاً" }).optional().nullable(),
   contactPhone: z.string({ invalid_type_error: "رقم الهاتف يجب أن يكون نصاً" }).optional().nullable(),
   contactEmail: z.string({ invalid_type_error: "البريد الإلكتروني يجب أن يكون نصاً" }).optional().nullable(),
   source: z.string({ invalid_type_error: "المصدر يجب أن يكون نصاً" }).optional().nullable(),
   stage: z.string({ invalid_type_error: "المرحلة يجب أن تكون نصاً" }).optional(),
   status: z.string({ invalid_type_error: "الحالة يجب أن تكون نصاً" }).optional(),
-  value: z.number({ invalid_type_error: "قيمة الفرصة يجب أن تكون رقماً" }).min(0, "قيمة الفرصة يجب أن تكون رقماً موجباً").optional().nullable(),
-  probability: z.number({ invalid_type_error: "الاحتمالية يجب أن تكون رقماً" }).min(0, "الاحتمالية يجب أن تكون بين 0 و 100").max(100, "الاحتمالية يجب أن تكون بين 0 و 100").optional().nullable(),
+  value: z.coerce.number({ invalid_type_error: "قيمة الفرصة يجب أن تكون رقماً" }).min(0, "قيمة الفرصة يجب أن تكون رقماً موجباً").optional().nullable(),
+  probability: z.coerce.number({ invalid_type_error: "الاحتمالية يجب أن تكون رقماً" }).min(0, "الاحتمالية يجب أن تكون بين 0 و 100").max(100, "الاحتمالية يجب أن تكون بين 0 و 100").optional().nullable(),
   expectedCloseDate: z.string({ invalid_type_error: "تاريخ الإغلاق المتوقع يجب أن يكون نصاً" }).optional().nullable(),
-  assignedTo: z.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
+  assignedTo: z.coerce.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
   notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
   lostReason: z.string({ invalid_type_error: "سبب الخسارة يجب أن يكون نصاً" }).optional().nullable(),
 });
 
 const convertOpportunitySchema = z.object({
-  value: z.number({ invalid_type_error: "قيمة الصفقة يجب أن تكون رقماً" }).optional(),
+  value: z.coerce.number({ invalid_type_error: "قيمة الصفقة يجب أن تكون رقماً" }).optional(),
   notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
 });
 

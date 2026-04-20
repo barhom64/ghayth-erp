@@ -32,7 +32,7 @@ const careersProfileUpdateSchema = z.object({
   dateOfBirth: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
   education: z.string().optional().nullable(),
-  experienceYears: z.number().optional().nullable(),
+  experienceYears: z.coerce.number().optional().nullable(),
   skills: z.any().optional().nullable(),
 });
 
@@ -41,7 +41,7 @@ const careersResumeUpdateSchema = z.object({
 });
 
 const careersApplySchema = z.object({
-  postingId: z.number({ invalid_type_error: "يجب تحديد الوظيفة" }).int().positive("يجب تحديد الوظيفة"),
+  postingId: z.coerce.number({ invalid_type_error: "يجب تحديد الوظيفة" }).int().positive("يجب تحديد الوظيفة"),
   coverLetter: z.string().optional().nullable(),
 });
 
@@ -177,7 +177,7 @@ router.get("/jobs/:id", portalLimiter, async (req: Request, res: Response) => {
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
        WHERE id = $1 AND status = 'open'`,
-      [req.params.id]
+      [Number(req.params.id)]
     );
     if (rows.length === 0) {
       throw new NotFoundError("الوظيفة غير موجودة");

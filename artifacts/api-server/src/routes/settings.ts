@@ -39,7 +39,7 @@ const createBranchSchema = z.object({
   email: z.string().optional(),
   website: z.string().optional(),
   footerText: z.string().optional(),
-  companyId: z.number().optional(),
+  companyId: z.coerce.number().optional(),
 });
 
 const updateBranchSchema = z.object({
@@ -91,8 +91,8 @@ const roleModulesSchema = z.object({
 const approvalConfigSchema = z.object({
   chainType: z.string().min(1),
   name: z.string().optional(),
-  minAmount: z.number().optional(),
-  maxAmount: z.number().nullable().optional(),
+  minAmount: z.coerce.number().optional(),
+  maxAmount: z.coerce.number().nullable().optional(),
   isActive: z.boolean().optional(),
 });
 

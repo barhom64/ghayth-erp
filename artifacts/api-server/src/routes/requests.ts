@@ -9,7 +9,7 @@ import { createAuditLog, createNotification, emitEvent, getLegalResponsible } fr
 /* ── Zod Schemas ───────────────────────────────────────────────── */
 
 const createRequestSchema = z.object({
-  typeId: z.number({ invalid_type_error: "نوع الطلب يجب أن يكون رقماً" }).optional(),
+  typeId: z.coerce.number({ invalid_type_error: "نوع الطلب يجب أن يكون رقماً" }).optional(),
   requesterName: z.string().optional(),
   requester: z.string().optional(),
   title: z.string({ required_error: "عنوان الطلب مطلوب" }).min(1, "عنوان الطلب مطلوب"),

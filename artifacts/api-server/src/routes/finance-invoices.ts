@@ -26,24 +26,24 @@ import { z } from "zod";
 
 // ── Zod schemas for POST route validation ──────────────────────────────────
 const createInvoiceSchema = z.object({
-  clientId: z.number({ required_error: "العميل مطلوب" }),
+  clientId: z.coerce.number({ required_error: "العميل مطلوب" }),
   lines: z.array(z.object({
     description: z.string().optional(),
-    quantity: z.number().optional(),
-    unitPrice: z.number().optional(),
+    quantity: z.coerce.number().optional(),
+    unitPrice: z.coerce.number().optional(),
     accountCode: z.string().optional(),
-    total: z.number().optional(),
+    total: z.coerce.number().optional(),
   })).min(1, "يجب إضافة بند واحد على الأقل").optional(),
-  vatRate: z.number().optional(),
+  vatRate: z.coerce.number().optional(),
   dueDate: z.string().optional(),
   date: z.string().optional(),
   description: z.string().optional(),
-  subtotal: z.number().optional(),
-  total: z.number().optional(),
+  subtotal: z.coerce.number().optional(),
+  total: z.coerce.number().optional(),
   notes: z.string().optional(),
-  paymentTermsDays: z.number().optional(),
-  branchId: z.number().optional(),
-  companyId: z.number().optional(),
+  paymentTermsDays: z.coerce.number().optional(),
+  branchId: z.coerce.number().optional(),
+  companyId: z.coerce.number().optional(),
   isTaxLinked: z.boolean().optional(),
   invoiceTypeCode: z.string().optional(),
   taxCategoryCode: z.string().optional(),
@@ -51,20 +51,20 @@ const createInvoiceSchema = z.object({
 });
 
 const createPaymentSchema = z.object({
-  amount: z.number().positive("المبلغ مطلوب"),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
   method: z.string().optional(),
 });
 
 const createCreditMemoSchema = z.object({
-  amount: z.number().positive("المبلغ مطلوب"),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
   reason: z.string().min(1, "السبب مطلوب"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
 });
 
 const createCustomerAdvanceSchema = z.object({
-  clientId: z.number({ required_error: "العميل مطلوب" }),
-  amount: z.number().positive("المبلغ مطلوب"),
+  clientId: z.coerce.number({ required_error: "العميل مطلوب" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
   method: z.string().optional(),
   reference: z.string().optional(),
   notes: z.string().optional(),

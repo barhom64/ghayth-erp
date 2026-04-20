@@ -28,7 +28,7 @@ const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
 const RequestUploadUrlBody = z.object({
   name: z.string(),
-  size: z.number().max(MAX_FILE_SIZE_BYTES, { message: `حجم الملف يتجاوز الحد الأقصى المسموح به (${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)` }),
+  size: z.coerce.number().max(MAX_FILE_SIZE_BYTES, { message: `حجم الملف يتجاوز الحد الأقصى المسموح به (${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)` }),
   contentType: z.string(),
 });
 
@@ -37,7 +37,7 @@ const RequestUploadUrlResponse = z.object({
   objectPath: z.string(),
   metadata: z.object({
     name: z.string(),
-    size: z.number(),
+    size: z.coerce.number(),
     contentType: z.string(),
   }),
 });

@@ -31,11 +31,11 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 const createProjectSchema = z.object({
   name: z.string().min(1, "اسم المشروع مطلوب"),
   description: z.string().optional().nullable(),
-  clientId: z.number().optional().nullable(),
-  managerId: z.number().optional().nullable(),
+  clientId: z.coerce.number().optional().nullable(),
+  managerId: z.coerce.number().optional().nullable(),
   startDate: z.string().min(1, "تاريخ بداية المشروع مطلوب"),
   endDate: z.string().min(1, "تاريخ نهاية المشروع مطلوب"),
-  budget: z.union([z.number(), z.string()]).optional().nullable(),
+  budget: z.union([z.coerce.number(), z.string()]).optional().nullable(),
   status: z.string().optional(),
   phases: z.array(z.object({
     name: z.string().min(1, "اسم المرحلة مطلوب"),
@@ -48,16 +48,16 @@ const updateProjectSchema = z.object({
   name: z.string().min(1, "اسم المشروع مطلوب").optional(),
   description: z.string().optional().nullable(),
   status: z.string().optional(),
-  budget: z.union([z.number(), z.string()]).optional().nullable(),
+  budget: z.union([z.coerce.number(), z.string()]).optional().nullable(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
-  managerId: z.number().optional().nullable(),
-  spentAmount: z.union([z.number(), z.string()]).optional().nullable(),
+  managerId: z.coerce.number().optional().nullable(),
+  spentAmount: z.union([z.coerce.number(), z.string()]).optional().nullable(),
 }).partial();
 
 const createPhaseSchema = z.object({
   name: z.string().min(1, "اسم المرحلة مطلوب"),
-  orderIndex: z.number().optional(),
+  orderIndex: z.coerce.number().optional(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
 });
@@ -65,19 +65,19 @@ const createPhaseSchema = z.object({
 const createTaskSchema = z.object({
   title: z.string().min(1, "عنوان المهمة مطلوب"),
   description: z.string().optional().nullable(),
-  assigneeId: z.number().optional().nullable(),
-  phaseId: z.number().optional().nullable(),
+  assigneeId: z.coerce.number().optional().nullable(),
+  phaseId: z.coerce.number().optional().nullable(),
   priority: z.string().optional(),
   startDate: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
-  estimatedHours: z.union([z.number(), z.string()]).optional().nullable(),
-  dependsOn: z.array(z.number()).optional(),
+  estimatedHours: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  dependsOn: z.array(z.coerce.number()).optional(),
 });
 
 const updateTaskSchema = z.object({
   status: z.string().optional(),
-  progress: z.union([z.number(), z.string()]).optional(),
-  actualHours: z.union([z.number(), z.string()]).optional(),
+  progress: z.union([z.coerce.number(), z.string()]).optional(),
+  actualHours: z.union([z.coerce.number(), z.string()]).optional(),
 }).partial();
 
 const createMilestoneSchema = z.object({
@@ -97,33 +97,33 @@ const updateMilestoneSchema = z.object({
 const createRiskSchema = z.object({
   title: z.string().min(1, "عنوان المخاطرة مطلوب"),
   description: z.string().optional().nullable(),
-  probability: z.union([z.number(), z.string()]).optional(),
-  impact: z.union([z.number(), z.string()]).optional(),
+  probability: z.union([z.coerce.number(), z.string()]).optional(),
+  impact: z.union([z.coerce.number(), z.string()]).optional(),
   mitigationPlan: z.string().optional().nullable(),
-  responsibleId: z.number().optional().nullable(),
+  responsibleId: z.coerce.number().optional().nullable(),
 });
 
 const updateRiskSchema = z.object({
   title: z.string().min(1, "عنوان المخاطرة مطلوب").optional(),
   status: z.string().optional(),
   mitigationPlan: z.string().optional().nullable(),
-  probability: z.union([z.number(), z.string()]).optional(),
-  impact: z.union([z.number(), z.string()]).optional(),
+  probability: z.union([z.coerce.number(), z.string()]).optional(),
+  impact: z.union([z.coerce.number(), z.string()]).optional(),
 }).partial();
 
 const createResourceSchema = z.object({
-  employeeId: z.number().optional().nullable(),
-  taskId: z.number().optional().nullable(),
+  employeeId: z.coerce.number().optional().nullable(),
+  taskId: z.coerce.number().optional().nullable(),
   role: z.string().optional(),
-  allocatedHours: z.union([z.number(), z.string()]).optional(),
-  budgetAllocated: z.union([z.number(), z.string()]).optional(),
+  allocatedHours: z.union([z.coerce.number(), z.string()]).optional(),
+  budgetAllocated: z.union([z.coerce.number(), z.string()]).optional(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
 });
 
 const createCostSchema = z.object({
   description: z.string().min(1, "وصف التكلفة مطلوب"),
-  amount: z.union([z.number(), z.string()]).refine((v) => Number(v) > 0, { message: "المبلغ يجب أن يكون أكبر من صفر" }),
+  amount: z.union([z.coerce.number(), z.string()]).refine((v) => Number(v) > 0, { message: "المبلغ يجب أن يكون أكبر من صفر" }),
   category: z.string().optional(),
   costDate: z.string().optional(),
   notes: z.string().optional().nullable(),

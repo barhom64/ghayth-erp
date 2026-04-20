@@ -27,7 +27,7 @@ const createAgentSchema = z.object({
   phone: z.string().optional(),
   email: z.string().optional(),
   country: z.string().optional(),
-  profitMargin: z.number().optional(),
+  profitMargin: z.coerce.number().optional(),
   contractRef: z.string().optional(),
   currency: z.string().optional(),
   notes: z.string().optional(),
@@ -35,23 +35,23 @@ const createAgentSchema = z.object({
 
 const createPackageSchema = z.object({
   name: z.string().min(1, "اسم الباقة مطلوب"),
-  seasonId: z.number({ required_error: "الموسم مطلوب" }),
-  costPrice: z.number().optional(),
-  sellPrice: z.number().optional(),
+  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+  costPrice: z.coerce.number().optional(),
+  sellPrice: z.coerce.number().optional(),
   includesTransport: z.boolean().optional(),
   includesHotel: z.boolean().optional(),
   includesMeals: z.boolean().optional(),
   includesZiyarat: z.boolean().optional(),
-  duration: z.number().optional(),
+  duration: z.coerce.number().optional(),
   description: z.string().optional(),
 });
 
 const createPilgrimSchema = z.object({
   fullName: z.string().min(1, "الاسم الكامل مطلوب"),
   passportNumber: z.string().min(1, "رقم جواز السفر مطلوب"),
-  seasonId: z.number().optional(),
-  agentId: z.number().optional(),
-  packageId: z.number().optional(),
+  seasonId: z.coerce.number().optional(),
+  agentId: z.coerce.number().optional(),
+  packageId: z.coerce.number().optional(),
   nationality: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().optional(),
@@ -62,7 +62,7 @@ const createPilgrimSchema = z.object({
 const createTransportSchema = z.object({
   type: z.string().optional(),
   provider: z.string().optional(),
-  pilgrimsCount: z.number().optional(),
+  pilgrimsCount: z.coerce.number().optional(),
   vehicleNumber: z.string().optional(),
   driverName: z.string().optional(),
   departureDate: z.string().optional(),

@@ -42,27 +42,27 @@ function assertRole(scope: any, allowedRoles: string[]): void {
 const createPurchaseRequestSchema = z.object({
   items: z.array(z.object({
     description: z.string().optional(),
-    quantity: z.number().optional(),
-    unitPrice: z.number().optional(),
+    quantity: z.coerce.number().optional(),
+    unitPrice: z.coerce.number().optional(),
     accountCode: z.string().optional(),
   })).min(1, "يجب إضافة بند واحد على الأقل"),
-  supplierId: z.number().optional(),
+  supplierId: z.coerce.number().optional(),
   notes: z.string().optional(),
   expectedDate: z.string().optional(),
   expectedDelivery: z.string().optional(),
 });
 
 const createPurchaseOrderSchema = z.object({
-  supplierId: z.number({ required_error: "المورد مطلوب" }),
-  totalAmount: z.number().optional(),
-  vatAmount: z.number().optional(),
+  supplierId: z.coerce.number({ required_error: "المورد مطلوب" }),
+  totalAmount: z.coerce.number().optional(),
+  vatAmount: z.coerce.number().optional(),
   notes: z.string().optional(),
   expectedDelivery: z.string().optional(),
   items: z.array(z.any()).optional(),
 });
 
 const executePaymentRunSchema = z.object({
-  poIds: z.array(z.number()).min(1, "يجب اختيار أمر شراء واحد على الأقل"),
+  poIds: z.array(z.coerce.number()).min(1, "يجب اختيار أمر شراء واحد على الأقل"),
   paymentDate: z.string().optional(),
   method: z.string().optional(),
   reference: z.string().optional(),

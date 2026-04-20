@@ -16,13 +16,13 @@ const rolePermissionSchema = z.object({
 });
 
 const userPermissionCreateSchema = z.object({
-  userId: z.number().int().positive("معرف المستخدم مطلوب"),
+  userId: z.coerce.number().int().positive("معرف المستخدم مطلوب"),
   permission: z.string().min(1, "الصلاحية مطلوبة"),
   type: z.enum(["grant", "revoke"]).optional(),
 });
 
 const userPermissionDeleteSchema = z.object({
-  userId: z.number().int().positive("معرف المستخدم مطلوب"),
+  userId: z.coerce.number().int().positive("معرف المستخدم مطلوب"),
   permission: z.string().min(1, "الصلاحية مطلوبة"),
 });
 

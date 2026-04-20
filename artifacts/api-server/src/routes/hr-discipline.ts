@@ -158,7 +158,7 @@ const createRegulationSchema = z.object({
   penalty2: z.string().optional(),
   penalty3: z.string().optional(),
   penalty4: z.string().optional(),
-  extraDeduction: z.number().optional(),
+  extraDeduction: z.coerce.number().optional(),
   severity: z.enum(["low", "medium", "high"]).optional(),
   isTermination: z.boolean().optional(),
   legalReference: z.string().optional(),
@@ -171,7 +171,7 @@ const updateRegulationSchema = z.object({
   penalty2: z.string().optional(),
   penalty3: z.string().optional(),
   penalty4: z.string().optional(),
-  extraDeduction: z.number().optional(),
+  extraDeduction: z.coerce.number().optional(),
   severity: z.enum(["low", "medium", "high"]).optional(),
   isTermination: z.boolean().optional(),
   legalReference: z.string().optional(),
@@ -181,18 +181,18 @@ const updateRegulationSchema = z.object({
 const incidentTypeEnum = z.enum(["late", "early_leave", "absence", "behavior", "organization", "gps_out_of_range", "custom"], { message: "نوع الواقعة غير صحيح" });
 
 const createMemoSchema = z.object({
-  assignmentId: z.number({ message: "assignmentId مطلوب" }),
+  assignmentId: z.coerce.number({ message: "assignmentId مطلوب" }),
   incidentType: incidentTypeEnum,
   incidentDate: z.string().min(1, "incidentDate مطلوب"),
-  incidentDurationMinutes: z.number().optional(),
-  absenceDays: z.number().optional(),
+  incidentDurationMinutes: z.coerce.number().optional(),
+  absenceDays: z.coerce.number().optional(),
   incidentDescription: z.string().optional(),
-  regulationId: z.number().optional(),
+  regulationId: z.coerce.number().optional(),
   disruptsOthers: z.boolean().optional(),
   witnesses: z.any().optional(),
   relatedParties: z.any().optional(),
   reasons: z.any().optional(),
-  manualOverrideAmount: z.number().optional(),
+  manualOverrideAmount: z.coerce.number().optional(),
   manualOverrideReason: z.string().optional(),
 });
 
@@ -216,13 +216,13 @@ const cancelMemoSchema = z.object({
 });
 
 const penaltyPreviewSchema = z.object({
-  assignmentId: z.number({ message: "assignmentId مطلوب" }),
+  assignmentId: z.coerce.number({ message: "assignmentId مطلوب" }),
   incidentType: incidentTypeEnum,
   incidentDate: z.string().min(1, "incidentDate مطلوب"),
-  durationMinutes: z.number().optional(),
-  absenceDays: z.number().optional(),
+  durationMinutes: z.coerce.number().optional(),
+  absenceDays: z.coerce.number().optional(),
   disruptsOthers: z.boolean().optional(),
-  regulationId: z.number().optional(),
+  regulationId: z.coerce.number().optional(),
 });
 
 const autoDetectionSettingsSchema = z.object({
@@ -230,9 +230,9 @@ const autoDetectionSettingsSchema = z.object({
   enableEarlyLeaveDetection: z.boolean().optional(),
   enableAbsenceDetection: z.boolean().optional(),
   enableGpsDetection: z.boolean().optional(),
-  lateThresholdMinutes: z.number().optional(),
-  earlyLeaveThresholdMinutes: z.number().optional(),
-  gpsRadiusMeters: z.number().optional(),
+  lateThresholdMinutes: z.coerce.number().optional(),
+  earlyLeaveThresholdMinutes: z.coerce.number().optional(),
+  gpsRadiusMeters: z.coerce.number().optional(),
   autoCreateMemo: z.boolean().optional(),
   notifyEmployee: z.boolean().optional(),
   notifyManager: z.boolean().optional(),

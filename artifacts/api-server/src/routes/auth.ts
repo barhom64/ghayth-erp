@@ -20,7 +20,7 @@ const refreshSchema = z.object({
 });
 
 const switchAssignmentSchema = z.object({
-  assignmentId: z.number({ required_error: "التعيين مطلوب" }),
+  assignmentId: z.coerce.number({ required_error: "التعيين مطلوب" }),
 });
 
 const changePasswordSchema = z.object({

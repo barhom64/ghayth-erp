@@ -22,7 +22,7 @@ const sendCommunicationSchema = z.object({
   fromNumber: z.string().optional(),
   subject: z.string().optional(),
   relatedType: z.string().optional(),
-  relatedId: z.number().optional(),
+  relatedId: z.coerce.number().optional(),
   attachments: z.array(z.any()).optional(),
 });
 

@@ -24,7 +24,7 @@ const createVehicleSchema = z.object({
   plateNumber: z.string().min(1),
   make: z.string().min(1),
   model: z.string().min(1),
-  year: z.number().optional(),
+  year: z.coerce.number().optional(),
   fuelType: z.enum(["gasoline", "diesel", "electric", "hybrid", "lpg"]).optional(),
 });
 
@@ -36,20 +36,20 @@ const createDriverSchema = z.object({
 });
 
 const createMaintenanceSchema = z.object({
-  vehicleId: z.number({ required_error: "المركبة مطلوبة" }),
+  vehicleId: z.coerce.number({ required_error: "المركبة مطلوبة" }),
   type: z.string().min(1, "نوع الصيانة مطلوب"),
   description: z.string().min(1, "وصف الصيانة مطلوب"),
-  cost: z.number().min(0).optional(),
+  cost: z.coerce.number().min(0).optional(),
 });
 
 const createFuelLogSchema = z.object({
-  vehicleId: z.number().optional(),
+  vehicleId: z.coerce.number().optional(),
   vehiclePlate: z.string().optional(),
-  liters: z.number().positive("كمية الوقود يجب أن تكون أكبر من صفر"),
+  liters: z.coerce.number().positive("كمية الوقود يجب أن تكون أكبر من صفر"),
 });
 
 const createInsuranceSchema = z.object({
-  vehicleId: z.number({ required_error: "المركبة مطلوبة" }),
+  vehicleId: z.coerce.number({ required_error: "المركبة مطلوبة" }),
   provider: z.string().min(1, "شركة التأمين مطلوبة"),
   startDate: z.string().min(1, "تاريخ بداية الوثيقة مطلوب"),
   endDate: z.string().min(1, "تاريخ انتهاء الوثيقة مطلوب"),

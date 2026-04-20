@@ -23,7 +23,7 @@ const createContractSchema = z.object({
   partyName: z.string().min(1, "اسم الطرف الآخر مطلوب"),
   startDate: z.string().min(1, "تاريخ البداية مطلوب"),
   endDate: z.string().optional(),
-  value: z.number().optional(),
+  value: z.coerce.number().optional(),
   ref: z.string().optional(),
   contractType: z.string().optional(),
   partyContact: z.string().optional(),
@@ -51,12 +51,12 @@ const createSessionSchema = z.object({
   result: z.string().optional(),
   nextSessionDate: z.string().optional(),
   notes: z.string().optional(),
-  hoursSpent: z.number().optional(),
-  hourlyRate: z.number().optional(),
-  courtLat: z.number().optional(),
-  courtLon: z.number().optional(),
-  officeLat: z.number().optional(),
-  officeLon: z.number().optional(),
+  hoursSpent: z.coerce.number().optional(),
+  hourlyRate: z.coerce.number().optional(),
+  courtLat: z.coerce.number().optional(),
+  courtLon: z.coerce.number().optional(),
+  officeLat: z.coerce.number().optional(),
+  officeLon: z.coerce.number().optional(),
 });
 
 const createCorrespondenceSchema = z.object({
@@ -71,12 +71,12 @@ const createCorrespondenceSchema = z.object({
 const createJudgmentSchema = z.object({
   judgmentDate: z.string().min(1, "تاريخ الحكم مطلوب"),
   verdict: z.string().min(1, "الحكم مطلوب"),
-  amount: z.number().optional(),
+  amount: z.coerce.number().optional(),
   judgmentType: z.string().optional(),
-  paidAmount: z.number().optional(),
+  paidAmount: z.coerce.number().optional(),
   dueDate: z.string().optional(),
   notes: z.string().optional(),
-  appealWindowDays: z.number().optional(),
+  appealWindowDays: z.coerce.number().optional(),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

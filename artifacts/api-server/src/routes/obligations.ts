@@ -20,11 +20,11 @@ obligationsRouter.use(authMiddleware);
 
 const createObligationSchema = z.object({
   entityType: z.string().min(1, "نوع الكيان مطلوب"),
-  entityId: z.union([z.number(), z.string()]).transform((v) => Number(v)).refine((v) => v > 0, "معرف الكيان مطلوب"),
+  entityId: z.union([z.coerce.number(), z.string()]).transform((v) => Number(v)).refine((v) => v > 0, "معرف الكيان مطلوب"),
   obligationType: z.string().min(1, "نوع الالتزام مطلوب"),
   title: z.string().min(1, "العنوان مطلوب"),
   dueAt: z.string().min(1, "تاريخ الاستحقاق مطلوب"),
-  assignedTo: z.number().int().positive().nullable().optional(),
+  assignedTo: z.coerce.number().int().positive().nullable().optional(),
   escalationSteps: z.array(z.any()).optional(),
   metadata: z.record(z.any()).optional(),
   dedupeKey: z.string().optional(),
@@ -32,7 +32,7 @@ const createObligationSchema = z.object({
 
 const entityActionSchema = z.object({
   entityType: z.string().min(1, "نوع الكيان مطلوب"),
-  entityId: z.union([z.number(), z.string()]).transform((v) => Number(v)).refine((v) => v > 0, "معرف الكيان مطلوب"),
+  entityId: z.union([z.coerce.number(), z.string()]).transform((v) => Number(v)).refine((v) => v > 0, "معرف الكيان مطلوب"),
   obligationType: z.string().optional(),
 });
 

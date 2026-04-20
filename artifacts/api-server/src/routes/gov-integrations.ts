@@ -14,9 +14,9 @@ const updateIntegrationSchema = z.object({
 });
 
 const createLinkSchema = z.object({
-  integrationId: z.number().int(),
+  integrationId: z.coerce.number().int(),
   entityType: z.string().min(1),
-  entityId: z.union([z.number(), z.string().min(1)]),
+  entityId: z.union([z.coerce.number(), z.string().min(1)]),
   externalRef: z.string().optional().nullable(),
   enabled: z.boolean().optional(),
   notes: z.string().optional().nullable(),

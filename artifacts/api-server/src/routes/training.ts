@@ -16,7 +16,7 @@ const createProgramSchema = z.object({
   endDate: z.string().optional(),
   location: z.string().optional(),
   trainer: z.string().optional(),
-  capacity: z.number().optional(),
+  capacity: z.coerce.number().optional(),
   status: z.string().optional(),
 });
 
@@ -28,7 +28,7 @@ const patchProgramSchema = z.object({
   endDate: z.string().nullable().optional(),
   location: z.string().optional(),
   trainer: z.string().optional(),
-  capacity: z.number().optional(),
+  capacity: z.coerce.number().optional(),
   status: z.string().optional(),
 });
 
@@ -41,15 +41,15 @@ const rejectSchema = z.object({
 });
 
 const createEnrollmentSchema = z.object({
-  programId: z.number(),
-  employeeId: z.number().optional(),
+  programId: z.coerce.number(),
+  employeeId: z.coerce.number().optional(),
   employeeName: z.string().optional(),
   status: z.string().optional(),
 });
 
 const patchEnrollmentSchema = z.object({
   status: z.string().optional(),
-  score: z.number().optional(),
+  score: z.coerce.number().optional(),
   feedback: z.string().optional(),
 });
 

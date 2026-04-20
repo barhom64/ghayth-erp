@@ -204,55 +204,35 @@ function AttendanceWidget() {
   const hasCheckedIn = !!attendance?.checkIn;
   const hasCheckedOut = !!attendance?.checkOut;
 
-  const handleCheckIn = async () => {
-    try {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            await checkInMut.mutateAsync({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-            toast({ title: "تم تسجيل الحضور بنجاح" });
-            refetch();
-          },
-          async () => {
-            await checkInMut.mutateAsync({});
-            toast({ title: "تم تسجيل الحضور بنجاح" });
-            refetch();
-          },
-          { timeout: 5000 }
-        );
-      } else {
-        await checkInMut.mutateAsync({});
-        toast({ title: "تم تسجيل الحضور بنجاح" });
-        refetch();
-      }
-    } catch (err: any) {
-      toast({ variant: "destructive", title: err?.message || "حدث خطأ أثناء تسجيل الحضور" });
+  const handleCheckIn = () => {
+    const onSuccess = () => {
+      toast({ title: "تم تسجيل الحضور بنجاح" });
+      refetch();
+    };
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => checkInMut.mutate({ lat: pos.coords.latitude, lon: pos.coords.longitude }, { onSuccess }),
+        () => checkInMut.mutate({} as any, { onSuccess }),
+        { timeout: 5000 }
+      );
+    } else {
+      checkInMut.mutate({} as any, { onSuccess });
     }
   };
 
-  const handleCheckOut = async () => {
-    try {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            await checkOutMut.mutateAsync({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-            toast({ title: "تم تسجيل الانصراف بنجاح" });
-            refetch();
-          },
-          async () => {
-            await checkOutMut.mutateAsync({});
-            toast({ title: "تم تسجيل الانصراف بنجاح" });
-            refetch();
-          },
-          { timeout: 5000 }
-        );
-      } else {
-        await checkOutMut.mutateAsync({});
-        toast({ title: "تم تسجيل الانصراف بنجاح" });
-        refetch();
-      }
-    } catch (err: any) {
-      toast({ variant: "destructive", title: err?.message || "حدث خطأ أثناء تسجيل الانصراف" });
+  const handleCheckOut = () => {
+    const onSuccess = () => {
+      toast({ title: "تم تسجيل الانصراف بنجاح" });
+      refetch();
+    };
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => checkOutMut.mutate({ lat: pos.coords.latitude, lon: pos.coords.longitude }, { onSuccess }),
+        () => checkOutMut.mutate({} as any, { onSuccess }),
+        { timeout: 5000 }
+      );
+    } else {
+      checkOutMut.mutate({} as any, { onSuccess });
     }
   };
 

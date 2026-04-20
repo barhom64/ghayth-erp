@@ -23,8 +23,8 @@ const createCampaignSchema = z.object({
   type: z.string({ invalid_type_error: "نوع الحملة يجب أن يكون نصاً" }).optional().nullable(),
   channel: z.string({ invalid_type_error: "القناة يجب أن تكون نصاً" }).optional().nullable(),
   status: z.string({ invalid_type_error: "الحالة يجب أن تكون نصاً" }).optional().nullable(),
-  budget: z.number({ invalid_type_error: "الميزانية يجب أن تكون رقماً" }).min(0, "الميزانية يجب أن تكون قيمة غير سالبة").optional().nullable(),
-  spent: z.number({ invalid_type_error: "المبلغ المصروف يجب أن يكون رقماً" }).min(0, "المبلغ المصروف يجب أن يكون قيمة غير سالبة").optional().nullable(),
+  budget: z.coerce.number({ invalid_type_error: "الميزانية يجب أن تكون رقماً" }).min(0, "الميزانية يجب أن تكون قيمة غير سالبة").optional().nullable(),
+  spent: z.coerce.number({ invalid_type_error: "المبلغ المصروف يجب أن يكون رقماً" }).min(0, "المبلغ المصروف يجب أن يكون قيمة غير سالبة").optional().nullable(),
   startDate: z.string({ invalid_type_error: "تاريخ البداية يجب أن يكون نصاً" }).optional().nullable(),
   endDate: z.string({ invalid_type_error: "تاريخ النهاية يجب أن يكون نصاً" }).optional().nullable(),
   targetAudience: z.string({ invalid_type_error: "الجمهور المستهدف يجب أن يكون نصاً" }).optional().nullable(),
@@ -36,15 +36,15 @@ const updateCampaignSchema = z.object({
   type: z.string({ invalid_type_error: "نوع الحملة يجب أن يكون نصاً" }).optional().nullable(),
   channel: z.string({ invalid_type_error: "القناة يجب أن تكون نصاً" }).optional().nullable(),
   status: z.string({ invalid_type_error: "الحالة يجب أن تكون نصاً" }).optional().nullable(),
-  budget: z.number({ invalid_type_error: "الميزانية يجب أن تكون رقماً" }).optional().nullable(),
-  spent: z.number({ invalid_type_error: "المبلغ المصروف يجب أن يكون رقماً" }).optional().nullable(),
+  budget: z.coerce.number({ invalid_type_error: "الميزانية يجب أن تكون رقماً" }).optional().nullable(),
+  spent: z.coerce.number({ invalid_type_error: "المبلغ المصروف يجب أن يكون رقماً" }).optional().nullable(),
   startDate: z.string({ invalid_type_error: "تاريخ البداية يجب أن يكون نصاً" }).optional().nullable(),
   endDate: z.string({ invalid_type_error: "تاريخ النهاية يجب أن يكون نصاً" }).optional().nullable(),
   targetAudience: z.string({ invalid_type_error: "الجمهور المستهدف يجب أن يكون نصاً" }).optional().nullable(),
 });
 
 const updateRevenueSchema = z.object({
-  revenue: z.number({ required_error: "قيمة الإيرادات مطلوبة", invalid_type_error: "الإيرادات يجب أن تكون رقماً" }).optional().nullable(),
+  revenue: z.coerce.number({ required_error: "قيمة الإيرادات مطلوبة", invalid_type_error: "الإيرادات يجب أن تكون رقماً" }).optional().nullable(),
 });
 
 const router = Router();

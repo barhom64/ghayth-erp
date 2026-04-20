@@ -99,11 +99,11 @@ const DEFAULT_CLEARANCE_DEPARTMENTS = [
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
 const createExitSchema = z.object({
-  assignmentId: z.number({ message: "يرجى اختيار الموظف" }),
+  assignmentId: z.coerce.number({ message: "يرجى اختيار الموظف" }),
   exitType: z.string().min(1, "نوع نهاية الخدمة مطلوب"),
   lastWorkingDay: z.string().optional(),
   exitReason: z.string().optional(),
-  otherDeductions: z.number().optional(),
+  otherDeductions: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
 
@@ -172,7 +172,7 @@ router.get("/exit/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE x.id = $1 AND x."companyId" = $2 AND x."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [Number(req.params.id), scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب نهاية الخدمة غير موجود");
 
@@ -366,7 +366,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
 
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [Number(req.params.id), scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
@@ -442,7 +442,7 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
 
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_clearance WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [Number(req.params.id), scope.companyId]
     );
     if (!item) throw new NotFoundError("عنصر إخلاء الطرف غير موجود");
 
@@ -481,7 +481,7 @@ router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, r
     const scope = req.scope!;
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [Number(req.params.id), scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "approved") throw new ConflictError("يجب اعتماد الطلب أولاً");

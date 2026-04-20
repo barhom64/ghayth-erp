@@ -18,8 +18,8 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 const createBudgetSchema = z.object({
   accountCode: z.string().min(1, "رمز الحساب مطلوب"),
   period: z.string().min(1, "الفترة مطلوبة"),
-  amount: z.number({ required_error: "المبلغ مطلوب" }).min(0, "المبلغ يجب أن يكون صفر أو أكثر"),
-  branchId: z.number().optional().nullable(),
+  amount: z.coerce.number({ required_error: "المبلغ مطلوب" }).min(0, "المبلغ يجب أن يكون صفر أو أكثر"),
+  branchId: z.coerce.number().optional().nullable(),
 });
 
 export const budgetRouter = Router();

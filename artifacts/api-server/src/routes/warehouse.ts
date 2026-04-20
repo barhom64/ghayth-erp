@@ -30,10 +30,10 @@ router.use(authMiddleware);
 const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment"] as const;
 
 const createMovementSchema = z.object({
-  productId: z.number({ required_error: "المنتج مطلوب", invalid_type_error: "معرف المنتج يجب أن يكون رقماً" }).int().positive("معرف المنتج يجب أن يكون رقماً موجباً"),
+  productId: z.coerce.number({ required_error: "المنتج مطلوب", invalid_type_error: "معرف المنتج يجب أن يكون رقماً" }).int().positive("معرف المنتج يجب أن يكون رقماً موجباً"),
   type: z.enum(MOVEMENT_TYPES, { errorMap: () => ({ message: `نوع الحركة غير صالح — اختر من: ${MOVEMENT_TYPES.join(", ")}` }) }),
-  quantity: z.number({ required_error: "الكمية مطلوبة", invalid_type_error: "الكمية يجب أن تكون رقماً" }).positive("الكمية يجب أن تكون أكبر من صفر"),
-  unitCost: z.number().min(0, "تكلفة الوحدة يجب أن تكون 0 أو أكثر").optional().nullable(),
+  quantity: z.coerce.number({ required_error: "الكمية مطلوبة", invalid_type_error: "الكمية يجب أن تكون رقماً" }).positive("الكمية يجب أن تكون أكبر من صفر"),
+  unitCost: z.coerce.number().min(0, "تكلفة الوحدة يجب أن تكون 0 أو أكثر").optional().nullable(),
   reference: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });

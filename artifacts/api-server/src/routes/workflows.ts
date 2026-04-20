@@ -21,7 +21,7 @@ import {
 const submitSchema = z.object({
   requestType: z.string().min(1),
   refTable: z.string().optional(),
-  refId: z.number().optional(),
+  refId: z.coerce.number().optional(),
   title: z.string().min(1),
   data: z.any().optional(),
 });
@@ -38,7 +38,7 @@ const rejectSchema = z.object({
 });
 
 const referSchema = z.object({
-  referredTo: z.number(),
+  referredTo: z.coerce.number(),
   referredToName: z.string().optional(),
   notes: z.string().optional(),
   overrideReason: z.string().optional(),
@@ -57,7 +57,7 @@ const returnSchema = z.object({
 const workflowStepSchema = z.object({
   stepName: z.string().min(1),
   requiredRole: z.string().min(1),
-  slaHours: z.number().optional(),
+  slaHours: z.coerce.number().optional(),
   autoApproveOnTimeout: z.boolean().optional(),
   canReject: z.boolean().optional(),
   canRefer: z.boolean().optional(),
@@ -69,7 +69,7 @@ const createDefinitionSchema = z.object({
   description: z.string().optional(),
   isReturnable: z.boolean().optional(),
   enableEscalation: z.boolean().optional(),
-  defaultSlaHours: z.number().optional(),
+  defaultSlaHours: z.coerce.number().optional(),
   steps: z.array(workflowStepSchema).optional(),
 });
 
@@ -78,16 +78,16 @@ const updateDefinitionSchema = z.object({
   description: z.string().optional(),
   isReturnable: z.boolean().optional(),
   enableEscalation: z.boolean().optional(),
-  defaultSlaHours: z.number().optional(),
+  defaultSlaHours: z.coerce.number().optional(),
   isActive: z.boolean().optional(),
   steps: z.array(workflowStepSchema).optional(),
 });
 
 const slaDefinitionSchema = z.object({
   requestType: z.string().min(1),
-  warningHours: z.number().optional(),
-  deadlineHours: z.number().optional(),
-  escalationHours: z.number().optional(),
+  warningHours: z.coerce.number().optional(),
+  deadlineHours: z.coerce.number().optional(),
+  escalationHours: z.coerce.number().optional(),
   autoApproveOnTimeout: z.boolean().optional(),
   escalateTo: z.string().optional(),
 });

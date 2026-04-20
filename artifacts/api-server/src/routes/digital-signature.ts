@@ -10,14 +10,14 @@ import { z } from "zod";
 
 const requestOtpSchema = z.object({
   entityType: z.string().min(1),
-  entityId: z.union([z.number(), z.string().min(1)]),
+  entityId: z.union([z.coerce.number(), z.string().min(1)]),
   action: z.string().min(1),
 });
 
 const verifySignatureSchema = z.object({
   otp: z.string().min(1),
   entityType: z.string().min(1),
-  entityId: z.union([z.number(), z.string().min(1)]),
+  entityId: z.union([z.coerce.number(), z.string().min(1)]),
   action: z.string().min(1),
 });
 

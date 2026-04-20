@@ -17,7 +17,7 @@ const createTagSchema = z.object({
 
 const bulkActionSchema = z.object({
   entityType: z.string().min(1),
-  entityIds: z.array(z.number().int().positive()).min(1),
+  entityIds: z.array(z.coerce.number().int().positive()).min(1),
   action: z.string().min(1),
 });
 

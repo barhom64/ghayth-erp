@@ -9,12 +9,12 @@ import { createAuditLog } from "../lib/businessHelpers.js";
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
 const updateAccountingMappingSchema = z.object({
-  debitAccountId: z.number().nullable().optional(),
-  creditAccountId: z.number().nullable().optional(),
+  debitAccountId: z.coerce.number().nullable().optional(),
+  creditAccountId: z.coerce.number().nullable().optional(),
   debitAccountCode: z.string().nullable().optional(),
   creditAccountCode: z.string().nullable().optional(),
   operationLabel: z.string().optional(),
-  branchId: z.number().nullable().optional(),
+  branchId: z.coerce.number().nullable().optional(),
   activityType: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
@@ -23,8 +23,8 @@ const updateAccountingMappingSchema = z.object({
 const batchMappingItemSchema = z.object({
   operationType: z.string().min(1),
   operationLabel: z.string().optional(),
-  debitAccountId: z.number().nullable().optional(),
-  creditAccountId: z.number().nullable().optional(),
+  debitAccountId: z.coerce.number().nullable().optional(),
+  creditAccountId: z.coerce.number().nullable().optional(),
   debitAccountCode: z.string().nullable().optional(),
   creditAccountCode: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
@@ -35,7 +35,7 @@ const batchAccountingMappingsSchema = z.object({
 });
 
 const templateLineSchema = z.object({
-  accountId: z.number().nullable().optional(),
+  accountId: z.coerce.number().nullable().optional(),
   accountCode: z.string().nullable().optional(),
   lineType: z.string().min(1),
   description: z.string().nullable().optional(),
@@ -45,7 +45,7 @@ const createJournalTemplateSchema = z.object({
   name: z.string().min(1),
   operationType: z.string().min(1),
   description: z.string().nullable().optional(),
-  branchId: z.number().nullable().optional(),
+  branchId: z.coerce.number().nullable().optional(),
   activityType: z.string().nullable().optional(),
   lines: z.array(templateLineSchema).optional(),
 });
@@ -53,7 +53,7 @@ const createJournalTemplateSchema = z.object({
 const updateJournalTemplateSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
-  branchId: z.number().nullable().optional(),
+  branchId: z.coerce.number().nullable().optional(),
   activityType: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
   lines: z.array(templateLineSchema).optional(),
@@ -61,9 +61,9 @@ const updateJournalTemplateSchema = z.object({
 
 const createSubsidiaryAccountSchema = z.object({
   entityType: z.string().min(1),
-  entityId: z.number(),
+  entityId: z.coerce.number(),
   accountType: z.string().min(1),
-  accountId: z.number(),
+  accountId: z.coerce.number(),
 });
 
 const router = Router();

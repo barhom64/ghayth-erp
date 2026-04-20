@@ -86,9 +86,9 @@ async function generateLoanNumber(companyId: number): Promise<string> {
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
 const createLoanSchema = z.object({
-  assignmentId: z.number({ message: "يرجى اختيار الموظف" }),
-  amount: z.number({ message: "المبلغ مطلوب" }).positive("المبلغ يجب أن يكون أكبر من صفر"),
-  installmentCount: z.number({ message: "عدد الأقساط مطلوب" }).int().min(1, "عدد الأقساط يجب أن يكون 1 على الأقل"),
+  assignmentId: z.coerce.number({ message: "يرجى اختيار الموظف" }),
+  amount: z.coerce.number({ message: "المبلغ مطلوب" }).positive("المبلغ يجب أن يكون أكبر من صفر"),
+  installmentCount: z.coerce.number({ message: "عدد الأقساط مطلوب" }).int().min(1, "عدد الأقساط يجب أن يكون 1 على الأقل"),
   loanType: z.string().optional(),
   reason: z.string().optional(),
   startDeductionPeriod: z.string().optional(),
@@ -171,7 +171,7 @@ router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE l.id = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [Number(req.params.id), scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
 
@@ -317,7 +317,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [Number(req.params.id), scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن اعتماد سلفة بحالة: " + loan.status);
@@ -429,7 +429,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
     const b = parsed_rejectLoanSchema.data;
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [Number(req.params.id), scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن رفض سلفة بحالة: " + loan.status);

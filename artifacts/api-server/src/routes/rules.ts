@@ -17,7 +17,7 @@ const createRuleSchema = z.object({
   actionTarget: z.string().optional().nullable(),
   actionConfig: z.record(z.unknown()).optional(),
   module: z.string().optional().nullable(),
-  priority: z.number().optional(),
+  priority: z.coerce.number().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -32,7 +32,7 @@ const patchRuleSchema = z.object({
   actionTarget: z.string().optional().nullable(),
   actionConfig: z.record(z.unknown()).optional(),
   module: z.string().optional().nullable(),
-  priority: z.number().optional(),
+  priority: z.coerce.number().optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -22,14 +22,14 @@ const createDocumentSchema = z.object({
 
 const entityLinkItem = z.object({
   entityType: z.string().min(1),
-  entityId: z.union([z.number().int(), z.string()]),
+  entityId: z.union([z.coerce.number().int(), z.string()]),
 });
 
 const uploadDocumentSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   fileName: z.string().min(1),
-  fileSize: z.number().optional(),
+  fileSize: z.coerce.number().optional(),
   mimeType: z.string().optional(),
   category: z.string().optional(),
   storageKey: z.string().min(1),
@@ -38,7 +38,7 @@ const uploadDocumentSchema = z.object({
 
 const createVersionSchema = z.object({
   fileName: z.string().optional(),
-  fileSize: z.number().optional(),
+  fileSize: z.coerce.number().optional(),
   mimeType: z.string().optional(),
   storageKey: z.string().optional(),
   notes: z.string().optional(),
@@ -50,12 +50,12 @@ const updateStatusSchema = z.object({
 
 const createEntityLinkSchema = z.object({
   entityType: z.string().min(1),
-  entityId: z.union([z.number().int(), z.string()]),
+  entityId: z.union([z.coerce.number().int(), z.string()]),
 });
 
 const createFolderSchema = z.object({
   name: z.string().min(1),
-  parentId: z.number().optional(),
+  parentId: z.coerce.number().optional(),
   color: z.string().optional(),
 });
 
@@ -67,7 +67,7 @@ const createTemplateSchema = z.object({
   type: z.string().optional(),
   variables: z.array(z.unknown()).optional(),
   htmlContent: z.string().optional(),
-  branchId: z.number().optional(),
+  branchId: z.coerce.number().optional(),
   signatureUrl: z.string().optional(),
 });
 
@@ -79,14 +79,14 @@ const updateTemplateSchema = z.object({
   type: z.string().optional(),
   variables: z.array(z.unknown()).optional(),
   htmlContent: z.string().optional(),
-  branchId: z.number().optional(),
+  branchId: z.coerce.number().optional(),
   signatureUrl: z.string().optional(),
   isActive: z.boolean().optional(),
 });
 
 const generateTemplateSchema = z.object({
   entityType: z.string().optional(),
-  entityId: z.union([z.number(), z.string()]).optional(),
+  entityId: z.union([z.coerce.number(), z.string()]).optional(),
   customData: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -96,7 +96,7 @@ const patchDocumentSchema = z.object({
   category: z.string().optional(),
   fileName: z.string().optional(),
   fileUrl: z.string().optional(),
-  folderId: z.number().nullable().optional(),
+  folderId: z.coerce.number().nullable().optional(),
   tags: z.unknown().optional(),
 });
 
