@@ -9,6 +9,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function TripsPage() {
   const [, navigate] = useLocation();
@@ -56,6 +57,7 @@ export default function TripsPage() {
         </Link>
       }
     >
+      <FleetTabsNav />
       <KpiGrid items={[
         { label: "إجمالي الرحلات", value: items.length, icon: Route, color: "text-blue-600 bg-blue-50" },
         { label: "جارية", value: items.filter((t: any) => t.status === "in_progress").length, icon: Navigation, color: "text-amber-600 bg-amber-50" },

@@ -6,6 +6,7 @@ import { useApiQuery } from "@/lib/api";
 import { ExportButton, MultiExportButton } from "@/components/shared/export-buttons";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function FleetReports() {
   const { data: stats, isLoading, isError } = useApiQuery<any>(["fleet-stats"], "/fleet/stats");
@@ -34,6 +35,7 @@ export default function FleetReports() {
         />
       }
     >
+      <FleetTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">

@@ -8,6 +8,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function InsurancePage() {
   const { data: insuranceResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -42,6 +43,7 @@ export default function InsurancePage() {
         </Link>
       }
     >
+      <FleetTabsNav />
       <KpiGrid items={(() => {
         const now = new Date();
         const soon = new Date();

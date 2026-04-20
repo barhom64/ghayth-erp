@@ -13,6 +13,7 @@ import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 const VIOLATION_TYPES: Record<string, string> = {
   speeding: "تجاوز السرعة",
@@ -68,6 +69,7 @@ export default function TrafficViolationsPage() {
         </Button>
       }
     >
+      <FleetTabsNav />
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{violations.length}</div><div className="text-xs text-gray-500">إجمالي المخالفات</div></CardContent></Card>
         <Card className="border-red-200 bg-red-50/30">

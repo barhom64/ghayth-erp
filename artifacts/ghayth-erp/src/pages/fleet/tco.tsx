@@ -7,6 +7,7 @@ import { BarChart3, Car, TrendingUp, DollarSign, Fuel, Wrench, Shield, AlertTria
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { formatCurrency } from "@/lib/formatters";
 
 const COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
@@ -41,6 +42,7 @@ export default function TCOPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "تحليل التكلفة الكلية للمركبة" }]}
       loading={isLoading}
     >
+      <FleetTabsNav />
       <div className="flex items-center gap-2">
         <Label>اختر مركبة:</Label>
         <Select value={vehicleId} onValueChange={setVehicleId}>

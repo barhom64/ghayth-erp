@@ -8,6 +8,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function FuelPage() {
   const { scopeQueryString } = useAppContext();
@@ -38,6 +39,7 @@ export default function FuelPage() {
         </Link>
       }
     >
+      <FleetTabsNav />
       <KpiGrid items={[
         { label: "إجمالي السجلات", value: items.length, icon: Fuel, color: "text-blue-600 bg-blue-50" },
         { label: "إجمالي اللترات", value: items.reduce((s: number, f: any) => s + (Number(f.liters) || 0), 0).toLocaleString(), icon: Droplets, color: "text-cyan-600 bg-cyan-50" },

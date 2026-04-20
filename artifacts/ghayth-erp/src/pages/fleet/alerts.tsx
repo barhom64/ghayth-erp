@@ -8,6 +8,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function FleetAlerts() {
   const [filters, setFilters] = useFilters();
@@ -81,6 +82,7 @@ export default function FleetAlerts() {
         </Link>
       }
     >
+      <FleetTabsNav />
       <KpiGrid items={[
         { label: "إجمالي التنبيهات", value: allAlerts.length, icon: Bell, color: "text-blue-600 bg-blue-50" },
         { label: "حرجة", value: allAlerts.filter((a: any) => a.severity === "critical" || a.type?.includes("overdue")).length, icon: AlertOctagon, color: "text-red-600 bg-red-50" },

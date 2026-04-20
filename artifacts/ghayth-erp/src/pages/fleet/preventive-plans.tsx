@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -87,6 +88,7 @@ export default function PreventivePlansPage() {
         </>
       }
     >
+      <FleetTabsNav />
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">خطة صيانة وقائية جديدة</CardTitle></CardHeader>
