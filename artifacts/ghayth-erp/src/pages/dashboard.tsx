@@ -27,6 +27,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
+import { UpcomingEventsWidget } from "@/components/shared/upcoming-events-widget";
 
 type ColorKey = "blue" | "green" | "red" | "yellow" | "purple" | "indigo" | "teal" | "orange" | "pink" | "gray";
 const COLOR_MAP: Record<ColorKey, { bg: string; icon: string; border: string; ring: string; text: string; gradient: string }> = {
@@ -912,6 +913,8 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
+
+          <UpcomingEventsWidget days={14} limit={5} title="أحداث قادمة" />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="border-0 shadow-sm">

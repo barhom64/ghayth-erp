@@ -23,6 +23,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 /**
  * Purchase orders list — migrated in R.4 iter 4 to the unified
@@ -179,6 +180,7 @@ export default function PurchaseOrdersPage() {
         </Button>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "إجمالي الطلبات", value: formatNumber(items.length), icon: ShoppingCart, color: "text-blue-600 bg-blue-50" },
         { label: "بانتظار الاعتماد", value: formatNumber(pendingCount), icon: Clock, color: "text-amber-600 bg-amber-50" },

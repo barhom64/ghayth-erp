@@ -6,6 +6,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 export default function PaymentsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["payments"], "/finance/payments");
@@ -55,6 +56,7 @@ export default function PaymentsPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "المدفوعات" }]}
       loading={isLoading}
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
         <Card className="bg-red-600 text-white"><CardContent className="p-4 flex items-center gap-3">
           <DollarSign className="h-8 w-8 opacity-80" />

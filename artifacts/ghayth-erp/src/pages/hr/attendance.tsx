@@ -21,6 +21,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { PENALTY_LEVELS } from "@/lib/hr-type-maps";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 
 // P02-M1 — `new Date(...).toISOString().slice(0, 10)` converts the
@@ -254,6 +255,7 @@ export default function AttendancePage() {
         </div>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">

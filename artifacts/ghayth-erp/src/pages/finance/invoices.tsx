@@ -18,6 +18,7 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 export default function InvoicesPage() {
   const [, navigate] = useLocation();
@@ -168,6 +169,7 @@ export default function InvoicesPage() {
         </Link>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "إجمالي الإيرادات", value: formatCurrency(stats?.totalRevenue || 0), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
         { label: "المدفوع هذا الشهر", value: formatCurrency(stats?.paidThisMonth || 0), icon: CheckCircle, color: "text-green-600 bg-green-50" },

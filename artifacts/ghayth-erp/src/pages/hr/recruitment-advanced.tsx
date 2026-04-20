@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function RecruitmentAdvancedPage() {
   const { data: stats, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
@@ -41,6 +42,7 @@ export default function RecruitmentAdvancedPage() {
       subtitle="إحصائيات ومؤشرات عمليات التوظيف"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التوظيف المتقدمة" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <Card>

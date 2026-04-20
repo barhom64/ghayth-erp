@@ -14,6 +14,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 const typeMap: Record<string, string> = {
   asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات"
@@ -305,6 +306,7 @@ export default function AccountsPage() {
           </>
         }
       >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg"><Layers className="h-5 w-5 text-blue-600" /></div>

@@ -12,6 +12,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => void }) {
   const [showImpact, setShowImpact] = useState(false);
@@ -110,6 +111,7 @@ export default function LeaveManagementPage() {
       subtitle="اعتماد طلبات الإجازات ومتابعة الأرصدة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الإجازات" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <Tabs defaultValue="pending" dir="rtl">

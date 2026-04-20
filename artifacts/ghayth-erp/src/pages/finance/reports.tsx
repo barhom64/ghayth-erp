@@ -17,6 +17,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { MultiExportButton } from "@/components/shared/export-buttons";
 import { PageShell } from "@/components/page-shell";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 function exportCSV(rows: any[], headers: string[], filename: string) {
   if (!rows.length) return;
@@ -57,6 +58,7 @@ export default function FinancialReportsPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex flex-wrap gap-1 h-auto">
           <TabsTrigger value="trial-balance" className="text-xs"><Scale className="h-3.5 w-3.5 me-1" />ميزان المراجعة</TabsTrigger>

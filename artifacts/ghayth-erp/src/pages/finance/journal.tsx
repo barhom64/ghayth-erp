@@ -24,6 +24,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 /**
  * Journal entries list — migrated in R.5 iter 5 to the unified template
@@ -186,6 +187,7 @@ export default function JournalPage() {
         </Button>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "إجمالي القيود", value: formatNumber(totalEntries), icon: ScrollText, color: "text-blue-600 bg-blue-50" },
         { label: "هذا الشهر", value: formatNumber(items.filter((j: any) => { const d = new Date(j.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },

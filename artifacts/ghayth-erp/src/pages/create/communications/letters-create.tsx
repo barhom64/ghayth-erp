@@ -16,11 +16,12 @@ export default function LettersCreate() {
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("letters_create", {
-    subject: "", channel: "email", fromNumber: "", toNumber: "", body: "",
+    subject: "", channel: "email", fromNumber: "", toNumber: "", body: "", relatedProjectId: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/communications/send", "POST", [["comm-letters"]]);
+  const createMut = useApiMutation<unknown, Record<string, any>>("/communications/send", "POST", [["comm-letters"]]);
   const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
@@ -28,6 +29,7 @@ export default function LettersCreate() {
 
   const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
+  const projects = projectsData?.data || [];
 
   const handleSubmit = () => {
     const firstError = validate({
@@ -44,6 +46,7 @@ export default function LettersCreate() {
       fromNumber: form.fromNumber || undefined,
       toNumber: form.toNumber,
       body: form.body || undefined,
+      ...(form.relatedProjectId ? { relatedType: "project", relatedId: Number(form.relatedProjectId) } : {}),
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/letters"); },
       onError: (err: any) => {
@@ -106,6 +109,15 @@ export default function LettersCreate() {
           </FormFieldWrapper>
           <TextField label="من" value={form.fromNumber} onChange={(v) => setForm((f) => ({ ...f, fromNumber: v }))} placeholder="رقم أو بريد المرسل" />
           <TextField label="إلى" required value={form.toNumber} onChange={(v) => setForm((f) => ({ ...f, toNumber: v }))} placeholder="رقم أو بريد المستلم" error={fieldErrors.toNumber} />
+          <FormFieldWrapper label="ربط بمشروع (اختياري)">
+            <Select value={form.relatedProjectId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, relatedProjectId: v === "_none" ? "" : v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— بدون ربط —</SelectItem>
+                {projects.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
         </div>
         <TextAreaField label="المحتوى" value={form.body} onChange={(v) => setForm((f) => ({ ...f, body: v }))} placeholder="نص الخطاب..." rows={5} />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />

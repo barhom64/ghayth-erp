@@ -16,6 +16,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 
 function PayrollLines({ runId }: { runId: number }) {
@@ -119,6 +120,7 @@ export default function PayrollPage() {
         </div>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <AdvancedFilters
