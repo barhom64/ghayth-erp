@@ -14,6 +14,8 @@ const createDocumentSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   type: z.string().optional(),
+  category: z.string().optional(),
+  status: z.enum(["draft", "active", "archived"]).optional().default("draft"),
   department: z.string().optional(),
   folder: z.string().optional(),
 });
@@ -146,17 +148,18 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
     if (!parsed_createDocumentSchema.success) throw new ValidationError(parsed_createDocumentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_createDocumentSchema.data;
     const scope = req.scope!;
-    const { title, description, type, department, folder } = body;
+    const { title, description, type, category, status, department, folder } = body;
     if (!String(title).trim()) {
       throw new ValidationError("عنوان المستند مطلوب", {
         field: "title",
         fix: "أدخل عنواناً واضحاً للمستند",
       });
     }
+    const resolvedCategory = category || type || "document";
     const r = await rawExecute(
       `INSERT INTO documents (title, description, category, "fileName", "storageKey", "companyId", "uploadedBy", status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft')`,
-      [String(title).trim(), description || null, type || 'document', folder || String(title).trim(), `doc-${Date.now()}`, scope.companyId, scope.userId]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [String(title).trim(), description || null, resolvedCategory, folder || String(title).trim(), `doc-${Date.now()}`, scope.companyId, scope.userId, status]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

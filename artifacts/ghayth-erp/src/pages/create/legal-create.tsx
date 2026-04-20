@@ -24,7 +24,7 @@ export default function LegalCreate() {
     startDate: "", endDate: "", notes: "",
   });
   const addContract = useApiMutation("/legal/contracts", "POST", [["legal-contracts"], ["legal-stats"]]);
-  const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/crm/clients");
+  const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
   const search = useSearch();
