@@ -18,7 +18,16 @@ calendarRouter.get("/upcoming", async (req, res) => {
     const now = new Date().toISOString();
     const cutoff = new Date(Date.now() + daysAhead * 86400000).toISOString();
 
-    const [milestones, obligations, contractExpirations, tasks] = await Promise.all([
+    const [
+      milestones,
+      obligations,
+      contractExpirations,
+      tasks,
+      trainings,
+      empDocs,
+      vehicleExpiries,
+      propertyInsurance,
+    ] = await Promise.all([
       safe(() => rawQuery<any>(
         `SELECT pm.id, pm.title, pm."dueDate" as "date", pm.status, p.name as "projectName", p.id as "projectId"
          FROM project_milestones pm
@@ -55,6 +64,45 @@ calendarRouter.get("/upcoming", async (req, res) => {
          ORDER BY t."dueDate" LIMIT 50`,
         [cid, now, cutoff]
       ), []),
+      safe(() => rawQuery<any>(
+        `SELECT id, name, "startDate" as "date", status, provider
+         FROM training_programs
+         WHERE "companyId" = $1 AND status IN ('planned','ongoing')
+           AND "startDate" BETWEEN $2 AND $3
+         ORDER BY "startDate" LIMIT 30`,
+        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
+      safe(() => rawQuery<any>(
+        `SELECT ed.id, ed.type, ed.name, ed."expiryDate" as "date", ed."employeeId",
+                e."firstName" || ' ' || e."lastName" as "employeeName"
+         FROM employee_documents ed
+         JOIN employees e ON e.id = ed."employeeId"
+         WHERE ed."companyId" = $1 AND ed."expiryDate" BETWEEN $2 AND $3
+         ORDER BY ed."expiryDate" LIMIT 30`,
+        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
+      safe(() => rawQuery<any>(
+        `SELECT id, "plateNumber", make, model,
+                "registrationExpiry" as "regExp",
+                "nextInspectionDate" as "inspExp",
+                "nextServiceDate" as "svcExp"
+         FROM fleet_vehicles
+         WHERE "companyId" = $1
+           AND (
+             ("registrationExpiry" BETWEEN $2 AND $3)
+             OR ("nextInspectionDate" BETWEEN $2 AND $3)
+             OR ("nextServiceDate" BETWEEN $2 AND $3)
+           )
+         LIMIT 50`,
+        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
+      safe(() => rawQuery<any>(
+        `SELECT id, "unitNumber", "insuranceExpiry" as "date"
+         FROM property_units
+         WHERE "companyId" = $1 AND "insuranceExpiry" BETWEEN $2 AND $3
+         ORDER BY "insuranceExpiry" LIMIT 30`,
+        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
     ]);
 
     const events: any[] = [];
@@ -83,6 +131,62 @@ calendarRouter.get("/upcoming", async (req, res) => {
       context: t.projectName || "", link: "/tasks",
     }));
 
+    trainings.forEach((tr: any) => events.push({
+      id: `training-${tr.id}`, date: tr.date, title: `بدء تدريب: ${tr.name}`,
+      category: "training", status: tr.status,
+      context: tr.provider || "", link: `/hr/training/${tr.id}`,
+    }));
+
+    const docTypeLabel: Record<string, string> = {
+      iqama: "إقامة", passport: "جواز سفر", visa: "تأشيرة",
+      work_permit: "تصريح عمل", license: "رخصة", contract: "عقد",
+      health_certificate: "شهادة صحية", other: "وثيقة",
+    };
+    empDocs.forEach((d: any) => events.push({
+      id: `empdoc-${d.id}`, date: d.date,
+      title: `انتهاء ${docTypeLabel[d.type] || d.type}: ${d.employeeName}`,
+      category: "document_expiry", status: "expiring",
+      context: d.name, link: `/hr/employees/${d.employeeId}`,
+    }));
+
+    const vehicleEvents: any[] = [];
+    vehicleExpiries.forEach((v: any) => {
+      const label = `${v.make || ""} ${v.model || ""} (${v.plateNumber || v.id})`.trim();
+      if (v.regExp && v.regExp >= now.slice(0, 10) && v.regExp <= cutoff.slice(0, 10)) {
+        vehicleEvents.push({
+          id: `vehicle-reg-${v.id}`, date: v.regExp,
+          title: `انتهاء استمارة: ${label}`,
+          category: "vehicle_expiry", status: "expiring",
+          context: "الاستمارة", link: `/fleet/vehicles/${v.id}`,
+        });
+      }
+      if (v.inspExp && v.inspExp >= now.slice(0, 10) && v.inspExp <= cutoff.slice(0, 10)) {
+        vehicleEvents.push({
+          id: `vehicle-insp-${v.id}`, date: v.inspExp,
+          title: `فحص دوري: ${label}`,
+          category: "vehicle_expiry", status: "due",
+          context: "الفحص الدوري", link: `/fleet/vehicles/${v.id}`,
+        });
+      }
+      if (v.svcExp && v.svcExp >= now.slice(0, 10) && v.svcExp <= cutoff.slice(0, 10)) {
+        vehicleEvents.push({
+          id: `vehicle-svc-${v.id}`, date: v.svcExp,
+          title: `صيانة مجدولة: ${label}`,
+          category: "vehicle_maintenance", status: "due",
+          context: "الصيانة", link: `/fleet/vehicles/${v.id}`,
+        });
+      }
+    });
+    events.push(...vehicleEvents);
+
+    propertyInsurance.forEach((pu: any) => events.push({
+      id: `propins-${pu.id}`, date: pu.date,
+      title: `انتهاء تأمين وحدة ${pu.unitNumber || pu.id}`,
+      category: "insurance_expiry", status: "expiring",
+      context: `وحدة ${pu.unitNumber || "#" + pu.id}`,
+      link: `/properties/units/${pu.id}`,
+    }));
+
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const summary = {
@@ -91,6 +195,10 @@ calendarRouter.get("/upcoming", async (req, res) => {
       obligations: obligations.length,
       contractExpirations: contractExpirations.length,
       tasks: tasks.length,
+      trainings: trainings.length,
+      documentExpiries: empDocs.length,
+      vehicleExpiries: vehicleEvents.length,
+      insuranceExpiries: propertyInsurance.length,
     };
 
     res.json({ events, summary });
