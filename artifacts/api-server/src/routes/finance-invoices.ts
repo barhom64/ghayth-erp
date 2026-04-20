@@ -670,6 +670,7 @@ invoicesRouter.get("/invoices/:id", async (req, res) => {
 invoicesRouter.patch("/invoices/:id", async (req, res) => {
   try {
     const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
     const { status, description, dueDate } = req.body as any;
 
@@ -758,6 +759,7 @@ invoicesRouter.patch("/invoices/:id", async (req, res) => {
 invoicesRouter.delete("/invoices/:id", async (req, res) => {
   try {
     const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
     const id = Number(req.params.id);
     const [inv] = await rawQuery<any>(
       `SELECT id, ref, status, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -1688,7 +1690,7 @@ invoicesRouter.get("/dunning/preview", async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
 
     const rows = await rawQuery<any>(
-      `SELECT i.id, i."invoiceNumber", i."invoiceDate", i."dueDate",
+      `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               i."clientId", i."lastDunningStage", i."lastDunningAt",
               c.name AS "clientName", c.email AS "clientEmail", c.phone AS "clientPhone",
@@ -1761,6 +1763,7 @@ invoicesRouter.get("/dunning/preview", async (req, res) => {
 invoicesRouter.post("/dunning/send", async (req, res) => {
   try {
     const scope = req.scope!;
+    assertRole(scope, FINANCE_ROLES);
     await ensureDunningTables();
     const { invoiceIds, sentVia = "manual" } = req.body as any;
     if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
@@ -1772,7 +1775,7 @@ invoicesRouter.post("/dunning/send", async (req, res) => {
 
     for (const invId of invoiceIds) {
       const [inv] = await rawQuery<any>(
-        `SELECT i.id, i."invoiceNumber", i."invoiceDate", i."dueDate",
+        `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
                 i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
                 c.name AS "clientName"
          FROM invoices i
@@ -1842,7 +1845,7 @@ invoicesRouter.get("/dunning/history", async (req, res) => {
     if (stage) { params.push(Number(stage)); where += ` AND dl.stage=$${params.length}`; }
 
     const rows = await rawQuery<any>(
-      `SELECT dl.*, i."invoiceNumber", c.name AS "clientName"
+      `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"
        FROM dunning_letters dl
        LEFT JOIN invoices i ON i.id = dl."invoiceId"
        LEFT JOIN clients c ON c.id = dl."clientId"

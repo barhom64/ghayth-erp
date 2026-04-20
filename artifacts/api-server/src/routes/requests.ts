@@ -3,7 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 
 /* ── Zod Schemas ───────────────────────────────────────────────── */
@@ -78,23 +78,26 @@ async function validateRequestTransition(
   companyId: number,
   targetStatus: string,
   scope: any,
-): Promise<{ error?: string; code?: number; request?: any }> {
+): Promise<any> {
   const [request] = await rawQuery<any>(
     `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`,
     [id, companyId]
   );
-  if (!request) return { error: "الطلب غير موجود", code: 404 };
+  if (!request) throw new NotFoundError("الطلب غير موجود");
 
   const allowed = VALID_REQUEST_TRANSITIONS[request.status];
   if (allowed && !allowed.includes(targetStatus)) {
-    return { error: `لا يمكن تغيير الحالة من "${request.status}" إلى "${targetStatus}" — انتقال غير مصرح`, code: 409 };
+    throw new ConflictError(
+      `لا يمكن تغيير الحالة من "${request.status}" إلى "${targetStatus}" — انتقال غير مصرح`,
+      { field: "status" }
+    );
   }
 
   if (['approved', 'rejected', 'returned', 'in_review'].includes(targetStatus)) {
     const isCurrentApprover = String(request.currentApprover) === String(scope.activeAssignmentId);
     const isManager = MANAGER_ROLES.includes(scope.role);
     if (!isCurrentApprover && !isManager) {
-      return { error: "غير مصرح لك بتغيير حالة هذا الطلب", code: 403 };
+      throw new ForbiddenError("غير مصرح لك بتغيير حالة هذا الطلب");
     }
     if (!isCurrentApprover && isManager) {
       request._isOverride = true;
@@ -141,11 +144,13 @@ async function validateRequestTransition(
     }
 
     if (validationErrors.length > 0) {
-      return { error: `لا يمكن الاعتماد — شروط غير مستوفاة:\n${validationErrors.map(e => `• ${e}`).join("\n")}`, code: 422 };
+      throw new ValidationError(
+        `لا يمكن الاعتماد — شروط غير مستوفاة:\n${validationErrors.map(e => `• ${e}`).join("\n")}`,
+      );
     }
   }
 
-  return { request };
+  return request;
 }
 
 const router = Router();
@@ -380,7 +385,7 @@ router.get("/:id", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
-    if (!row) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!row) throw new NotFoundError("الطلب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
@@ -396,16 +401,11 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
     let previousStatus: string | null = null;
     let patchIsOverride = false;
     if (b.status !== undefined) {
-      const validation = await validateRequestTransition(id, scope.companyId, b.status, scope);
-      if (validation.error) {
-        res.status(validation.code || 400).json({ error: validation.error });
-        return;
-      }
-      previousStatus = validation.request?.status ?? null;
-      patchIsOverride = validation.request?._isOverride === true;
+      const request = await validateRequestTransition(id, scope.companyId, b.status, scope);
+      previousStatus = request?.status ?? null;
+      patchIsOverride = request?._isOverride === true;
       if (patchIsOverride && !b.notes) {
-        res.status(400).json({ error: "يجب تحديد سبب التجاوز عند التدخل في طلب ليس مسنداً إليك" });
-        return;
+        throw new ValidationError("يجب تحديد سبب التجاوز عند التدخل في طلب ليس مسنداً إليك", { field: "notes" });
       }
     }
 
@@ -423,10 +423,10 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
       params.push(scope.userId); sets.push(`"reviewedBy"=$${params.length}`);
       params.push(new Date().toISOString()); sets.push(`"reviewedAt"=$${params.length}`);
     }
-    if (sets.length === 0) { res.status(400).json({ error: "لا توجد بيانات للتحديث" }); return; }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [id, scope.companyId]);
     if (b.status && ['approved', 'rejected', 'in_review', 'returned'].includes(b.status)) {
       const statusLabels: Record<string, string> = { approved: 'معتمد', rejected: 'مرفوض', in_review: 'قيد المراجعة', returned: 'مُرجع' };
@@ -476,16 +476,15 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
     const id = Number(req.params.id);
     const { notes } = req.body;
 
-    const validation = await validateRequestTransition(id, scope.companyId, "approved", scope);
-    if (validation.error) { res.status(validation.code || 400).json({ error: validation.error }); return; }
-    const isOverride = validation.request?._isOverride === true;
-    if (isOverride && !notes) { res.status(400).json({ error: "يجب تحديد سبب التجاوز عند التدخل في طلب ليس مسنداً إليك" }); return; }
+    const request = await validateRequestTransition(id, scope.companyId, "approved", scope);
+    const isOverride = request?._isOverride === true;
+    if (isOverride && !notes) throw new ValidationError("يجب تحديد سبب التجاوز عند التدخل في طلب ليس مسنداً إليك", { field: "notes" });
 
     const result = await rawExecute(
       `UPDATE requests SET status='approved', notes=$1, "reviewedBy"=$2, "reviewedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
       [notes || null, scope.userId, id, scope.companyId]
     );
-    if (result.affectedRows === 0) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
     await rawExecute(
       `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
       [id, isOverride ? 'approved_override' : 'approved', isOverride ? `[تدخل] ${notes}` : (notes || null), scope.userId, scope.companyId]
@@ -494,7 +493,7 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
       await createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
         action: "workflow_override", entity: "request", entityId: id,
-        before: { status: validation.request!.status, currentApprover: validation.request!.currentApprover },
+        before: { status: request.status, currentApprover: request.currentApprover },
         after: { status: "approved", overriddenBy: scope.userId },
         reason: notes || "تدخل دور أعلى",
       });
@@ -502,7 +501,7 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "request_status_approved", entity: "request", entityId: id,
-      before: { status: validation.request!.status }, after: { status: "approved" },
+      before: { status: request.status }, after: { status: "approved" },
       reason: notes || undefined,
     });
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
@@ -522,9 +521,9 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "request.approved", entity: "request", entityId: id,
-      before: { status: validation.request!.status }, after: { status: "approved" },
+      before: { status: request.status }, after: { status: "approved" },
     }).catch(console.error);
-    res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "approved" }, notifications: ["إشعار لمقدم الطلب بالاعتماد"], overrideLogged: isOverride } });
+    res.json({ ...row, actualImpact: { statusChange: { from: request.status, to: "approved" }, notifications: ["إشعار لمقدم الطلب بالاعتماد"], overrideLogged: isOverride } });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -535,17 +534,16 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { notes } = req.body;
-    if (!notes) { res.status(400).json({ error: "يجب ذكر سبب الرفض" }); return; }
+    if (!notes) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
 
-    const validation = await validateRequestTransition(id, scope.companyId, "rejected", scope);
-    if (validation.error) { res.status(validation.code || 400).json({ error: validation.error }); return; }
-    const isOverride = validation.request?._isOverride === true;
+    const request = await validateRequestTransition(id, scope.companyId, "rejected", scope);
+    const isOverride = request?._isOverride === true;
 
     const result = await rawExecute(
       `UPDATE requests SET status='rejected', notes=$1, "reviewedBy"=$2, "reviewedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
       [notes, scope.userId, id, scope.companyId]
     );
-    if (result.affectedRows === 0) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
     await rawExecute(
       `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
       [id, isOverride ? 'rejected_override' : 'rejected', isOverride ? `[تدخل] ${notes}` : notes, scope.userId, scope.companyId]
@@ -554,7 +552,7 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
       await createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
         action: "workflow_override", entity: "request", entityId: id,
-        before: { status: validation.request!.status, currentApprover: validation.request!.currentApprover },
+        before: { status: request.status, currentApprover: request.currentApprover },
         after: { status: "rejected", overriddenBy: scope.userId },
         reason: notes,
       });
@@ -562,7 +560,7 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "request_status_rejected", entity: "request", entityId: id,
-      before: { status: validation.request!.status }, after: { status: "rejected" },
+      before: { status: request.status }, after: { status: "rejected" },
       reason: notes,
     });
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
@@ -582,9 +580,9 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "request.rejected", entity: "request", entityId: id,
-      before: { status: validation.request!.status }, after: { status: "rejected", reason: notes },
+      before: { status: request.status }, after: { status: "rejected", reason: notes },
     }).catch(console.error);
-    res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "rejected" }, notifications: ["إشعار لمقدم الطلب بالرفض"], overrideLogged: isOverride } });
+    res.json({ ...row, actualImpact: { statusChange: { from: request.status, to: "rejected" }, notifications: ["إشعار لمقدم الطلب بالرفض"], overrideLogged: isOverride } });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -595,17 +593,16 @@ router.post("/:id/return", requirePermission("requests:write"), async (req, res)
     const scope = req.scope!;
     const id = Number(req.params.id);
     const { notes } = req.body;
-    if (!notes) { res.status(400).json({ error: "يجب ذكر سبب الإرجاع" }); return; }
+    if (!notes) throw new ValidationError("يجب ذكر سبب الإرجاع", { field: "notes" });
 
-    const validation = await validateRequestTransition(id, scope.companyId, "returned", scope);
-    if (validation.error) { res.status(validation.code || 400).json({ error: validation.error }); return; }
-    const isOverride = validation.request?._isOverride === true;
+    const request = await validateRequestTransition(id, scope.companyId, "returned", scope);
+    const isOverride = request?._isOverride === true;
 
     const result = await rawExecute(
       `UPDATE requests SET status='returned', "returnReason"=$1, notes=$2, "reviewedBy"=$3, "reviewedAt"=NOW() WHERE id=$4 AND "companyId"=$5`,
       [notes, notes, scope.userId, id, scope.companyId]
     );
-    if (result.affectedRows === 0) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
     await rawExecute(
       `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
       [id, isOverride ? 'returned_override' : 'returned', isOverride ? `[تدخل] ${notes}` : notes, scope.userId, scope.companyId]
@@ -614,7 +611,7 @@ router.post("/:id/return", requirePermission("requests:write"), async (req, res)
       await createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
         action: "workflow_override", entity: "request", entityId: id,
-        before: { status: validation.request!.status, currentApprover: validation.request!.currentApprover },
+        before: { status: request.status, currentApprover: request.currentApprover },
         after: { status: "returned", overriddenBy: scope.userId },
         reason: notes,
       });
@@ -622,7 +619,7 @@ router.post("/:id/return", requirePermission("requests:write"), async (req, res)
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "request_status_returned", entity: "request", entityId: id,
-      before: { status: validation.request!.status }, after: { status: "returned" },
+      before: { status: request.status }, after: { status: "returned" },
       reason: notes,
     });
     const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
@@ -642,9 +639,9 @@ router.post("/:id/return", requirePermission("requests:write"), async (req, res)
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "request.returned", entity: "request", entityId: id,
-      before: { status: validation.request!.status }, after: { status: "returned", reason: notes },
+      before: { status: request.status }, after: { status: "returned", reason: notes },
     }).catch(console.error);
-    res.json({ ...row, actualImpact: { statusChange: { from: validation.request!.status, to: "returned" }, notifications: ["إشعار لمقدم الطلب بالإرجاع"], overrideLogged: isOverride } });
+    res.json({ ...row, actualImpact: { statusChange: { from: request.status, to: "returned" }, notifications: ["إشعار لمقدم الطلب بالإرجاع"], overrideLogged: isOverride } });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -672,28 +669,26 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
       `SELECT id, status, "requesterId", "convertedTo" FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [id, scope.companyId]
     );
-    if (!request) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (!request) throw new NotFoundError("الطلب غير موجود");
 
     const isManager = MANAGER_ROLES.includes(scope.role);
     const isOwner = String(request.requesterId) === String(scope.activeAssignmentId);
     if (!isManager && !isOwner) {
-      res.status(403).json({ error: "غير مصرح لك بحذف هذا الطلب" });
-      return;
+      throw new ForbiddenError("غير مصرح لك بحذف هذا الطلب");
     }
 
     if (!["pending", "draft", "returned"].includes(request.status)) {
-      res.status(409).json({
-        error: `لا يمكن حذف طلب في حالة "${request.status}". استخدم الإلغاء بدلاً من الحذف.`,
-      });
-      return;
+      throw new ConflictError(
+        `لا يمكن حذف طلب في حالة "${request.status}". استخدم الإلغاء بدلاً من الحذف.`,
+        { field: "status" }
+      );
     }
     if (request.convertedTo) {
-      res.status(409).json({ error: "لا يمكن حذف طلب تم تحويله إلى كيان آخر" });
-      return;
+      throw new ConflictError("لا يمكن حذف طلب تم تحويله إلى كيان آخر", { field: "convertedTo" });
     }
 
     const result = await rawExecute(`UPDATE requests SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (result.affectedRows === 0) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
+    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -718,17 +713,16 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
     const { targetType } = req.body;
 
     if (!["maintenance", "purchase", "case"].includes(targetType)) {
-      res.status(400).json({ error: "نوع التحويل غير صالح. المتاح: maintenance, purchase, case" });
-      return;
+      throw new ValidationError("نوع التحويل غير صالح. المتاح: maintenance, purchase, case", { field: "targetType" });
     }
 
     const [request] = await rawQuery<any>(
       `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`,
       [id, scope.companyId]
     );
-    if (!request) { res.status(404).json({ error: "الطلب غير موجود" }); return; }
-    if (request.status !== "approved") { res.status(400).json({ error: "يمكن تحويل الطلبات المعتمدة فقط" }); return; }
-    if (request.convertedTo) { res.status(400).json({ error: "هذا الطلب تم تحويله مسبقاً" }); return; }
+    if (!request) throw new NotFoundError("الطلب غير موجود");
+    if (request.status !== "approved") throw new ConflictError("يمكن تحويل الطلبات المعتمدة فقط", { field: "status" });
+    if (request.convertedTo) throw new ConflictError("هذا الطلب تم تحويله مسبقاً", { field: "convertedTo" });
 
     let createdId: number | null = null;
     let targetEndpoint = "";

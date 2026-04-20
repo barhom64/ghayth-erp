@@ -225,6 +225,7 @@ accountsRouter.get("/journal", async (req, res) => {
 accountsRouter.post("/journal", async (req, res) => {
   try {
     const scope = req.scope!;
+    assertRole(scope, ["finance_manager", "general_manager", "owner"]);
     const { ref, description, lines, date: journalBodyDate } = req.body as any;
     if (!lines || !Array.isArray(lines) || lines.length === 0) {
       throw new ValidationError("بنود القيد مطلوبة", {
