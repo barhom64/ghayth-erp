@@ -800,7 +800,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
     const { reason } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    if (["approved", "rejected", "cancelled"].includes(memo.status)) {
+    if (["approved", "rejected", "cancelled", "closed", "appeal_pending", "appeal_accepted"].includes(memo.status)) {
       badRequest(res, `لا يمكن إلغاء المحضر في الحالة ${memo.status}`); return;
     }
     await rawExecute(

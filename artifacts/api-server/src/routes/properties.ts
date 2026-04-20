@@ -710,7 +710,7 @@ router.get("/contracts/:id", requirePermission("properties:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
 
-router.post("/contracts", async (req, res) => {
+router.post("/contracts", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -761,6 +761,27 @@ router.post("/contracts", async (req, res) => {
       throw new ConflictError(
         `لا يمكن تأجير وحدة بحالة ${unit.status}`,
         { field: "unitId", fix: "أعد الوحدة لحالة متاحة قبل إنشاء العقد" }
+      );
+    }
+
+    // Defense in depth: even if the unit's status flag is stale, refuse to
+    // create a second active/draft contract on the same unit. The unit.status
+    // check above can lag (admin manually set "available" on a unit that
+    // still has a contract), so this catches the contract-table truth.
+    const [activeContract] = await rawQuery<{ id: number; contractNumber: string }>(
+      `SELECT id, "contractNumber" FROM rental_contracts
+       WHERE "unitId" = $1 AND "companyId" = $2 AND status IN ('active','draft')
+         AND "deletedAt" IS NULL LIMIT 1`,
+      [b.unitId, scope.companyId]
+    );
+    if (activeContract) {
+      throw new ConflictError(
+        `يوجد عقد نشط على الوحدة ${unit.unitNumber} (رقم ${activeContract.contractNumber})`,
+        {
+          field: "unitId",
+          fix: "أنهِ العقد الحالي عبر زر الإنهاء أو التجديد قبل إنشاء عقد جديد.",
+          meta: { existingContractId: activeContract.id },
+        }
       );
     }
 
@@ -873,7 +894,7 @@ router.post("/contracts", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create contract error:"); }
 });
 
-router.patch("/contracts/:id", async (req, res) => {
+router.patch("/contracts/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -882,6 +903,20 @@ router.patch("/contracts/:id", async (req, res) => {
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("العقد غير موجود");
+
+    // Refuse any edits on contracts that have left the active lifecycle.
+    // Historical contracts must stay immutable so audit trails and accounting
+    // entries remain trustworthy. Use /renew or create a fresh contract.
+    if (["terminated", "expired", "cancelled", "renewed"].includes(existing.status)) {
+      throw new ConflictError(
+        `لا يمكن تعديل عقد بحالة "${existing.status}"`,
+        {
+          field: "status",
+          fix: "العقد منتهي. أنشئ عقداً جديداً أو جدّد العقد عبر /renew.",
+          meta: { contractId: id, currentStatus: existing.status },
+        }
+      );
+    }
 
     const parsed = updateContractSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -1047,7 +1082,7 @@ router.delete("/contracts/:id", async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Renew an active contract — extends endDate, generates new installments, resets obligations */
-router.post("/contracts/:id/renew", async (req, res) => {
+router.post("/contracts/:id/renew", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -1158,7 +1193,7 @@ router.post("/contracts/:id/renew", async (req, res) => {
 });
 
 /** Terminate an active contract — early termination with optional fee */
-router.post("/contracts/:id/terminate", async (req, res) => {
+router.post("/contracts/:id/terminate", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -1400,7 +1435,7 @@ router.get("/payments", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Rent payments error:"); }
 });
 
-router.post("/payments/:id/pay", async (req, res) => {
+router.post("/payments/:id/pay", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -1412,7 +1447,7 @@ router.post("/payments/:id/pay", async (req, res) => {
 
     // Fetch payment + contract context BEFORE mutating so we can post GL first.
     const [existing] = await rawQuery<any>(
-      `SELECT rp.*, c."tenantName", u."unitNumber", u."buildingName", u.id AS "unitId"
+      `SELECT rp.*, c.status AS "contractStatus", c."tenantName", u."unitNumber", u."buildingName", u.id AS "unitId"
          FROM rent_payments rp
          JOIN rental_contracts c ON c.id = rp."contractId"
          LEFT JOIN property_units u ON u.id = c."unitId"
@@ -1420,6 +1455,21 @@ router.post("/payments/:id/pay", async (req, res) => {
       [Number(id)]
     );
     if (!existing) throw new NotFoundError("القسط غير موجود");
+
+    // Refuse to record payments against contracts that are no longer in
+    // a payable state. The /renew or /terminate flows are the only paths
+    // that change a contract's lifecycle — a fresh payment on a terminated
+    // contract would create a misleading audit trail.
+    if (!["active", "draft"].includes(existing.contractStatus)) {
+      throw new ConflictError(
+        `لا يمكن تسجيل دفعة على عقد بحالة "${existing.contractStatus}"`,
+        {
+          field: "contractStatus",
+          fix: "أعد تفعيل العقد أو أنشئ عقداً جديداً قبل تسجيل الدفعة.",
+          meta: { paymentId: Number(id), contractStatus: existing.contractStatus },
+        }
+      );
+    }
 
     // 1. Post journal entry FIRST. If this fails, the payment update never happens,
     //    preserving dual-entry invariants (no cash recorded without a GL post).
@@ -2047,7 +2097,7 @@ router.get("/tenants", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Tenants error:"); }
 });
 
-router.post("/tenants", async (req, res) => {
+router.post("/tenants", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;
@@ -2785,7 +2835,7 @@ router.get("/owners/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Owner detail error:"); }
 });
 
-router.post("/owners", async (req, res) => {
+router.post("/owners", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = req.body;

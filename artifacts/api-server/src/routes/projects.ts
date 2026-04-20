@@ -341,6 +341,21 @@ async function assertProjectAccess(projectId: number, scope: any): Promise<any> 
   return project;
 }
 
+// Closing a project freezes it: no costs/tasks/phases/resources can be added,
+// and core fields cannot be updated. Cancelled projects are treated the same.
+function assertProjectMutable(project: any): void {
+  if (project.status === "completed" || project.status === "cancelled") {
+    throw new ConflictError(
+      `لا يمكن التعديل على مشروع بحالة "${project.status === "completed" ? "مغلق" : "ملغى"}"`,
+      {
+        field: "status",
+        fix: "المشروع مقفول ولا يقبل أي تعديلات. أعد فتحه عبر صلاحية المالك إن لزم.",
+        meta: { projectId: project.id, currentStatus: project.status },
+      }
+    );
+  }
+}
+
 router.post("/", requirePermission("projects:create"), async (req, res) => {
   try {
     const parsed = createProjectSchema.safeParse(req.body);
@@ -548,6 +563,19 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     if (!existing) throw new NotFoundError("المشروع غير موجود");
     const b = req.body;
 
+    // Closed/cancelled projects are frozen — refuse any PATCH on them, even
+    // edits to non-status fields. The /close endpoint is the only way out.
+    if (existing.status === "completed" || existing.status === "cancelled") {
+      throw new ConflictError(
+        `لا يمكن تعديل مشروع بحالة "${existing.status === "completed" ? "مغلق" : "ملغى"}"`,
+        {
+          field: "status",
+          fix: "المشروع مقفول. التعديلات على المشاريع المغلقة غير مسموحة.",
+          meta: { projectId: existing.id, currentStatus: existing.status },
+        }
+      );
+    }
+
     // State machine — /close is the only way to reach `completed`; PATCH
     // refuses direct transitions to terminal states.
     if (b.status !== undefined && b.status !== existing.status) {
@@ -683,7 +711,8 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المرحلة مطلوب", { field: "name", fix: "أدخل اسم المرحلة" });
     }
-    await assertProjectAccess(projectId, scope);
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
     const { insertId } = await rawExecute(
       `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
       [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
@@ -777,7 +806,8 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
       throw new ValidationError("عنوان المهمة مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للمهمة" });
     }
-    await assertProjectAccess(projectId, scope);
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
 
     if (b.assigneeId) {
       const [emp] = await rawQuery<any>(
@@ -1028,17 +1058,48 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
 
       const budget = Number(project?.budget) || 0;
       const spentAmount = Number(project?.spentAmount) || 0;
-      if (budget > 0 && spentAmount >= budget * 0.8) {
-        console.log(`[ALERT] Project ${task.projectId} reached ${Math.round((spentAmount / budget) * 100)}% of budget`);
+      if (budget > 0 && spentAmount >= budget * 0.8 && project?.managerId) {
+        const pct = Math.round((spentAmount / budget) * 100);
+        const [mgrAsn] = await rawQuery<{ id: number }>(
+          `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+          [project.managerId, project.companyId]
+        );
+        if (mgrAsn?.id) {
+          createNotification({
+            companyId: project.companyId,
+            assignmentId: mgrAsn.id,
+            type: "project_budget_warning",
+            title: `تحذير الميزانية: ${project.name}`,
+            body: `صُرف ${pct}% من ميزانية المشروع (${spentAmount} من ${budget} ريال).`,
+            priority: pct >= 100 ? "urgent" : "high",
+            refType: "project",
+            refId: project.id,
+          }).catch(console.error);
+        }
       }
 
       const endDate = project?.endDate ? new Date(project.endDate) : null;
-      if (endDate && new Date() > endDate && project?.status === 'active' && progressPct < 100) {
+      if (endDate && new Date() > endDate && project?.status === 'active' && progressPct < 100 && project?.managerId) {
         const delayDays = Math.floor((Date.now() - endDate.getTime()) / (1000 * 60 * 60 * 24));
         const projectDuration = Math.max(1, Math.round((endDate.getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24)));
         const dailyBudget = budget / projectDuration;
         const delayImpact = dailyBudget * delayDays;
-        console.log(`[ALERT] Project ${task.projectId} is slipping: ${delayDays} days late, financial impact: ${delayImpact.toFixed(2)} SAR`);
+        const [mgrAsn] = await rawQuery<{ id: number }>(
+          `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+          [project.managerId, project.companyId]
+        );
+        if (mgrAsn?.id) {
+          createNotification({
+            companyId: project.companyId,
+            assignmentId: mgrAsn.id,
+            type: "project_overdue",
+            title: `تأخر المشروع: ${project.name}`,
+            body: `المشروع متأخر ${delayDays} يوم — أثر مالي تقديري: ${delayImpact.toFixed(0)} ريال.`,
+            priority: "high",
+            refType: "project",
+            refId: project.id,
+          }).catch(console.error);
+        }
       }
     }
 
@@ -1477,6 +1538,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
     const b = req.body;
     const projectId = Number(req.params.id);
     const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
     const { insertId } = await rawExecute(
       `INSERT INTO project_resources ("projectId","companyId","employeeId","taskId",role,"allocatedHours","budgetAllocated","startDate","endDate")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -1527,6 +1589,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
     const b = req.body;
     const projectId = Number(req.params.id);
     const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
     if (!b.description || typeof b.description !== "string" || !b.description.trim()) {
       throw new ValidationError("وصف التكلفة مطلوب", { field: "description", fix: "أدخل وصفاً للتكلفة" });
     }
@@ -1765,6 +1828,43 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
       }
     } catch (obErr) {
       console.error(`[projects] cancel obligations on close failed for project ${projectId}:`, obErr);
+    }
+
+    // Notify the project team that the project is closed.
+    try {
+      const teamRows = await rawQuery<{ employeeId: number }>(
+        `SELECT DISTINCT pr."employeeId" FROM project_resources pr
+         WHERE pr."projectId" = $1 AND pr."employeeId" IS NOT NULL`,
+        [projectId]
+      );
+      const managerRow = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+         WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active' LIMIT 1`,
+        [project.managerId ?? 0, scope.companyId]
+      );
+      const recipientAssignments = new Set<number>();
+      if (managerRow[0]?.id) recipientAssignments.add(managerRow[0].id);
+      for (const t of teamRows) {
+        const [asn] = await rawQuery<{ id: number }>(
+          `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+          [t.employeeId, scope.companyId]
+        );
+        if (asn?.id) recipientAssignments.add(asn.id);
+      }
+      for (const assignmentId of recipientAssignments) {
+        createNotification({
+          companyId: scope.companyId,
+          assignmentId,
+          type: "project_closed",
+          title: `تم إقفال المشروع: ${project.name}`,
+          body: `تم إقفال المشروع وتحويل التكاليف (${totalWip} ريال) إلى الحسابات النهائية.`,
+          priority: "normal",
+          refType: "project",
+          refId: projectId,
+        }).catch(console.error);
+      }
+    } catch (notifyErr) {
+      console.error(`[projects] notify team on close failed:`, notifyErr);
     }
 
     res.json({
