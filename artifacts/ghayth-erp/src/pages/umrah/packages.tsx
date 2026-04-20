@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/formatters";
 import { Package, Check, X } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 interface UmrahPackage {
   id: number;
@@ -48,12 +50,12 @@ export default function UmrahPackages() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
-    <div className="space-y-6">
+    <PageShell title="باقات العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الباقات" }]}>
+      <UmrahTabsNav />
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Package className="h-6 w-6" /> باقات العمرة</h1>
         <p className="text-muted-foreground mt-1">إدارة باقات العمرة والأسعار والتفاصيل</p>
       </div>
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </div>
+    </PageShell>
   );
 }

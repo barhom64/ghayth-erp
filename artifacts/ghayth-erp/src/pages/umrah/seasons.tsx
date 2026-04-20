@@ -9,6 +9,8 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 export default function UmrahSeasons() {
   const { data: resp, refetch, isLoading, isError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -43,9 +45,9 @@ export default function UmrahSeasons() {
   const openCount = items.filter((s: any) => s.status === "open").length;
 
   return (
-    <div className="space-y-6">
+    <PageShell title="مواسم العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "المواسم" }]}>
+      <UmrahTabsNav />
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">مواسم العمرة</h1>
         <Button onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</Button>
       </div>
 
@@ -102,6 +104,6 @@ export default function UmrahSeasons() {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -7,6 +7,8 @@ import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filter
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 export default function UmrahPenalties() {
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-penalties"], "/umrah/penalties");
@@ -46,10 +48,8 @@ export default function UmrahPenalties() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الغرامات</h1>
-      </div>
+    <PageShell title="غرامات العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الغرامات" }]}>
+      <UmrahTabsNav />
 
       <div className="grid gap-4 grid-cols-3">
         {kpiCards.map((c) => (
@@ -94,6 +94,6 @@ export default function UmrahPenalties() {
         noToolbar
         pageSize={pageSize}
       />
-    </div>
+    </PageShell>
   );
 }

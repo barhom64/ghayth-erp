@@ -18,6 +18,7 @@ import { Users2, FileText, Calendar, Banknote, Shield, ScrollText, Zap } from "l
 import { formatCurrency, getCurrencySymbol } from "@/lib/formatters";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { fieldErrorClass, TextField, NumberField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
@@ -504,6 +505,21 @@ export default function ContractsCreate() {
         <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => set("notes", v)} rows={2} placeholder="ملاحظات إضافية..." />
 
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات العقد" />
+
+        {form.unitId && form.monthlyRent && form.startDate && form.endDate && (
+          <ImpactPreviewButton
+            endpoint="/properties/contracts/impact-preview"
+            payload={{
+              unitId: Number(form.unitId),
+              tenantId: form.tenantId ? Number(form.tenantId) : undefined,
+              monthlyRent: Number(form.monthlyRent),
+              startDate: form.startDate,
+              endDate: form.endDate,
+              securityDeposit: form.depositAmount ? Number(form.depositAmount) : undefined,
+            }}
+            label="معاينة أثر العقد"
+          />
+        )}
 
         <div className="flex justify-end gap-3 pt-6">
           <Button variant="outline" onClick={() => setLocation("/properties/contracts")}>إلغاء</Button>

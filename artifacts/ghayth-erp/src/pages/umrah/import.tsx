@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Upload } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 const EXPECTED_FIELDS = ["fullName", "passportNumber", "nationality", "arrivalDate", "departureDate"];
 const FIELD_LABELS: Record<string, string> = {
@@ -129,10 +131,8 @@ export default function UmrahImport() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">استيراد المعتمرين</h1>
-      </div>
+    <PageShell title="استيراد معتمرين" breadcrumbs={[{ label: "العمرة" }, { label: "الاستيراد" }]}>
+      <UmrahTabsNav />
 
       <Card>
         <CardHeader><CardTitle className="text-base">رفع ملف إكسل</CardTitle></CardHeader>
@@ -257,6 +257,6 @@ export default function UmrahImport() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

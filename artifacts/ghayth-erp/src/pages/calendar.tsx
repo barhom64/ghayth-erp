@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { Calendar as CalendarIcon, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield } from "lucide-react";
+import { Calendar as CalendarIcon, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield, List, Grid3x3, ChevronRight, ChevronLeft } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
@@ -49,9 +49,34 @@ function dayLabel(dateStr: string) {
   return formatDateAr(dateStr);
 }
 
+const ARABIC_WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const ARABIC_MONTHS = [
+  "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+  "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+];
+
+function buildMonthGrid(year: number, month: number): (string | null)[] {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startWeekday = firstDay.getDay();
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const date = new Date(year, month, d);
+    cells.push(date.toISOString().split("T")[0]);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
 export default function CalendarPage() {
   const [days, setDays] = useState("30");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [view, setView] = useState<"list" | "month">("list");
+  const [monthCursor, setMonthCursor] = useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["calendar-upcoming", days],
@@ -77,6 +102,24 @@ export default function CalendarPage() {
       breadcrumbs={[{ label: "العمليات" }, { label: "التقويم" }]}
       actions={
         <div className="flex items-center gap-2">
+          <div className="flex rounded-md border bg-muted/30 p-0.5">
+            <Button
+              variant={view === "list" ? "default" : "ghost"}
+              size="sm"
+              className="h-7 px-2 gap-1 text-xs"
+              onClick={() => setView("list")}
+            >
+              <List className="h-3.5 w-3.5" /> قائمة
+            </Button>
+            <Button
+              variant={view === "month" ? "default" : "ghost"}
+              size="sm"
+              className="h-7 px-2 gap-1 text-xs"
+              onClick={() => setView("month")}
+            >
+              <Grid3x3 className="h-3.5 w-3.5" /> شهر
+            </Button>
+          </div>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -115,7 +158,16 @@ export default function CalendarPage() {
         { label: "تأمينات تنتهي", value: summary.insuranceExpiries || 0, icon: Shield, color: "text-emerald-600 bg-emerald-50" },
       ]} />
 
-      {sortedDates.length === 0 ? (
+      {view === "month" ? (
+        <MonthGrid
+          year={monthCursor.year}
+          month={monthCursor.month}
+          events={filtered}
+          onPrev={() => setMonthCursor((c) => c.month === 0 ? { year: c.year - 1, month: 11 } : { year: c.year, month: c.month - 1 })}
+          onNext={() => setMonthCursor((c) => c.month === 11 ? { year: c.year + 1, month: 0 } : { year: c.year, month: c.month + 1 })}
+          onToday={() => { const d = new Date(); setMonthCursor({ year: d.getFullYear(), month: d.getMonth() }); }}
+        />
+      ) : sortedDates.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <CalendarIcon className="h-10 w-10 mx-auto mb-3 text-gray-300" />
@@ -169,5 +221,83 @@ export default function CalendarPage() {
         </div>
       )}
     </PageShell>
+  );
+}
+
+interface MonthGridProps {
+  year: number;
+  month: number;
+  events: any[];
+  onPrev: () => void;
+  onNext: () => void;
+  onToday: () => void;
+}
+
+function MonthGrid({ year, month, events, onPrev, onNext, onToday }: MonthGridProps) {
+  const cells = buildMonthGrid(year, month);
+  const today = new Date().toISOString().split("T")[0];
+
+  const eventsByDate: Record<string, any[]> = {};
+  for (const e of events) {
+    const d = e.date?.split("T")[0];
+    if (!d) continue;
+    if (!eventsByDate[d]) eventsByDate[d] = [];
+    eventsByDate[d].push(e);
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <CalendarIcon className="h-4 w-4 text-primary" />
+          {ARABIC_MONTHS[month]} {year}
+        </CardTitle>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onPrev}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onToday}>اليوم</Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onNext}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-7 gap-1 text-center" dir="rtl">
+          {ARABIC_WEEKDAYS.map((wd) => (
+            <div key={wd} className="text-xs font-semibold text-muted-foreground py-1.5">{wd}</div>
+          ))}
+          {cells.map((date, idx) => {
+            if (!date) return <div key={idx} className="min-h-[80px]" />;
+            const dayEvents = eventsByDate[date] || [];
+            const isCurrentDay = date === today;
+            const dayNum = Number(date.split("-")[2]);
+            return (
+              <div
+                key={idx}
+                className={`min-h-[80px] border rounded-md p-1 text-start flex flex-col gap-0.5 ${isCurrentDay ? "border-primary bg-primary/5" : "border-gray-100 hover:bg-muted/40"}`}
+              >
+                <div className={`text-xs font-semibold ${isCurrentDay ? "text-primary" : "text-gray-600"}`}>{dayNum}</div>
+                <div className="space-y-0.5 overflow-hidden">
+                  {dayEvents.slice(0, 3).map((e: any) => {
+                    const config = CATEGORY_CONFIG[e.category] || CATEGORY_CONFIG.task;
+                    return (
+                      <Link key={e.id} href={e.link || "#"}>
+                        <div className={`text-[10px] truncate rounded px-1 py-0.5 cursor-pointer hover:opacity-80 ${config.color}`}>
+                          {e.title}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  {dayEvents.length > 3 && (
+                    <div className="text-[10px] text-muted-foreground">+{dayEvents.length - 3} أخرى</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -559,6 +559,124 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
 });
 
+// Impact preview — shows what will happen when the rental contract is created
+router.post("/contracts/impact-preview", requirePermission("properties:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { unitId, tenantId, monthlyRent, startDate, endDate, securityDeposit } = req.body as any;
+
+    const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
+
+    let unitLabel = "";
+    let unitStatus = "";
+    if (unitId) {
+      const [unit] = await rawQuery<any>(
+        `SELECT "unitNumber", status FROM property_units WHERE id = $1 AND "companyId" = $2`,
+        [Number(unitId), scope.companyId]
+      );
+      unitLabel = unit?.unitNumber || String(unitId);
+      unitStatus = unit?.status || "";
+      if (unit && unit.status !== "available") {
+        items.push({
+          category: "الوحدة",
+          label: "حالة الوحدة",
+          value: `الوحدة ${unitLabel} حالتها "${unit.status}" — لن تصبح مؤجرة حتى تعتمد العقد`,
+          severity: unit.status === "rented" ? "danger" : "warning",
+        });
+      }
+    }
+
+    if (startDate && endDate) {
+      const months = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (30 * 86400000));
+      const totalRent = Number(monthlyRent || 0) * months;
+      items.push({
+        category: "مالي",
+        label: "إجمالي الإيجار",
+        value: `${totalRent.toLocaleString("ar-SA")} ر.س على ${months} شهر (${Number(monthlyRent || 0).toLocaleString("ar-SA")} ر.س/شهر)`,
+        severity: "info",
+      });
+
+      items.push({
+        category: "التزامات",
+        label: "أقساط الإيجار الشهرية",
+        value: `سيتم إنشاء ${months} التزام شهري تلقائياً للتحصيل`,
+        severity: "info",
+      });
+
+      items.push({
+        category: "التزامات",
+        label: "تذكير انتهاء العقد",
+        value: `سيتم تسجيل التزام تجديد قبل 30 يوم من ${new Date(endDate).toLocaleDateString("ar-SA")}`,
+        severity: "info",
+      });
+    }
+
+    if (securityDeposit && Number(securityDeposit) > 0) {
+      items.push({
+        category: "مالي",
+        label: "ضمان تأمين",
+        value: `استلام مبلغ ${Number(securityDeposit).toLocaleString("ar-SA")} ر.س كضمان يُعاد عند انتهاء العقد`,
+        severity: "info",
+      });
+    }
+
+    if (tenantId) {
+      const [tenant] = await rawQuery<any>(
+        `SELECT name FROM tenants WHERE id = $1 AND "companyId" = $2`,
+        [Number(tenantId), scope.companyId]
+      );
+      const [[activeContracts]] = await Promise.all([
+        rawQuery<any>(
+          `SELECT COUNT(*)::int AS c FROM rental_contracts
+           WHERE "tenantId" = $1 AND "companyId" = $2 AND status = 'active'`,
+          [Number(tenantId), scope.companyId]
+        ),
+      ]);
+      const existing = Number(activeContracts?.c || 0);
+      if (existing > 0) {
+        items.push({
+          category: "المستأجر",
+          label: `${tenant?.name || "المستأجر"} — عقود قائمة`,
+          value: `لديه ${existing} عقد إيجار نشط حالياً`,
+          severity: "info",
+        });
+      }
+    }
+
+    items.push({
+      category: "الوحدة",
+      label: "تحديث الحالة",
+      value: unitLabel
+        ? `الوحدة ${unitLabel} ستتحول إلى "مؤجرة" عند اعتماد العقد`
+        : "الوحدة ستتحول إلى مؤجرة",
+      severity: "info",
+    });
+
+    items.push({
+      category: "تقارير",
+      label: "لوحات العقارات",
+      value: "ستتحدث تقارير الإشغال والعائد فوراً",
+      severity: "info",
+    });
+
+    const hasDanger = items.some((i) => i.severity === "danger");
+    const hasWarning = items.some((i) => i.severity === "warning");
+    res.json({
+      actionType: "create_rental_contract",
+      employeeId: 0,
+      employeeName: "",
+      items,
+      summary: hasDanger
+        ? "العقد يتعارض مع حالة الوحدة الحالية — راجع قبل المتابعة"
+        : hasWarning
+        ? "العقد جاهز — راجع التحذيرات"
+        : "العقد جاهز للإنشاء",
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة أثر العقد");
+  }
+});
+
 router.get("/contracts", async (req, res) => {
   try {
     const scope = req.scope!;
