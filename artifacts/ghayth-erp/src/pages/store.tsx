@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -269,7 +270,16 @@ export default function StorePage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="المتجر"
+      subtitle="إدارة المنتجات والطلبات"
+      breadcrumbs={[{ label: "المتجر" }]}
+      actions={
+        <Link href="/store/products/create">
+          <Button className="gap-2"><Plus className="h-4 w-4" /> منتج جديد</Button>
+        </Link>
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -290,6 +300,6 @@ export default function StorePage() {
         <TabsContent value="products"><ProductsTab /></TabsContent>
         <TabsContent value="orders"><OrdersTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

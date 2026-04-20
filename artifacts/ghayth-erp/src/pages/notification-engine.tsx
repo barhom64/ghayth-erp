@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -917,17 +918,11 @@ function PreferencesTab() {
 
 export default function NotificationEnginePage() {
   return (
-    <div className="space-y-6 p-6" dir="rtl">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded-lg">
-          <Zap className="h-6 w-6 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold">محرك الإشعارات</h1>
-          <p className="text-muted-foreground">توجيه ذكي، قوالب رسائل، سلاسل تصعيد، و تتبع التوصيل</p>
-        </div>
-      </div>
-
+    <PageShell
+      title="محرك الإشعارات"
+      subtitle="توجيه ذكي، قوالب رسائل، سلاسل تصعيد، و تتبع التوصيل"
+      breadcrumbs={[{ href: "/settings", label: "الإعدادات" }, { label: "محرك الإشعارات" }]}
+    >
       <Tabs defaultValue="routing" dir="rtl">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="routing" className="gap-1">
@@ -968,6 +963,6 @@ export default function NotificationEnginePage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

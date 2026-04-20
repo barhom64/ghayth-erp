@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
+import { PageShell } from "@/components/page-shell";
 import {
   Activity, AlertTriangle, ArrowUpRight, Building, Car, CheckCircle2,
   Clock, CreditCard, CloudRain, Home, RefreshCw, Shield, Timer, Users,
@@ -106,15 +107,11 @@ export default function OperationsCenter() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Zap className="w-6 h-6 text-amber-500" />
-            مركز العمليات
-          </h1>
-          <p className="text-gray-500 mt-1">نظرة شاملة على حالة التشغيل الآن</p>
-        </div>
+    <PageShell
+      title="مركز العمليات"
+      subtitle="نظرة شاملة على حالة التشغيل الآن"
+      breadcrumbs={[{ label: "العمليات" }]}
+      actions={
         <div className="flex items-center gap-2">
           <Link href="/daily-close">
             <Button variant="outline" className="gap-2">
@@ -126,7 +123,8 @@ export default function OperationsCenter() {
             <RefreshCw className="w-4 h-4" />
           </Button>
         </div>
-      </div>
+      }
+    >
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className={cn("rounded-xl p-4 border-2 text-center", totalCritical > 0 ? "border-red-200 bg-red-50" : "border-gray-100 bg-white")}>
@@ -280,6 +278,6 @@ export default function OperationsCenter() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }
