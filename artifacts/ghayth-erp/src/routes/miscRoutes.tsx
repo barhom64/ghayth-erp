@@ -53,6 +53,7 @@ const ProjectGantt = lazy(() => import("@/pages/projects/gantt"));
 const ProjectRisks = lazy(() => import("@/pages/projects/risks"));
 const InventoryCount = lazy(() => import("@/pages/warehouse/inventory-count"));
 const Obligations = lazy(() => import("@/pages/obligations"));
+const CalendarPage = lazy(() => import("@/pages/calendar"));
 
 export const miscRoutes: { path: string; component: any; module?: ModuleType; minRoleLevel?: number }[] = [
   { path: "/my-space", component: MySpace },
@@ -66,6 +67,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-overtime", component: MyOvertime },
   { path: "/action-center", component: ActionCenter },
   { path: "/obligations", component: Obligations, module: "operations" },
+  { path: "/calendar", component: CalendarPage },
   { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 60 },
   { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
   { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },
