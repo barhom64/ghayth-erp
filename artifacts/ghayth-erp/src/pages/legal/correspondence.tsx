@@ -5,6 +5,7 @@ import { Mail } from "lucide-react";
 import { useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 
 interface LegalCase {
   id: number;
@@ -38,6 +39,7 @@ export default function LegalCorrespondence() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "المراسلات القانونية" }]}
       loading={isLoading}
     >
+      <LegalTabsNav />
       <DataTable
         columns={columns}
         data={cases}

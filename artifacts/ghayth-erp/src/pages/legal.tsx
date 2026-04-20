@@ -14,6 +14,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 
 export default function Legal() {
   const [tab, setTab] = useState("contracts");
@@ -25,6 +26,7 @@ export default function Legal() {
       subtitle="العقود والقضايا والجلسات والأحكام"
       breadcrumbs={[{ label: "القانونية" }]}
     >
+      <LegalTabsNav />
       <KpiGrid items={[
         { label: "إجمالي القضايا", value: (s.openCases || 0) + (s.closedCases || 0), icon: Scale, color: "text-blue-600 bg-blue-50" },
         { label: "نشطة", value: s.activeContracts || 0, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },

@@ -15,6 +15,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { ManagerWorkloadCard } from "@/components/shared/manager-workload-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 
 const DRAFT_KEY = "projects_create";
 const INITIAL = { name: "", clientId: "", managerId: "", status: "planning", budget: "", startDate: "", endDate: "", description: "" };
@@ -138,6 +139,21 @@ export default function ProjectsCreate() {
           </FormFieldWrapper>
         </div>
         <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف المشروع وأهدافه..." />
+
+        {form.name && form.startDate && form.endDate && (
+          <ImpactPreviewButton
+            endpoint="/projects/impact-preview"
+            payload={{
+              managerId: form.managerId ? Number(form.managerId) : undefined,
+              budget: form.budget ? Number(form.budget) : undefined,
+              startDate: form.startDate,
+              endDate: form.endDate,
+              type: form.status,
+            }}
+            label="معاينة أثر المشروع"
+          />
+        )}
+
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/projects")}>إلغاء</Button>

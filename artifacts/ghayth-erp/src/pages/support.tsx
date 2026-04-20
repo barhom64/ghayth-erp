@@ -26,6 +26,7 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { formatDateAr } from "@/lib/formatters";
+import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 
 function Support() {
   const { roleLevel } = useAppContext();
@@ -128,6 +129,7 @@ function Support() {
         </Link>
       }
     >
+      <SupportTabsNav />
       <KpiGrid items={[
         { label: "إجمالي التذاكر", value: stats?.totalTickets || 0, icon: Headphones, color: "text-blue-600 bg-blue-50" },
         { label: "مفتوحة", value: stats?.openTickets || 0, icon: Clock, color: "text-amber-600 bg-amber-50" },
