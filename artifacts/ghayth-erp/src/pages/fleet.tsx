@@ -15,6 +15,7 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function Fleet() {
   const [tab, setTab] = useState("vehicles");
@@ -24,6 +25,7 @@ export default function Fleet() {
       subtitle="المركبات والسائقون والرحلات والصيانة والوقود"
       breadcrumbs={[{ label: "الأسطول" }]}
     >
+      <FleetTabsNav />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="vehicles" className="gap-2"><Car className="h-4 w-4" /> المركبات</TabsTrigger>

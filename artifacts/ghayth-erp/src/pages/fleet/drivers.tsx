@@ -12,6 +12,7 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function DriversPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
@@ -91,6 +92,7 @@ export default function DriversPage() {
         </Link>
       }
     >
+      <FleetTabsNav />
       <KpiGrid items={[
         { label: "إجمالي السائقين", value: items.length, icon: Users, color: "text-blue-600 bg-blue-50" },
         { label: "نشطين", value: items.filter((d: any) => d.status === "active").length, icon: UserCheck, color: "text-green-600 bg-green-50" },

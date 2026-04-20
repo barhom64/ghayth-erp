@@ -8,6 +8,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function FleetMaintenancePage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-maintenance"], "/fleet/maintenance");
@@ -46,6 +47,7 @@ export default function FleetMaintenancePage() {
         </Link>
       }
     >
+      <FleetTabsNav />
       <KpiGrid items={[
         { label: "إجمالي السجلات", value: items.length, icon: Wrench, color: "text-blue-600 bg-blue-50" },
         { label: "مكتملة", value: items.filter((m: any) => m.status === "completed").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
