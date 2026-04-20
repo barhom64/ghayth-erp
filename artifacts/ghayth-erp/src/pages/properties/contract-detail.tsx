@@ -8,6 +8,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
+import { EntityObligations } from "@/components/shared/entity-obligations";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -188,7 +189,12 @@ export default function ContractDetailPage() {
       key: "documents",
       label: "المستندات",
       icon: FolderOpen,
-      content: () => <EntityDocuments entityType="contract" entityId={id} />,
+      content: () => (
+        <div className="space-y-4">
+          <EntityObligations entityType="contract" entityId={id} hideWhenEmpty />
+          <EntityDocuments entityType="contract" entityId={id} />
+        </div>
+      ),
     },
     {
       key: "timeline",

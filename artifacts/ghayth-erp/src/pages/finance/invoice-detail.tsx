@@ -27,6 +27,7 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline, ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import { EntityObligations } from "@/components/shared/entity-obligations";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -481,6 +482,8 @@ export default function InvoiceDetailPage() {
           <CardContent><p className="text-gray-600">{invoice.description}</p></CardContent>
         </Card>
       )}
+
+      {id && <EntityObligations entityType="invoice" entityId={id} hideWhenEmpty />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>{id && <EntityDocuments entityType="invoice" entityId={id} />}</div>

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { PageShell } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -582,7 +583,7 @@ export default function RequestsPage() {
   const s = stats || {};
 
   return (
-    <div className="space-y-6">
+    <PageShell title="طلبات المشتريات" breadcrumbs={[{ label: "المشتريات" }]}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "إجمالي الطلبات", value: s.totalRequests || 0, icon: ClipboardCheck, color: "text-blue-600 bg-blue-50" },
@@ -612,6 +613,6 @@ export default function RequestsPage() {
         <TabsContent value="types"><TypesTab /></TabsContent>
         <TabsContent value="workflows"><WorkflowsTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

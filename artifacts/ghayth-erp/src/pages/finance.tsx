@@ -1,10 +1,15 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { PageShell } from "@/components/page-shell";
 
 export default function Finance() {
   const [, setLocation] = useLocation();
   useEffect(() => {
     setLocation("/finance/accounts");
   }, [setLocation]);
-  return null;
+  return (
+    <PageShell title="المالية" breadcrumbs={[{ label: "المالية" }]}>
+      <div />
+    </PageShell>
+  );
 }

@@ -1,4 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageShell } from "@/components/page-shell";
 import { CEODashboardTab } from "./bi/ceo-dashboard-tab";
 import { OverviewTab } from "./bi/overview-tab";
 import { BranchPerformanceTab } from "./bi/branch-performance-tab";
@@ -12,7 +13,7 @@ import { AlertFatigueTab } from "./bi/alert-fatigue-tab";
 
 export default function BIPage() {
   return (
-    <div className="space-y-6">
+    <PageShell title="ذكاء الأعمال" breadcrumbs={[{ label: "التحليلات" }]}>
       <Tabs defaultValue="ceo" dir="rtl">
         <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10 gap-1 h-auto flex-wrap">
           <TabsTrigger value="ceo" className="text-xs">لوحة الرئيس التنفيذي</TabsTrigger>
@@ -39,6 +40,6 @@ export default function BIPage() {
           <TabsContent value="alert-fatigue"><AlertFatigueTab /></TabsContent>
         </div>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
