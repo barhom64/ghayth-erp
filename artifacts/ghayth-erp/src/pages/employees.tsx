@@ -47,6 +47,7 @@ import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/e
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { textColumn, actionsColumn } from "@/components/data-table-presets";
 
 type OperationalStatus = {
@@ -308,6 +309,7 @@ export default function Employees() {
         </div>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={[
         { label: "إجمالي الموظفين", value: total, icon: Users, color: "text-blue-600 bg-blue-50" },
         { label: "نشط", value: employees?.filter((e: any) => e.status === "active").length || 0, icon: UserCheck, color: "text-green-600 bg-green-50" },

@@ -38,6 +38,7 @@ const OPERATION_LABELS: Record<string, string> = {
 
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 
 export default function ExpensesPage() {
@@ -176,6 +177,7 @@ export default function ExpensesPage() {
         </Link>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "إجمالي المصروفات", value: formatCurrency(totalExpenses), icon: TrendingDown, color: "text-red-600 bg-red-50" },
         { label: "عدد المصروفات", value: formatNumber(items.length), icon: Wallet, color: "text-blue-600 bg-blue-50" },

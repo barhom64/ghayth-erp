@@ -9,6 +9,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 export default function BudgetPage() {
   const { scopeQueryString } = useAppContext();
@@ -107,6 +108,7 @@ export default function BudgetPage() {
         </Button>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "إجمالي البنود", value: formatNumber(items.length), icon: FileBarChart, color: "text-blue-600 bg-blue-50" },
         { label: "المخصص", value: formatCurrency(totalAllocated), icon: CheckCircle, color: "text-green-600 bg-green-50" },

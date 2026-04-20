@@ -5,6 +5,7 @@ import { Building2, Users, Network, ChevronDown } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function OrganizationStructurePage() {
   const { data: depts, isLoading: deptsLoading, isError: deptsError } = useApiQuery<any>(["departments"], "/settings/departments");
@@ -31,6 +32,7 @@ export default function OrganizationStructurePage() {
       subtitle="عرض شجري للأقسام والمسؤولين والعلاقات التنظيمية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "الهيكل التنظيمي المفصل" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <div className="flex justify-center">

@@ -11,6 +11,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 /**
  * Vendors list — migrated in R.2 iter 2 to the unified template stack.
@@ -127,6 +128,7 @@ export default function VendorsPage() {
         </Button>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "إجمالي الموردين", value: items.length, icon: Users, color: "text-blue-600 bg-blue-50" },
         { label: "نشطون", value: items.length, icon: Star, color: "text-green-600 bg-green-50" },

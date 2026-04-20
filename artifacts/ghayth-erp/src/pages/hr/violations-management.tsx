@@ -12,6 +12,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
 import { SEVERITY_LEVELS } from "@/lib/hr-type-maps";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function ViolationsManagementPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["violations"], "/hr/violations");
@@ -93,6 +94,7 @@ export default function ViolationsManagementPage() {
         { label: "تحليل متقدم" },
       ]}
     >
+      <HrTabsNav />
       <KpiGrid items={[
         { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
         { label: "نشطة", value: stats?.active ?? 0, icon: Scale, color: "text-yellow-600 bg-yellow-50" },

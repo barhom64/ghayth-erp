@@ -7,6 +7,7 @@ import { Target, TrendingUp, Award, BarChart3, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function PerformanceAdvancedPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["performance"], "/hr/performance");
@@ -41,6 +42,7 @@ export default function PerformanceAdvancedPage() {
       subtitle="تحليل مؤشرات الأداء والمقارنات المعيارية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات الأداء المتقدمة" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <Card>

@@ -12,6 +12,7 @@ import { CalendarClock, Users, Plus, Sun, Moon, Clock } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function ShiftsManagementPage() {
   const { data: shiftsData, isLoading: shiftsLoading, isError: shiftsError } = useApiQuery<any>(["shifts"], "/hr/shifts");
@@ -57,6 +58,7 @@ export default function ShiftsManagementPage() {
       subtitle="تعيين الموظفين للورديات وإدارة الجداول"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الورديات المتقدمة" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={[
         { label: "الورديات", value: shifts.length, icon: CalendarClock, color: "text-blue-600 bg-blue-50" },
         { label: "نشطة", value: shifts.filter((s: any) => s.status === "active").length, icon: Clock, color: "text-green-600 bg-green-50" },

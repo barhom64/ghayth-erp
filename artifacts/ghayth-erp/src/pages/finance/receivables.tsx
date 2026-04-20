@@ -10,6 +10,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 export default function ReceivablesPage() {
   const { scopeQueryString } = useAppContext();
@@ -88,6 +89,7 @@ export default function ReceivablesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "المقبوضات (الذمم المدينة)" }]}
       loading={isLoading}
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card className="bg-blue-600 text-white"><CardContent className="p-4 flex items-center gap-3">
           <DollarSign className="h-8 w-8 opacity-80" />

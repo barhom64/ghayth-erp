@@ -8,6 +8,7 @@ import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function TrainingAdvancedPage() {
   const { data: statsData, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["training-stats"], "/training/stats");
@@ -40,6 +41,7 @@ export default function TrainingAdvancedPage() {
       subtitle="متابعة فعالية البرامج التدريبية ونتائجها"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التدريب المتقدمة" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <Card>
