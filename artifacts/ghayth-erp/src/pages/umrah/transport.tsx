@@ -4,6 +4,8 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Truck } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell } from "@/components/page-shell";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 interface TransportEntry {
   id: number;
@@ -42,12 +44,12 @@ export default function UmrahTransport() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
-    <div className="space-y-6">
+    <PageShell title="نقل العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "النقل" }]}>
+      <UmrahTabsNav />
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Truck className="h-6 w-6" /> النقل والمواصلات</h1>
         <p className="text-muted-foreground mt-1">إدارة رحلات نقل المعتمرين والمواصلات</p>
       </div>
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </div>
+    </PageShell>
   );
 }
