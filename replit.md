@@ -108,4 +108,15 @@ Run before every deployment or after merging branches. Checks:
 - `purchase_requests` uses `expectedDelivery` (not `expectedDate`); items use `name` (not `itemName`), `totalPrice` (not `lineTotal`)
 - `property_buildings` has NO `branchId`, `floors`, `description`
 
+**Deck Screenshots (ghayth-erp-deck):**
+
+The deck (`artifacts/ghayth-erp-deck`) embeds platform screenshots from `public/screenshots/*.png`. Scripts in `artifacts/ghayth-erp-deck/scripts/`:
+
+- `pnpm --filter @workspace/ghayth-erp-deck run refresh-shots` — re-capture all module screenshots from the live ERP (requires `REPLIT_DEV_DOMAIN`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`).
+- `pnpm --filter @workspace/ghayth-erp-deck run export-pdf` — build deck and export PDF using existing screenshots.
+- `pnpm --filter @workspace/ghayth-erp-deck run export-pdf-fresh` — refresh screenshots first, then export PDF. **Use this before any presentation or share with the GM** to guarantee shots match the current UI.
+- `pnpm --filter @workspace/ghayth-erp-deck run check-shots-age` — warn if any screenshot is older than 14 days (override with `SHOTS_MAX_AGE_DAYS=N`; set `FAIL_ON_STALE=1` to exit non-zero).
+
+When to refresh screenshots: after any visible change to dashboard, HR, finance, operations, fleet, properties, legal, projects, support, or CRM modules; and always before exporting a deliverable PDF for the GM.
+
 **JSX Rule:** NEVER use `<DataTable<any>` — Babel JSX parser fails on generic type params. Use `(DataTable as any)` or remove generic.

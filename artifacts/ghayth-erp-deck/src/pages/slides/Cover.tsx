@@ -1,3 +1,5 @@
+import PlatformShot from "../../components/PlatformShot";
+
 const base = import.meta.env.BASE_URL;
 
 export default function Cover() {
@@ -32,6 +34,20 @@ export default function Cover() {
         <p className="font-body text-white/85 text-[1.8vw] mt-[3vh] leading-relaxed font-light max-w-[50vw]">
           منصة موحّدة تدير عملياتك من الموارد البشرية إلى المالية والأسطول والمشاريع — بلغة عربية كاملة وذكاء تشغيلي.
         </p>
+      </div>
+
+      <div className="absolute bottom-[10vh] left-[6vw] w-[32vw]" style={{ aspectRatio: "1600 / 960" }}>
+        <PlatformShot
+          src="screenshots/dashboard.png"
+          alt="لوحة التحكم الرئيسية في غيث ERP"
+          className="w-full h-full"
+          callouts={[
+            { x: 50, y: 28, label: "لوحة تحكم تنفيذية لحظية", side: "bottom" },
+          ]}
+        />
+        <div className="mt-[0.8vh] text-accent font-body text-[0.85vw] tracking-wide" dir="rtl">
+          لقطة حيّة من نواة المنصّة — لوحة التحكم الرئيسية
+        </div>
       </div>
 
       <div className="absolute bottom-[5vh] right-[6vw] left-[6vw] flex items-center justify-between text-white/60 font-body text-[1vw] border-t border-white/15 pt-[2vh]">

@@ -1,10 +1,18 @@
+import { PortalsIcon } from "../../components/ModuleIcons";
+
 export default function ModulePortals() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-bg px-[6vw] py-[6vh]" dir="rtl">
       <div className="absolute top-0 right-0 w-[100vw] h-[12vh] bg-primary" />
+      <div className="absolute top-[3vh] left-[6vw] text-accent w-[7vh] h-[7vh]">
+        <PortalsIcon className="w-full h-full" />
+      </div>
       <div className="absolute top-[6vh] right-[6vw] flex items-center gap-[1.2vw]">
         <span className="text-accent font-display text-[1vw] font-bold tracking-[0.3em]">PRT</span>
         <span className="text-white/60 font-body text-[1vw]">وحدة 10 من 10</span>
+      </div>
+      <div className="absolute top-[32vh] left-[6vw] text-primary w-[28vw] h-[28vw] pointer-events-none">
+        <PortalsIcon className="w-full h-full opacity-[0.07]" />
       </div>
       <div className="absolute top-[18vh] right-[6vw] max-w-[88vw]">
         <h2 className="font-display text-text font-black text-[4.5vw] leading-[1.05] tracking-tighter">
