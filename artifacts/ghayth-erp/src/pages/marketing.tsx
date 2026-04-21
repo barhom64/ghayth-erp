@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, asList } from "@/lib/api";
+import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -34,15 +35,10 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 function FunnelTab() {
-  const { data: funnelResp, isLoading, isError } = useApiQuery<any>(["mkt-funnel"], "/marketing/funnel");
+  const { data: funnelResp, isLoading, isError, error, refetch } = useApiQuery<any>(["mkt-funnel"], "/marketing/funnel");
   const stages: any[] = funnelResp?.stages || [];
   const sourceFunnel: any[] = funnelResp?.sourceFunnel || [];
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isError) return <PageStateWrapper error={error} onRetry={refetch}><div /></PageStateWrapper>;
 
   return (
     <div className="space-y-6">
@@ -194,12 +190,7 @@ function CampaignsTab() {
     },
   ];
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isError) return <PageStateWrapper error={error} onRetry={refetch}><div /></PageStateWrapper>;
 
   return (
     <div className="space-y-6">

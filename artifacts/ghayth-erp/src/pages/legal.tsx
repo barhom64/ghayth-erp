@@ -8,6 +8,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
+import { PageStateWrapper } from "@/components/shared/page-state";
 import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2, DollarSign, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -108,12 +109,7 @@ function ContractsTab() {
     },
   ];
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isError) return <PageStateWrapper error={error} onRetry={refetch}><div /></PageStateWrapper>;
 
   return (
     <div className="space-y-6">
@@ -237,12 +233,7 @@ function CasesTab() {
     },
   ];
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isError) return <PageStateWrapper error={error} onRetry={refetch}><div /></PageStateWrapper>;
 
   return (
     <div className="space-y-6">
@@ -302,7 +293,7 @@ function CasesTab() {
 }
 
 function FinancialLegalTab() {
-  const { data: reportResp, isLoading, isError } = useApiQuery<any>(["legal-financial-report"], "/legal/financial-report");
+  const { data: reportResp, isLoading, isError, error, refetch } = useApiQuery<any>(["legal-financial-report"], "/legal/financial-report");
   const report = reportResp || {};
 
   const RISK_COLORS: Record<string, string> = {
@@ -315,12 +306,7 @@ function FinancialLegalTab() {
     critical: "حرجة", high: "عالية", medium: "متوسطة", low: "منخفضة",
   };
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isError) return <PageStateWrapper error={error} onRetry={refetch}><div /></PageStateWrapper>;
 
   return (
     <div className="space-y-5">
