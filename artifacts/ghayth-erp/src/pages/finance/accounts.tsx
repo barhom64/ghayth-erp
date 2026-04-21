@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, apiPatch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, GitBranch, TrendingUp, TrendingDown, Layers, BookOpen, ChevronDown, ChevronRight, CheckCircle, Search, Edit2, Trash2, Printer } from "lucide-react";
@@ -297,12 +298,12 @@ export default function AccountsPage() {
               <Layers className="h-4 w-4 me-1" />
               مسطح
             </Button>
-            <Button size="sm" asChild>
+            <GuardedButton perm="finance:create" size="sm" asChild>
               <Link href="/finance/accounts/create">
                 <Plus className="h-4 w-4 me-1" />
                 إضافة حساب
               </Link>
-            </Button>
+            </GuardedButton>
           </>
         }
       >

@@ -6,6 +6,7 @@ const RisksCreate = lazy(() => import("@/pages/create/governance/risks-create"))
 const AuditsCreate = lazy(() => import("@/pages/create/governance/audits-create"));
 const ComplianceCreate = lazy(() => import("@/pages/create/governance/compliance-create"));
 const GovernanceCapa = lazy(() => import("@/pages/governance/capa"));
+const AuditDetail = lazy(() => import("@/pages/details/audit-detail"));
 
 export const governanceRoutes = [
   { path: "/governance", component: Governance },
@@ -15,6 +16,7 @@ export const governanceRoutes = [
   { path: "/governance/risks/create", component: RisksCreate },
   { path: "/governance/audits", component: Governance },
   { path: "/governance/audits/create", component: AuditsCreate },
+  { path: "/governance/audits/:id", component: AuditDetail },
   { path: "/governance/compliance", component: Governance },
   { path: "/governance/compliance/create", component: ComplianceCreate },
   { path: "/governance/capa", component: GovernanceCapa },

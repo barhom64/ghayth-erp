@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   Plus,
   ShoppingCart,
@@ -172,12 +173,12 @@ export default function PurchaseOrdersPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "طلبات الشراء" }]}
       loading={isLoading}
       actions={
-        <Button size="sm" asChild>
+        <GuardedButton perm="finance:create" size="sm" asChild>
           <Link href="/finance/purchase-orders/create">
             <Plus className="h-4 w-4 me-1" />
             طلب جديد
           </Link>
-        </Button>
+        </GuardedButton>
       }
     >
       <FinanceTabsNav />

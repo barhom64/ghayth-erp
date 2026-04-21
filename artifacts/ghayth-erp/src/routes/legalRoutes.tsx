@@ -7,11 +7,13 @@ const LegalCaseDetail = lazy(() => import("@/pages/legal-case-detail"));
 const LegalSessions = lazy(() => import("@/pages/legal/sessions"));
 const LegalJudgments = lazy(() => import("@/pages/legal/judgments"));
 const LegalCorrespondence = lazy(() => import("@/pages/legal/correspondence"));
+const LegalContractDetail = lazy(() => import("@/pages/details/legal-contract-detail"));
 
 export const legalRoutes = [
   { path: "/legal", component: Legal },
   { path: "/legal/create", component: LegalCreate },
   { path: "/legal/contracts", component: Legal },
+  { path: "/legal/contracts/:id", component: LegalContractDetail },
   { path: "/legal/sessions", component: LegalSessions },
   { path: "/legal/judgments", component: LegalJudgments },
   { path: "/legal/correspondence", component: LegalCorrespondence },
