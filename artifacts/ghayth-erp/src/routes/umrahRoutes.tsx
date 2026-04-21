@@ -8,6 +8,7 @@ const UmrahSeasons = lazy(() => import("@/pages/umrah/seasons"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
 const UmrahImport = lazy(() => import("@/pages/umrah/import"));
+const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
 const PilgrimCreate = lazy(() => import("@/pages/umrah/pilgrim-create"));
 const PilgrimDetail = lazy(() => import("@/pages/umrah/pilgrim-detail"));
 const UmrahPackages = lazy(() => import("@/pages/umrah/packages"));
@@ -17,6 +18,13 @@ const UmrahSeasonDetail = lazy(() => import("@/pages/details/umrah-season-detail
 const UmrahPackageDetail = lazy(() => import("@/pages/details/umrah-package-detail"));
 const UmrahInvoiceDetail = lazy(() => import("@/pages/details/umrah-invoice-detail"));
 const UmrahPenaltyDetail = lazy(() => import("@/pages/details/umrah-penalty-detail"));
+
+// Wave 5 — extended module
+const UmrahSubAgents = lazy(() => import("@/pages/umrah/sub-agents"));
+const UmrahPricing = lazy(() => import("@/pages/umrah/pricing"));
+const UmrahCommissionPlans = lazy(() => import("@/pages/umrah/commission-plans"));
+const UmrahCommissionPlanEditor = lazy(() => import("@/pages/umrah/commission-plan-editor"));
+const UmrahViolations = lazy(() => import("@/pages/umrah/violations"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -34,5 +42,14 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/packages", component: UmrahPackages, module: "operations" },
   { path: "/umrah/packages/:id", component: UmrahPackageDetail, module: "operations" },
   { path: "/umrah/transport", component: UmrahTransport, module: "operations" },
-  { path: "/umrah/import", component: UmrahImport, module: "operations" },
+  // Legacy import page kept for backward compat; new wizard registered below
+  { path: "/umrah/import/legacy", component: UmrahImport, module: "operations" },
+  // Wave 5 routes
+  { path: "/umrah/sub-agents", component: UmrahSubAgents, module: "operations" },
+  { path: "/umrah/pricing", component: UmrahPricing, module: "operations" },
+  { path: "/umrah/commission-plans", component: UmrahCommissionPlans, module: "operations" },
+  { path: "/umrah/commission-plans/new", component: UmrahCommissionPlanEditor, module: "operations" },
+  { path: "/umrah/commission-plans/:id/edit", component: UmrahCommissionPlanEditor, module: "operations" },
+  { path: "/umrah/violations", component: UmrahViolations, module: "operations" },
+  { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
 ];

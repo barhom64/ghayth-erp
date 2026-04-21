@@ -1,0 +1,493 @@
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { PageShell } from "@/components/page-shell";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { SearchableSelect } from "@/components/shared/searchable-select";
+import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { useToast } from "@/hooks/use-toast";
+import { formatNumber } from "@/lib/formatters";
+import { Upload, CheckCircle2, AlertTriangle, Link2, ArrowRight, FileSpreadsheet, AlertOctagon } from "lucide-react";
+
+type FileType = "mutamers" | "vouchers";
+
+interface PreviewSummary {
+  total?: number;
+  newCount?: number;
+  updatedCount?: number;
+  unchangedCount?: number;
+  errorCount?: number;
+  errors?: { row: number; message: string }[];
+  unlinkedSubAgents?: { nuskCode: string; name: string; rowCount: number }[];
+  violationsDetected?: number;
+  rows?: any[];
+}
+
+export default function UmrahImportWizard() {
+  const { toast } = useToast();
+
+  const [step, setStep] = useState<1 | 2>(1);
+  const [fileType, setFileType] = useState<FileType>("mutamers");
+  const [seasonId, setSeasonId] = useState("");
+  const [dropFiles, setDropFiles] = useState<Attachment[]>([]);
+  const [fileName, setFileName] = useState("");
+  const [parsedRows, setParsedRows] = useState<any[]>([]);
+  const [parseError, setParseError] = useState("");
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<PreviewSummary | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmResult, setConfirmResult] = useState<{ batchId?: string | number } | null>(null);
+  const [linkingSubAgent, setLinkingSubAgent] = useState<{ nuskCode: string; name: string } | null>(null);
+  const [linkClientId, setLinkClientId] = useState("");
+  const [linking, setLinking] = useState(false);
+
+  const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
+  const clientsQ = useApiQuery<{ data: any[] }>(["clients"], "/clients");
+  const seasons = seasonsQ.data?.data ?? [];
+  const clients = clientsQ.data?.data ?? [];
+
+  const clearFile = () => {
+    setDropFiles([]);
+    setFileName("");
+    setParsedRows([]);
+    setParseError("");
+    setPreview(null);
+  };
+
+  const handleDropFiles = async (files: Attachment[]) => {
+    setDropFiles(files);
+    if (files.length === 0) { clearFile(); return; }
+    const latest = files[files.length - 1];
+    const ext = latest.name.substring(latest.name.lastIndexOf(".")).toLowerCase();
+    if (ext !== ".xlsx") {
+      setParseError("يُرجى رفع ملف Excel بامتداد .xlsx فقط");
+      setParsedRows([]);
+      setFileName("");
+      return;
+    }
+    setParseError("");
+    setFileName(latest.name);
+    try {
+      const XLSX: any = await import("xlsx");
+      const base64 = latest.dataUrl.split(",")[1];
+      const binaryStr = atob(base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      const wb = XLSX.read(bytes, { type: "array", cellDates: true });
+      const sheetName = wb.SheetNames[0];
+      if (!sheetName) { setParseError("الملف لا يحتوي على أوراق عمل"); return; }
+      const data = XLSX.utils.sheet_to_json<any>(wb.Sheets[sheetName], { defval: "" });
+      if (data.length === 0) { setParseError("الملف فارغ"); return; }
+      const rows = data.map((row: any) => {
+        const mapped: any = {};
+        Object.keys(row).forEach((k) => {
+          let val = row[k];
+          if (val instanceof Date) val = val.toISOString().split("T")[0];
+          mapped[k.trim()] = String(val ?? "").trim();
+        });
+        return mapped;
+      });
+      setParsedRows(rows);
+    } catch (e: any) {
+      setParseError(`خطأ في قراءة الملف: ${e?.message ?? "خطأ غير معروف"}`);
+    }
+  };
+
+  const runPreview = async () => {
+    if (!seasonId || parsedRows.length === 0) return;
+    setPreviewing(true);
+    try {
+      // TODO: endpoint not yet implemented — placeholder response
+      const res: any = await apiFetch("/umrah/import/preview", {
+        method: "POST",
+        body: JSON.stringify({
+          fileType,
+          seasonId: Number(seasonId),
+          fileName,
+          rows: parsedRows,
+        }),
+      });
+      const summary: PreviewSummary = res?.data ?? res;
+      setPreview(summary);
+      setStep(2);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: err?.message ?? "تعذّر معاينة الاستيراد" });
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!preview || !seasonId) return;
+    setConfirming(true);
+    try {
+      const endpoint = fileType === "mutamers" ? "/umrah/import/mutamers" : "/umrah/import/vouchers";
+      // TODO: endpoint not yet implemented — placeholder response
+      const res: any = await apiFetch(endpoint, {
+        method: "POST",
+        body: JSON.stringify({
+          seasonId: Number(seasonId),
+          fileName,
+          rows: parsedRows,
+        }),
+      });
+      const data = res?.data ?? res;
+      setConfirmResult({ batchId: data?.batchId ?? data?.id });
+      toast({ title: "تم تنفيذ الاستيراد بنجاح" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: err?.message ?? "تعذّر تنفيذ الاستيراد" });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const doLinkSubAgent = async () => {
+    if (!linkingSubAgent || !linkClientId) return;
+    setLinking(true);
+    try {
+      // TODO: endpoint not yet implemented — placeholder response
+      await apiFetch(`/umrah/sub-agents/link-by-nusk`, {
+        method: "POST",
+        body: JSON.stringify({
+          nuskCode: linkingSubAgent.nuskCode,
+          clientId: Number(linkClientId),
+        }),
+      });
+      toast({ title: "تم ربط الوكيل الفرعي بالعميل" });
+      setPreview((p) => p
+        ? { ...p, unlinkedSubAgents: (p.unlinkedSubAgents ?? []).filter((u) => u.nuskCode !== linkingSubAgent.nuskCode) }
+        : p);
+      setLinkingSubAgent(null);
+      setLinkClientId("");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: err?.message ?? "تعذّر الربط" });
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const canPreview = useMemo(
+    () => !!seasonId && parsedRows.length > 0 && !parseError,
+    [seasonId, parsedRows, parseError],
+  );
+
+  return (
+    <PageShell
+      title="معالج استيراد العمرة"
+      subtitle="استيراد ملفات Excel للمعتمرين أو البوشرات مع معاينة وربط ذكي"
+      breadcrumbs={[{ label: "العمرة" }, { label: "الاستيراد" }]}
+    >
+      <UmrahTabsNav />
+
+      {/* Steps header */}
+      <div className="flex items-center gap-4">
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${step === 1 ? "bg-blue-100 text-blue-800" : "bg-muted text-muted-foreground"}`}>
+          <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">1</span>
+          رفع الملف
+        </div>
+        <ArrowRight className="h-4 w-4 text-muted-foreground rotate-180" />
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${step === 2 ? "bg-blue-100 text-blue-800" : "bg-muted text-muted-foreground"}`}>
+          <span className={`w-6 h-6 rounded-full text-xs flex items-center justify-center ${step === 2 ? "bg-blue-600 text-white" : "bg-muted-foreground/40 text-white"}`}>2</span>
+          تأكيد الاستيراد
+        </div>
+      </div>
+
+      {/* Step 1 */}
+      {step === 1 && (
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>الموسم *</Label>
+                <Select value={seasonId} onValueChange={setSeasonId}>
+                  <SelectTrigger><SelectValue placeholder="اختر الموسم" /></SelectTrigger>
+                  <SelectContent>
+                    {seasons.map((s: any) => (
+                      <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>نوع الملف *</Label>
+                <div className="flex gap-3 mt-2">
+                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded border flex-1 hover:bg-muted/30">
+                    <input
+                      type="radio"
+                      name="fileType"
+                      checked={fileType === "mutamers"}
+                      onChange={() => setFileType("mutamers")}
+                    />
+                    <span className="text-sm">معتمرون</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded border flex-1 hover:bg-muted/30">
+                    <input
+                      type="radio"
+                      name="fileType"
+                      checked={fileType === "vouchers"}
+                      onChange={() => setFileType("vouchers")}
+                    />
+                    <span className="text-sm">بوشرات</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <FileDropZone
+              files={dropFiles}
+              onFilesChange={handleDropFiles}
+              label="ملف Excel (.xlsx فقط)"
+              maxSizeMB={20}
+            />
+
+            {fileName && parsedRows.length > 0 && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                <FileSpreadsheet className="h-5 w-5 text-blue-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-blue-800 truncate">{fileName}</p>
+                  <p className="text-xs text-blue-600">
+                    تم قراءة {formatNumber(parsedRows.length)} صف من الملف
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={clearFile} className="text-blue-600">
+                  تغيير الملف
+                </Button>
+              </div>
+            )}
+
+            {parseError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{parseError}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <GuardedButton
+                perm="umrah:write"
+                disabled={!canPreview || previewing}
+                onClick={runPreview}
+                className="gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                {previewing ? "جاري التحليل..." : "معاينة الاستيراد"}
+              </GuardedButton>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 2 */}
+      {step === 2 && preview && (
+        <div className="space-y-4">
+          {/* Summary tiles */}
+          <div className="grid gap-3 md:grid-cols-5">
+            <Card><CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">الإجمالي</p>
+              <p className="text-xl font-bold">{formatNumber(preview.total ?? 0)}</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">جديد</p>
+              <p className="text-xl font-bold text-emerald-700">{formatNumber(preview.newCount ?? 0)}</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">محدث</p>
+              <p className="text-xl font-bold text-blue-700">{formatNumber(preview.updatedCount ?? 0)}</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">بدون تغيير</p>
+              <p className="text-xl font-bold text-muted-foreground">{formatNumber(preview.unchangedCount ?? 0)}</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">أخطاء</p>
+              <p className="text-xl font-bold text-red-700">{formatNumber(preview.errorCount ?? 0)}</p>
+            </CardContent></Card>
+          </div>
+
+          {preview.violationsDetected != null && preview.violationsDetected > 0 && (
+            <Card className="border-amber-300 bg-amber-50">
+              <CardContent className="p-3 flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                <p className="text-sm text-amber-800">
+                  تم رصد <strong>{formatNumber(preview.violationsDetected)}</strong> مخالفة محتملة ستُنشأ تلقائياً.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Unlinked sub-agents */}
+          {preview.unlinkedSubAgents && preview.unlinkedSubAgents.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Link2 className="h-4 w-4 text-red-600" />
+                  <h3 className="font-semibold">وكلاء فرعيون غير مربوطين ({formatNumber(preview.unlinkedSubAgents.length)})</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  الوكلاء الفرعيون التاليون موجودون في الملف ولكن غير مربوطين بعملاء في النظام. يمكنك ربطهم الآن قبل التأكيد.
+                </p>
+                <div className="rounded border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="p-2 text-start font-medium">رمز نُسك</th>
+                        <th className="p-2 text-start font-medium">الاسم</th>
+                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
+                        <th className="p-2 text-start font-medium"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.unlinkedSubAgents.map((u) => (
+                        <tr key={u.nuskCode} className="border-t">
+                          <td className="p-2 font-mono text-xs" dir="ltr">{u.nuskCode}</td>
+                          <td className="p-2">{u.name}</td>
+                          <td className="p-2">{formatNumber(u.rowCount)}</td>
+                          <td className="p-2">
+                            <GuardedButton
+                              perm="umrah:write"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setLinkingSubAgent(u)}
+                              className="gap-1"
+                            >
+                              <Link2 className="h-3.5 w-3.5" />
+                              ربط الآن
+                            </GuardedButton>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Errors */}
+          {preview.errors && preview.errors.length > 0 && (
+            <Card className="border-red-200">
+              <CardContent className="p-4">
+                <h3 className="font-semibold mb-2 text-red-700">أخطاء في الصفوف</h3>
+                <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
+                  {preview.errors.slice(0, 20).map((e, i) => (
+                    <li key={i} className="flex gap-2 p-1.5 bg-red-50 rounded">
+                      <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">
+                        صف {formatNumber(e.row)}
+                      </Badge>
+                      <span>{e.message}</span>
+                    </li>
+                  ))}
+                  {preview.errors.length > 20 && (
+                    <li className="text-xs text-muted-foreground text-center py-1">
+                      و {formatNumber(preview.errors.length - 20)} خطأ آخر...
+                    </li>
+                  )}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Actions */}
+          {!confirmResult && (
+            <div className="flex justify-between gap-2">
+              <Button variant="outline" onClick={() => setStep(1)}>
+                العودة للرفع
+              </Button>
+              <GuardedButton
+                perm="umrah:write"
+                disabled={confirming || ((preview.errorCount ?? 0) > 0 && !preview.newCount && !preview.updatedCount)}
+                onClick={confirmImport}
+                className="gap-2"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {confirming ? "جاري التنفيذ..." : "تأكيد الاستيراد"}
+              </GuardedButton>
+            </div>
+          )}
+
+          {/* Success block */}
+          {confirmResult && (
+            <Card className="border-emerald-300 bg-emerald-50">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                  <h3 className="font-bold text-emerald-800">تم تنفيذ الاستيراد بنجاح</h3>
+                </div>
+                {confirmResult.batchId && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-muted-foreground">معرف الدفعة:</span>
+                    <Badge variant="outline" className="font-mono">{String(confirmResult.batchId)}</Badge>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/admin/import-batches/${confirmResult.batchId}`}>
+                        عرض تفاصيل الدفعة
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+                <div>
+                  <Button variant="outline" onClick={() => {
+                    setStep(1);
+                    setPreview(null);
+                    setConfirmResult(null);
+                    clearFile();
+                  }}>
+                    استيراد ملف آخر
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Link sub-agent dialog */}
+      <Dialog open={!!linkingSubAgent} onOpenChange={(o) => { if (!o) { setLinkingSubAgent(null); setLinkClientId(""); } }}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>ربط الوكيل الفرعي بعميل</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {linkingSubAgent && (
+              <div className="p-3 rounded bg-muted/30 text-sm">
+                <p><span className="text-muted-foreground">رمز نُسك:</span> <strong dir="ltr" className="font-mono">{linkingSubAgent.nuskCode}</strong></p>
+                <p><span className="text-muted-foreground">الاسم:</span> <strong>{linkingSubAgent.name}</strong></p>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs">اختر العميل</Label>
+              <SearchableSelect
+                options={clients.map((c: any) => ({
+                  value: String(c.id),
+                  label: c.name ?? c.companyName ?? `#${c.id}`,
+                  sublabel: c.phone,
+                }))}
+                value={linkClientId}
+                onValueChange={setLinkClientId}
+                placeholder="اختر عميلاً..."
+                searchPlaceholder="ابحث في العملاء..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setLinkingSubAgent(null); setLinkClientId(""); }}>إلغاء</Button>
+            <GuardedButton
+              perm="umrah:write"
+              disabled={!linkClientId || linking}
+              onClick={doLinkSubAgent}
+            >
+              {linking ? "جاري الربط..." : "ربط"}
+            </GuardedButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageShell>
+  );
+}
