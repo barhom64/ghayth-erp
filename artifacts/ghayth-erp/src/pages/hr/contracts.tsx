@@ -1,0 +1,356 @@
+/**
+ * /hr/contracts — صفحة إدارة عقود الموظفين
+ *
+ * تعرض جدول بكل العقود مع فلترة حسب الحالة وحالة الاعتماد،
+ * وقائمة إجراءات (تقديم، اعتماد، رفض، توقيع، تفعيل، إنهاء) على كل صف.
+ */
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreHorizontal, Plus } from "lucide-react";
+
+// ─── Arabic Maps ────────────────────────────────────────────────────
+
+const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
+  pending_approval: { label: "بانتظار الاعتماد", color: "bg-yellow-100 text-yellow-700" },
+  approved: { label: "معتمد", color: "bg-blue-100 text-blue-700" },
+  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
+};
+
+const CONTRACT_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
+  pending_approval: { label: "بانتظار الاعتماد", color: "bg-yellow-100 text-yellow-700" },
+  approved: { label: "معتمد", color: "bg-blue-100 text-blue-700" },
+  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
+  signed: { label: "موقّع", color: "bg-purple-100 text-purple-700" },
+  active: { label: "نشط", color: "bg-green-100 text-green-700" },
+  terminated: { label: "منتهي", color: "bg-red-100 text-red-700" },
+};
+
+const CONTRACT_TYPE_MAP: Record<string, string> = {
+  full_time: "دوام كامل",
+  part_time: "دوام جزئي",
+  contract: "عقد مؤقت",
+  probation: "فترة تجربة",
+};
+
+// ─── Component ──────────────────────────────────────────────────────
+
+export default function ContractsPage() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [approvalFilter, setApprovalFilter] = useState<string>("all");
+
+  const { data, isLoading, isError } = useApiQuery<{ data: any[]; total: number }>(
+    ["contracts"],
+    "/hr/contracts",
+  );
+
+  // ─── Mutations (function path form for dynamic IDs) ───────────────
+
+  const submitMutation = useApiMutation<unknown, { id: number }>(
+    (body) => `/hr/contracts/${body.id}/submit`,
+    "POST",
+    [["contracts"]],
+    { successMessage: "تم تقديم العقد للاعتماد" },
+  );
+
+  const approveMutation = useApiMutation<unknown, { id: number }>(
+    (body) => `/hr/contracts/${body.id}/approve`,
+    "POST",
+    [["contracts"]],
+    { successMessage: "تم اعتماد العقد" },
+  );
+
+  const rejectMutation = useApiMutation<unknown, { id: number }>(
+    (body) => `/hr/contracts/${body.id}/reject`,
+    "POST",
+    [["contracts"]],
+    { successMessage: "تم رفض العقد" },
+  );
+
+  const signCompanyMutation = useApiMutation<unknown, { id: number }>(
+    (body) => `/hr/contracts/${body.id}/sign-company`,
+    "POST",
+    [["contracts"]],
+    { successMessage: "تم توقيع العقد من الشركة" },
+  );
+
+  const activateMutation = useApiMutation<unknown, { id: number }>(
+    (body) => `/hr/contracts/${body.id}/activate`,
+    "POST",
+    [["contracts"]],
+    { successMessage: "تم تفعيل العقد" },
+  );
+
+  const terminateMutation = useApiMutation<unknown, { id: number }>(
+    (body) => `/hr/contracts/${body.id}/terminate`,
+    "POST",
+    [["contracts"]],
+    { successMessage: "تم إنهاء العقد" },
+  );
+
+  // ─── Loading / Error States ───────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <div className="p-6" dir="rtl">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6" dir="rtl">
+        <ErrorState onRetry={() => window.location.reload()} />
+      </div>
+    );
+  }
+
+  const contracts = data?.data || [];
+
+  // ─── Filtering ────────────────────────────────────────────────────
+
+  const filtered = contracts.filter((c: any) => {
+    if (statusFilter !== "all" && c.status !== statusFilter) return false;
+    if (approvalFilter !== "all" && c.approvalStatus !== approvalFilter) return false;
+    return true;
+  });
+
+  // ─── Render ───────────────────────────────────────────────────────
+
+  return (
+    <div className="p-6 space-y-6" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">عقود الموظفين</h1>
+        <Link href="/hr/contracts/create">
+          <Button className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            عقد جديد
+          </Button>
+        </Link>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-600">حالة العقد:</span>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="الكل" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">الكل</SelectItem>
+              <SelectItem value="draft">مسودة</SelectItem>
+              <SelectItem value="pending_approval">بانتظار الاعتماد</SelectItem>
+              <SelectItem value="approved">معتمد</SelectItem>
+              <SelectItem value="rejected">مرفوض</SelectItem>
+              <SelectItem value="signed">موقّع</SelectItem>
+              <SelectItem value="active">نشط</SelectItem>
+              <SelectItem value="terminated">منتهي</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-600">حالة الاعتماد:</span>
+          <Select value={approvalFilter} onValueChange={setApprovalFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="الكل" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">الكل</SelectItem>
+              <SelectItem value="draft">مسودة</SelectItem>
+              <SelectItem value="pending_approval">بانتظار الاعتماد</SelectItem>
+              <SelectItem value="approved">معتمد</SelectItem>
+              <SelectItem value="rejected">مرفوض</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>رقم العقد</TableHead>
+              <TableHead>الموظف</TableHead>
+              <TableHead>نوع العقد</TableHead>
+              <TableHead>تاريخ البداية</TableHead>
+              <TableHead>تاريخ النهاية</TableHead>
+              <TableHead>حالة الاعتماد</TableHead>
+              <TableHead>حالة العقد</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                  لا توجد عقود
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((contract: any) => (
+                <TableRow key={contract.id}>
+                  <TableCell className="font-mono text-sm">{contract.ref}</TableCell>
+                  <TableCell className="font-medium">{contract.employeeName}</TableCell>
+                  <TableCell>{CONTRACT_TYPE_MAP[contract.contractType] || contract.contractType}</TableCell>
+                  <TableCell className="text-sm">{contract.startDate}</TableCell>
+                  <TableCell className="text-sm">{contract.endDate || "—"}</TableCell>
+                  <TableCell>
+                    <StatusBadge
+                      value={contract.approvalStatus}
+                      map={APPROVAL_STATUS_MAP}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge
+                      value={contract.status}
+                      map={CONTRACT_STATUS_MAP}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <ActionsMenu
+                      contract={contract}
+                      onSubmit={() => submitMutation.mutate({ id: contract.id })}
+                      onApprove={() => approveMutation.mutate({ id: contract.id })}
+                      onReject={() => rejectMutation.mutate({ id: contract.id })}
+                      onSignCompany={() => signCompanyMutation.mutate({ id: contract.id })}
+                      onActivate={() => activateMutation.mutate({ id: contract.id })}
+                      onTerminate={() => terminateMutation.mutate({ id: contract.id })}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sub-components ─────────────────────────────────────────────────
+
+function StatusBadge({
+  value,
+  map,
+}: {
+  value: string;
+  map: Record<string, { label: string; color: string }>;
+}) {
+  const entry = map[value];
+  if (!entry) return <Badge variant="secondary">{value}</Badge>;
+  return (
+    <Badge variant="secondary" className={entry.color}>
+      {entry.label}
+    </Badge>
+  );
+}
+
+function ActionsMenu({
+  contract,
+  onSubmit,
+  onApprove,
+  onReject,
+  onSignCompany,
+  onActivate,
+  onTerminate,
+}: {
+  contract: any;
+  onSubmit: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onSignCompany: () => void;
+  onActivate: () => void;
+  onTerminate: () => void;
+}) {
+  const status = contract.status;
+  const approvalStatus = contract.approvalStatus;
+
+  // Determine which actions are available
+  const canSubmit = status === "draft" || approvalStatus === "draft";
+  const canApprove = approvalStatus === "pending_approval";
+  const canReject = approvalStatus === "pending_approval";
+  const canSign = status === "approved" || approvalStatus === "approved";
+  const canActivate = status === "signed";
+  const canTerminate = status === "active";
+
+  const hasActions = canSubmit || canApprove || canReject || canSign || canActivate || canTerminate;
+
+  if (!hasActions) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canSubmit && (
+          <DropdownMenuItem onClick={onSubmit}>
+            تقديم للاعتماد
+          </DropdownMenuItem>
+        )}
+        {canApprove && (
+          <DropdownMenuItem onClick={onApprove}>
+            اعتماد
+          </DropdownMenuItem>
+        )}
+        {canReject && (
+          <DropdownMenuItem onClick={onReject} className="text-red-600">
+            رفض
+          </DropdownMenuItem>
+        )}
+        {canSign && (
+          <DropdownMenuItem onClick={onSignCompany}>
+            توقيع الشركة
+          </DropdownMenuItem>
+        )}
+        {canActivate && (
+          <DropdownMenuItem onClick={onActivate}>
+            تفعيل
+          </DropdownMenuItem>
+        )}
+        {canTerminate && (
+          <DropdownMenuItem onClick={onTerminate} className="text-red-600">
+            إنهاء العقد
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

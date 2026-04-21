@@ -9,6 +9,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   emitEvent,
   createAuditLog,
@@ -84,7 +85,7 @@ function checkAttachmentRequired(params: { operationType: string; amount?: numbe
   return { required: false };
 }
 
-journalRouter.get("/expenses", async (req, res) => {
+journalRouter.get("/expenses", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -118,7 +119,7 @@ journalRouter.get("/expenses", async (req, res) => {
 });
 
 // Impact preview — shows what will happen when the expense is created
-journalRouter.post("/expenses/impact-preview", async (req, res) => {
+journalRouter.post("/expenses/impact-preview", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId } = req.body as any;
@@ -221,7 +222,7 @@ journalRouter.post("/expenses/impact-preview", async (req, res) => {
   }
 });
 
-journalRouter.post("/expenses", async (req, res) => {
+journalRouter.post("/expenses", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -363,7 +364,7 @@ journalRouter.post("/expenses", async (req, res) => {
   }
 });
 
-journalRouter.patch("/expenses/:id", async (req, res) => {
+journalRouter.patch("/expenses/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { description } = req.body as any;
@@ -382,7 +383,7 @@ journalRouter.patch("/expenses/:id", async (req, res) => {
   }
 });
 
-journalRouter.delete("/expenses/:id", async (req, res) => {
+journalRouter.delete("/expenses/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
@@ -394,7 +395,7 @@ journalRouter.delete("/expenses/:id", async (req, res) => {
   }
 });
 
-journalRouter.patch("/expenses/:id/approve", async (req, res) => {
+journalRouter.patch("/expenses/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -454,7 +455,7 @@ journalRouter.patch("/expenses/:id/approve", async (req, res) => {
   }
 });
 
-journalRouter.get("/vouchers", async (req, res) => {
+journalRouter.get("/vouchers", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -481,7 +482,7 @@ journalRouter.get("/vouchers", async (req, res) => {
   }
 });
 
-journalRouter.post("/vouchers", async (req, res) => {
+journalRouter.post("/vouchers", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -586,7 +587,7 @@ journalRouter.post("/vouchers", async (req, res) => {
   }
 });
 
-journalRouter.patch("/vouchers/:id", async (req, res) => {
+journalRouter.patch("/vouchers/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { description } = req.body as any;
@@ -598,7 +599,7 @@ journalRouter.patch("/vouchers/:id", async (req, res) => {
   }
 });
 
-journalRouter.delete("/vouchers/:id", async (req, res) => {
+journalRouter.delete("/vouchers/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
@@ -610,7 +611,7 @@ journalRouter.delete("/vouchers/:id", async (req, res) => {
   }
 });
 
-journalRouter.get("/salary-advances", async (req, res) => {
+journalRouter.get("/salary-advances", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, 'active' AS status FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC`, [scope.companyId]);
@@ -620,7 +621,7 @@ journalRouter.get("/salary-advances", async (req, res) => {
   }
 });
 
-journalRouter.post("/salary-advances", async (req, res) => {
+journalRouter.post("/salary-advances", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PAYROLL_ROLES);
@@ -648,7 +649,7 @@ journalRouter.post("/salary-advances", async (req, res) => {
   }
 });
 
-journalRouter.patch("/salary-advances/:id/approve", async (req, res) => {
+journalRouter.patch("/salary-advances/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PAYROLL_ROLES);
@@ -708,7 +709,7 @@ journalRouter.patch("/salary-advances/:id/approve", async (req, res) => {
 // JOURNAL ENTRY DETAIL + REVERSAL (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-journalRouter.get("/journal/:id", async (req, res) => {
+journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -748,7 +749,7 @@ journalRouter.get("/journal/:id", async (req, res) => {
   }
 });
 
-journalRouter.post("/journal/:id/reverse", async (req, res) => {
+journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -934,11 +935,11 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
   return { revenues, expenses, totalRevenue, totalExpense, netIncome, lines };
 }
 
-journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) => {
+journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { period } = req.params;
+    const period = String(req.params.period);
     const dryRun = String(req.query.dryRun ?? "").toLowerCase() === "true";
     const { retainedEarningsAccountCode = "3300", force = false } = (req.body ?? {}) as { retainedEarningsAccountCode?: string; force?: boolean };
 
@@ -1074,7 +1075,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", async (req, res) =>
 // OPENING BALANCES (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-journalRouter.get("/opening-balances", async (req, res) => {
+journalRouter.get("/opening-balances", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { periodStart } = req.query as { periodStart?: string };
@@ -1185,7 +1186,7 @@ async function createOpeningBalanceEntry(params: {
   return { id: journalId, ref, description };
 }
 
-journalRouter.post("/opening-balances", async (req, res) => {
+journalRouter.post("/opening-balances", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -1201,7 +1202,7 @@ journalRouter.post("/opening-balances", async (req, res) => {
   }
 });
 
-journalRouter.post("/opening-balances/import-csv", async (req, res) => {
+journalRouter.post("/opening-balances/import-csv", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);

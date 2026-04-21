@@ -9,6 +9,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createJournalEntry, getAccountCodeFromMapping, checkFinancialPeriodOpen } from "../lib/businessHelpers.js";
 
 export const financeAlgorithmsRouter = Router();
@@ -28,7 +29,7 @@ function assertFinanceRole(scope: any): void {
 // AR AGING — تقادم الذمم المدينة
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/ar-aging", async (req, res) => {
+financeAlgorithmsRouter.get("/ar-aging", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const asOfDate = (req.query.asOfDate as string) || new Date().toISOString().split("T")[0];
@@ -117,7 +118,7 @@ financeAlgorithmsRouter.get("/ar-aging", async (req, res) => {
 // AP AGING — تقادم الذمم الدائنة
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/ap-aging", async (req, res) => {
+financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const asOfDate = (req.query.asOfDate as string) || new Date().toISOString().split("T")[0];
@@ -251,7 +252,7 @@ financeAlgorithmsRouter.get("/ap-aging", async (req, res) => {
 // BANK RECONCILIATION — التسوية البنكية
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.post("/bank-reconciliation/import", async (req, res) => {
+financeAlgorithmsRouter.post("/bank-reconciliation/import", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -296,7 +297,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", async (req, res) => 
   }
 });
 
-financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", async (req, res) => {
+financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -363,7 +364,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", async (req, res)
   }
 });
 
-financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", async (req, res) => {
+financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { batchId } = req.params;
@@ -404,7 +405,7 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", async (req, res) =>
   }
 });
 
-financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", async (req, res) => {
+financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -438,7 +439,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", async (req, re
   }
 });
 
-financeAlgorithmsRouter.get("/journal-lines/search", async (req, res) => {
+financeAlgorithmsRouter.get("/journal-lines/search", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode: acc, search, amount, pageSize = "20" } = req.query as any;
@@ -472,7 +473,7 @@ financeAlgorithmsRouter.get("/journal-lines/search", async (req, res) => {
   }
 });
 
-financeAlgorithmsRouter.get("/bank-reconciliation", async (req, res) => {
+financeAlgorithmsRouter.get("/bank-reconciliation", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const batches = await rawQuery<any>(
@@ -499,7 +500,7 @@ financeAlgorithmsRouter.get("/bank-reconciliation", async (req, res) => {
 // FIXED ASSETS & DEPRECIATION — الأصول الثابتة والإهلاك
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/fixed-assets", async (req, res) => {
+financeAlgorithmsRouter.get("/fixed-assets", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -512,7 +513,7 @@ financeAlgorithmsRouter.get("/fixed-assets", async (req, res) => {
   }
 });
 
-financeAlgorithmsRouter.post("/fixed-assets", async (req, res) => {
+financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -548,7 +549,7 @@ financeAlgorithmsRouter.post("/fixed-assets", async (req, res) => {
   }
 });
 
-financeAlgorithmsRouter.get("/fixed-assets/:id", async (req, res) => {
+financeAlgorithmsRouter.get("/fixed-assets/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [asset] = await rawQuery<any>(
@@ -566,7 +567,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id", async (req, res) => {
   }
 });
 
-financeAlgorithmsRouter.patch("/fixed-assets/:id", async (req, res) => {
+financeAlgorithmsRouter.patch("/fixed-assets/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -646,7 +647,7 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
   return Math.min(monthlyAmount, remainingDepreciable);
 }
 
-financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", async (req, res) => {
+financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [asset] = await rawQuery<any>(
@@ -720,7 +721,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", async (req, res) => {
   }
 });
 
-financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) => {
+financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -803,7 +804,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", async (req, res) =>
 // MONTHLY DEPRECIATION BATCH — إهلاك دفعي لجميع الأصول
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", async (req, res) => {
+financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -877,7 +878,7 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", async (req, res) =>
 // WEIGHTED AVERAGE INVENTORY COST — المتوسط المرجح للمخزون
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/inventory-costing", async (req, res) => {
+financeAlgorithmsRouter.get("/inventory-costing", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const products = await rawQuery<any>(
@@ -904,7 +905,7 @@ financeAlgorithmsRouter.get("/inventory-costing", async (req, res) => {
   }
 });
 
-financeAlgorithmsRouter.get("/inventory-costing/:productId", async (req, res) => {
+financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const productId = Number(req.params.productId);
@@ -971,7 +972,7 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", async (req, res) =>
 // ROUNDING DIFFERENCES — فروقات التقريب
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/rounding-account", async (req, res) => {
+financeAlgorithmsRouter.get("/rounding-account", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [account] = await rawQuery<any>(
@@ -984,7 +985,7 @@ financeAlgorithmsRouter.get("/rounding-account", async (req, res) => {
   }
 });
 
-financeAlgorithmsRouter.post("/rounding-account/setup", async (req, res) => {
+financeAlgorithmsRouter.post("/rounding-account/setup", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1010,7 +1011,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", async (req, res) => {
   }
 });
 
-financeAlgorithmsRouter.post("/rounding-differences/apply", async (req, res) => {
+financeAlgorithmsRouter.post("/rounding-differences/apply", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1101,7 +1102,7 @@ async function ensureFxTables(client?: any) {
 }
 
 // List FX rates
-financeAlgorithmsRouter.get("/fx/rates", async (req, res) => {
+financeAlgorithmsRouter.get("/fx/rates", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureFxTables();
@@ -1122,7 +1123,7 @@ financeAlgorithmsRouter.get("/fx/rates", async (req, res) => {
 });
 
 // Upsert FX rate
-financeAlgorithmsRouter.post("/fx/rates", async (req, res) => {
+financeAlgorithmsRouter.post("/fx/rates", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1146,7 +1147,7 @@ financeAlgorithmsRouter.post("/fx/rates", async (req, res) => {
 });
 
 // Preview FX revaluation for a period (no posting)
-financeAlgorithmsRouter.get("/fx/revaluation/preview", async (req, res) => {
+financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1270,7 +1271,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", async (req, res) => {
 });
 
 // Post FX revaluation journal entry for the period
-financeAlgorithmsRouter.post("/fx/revaluation/post", async (req, res) => {
+financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1426,7 +1427,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", async (req, res) => {
 });
 
 // List past revaluations
-financeAlgorithmsRouter.get("/fx/revaluation", async (req, res) => {
+financeAlgorithmsRouter.get("/fx/revaluation", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureFxTables();
@@ -1444,7 +1445,7 @@ financeAlgorithmsRouter.get("/fx/revaluation", async (req, res) => {
 // TREASURY — الخزينة وإدارة السيولة
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/treasury", async (req, res) => {
+financeAlgorithmsRouter.get("/treasury", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1548,7 +1549,7 @@ financeAlgorithmsRouter.get("/treasury", async (req, res) => {
 // Returns all GL transactions, subsidiary accounts, and cost breakdown
 // for a given entity (vehicle, employee, property, project, product, vendor)
 // ─────────────────────────────────────────────────────────────────────────────
-financeAlgorithmsRouter.get("/entity-financial-profile", async (req, res) => {
+financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as { entityType: string; entityId: string };

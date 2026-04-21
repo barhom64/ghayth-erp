@@ -84,7 +84,7 @@ function severity(value: number, warnThreshold: number, critThreshold: number): 
   return "ok";
 }
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req);
@@ -497,7 +497,7 @@ async function buildChecklistItems(scope: any, where: string, params: any[], com
     return items;
 }
 
-router.get("/daily-close/checklist", async (req, res) => {
+router.get("/daily-close/checklist", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const companies = scope.allowedCompanies;

@@ -83,6 +83,8 @@ import { eventsRouter } from "./events.js";
 import { execDashboardRouter } from "./execDashboard.js";
 import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
+import contractsRouter from "./hr-contracts.js";
+import correspondenceRouter from "./correspondence.js";
 
 const router: IRouter = Router();
 
@@ -226,5 +228,7 @@ router.use("/events", eventsRouter);
 router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
 router.use("/obligations", obligationsRouter);
 router.use("/calendar", calendarRouter);
+router.use("/hr/contracts", requireModule("hr"), contractsRouter);
+router.use("/correspondence", requireModule("comms"), correspondenceRouter);
 
 export default router;

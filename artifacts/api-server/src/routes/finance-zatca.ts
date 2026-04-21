@@ -10,6 +10,7 @@ import { assertRole } from "../lib/roleGuards.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import crypto from "crypto";
 import QRCode from "qrcode";
@@ -207,7 +208,7 @@ function computeInvoiceHash(xmlContent: string): string {
 // ZATCA Settings CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-zatcaRouter.get("/zatca/settings", async (req, res) => {
+zatcaRouter.get("/zatca/settings", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -230,7 +231,7 @@ zatcaRouter.get("/zatca/settings", async (req, res) => {
   }
 });
 
-zatcaRouter.put("/zatca/settings", async (req, res) => {
+zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -322,7 +323,7 @@ zatcaRouter.put("/zatca/settings", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Test connection (simulated)
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/test-connection", async (req, res) => {
+zatcaRouter.post("/zatca/test-connection", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -356,7 +357,7 @@ zatcaRouter.post("/zatca/test-connection", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Generate XML for an invoice
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.get("/zatca/invoice/:id/xml", async (req, res) => {
+zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -443,7 +444,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Simulate ZATCA submission for invoice
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/invoice/:id/submit", async (req, res) => {
+zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -574,7 +575,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Simulate ZATCA submission for expense
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/expense/:id/submit", async (req, res) => {
+zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -650,7 +651,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // ZATCA submission log list
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.get("/zatca/submissions", async (req, res) => {
+zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -716,7 +717,7 @@ zatcaRouter.get("/zatca/submissions", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Update invoice ZATCA fields (isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason)
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.patch("/zatca/invoice/:id", async (req, res) => {
+zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -747,7 +748,7 @@ zatcaRouter.patch("/zatca/invoice/:id", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Update expense ZATCA fields
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.patch("/zatca/expense/:id", async (req, res) => {
+zatcaRouter.patch("/zatca/expense/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);

@@ -70,6 +70,8 @@ const DisciplineRegulation = lazy(() => import("@/pages/hr/discipline-regulation
 const DisciplineMemos = lazy(() => import("@/pages/hr/discipline-memos"));
 const DisciplineMemoDetail = lazy(() => import("@/pages/hr/discipline-memo-detail"));
 const OfficialLetters = lazy(() => import("@/pages/hr/official-letters"));
+const Contracts = lazy(() => import("@/pages/hr/contracts"));
+const ContractsCreate = lazy(() => import("@/pages/create/hr/contracts-create"));
 const ExcuseRequests = lazy(() => import("@/pages/hr/excuse-requests"));
 const ExcuseCreate = lazy(() => import("@/pages/create/hr/excuse-create"));
 
@@ -142,6 +144,8 @@ export const hrRoutes = [
   { path: "/hr/gratuity", component: Gratuity, subKey: "payroll" },
   { path: "/hr/turnover-report", component: TurnoverReport, subKey: "performance" },
   { path: "/hr/expiring-documents", component: ExpiringDocuments, subKey: "employees" },
+  { path: "/hr/contracts", component: Contracts, subKey: "employees" },
+  { path: "/hr/contracts/create", component: ContractsCreate, subKey: "employees" },
   { path: "/hr/official-letters", component: OfficialLetters, subKey: "employees" },
   { path: "/hr/excuse-requests", component: ExcuseRequests, subKey: "attendance" },
   { path: "/hr/excuse-requests/create", component: ExcuseCreate, subKey: "attendance" },

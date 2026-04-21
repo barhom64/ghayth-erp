@@ -7,6 +7,7 @@ import {
   ConflictError,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -17,7 +18,7 @@ vendorsRouter.use(authMiddleware);
 
 const PROCUREMENT_ROLES = ["procurement", "finance", "director", "owner"];
 
-vendorsRouter.get("/vendors", async (req, res) => {
+vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -32,7 +33,7 @@ vendorsRouter.get("/vendors", async (req, res) => {
   }
 });
 
-vendorsRouter.post("/vendors", async (req, res) => {
+vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
@@ -72,7 +73,7 @@ vendorsRouter.post("/vendors", async (req, res) => {
   }
 });
 
-vendorsRouter.post("/vendors/create", async (req, res) => {
+vendorsRouter.post("/vendors/create", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PROCUREMENT_ROLES);
@@ -112,7 +113,7 @@ vendorsRouter.post("/vendors/create", async (req, res) => {
   }
 });
 
-vendorsRouter.patch("/vendors/:id", async (req, res) => {
+vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const vendorId = Number(req.params.id);
@@ -163,7 +164,7 @@ vendorsRouter.patch("/vendors/:id", async (req, res) => {
   }
 });
 
-vendorsRouter.delete("/vendors/:id", async (req, res) => {
+vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, PROCUREMENT_ROLES);
@@ -228,7 +229,7 @@ vendorsRouter.delete("/vendors/:id", async (req, res) => {
   }
 });
 
-vendorsRouter.get("/stats", async (req, res) => {
+vendorsRouter.get("/stats", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -258,7 +259,7 @@ vendorsRouter.get("/stats", async (req, res) => {
   }
 });
 
-vendorsRouter.get("/receivables", async (req, res) => {
+vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -277,7 +278,7 @@ vendorsRouter.get("/receivables", async (req, res) => {
   }
 });
 
-vendorsRouter.get("/payments", async (req, res) => {
+vendorsRouter.get("/payments", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -298,7 +299,7 @@ vendorsRouter.get("/payments", async (req, res) => {
   }
 });
 
-vendorsRouter.get("/commitments", async (req, res) => {
+vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -316,7 +317,7 @@ vendorsRouter.get("/commitments", async (req, res) => {
   }
 });
 
-vendorsRouter.get("/financial-requests", async (req, res) => {
+vendorsRouter.get("/financial-requests", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -339,7 +340,7 @@ vendorsRouter.get("/financial-requests", async (req, res) => {
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-vendorsRouter.get("/vendors/:id", async (req, res) => {
+vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = (req as any).scope!;
     const id = Number(req.params.id);

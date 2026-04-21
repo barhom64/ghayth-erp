@@ -93,7 +93,7 @@ const updateWebhookSchema = z.object({
 
 const router = Router();
 
-router.get("/preferences", async (req: Request, res: Response): Promise<any> => {
+router.get("/preferences", requirePermission("notifications:read"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope;
     if (!scope) return res.status(401).json({ error: "Unauthorized" });

@@ -8,6 +8,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   createJournalEntry,
   createAuditLog,
@@ -28,7 +29,7 @@ const CFO_ROLES = ["finance_manager", "general_manager", "owner"];
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/fiscal-periods-v2", async (req, res) => {
+financeHardeningRouter.get("/fiscal-periods-v2", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -48,7 +49,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", async (req, res) => {
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2", async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, CFO_ROLES);
@@ -90,7 +91,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", async (req, res) => {
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, CFO_ROLES);
@@ -160,7 +161,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", async (req, res) => 
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["general_manager", "owner"]);
@@ -216,7 +217,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", async (req, res) =>
 // draft → pending_review → approved → posted
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.post("/journal-manual", async (req, res) => {
+financeHardeningRouter.post("/journal-manual", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -284,7 +285,7 @@ financeHardeningRouter.post("/journal-manual", async (req, res) => {
   }
 });
 
-financeHardeningRouter.get("/journal-manual", async (req, res) => {
+financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -329,7 +330,7 @@ financeHardeningRouter.get("/journal-manual", async (req, res) => {
 // for approvalStatus are no longer permitted on this entity.
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.patch("/journal-manual/:id/submit", async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/submit", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -366,7 +367,7 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", async (req, res) => {
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/review", async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -430,7 +431,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", async (req, res) => {
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/approve", async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["finance_manager", "general_manager", "owner"]);
@@ -483,7 +484,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", async (req, res) => 
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/post", async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["finance_manager", "general_manager", "owner"]);
@@ -533,7 +534,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", async (req, res) => {
 // BANK GUARANTEES
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/bank-guarantees", async (req, res) => {
+financeHardeningRouter.get("/bank-guarantees", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const today = new Date().toISOString().split("T")[0];
@@ -567,7 +568,7 @@ financeHardeningRouter.get("/bank-guarantees", async (req, res) => {
   }
 });
 
-financeHardeningRouter.post("/bank-guarantees", async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -612,7 +613,7 @@ financeHardeningRouter.post("/bank-guarantees", async (req, res) => {
   }
 });
 
-financeHardeningRouter.patch("/bank-guarantees/:id", async (req, res) => {
+financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -661,7 +662,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", async (req, res) => {
   }
 });
 
-financeHardeningRouter.delete("/bank-guarantees/:id", async (req, res) => {
+financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -731,7 +732,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", async (req, res) => {
 // go through `applyTransition` so the graph is enforced centrally.
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.post("/bank-guarantees/:id/cancel", async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -784,7 +785,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", async (req, res) => {
   }
 });
 
-financeHardeningRouter.post("/bank-guarantees/:id/release", async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees/:id/release", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -833,7 +834,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", async (req, res) => 
 // INTERCOMPANY TRANSACTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/intercompany", async (req, res) => {
+financeHardeningRouter.get("/intercompany", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -853,7 +854,7 @@ financeHardeningRouter.get("/intercompany", async (req, res) => {
   }
 });
 
-financeHardeningRouter.post("/intercompany", async (req, res) => {
+financeHardeningRouter.post("/intercompany", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["general_manager", "owner"]);
@@ -948,7 +949,7 @@ financeHardeningRouter.post("/intercompany", async (req, res) => {
   }
 });
 
-financeHardeningRouter.get("/intercompany/consolidation", async (req, res) => {
+financeHardeningRouter.get("/intercompany/consolidation", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const companies = scope.allowedCompanies ?? [scope.companyId];
@@ -999,7 +1000,7 @@ financeHardeningRouter.get("/intercompany/consolidation", async (req, res) => {
 // PROJECTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/projects", async (req, res) => {
+financeHardeningRouter.get("/projects", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1020,7 +1021,7 @@ financeHardeningRouter.get("/projects", async (req, res) => {
   }
 });
 
-financeHardeningRouter.post("/projects", async (req, res) => {
+financeHardeningRouter.post("/projects", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -1063,7 +1064,7 @@ financeHardeningRouter.post("/projects", async (req, res) => {
   }
 });
 
-financeHardeningRouter.get("/projects/:id/costs", async (req, res) => {
+financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
@@ -1099,7 +1100,7 @@ financeHardeningRouter.get("/projects/:id/costs", async (req, res) => {
 // CASH FLOW FORECAST
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/cash-flow-forecast", async (req, res) => {
+financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const today = new Date();
@@ -1187,7 +1188,7 @@ financeHardeningRouter.get("/cash-flow-forecast", async (req, res) => {
 // COST CENTER REPORT
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/cost-center-report", async (req, res) => {
+financeHardeningRouter.get("/cost-center-report", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, costCenter } = req.query as any;

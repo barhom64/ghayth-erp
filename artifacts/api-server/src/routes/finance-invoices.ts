@@ -9,6 +9,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   createNotification,
   emitEvent,
@@ -124,7 +125,7 @@ const COLLECTION_STAGES = [
 ];
 
 // Impact preview — lets the create form show exactly what will happen
-invoicesRouter.post("/invoices/impact-preview", async (req, res) => {
+invoicesRouter.post("/invoices/impact-preview", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = req.body as any;
@@ -212,7 +213,7 @@ invoicesRouter.post("/invoices/impact-preview", async (req, res) => {
   }
 });
 
-invoicesRouter.get("/invoices", async (req, res) => {
+invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status = "", page = "1", limit: lim = "20" } = req.query as any;
@@ -263,7 +264,7 @@ invoicesRouter.get("/invoices", async (req, res) => {
   }
 });
 
-invoicesRouter.post("/invoices", async (req, res) => {
+invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -480,7 +481,7 @@ invoicesRouter.post("/invoices", async (req, res) => {
   }
 });
 
-invoicesRouter.post("/invoices/:id/send", async (req, res) => {
+invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -544,7 +545,7 @@ invoicesRouter.post("/invoices/:id/send", async (req, res) => {
   }
 });
 
-invoicesRouter.post("/invoices/:id/payment", async (req, res) => {
+invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -639,7 +640,7 @@ invoicesRouter.post("/invoices/:id/payment", async (req, res) => {
   }
 });
 
-invoicesRouter.get("/invoices/:id", async (req, res) => {
+invoicesRouter.get("/invoices/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -667,7 +668,7 @@ invoicesRouter.get("/invoices/:id", async (req, res) => {
   }
 });
 
-invoicesRouter.patch("/invoices/:id", async (req, res) => {
+invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -756,7 +757,7 @@ invoicesRouter.patch("/invoices/:id", async (req, res) => {
   }
 });
 
-invoicesRouter.delete("/invoices/:id", async (req, res) => {
+invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -870,11 +871,11 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
   }
 }
 
-invoicesRouter.patch("/invoices/:id/approve", (req, res) => invoiceApprovalAction(req, res, "approved"));
-invoicesRouter.patch("/invoices/:id/reject", (req, res) => invoiceApprovalAction(req, res, "rejected"));
-invoicesRouter.patch("/invoices/:id/return", (req, res) => invoiceApprovalAction(req, res, "returned"));
+invoicesRouter.patch("/invoices/:id/approve", requirePermission("finance:update"), (req, res) => invoiceApprovalAction(req, res, "approved"));
+invoicesRouter.patch("/invoices/:id/reject", requirePermission("finance:update"), (req, res) => invoiceApprovalAction(req, res, "rejected"));
+invoicesRouter.patch("/invoices/:id/return", requirePermission("finance:update"), (req, res) => invoiceApprovalAction(req, res, "returned"));
 
-invoicesRouter.get("/tax/summary", async (req, res) => {
+invoicesRouter.get("/tax/summary", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period } = req.query as any;
@@ -904,7 +905,7 @@ invoicesRouter.get("/tax/summary", async (req, res) => {
 //   CR 2300 VAT payable
 // ─────────────────────────────────────────────────────────────────────────────
 
-invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
+invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -1053,7 +1054,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", async (req, res) => {
   }
 });
 
-invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
+invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -1190,7 +1191,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", async (req, res) => {
   }
 });
 
-invoicesRouter.get("/invoices/:id/memos", async (req, res) => {
+invoicesRouter.get("/invoices/:id/memos", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -1225,7 +1226,7 @@ invoicesRouter.get("/invoices/:id/memos", async (req, res) => {
 // per request. Idempotent per period via ref `BAD-DEBT-{period}`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-invoicesRouter.get("/bad-debt/preview", async (req, res) => {
+invoicesRouter.get("/bad-debt/preview", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const asOf = (req.query.asOf as string) || new Date().toISOString().slice(0, 10);
@@ -1278,7 +1279,7 @@ invoicesRouter.get("/bad-debt/preview", async (req, res) => {
   }
 });
 
-invoicesRouter.post("/bad-debt/post", async (req, res) => {
+invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -1394,7 +1395,7 @@ invoicesRouter.post("/bad-debt/post", async (req, res) => {
 //   CR 1200 AR
 // ─────────────────────────────────────────────────────────────────────────────
 
-invoicesRouter.post("/customer-advances", async (req, res) => {
+invoicesRouter.post("/customer-advances", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -1485,7 +1486,7 @@ invoicesRouter.post("/customer-advances", async (req, res) => {
   }
 });
 
-invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
+invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -1575,7 +1576,7 @@ invoicesRouter.post("/customer-advances/:id/apply", async (req, res) => {
   }
 });
 
-invoicesRouter.get("/customer-advances", async (req, res) => {
+invoicesRouter.get("/customer-advances", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { clientId, status } = req.query as any;
@@ -1682,7 +1683,7 @@ ${opts.stageTitle}
 }
 
 // Preview eligible invoices for dunning
-invoicesRouter.get("/dunning/preview", async (req, res) => {
+invoicesRouter.get("/dunning/preview", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureDunningTables();
@@ -1760,7 +1761,7 @@ invoicesRouter.get("/dunning/preview", async (req, res) => {
 });
 
 // Send dunning letters (record them)
-invoicesRouter.post("/dunning/send", async (req, res) => {
+invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -1833,7 +1834,7 @@ invoicesRouter.post("/dunning/send", async (req, res) => {
 });
 
 // History of dunning letters
-invoicesRouter.get("/dunning/history", async (req, res) => {
+invoicesRouter.get("/dunning/history", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureDunningTables();
@@ -1859,7 +1860,7 @@ invoicesRouter.get("/dunning/history", async (req, res) => {
   }
 });
 
-invoicesRouter.get("/tax/declarations", async (req, res) => {
+invoicesRouter.get("/tax/declarations", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const currentYear = new Date().getFullYear();

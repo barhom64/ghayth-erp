@@ -3398,9 +3398,11 @@ router.get("/official-letters", requirePermission("hr:read"), async (req, res) =
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT ol.*, e.name AS "employeeName"
+      `SELECT ol.*, e.name AS "employeeName",
+              b.name AS "branchName"
        FROM official_letters ol
        LEFT JOIN employees e ON e.id = ol."employeeId"
+       LEFT JOIN branches b ON b.id = ol."branchId"
        WHERE ol."companyId" = $1
        ORDER BY ol."createdAt" DESC LIMIT 100`,
       [scope.companyId]
@@ -3430,10 +3432,13 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       });
     }
 
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
+    const letterRef = `LTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+
     const { insertId } = await rawExecute(
-      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId]
+      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
     );
 
     const approvalResult = await initiateApprovalChain({
@@ -3995,6 +4000,34 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
     }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ─── Single official letter with letterhead ──────────────
+router.get("/official-letters/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [letter] = await rawQuery<any>(
+      `SELECT ol.*, e.name AS "employeeName", e."empNumber",
+              e."nationalId", e."passportNumber", e."iqamaNumber",
+              ea."jobTitle", ea."hireDate",
+              b.name AS "branchName", b."logoUrl" AS "branchLogo",
+              b.address AS "branchAddress", b."taxNumber" AS "branchTaxNumber",
+              b."crNumber" AS "branchCrNumber", b.email AS "branchEmail",
+              b.website AS "branchWebsite", b."footerText" AS "branchFooter",
+              b."nameEn" AS "branchNameEn", b.city AS "branchCity",
+              c.name AS "companyName"
+       FROM official_letters ol
+       LEFT JOIN employees e ON e.id = ol."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = ol."companyId" AND ea.status = 'active'
+       LEFT JOIN branches b ON b.id = COALESCE(ol."branchId", ea."branchId")
+       LEFT JOIN companies c ON c.id = ol."companyId"
+       WHERE ol.id = $1 AND ol."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!letter) throw new NotFoundError("الخطاب غير موجود");
+    res.json(letter);
+  } catch (err) { handleRouteError(err, res, "خطأ في جلب الخطاب"); }
 });
 
 // ─── Official letters PATCH/DELETE ──────────────────────

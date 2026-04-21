@@ -6,6 +6,7 @@ import {
   ValidationError,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -25,7 +26,7 @@ const COLLECTION_STAGES = [
   { stage: 6, name: "legal_churned", label: "إشعار القانونية + تصنيف churned", daysOverdue: 60 },
 ];
 
-collectionRouter.get("/collection", async (req, res) => {
+collectionRouter.get("/collection", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -71,7 +72,7 @@ collectionRouter.get("/collection", async (req, res) => {
   }
 });
 
-collectionRouter.post("/collection/:invoiceId/action", async (req, res) => {
+collectionRouter.post("/collection/:invoiceId/action", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -158,7 +159,7 @@ collectionRouter.post("/collection/:invoiceId/action", async (req, res) => {
   }
 });
 
-collectionRouter.get("/collection/:invoiceId/history", async (req, res) => {
+collectionRouter.get("/collection/:invoiceId/history", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { invoiceId } = req.params;

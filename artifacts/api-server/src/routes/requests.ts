@@ -230,22 +230,25 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
         a && typeof a.name === "string" && typeof a.size === "number" && a.size <= 5 * 1024 * 1024
       ).map((a: any) => ({ name: a.name, size: a.size, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
+    const ref = `REQ-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+
     const r = await rawExecute(
-      `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [typeId ? Number(typeId) : null, enforcedRequesterId, resolvedRequesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments)]
+      `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,
+      [typeId ? Number(typeId) : null, enforcedRequesterId, resolvedRequesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments), ref, scope.branchId || null]
     );
     await logCommunication(
       scope.companyId, 'inbound',
-      `طلب جديد: ${title}`,
+      `طلب جديد: ${title} (${ref})`,
       `تم إنشاء طلب جديد بواسطة ${resolvedRequesterName || 'مستخدم'} - الأولوية: ${priority || 'متوسطة'} - ${description || ''}`,
       'request', r.insertId
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "requests", entityId: r.insertId,
-      after: { typeId: typeId ? Number(typeId) : null, title, description, priority: priority || "medium" },
+      after: { typeId: typeId ? Number(typeId) : null, title, description, priority: priority || "medium", ref },
     }).catch(console.error);
-    res.status(201).json({ id: r.insertId, title, description, priority: priority || "medium", status: "pending" });
+    res.status(201).json({ id: r.insertId, ref, title, description, priority: priority || "medium", status: "pending" });
   } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
 
@@ -494,7 +497,7 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
     if (isOverride && !notes) throw new ValidationError("يجب تحديد سبب التجاوز عند التدخل في طلب ليس مسنداً إليك", { field: "notes" });
 
     const result = await rawExecute(
-      `UPDATE requests SET status='approved', notes=$1, "reviewedBy"=$2, "reviewedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+      `UPDATE requests SET status='approved', notes=$1, "reviewedBy"=$2, "reviewedAt"=NOW(), "approvedAt"=NOW(), "approvedBy"=$2 WHERE id=$3 AND "companyId"=$4`,
       [notes || null, scope.userId, id, scope.companyId]
     );
     if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
@@ -791,12 +794,12 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
     }
 
     await rawExecute(
-      `UPDATE requests SET status='closed', "convertedTo"=$1, "convertedType"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
-      [createdId, targetType, id, scope.companyId]
+      `UPDATE requests SET status='closed', "convertedTo"=$1, "convertedType"=$2, "closedAt"=NOW(), "closedBy"=$5, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+      [createdId, targetType, id, scope.companyId, scope.userId]
     ).catch(async () => {
       await rawExecute(
-        `UPDATE requests SET status='closed', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-        [id, scope.companyId]
+        `UPDATE requests SET status='closed', "closedAt"=NOW(), "closedBy"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+        [id, scope.companyId, scope.userId]
       );
     });
 

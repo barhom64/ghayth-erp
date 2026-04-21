@@ -1087,7 +1087,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
   } catch (err) { handleRouteError(err, res, "Department leave balance"); }
 });
 
-router.get("/reports/property-occupancy", async (req, res) => {
+router.get("/reports/property-occupancy", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1133,7 +1133,7 @@ router.get("/reports/property-occupancy", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Property occupancy report"); }
 });
 
-router.get("/reports/training-roi", async (req, res) => {
+router.get("/reports/training-roi", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1189,7 +1189,7 @@ router.get("/reports/training-roi", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Training ROI report"); }
 });
 
-router.get("/ai-insights", async (req, res) => {
+router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1250,7 +1250,7 @@ router.get("/ai-insights", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "AI insights"); }
 });
 
-router.patch("/ai-insights/:id/dismiss", async (req, res) => {
+router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -1262,7 +1262,7 @@ router.patch("/ai-insights/:id/dismiss", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
 });
 
-router.patch("/ai-insights/:id/read", async (req, res) => {
+router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -1274,7 +1274,7 @@ router.patch("/ai-insights/:id/read", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Mark insight read"); }
 });
 
-router.get("/alert-fatigue/settings", async (req, res) => {
+router.get("/alert-fatigue/settings", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1285,7 +1285,7 @@ router.get("/alert-fatigue/settings", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
 });
 
-router.post("/alert-fatigue/mute", async (req, res) => {
+router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed_muteAlertSchema = muteAlertSchema.safeParse(req.body);
@@ -1304,7 +1304,7 @@ router.post("/alert-fatigue/mute", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Mute alert type"); }
 });
 
-router.delete("/alert-fatigue/mute/:alertType", async (req, res) => {
+router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { alertType } = req.params;
@@ -1316,7 +1316,7 @@ router.delete("/alert-fatigue/mute/:alertType", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Unmute alert type"); }
 });
 
-router.get("/alert-fatigue/daily-count", async (req, res) => {
+router.get("/alert-fatigue/daily-count", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(

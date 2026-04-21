@@ -7,6 +7,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createJournalEntry, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { assertRole } from "../lib/roleGuards.js";
@@ -32,7 +33,7 @@ export function computeNextRunDate(fromDate: string | Date, frequency: Recurring
   return d.toISOString().slice(0, 10);
 }
 
-recurringRouter.get("/recurring-journals", async (req, res) => {
+recurringRouter.get("/recurring-journals", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -63,7 +64,7 @@ recurringRouter.get("/recurring-journals", async (req, res) => {
   }
 });
 
-recurringRouter.get("/recurring-journals/:id", async (req, res) => {
+recurringRouter.get("/recurring-journals/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -112,7 +113,7 @@ function validateTemplateLines(lines: any): { ok: true; lines: any[] } | { ok: f
   };
 }
 
-recurringRouter.post("/recurring-journals", async (req, res) => {
+recurringRouter.post("/recurring-journals", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -186,7 +187,7 @@ recurringRouter.post("/recurring-journals", async (req, res) => {
   }
 });
 
-recurringRouter.patch("/recurring-journals/:id", async (req, res) => {
+recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -328,7 +329,7 @@ export async function runRecurringJournal(params: {
   }
 }
 
-recurringRouter.post("/recurring-journals/:id/run-now", async (req, res) => {
+recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -380,7 +381,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", async (req, res) => {
   }
 });
 
-recurringRouter.delete("/recurring-journals/:id", async (req, res) => {
+recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);

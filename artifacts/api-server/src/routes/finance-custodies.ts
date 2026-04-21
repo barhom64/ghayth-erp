@@ -7,6 +7,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import {
   emitEvent,
@@ -22,7 +23,7 @@ custodiesRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-custodiesRouter.get("/custodies", async (req, res) => {
+custodiesRouter.get("/custodies", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status: filterStatus, employeeId, page = "1", limit: lim = "50", dateFrom, dateTo } = req.query as any;
@@ -118,7 +119,7 @@ custodiesRouter.get("/custodies", async (req, res) => {
   }
 });
 
-custodiesRouter.get("/custodies/report", async (req, res) => {
+custodiesRouter.get("/custodies/report", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -216,7 +217,7 @@ custodiesRouter.get("/custodies/report", async (req, res) => {
   }
 });
 
-custodiesRouter.get("/custodies/summary", async (req, res) => {
+custodiesRouter.get("/custodies/summary", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -261,7 +262,7 @@ custodiesRouter.get("/custodies/summary", async (req, res) => {
   }
 });
 
-custodiesRouter.get("/custodies/:id", async (req, res) => {
+custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -361,7 +362,7 @@ custodiesRouter.get("/custodies/:id", async (req, res) => {
   }
 });
 
-custodiesRouter.post("/custodies", async (req, res) => {
+custodiesRouter.post("/custodies", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -479,7 +480,7 @@ custodiesRouter.post("/custodies", async (req, res) => {
   }
 });
 
-custodiesRouter.post("/custodies/settle", async (req, res) => {
+custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -598,7 +599,7 @@ custodiesRouter.post("/custodies/settle", async (req, res) => {
   }
 });
 
-custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
+custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
@@ -715,7 +716,7 @@ custodiesRouter.post("/custodies/:id/settle", async (req, res) => {
   }
 });
 
-custodiesRouter.patch("/custodies/:id/approve", async (req, res) => {
+custodiesRouter.patch("/custodies/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);

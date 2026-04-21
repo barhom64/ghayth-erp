@@ -9,6 +9,7 @@ import {
   ForbiddenError,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { assertRole } from "../lib/roleGuards.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
@@ -27,7 +28,7 @@ budgetRouter.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance", "director", "owner"];
 
-budgetRouter.get("/budget", async (req, res) => {
+budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -46,7 +47,7 @@ budgetRouter.get("/budget", async (req, res) => {
   }
 });
 
-budgetRouter.post("/budget", async (req, res) => {
+budgetRouter.post("/budget", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["director", "owner"]);
@@ -84,7 +85,7 @@ budgetRouter.post("/budget", async (req, res) => {
   }
 });
 
-budgetRouter.post("/budget/validate", async (req, res) => {
+budgetRouter.post("/budget/validate", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode, amount, period } = req.body as any;
@@ -126,7 +127,7 @@ budgetRouter.post("/budget/validate", async (req, res) => {
   }
 });
 
-budgetRouter.patch("/budget/:id", async (req, res) => {
+budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["director", "owner"]);
@@ -170,7 +171,7 @@ budgetRouter.patch("/budget/:id", async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Update budget error:"); }
 });
 
-budgetRouter.delete("/budget/:id", async (req, res) => {
+budgetRouter.delete("/budget/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, ["director", "owner"]);
@@ -273,7 +274,7 @@ async function ensureBudgetApprovalTable() {
   `);
 }
 
-budgetRouter.post("/budget/approval-requests", async (req, res) => {
+budgetRouter.post("/budget/approval-requests", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = req.body as any;
@@ -348,7 +349,7 @@ budgetRouter.post("/budget/approval-requests", async (req, res) => {
   }
 });
 
-budgetRouter.get("/budget/approval-requests", async (req, res) => {
+budgetRouter.get("/budget/approval-requests", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureBudgetApprovalTable();
@@ -367,7 +368,7 @@ budgetRouter.get("/budget/approval-requests", async (req, res) => {
   }
 });
 
-budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
+budgetRouter.post("/budget/approval-requests/:id/decide", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     const requestId = Number(req.params.id);
@@ -445,7 +446,7 @@ budgetRouter.post("/budget/approval-requests/:id/decide", async (req, res) => {
 // BUDGET VARIANCE REPORT — تقرير الفروقات بين الميزانية والفعلي
 // ─────────────────────────────────────────────────────────────────────────────
 
-budgetRouter.get("/budget/variance", async (req, res) => {
+budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
@@ -522,7 +523,7 @@ budgetRouter.get("/budget/variance", async (req, res) => {
   }
 });
 
-budgetRouter.get("/fiscal-periods", async (req, res) => {
+budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const currentYear = new Date().getFullYear();
@@ -555,11 +556,11 @@ budgetRouter.get("/fiscal-periods", async (req, res) => {
   }
 });
 
-budgetRouter.post("/fiscal-periods/:period/close", async (req, res) => {
+budgetRouter.post("/fiscal-periods/:period/close", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     assertRole(scope, FINANCE_ROLES);
-    const { period } = req.params;
+    const period = String(req.params.period);
 
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("صيغة الفترة غير صحيحة", {

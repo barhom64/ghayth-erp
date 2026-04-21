@@ -155,6 +155,7 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, module: "hr", subKey: "employees" },
       { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, module: "hr", subKey: "employees" },
+      { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, module: "hr", subKey: "employees" },
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
@@ -320,6 +321,7 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "التواصل", path: "/communications", icon: Mail, module: "comms", children: [
         { label: "سجل الاتصالات", path: "/communications", icon: MessageSquare },
+        { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
         { label: "الخطابات والمراسلات", path: "/letters", icon: Mail },
         { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap },
       ]},
