@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -18,16 +19,15 @@ export default function BuildingsCreate() {
   const owners = asList(ownersResp);
   const [saving, setSaving] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const [form, setForm] = useState<any>({
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_buildings_create", {
     name: "", address: "", city: "", type: "residential", floors: "", description: "",
     deedNumber: "", deedDate: "", buildingPermitNumber: "",
     district: "", street: "", buildingNumber: "", postalCode: "", additionalNumber: "",
     latitude: "", longitude: "", totalArea: "", yearBuilt: "", ownerId: "",
   });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const buildPayload = () => ({
     ...form,
@@ -55,6 +55,7 @@ export default function BuildingsCreate() {
     setSaving(true);
     try {
       await apiFetch("/properties/buildings", { method: "POST", body: JSON.stringify(buildPayload()) });
+      clearDraft();
       toast({ title: "تمت إضافة المبنى بنجاح" });
       setLocation("/properties/buildings");
     } catch (err: any) {
@@ -70,6 +71,12 @@ export default function BuildingsCreate() {
       subtitle="تسجيل مبنى أو مجمع في النظام"
       backPath="/properties/buildings"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-6">
         <CreationDateField />
         <h3 className="flex items-center gap-2 text-lg font-semibold">

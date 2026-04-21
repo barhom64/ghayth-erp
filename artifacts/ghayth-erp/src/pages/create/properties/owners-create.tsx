@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Crown, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -15,8 +16,7 @@ export default function OwnersCreate() {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  const [form, setForm] = useState<any>({
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_owners_create", {
     ownerType: "individual", name: "", nationalId: "", crNumber: "", phone: "", email: "",
     iban: "", bankName: "", address: "", city: "",
     authorizationNumber: "", authorizationDate: "", authorizationExpiry: "", notes: "",
@@ -36,6 +36,7 @@ export default function OwnersCreate() {
     try {
       const payload = { ...form, authorizationDate: form.authorizationDate || undefined, authorizationExpiry: form.authorizationExpiry || undefined };
       await apiFetch("/properties/owners", { method: "POST", body: JSON.stringify(payload) });
+      clearDraft();
       toast({ title: "تمت إضافة المالك بنجاح" });
       setLocation("/properties/owners");
     } catch (err: any) {
@@ -51,6 +52,12 @@ export default function OwnersCreate() {
       subtitle="تسجيل مالك عقار في النظام"
       backPath="/properties/owners"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-6">
         <CreationDateField />
         <h3 className="flex items-center gap-2 text-lg font-semibold">

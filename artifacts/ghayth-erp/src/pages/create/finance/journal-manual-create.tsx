@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -7,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ export default function JournalManualCreatePage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
 
-  const [form, setForm] = useState({
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_journal_manual_create", {
     description: "",
     date: todayLocal(),
     costCenter: "",
@@ -41,7 +41,7 @@ export default function JournalManualCreatePage() {
     [["journal-manual"]],
     {
       successMessage: "تم إنشاء القيد اليدوي بحالة مسودة",
-      onSuccess: () => navigate("/finance/journal-manual"),
+      onSuccess: () => { clearDraft(); navigate("/finance/journal-manual"); },
     },
   );
 
@@ -81,6 +81,12 @@ export default function JournalManualCreatePage() {
       subtitle="أنشئ قيداً يدوياً بحالة مسودة، ثم أرسله للمراجعة والاعتماد"
       backPath="/finance/journal-manual"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
             <CreationDateField />

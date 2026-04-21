@@ -40,7 +40,7 @@ router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (r
     if (result.success) {
       res.json({ success: true, message: "تم تشغيل المهمة بنجاح", result: result.result });
     } else {
-      res.status(500).json({ success: false, message: "فشل تشغيل المهمة", error: result.error });
+      handleRouteError(new Error(result.error || "فشل تشغيل المهمة"), res, "Trigger cron job error");
     }
   } catch (err) { handleRouteError(err, res, "Trigger cron error:"); }
 });

@@ -2,11 +2,12 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { q = "", type = "all" } = req.query as any;

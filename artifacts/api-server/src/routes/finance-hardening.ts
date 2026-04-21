@@ -22,8 +22,6 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
 
-const CFO_ROLES = ["finance_manager", "general_manager", "owner"];
-
 // ─────────────────────────────────────────────────────────────────────────────
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
 // ─────────────────────────────────────────────────────────────────────────────

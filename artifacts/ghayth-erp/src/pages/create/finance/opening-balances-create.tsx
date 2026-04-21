@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -13,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -37,9 +37,19 @@ export default function OpeningBalancesCreatePage() {
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
 
-  const [periodStart, setPeriodStart] = useState<string>(firstDayOfFiscalYear());
-  const [lines, setLines] = useState<OBLine[]>([emptyLine(), emptyLine()]);
-  const [force, setForce] = useState(false);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_opening_balances_create", {
+    periodStart: firstDayOfFiscalYear(),
+    lines: [emptyLine(), emptyLine()] as OBLine[],
+    force: false,
+  });
+  const periodStart = form.periodStart;
+  const setPeriodStart = (v: string) => setForm(f => ({ ...f, periodStart: v }));
+  const lines = form.lines;
+  const setLines = (updater: OBLine[] | ((prev: OBLine[]) => OBLine[])) => {
+    setForm(f => ({ ...f, lines: typeof updater === "function" ? updater(f.lines) : updater }));
+  };
+  const force = form.force;
+  const setForce = (v: boolean) => setForm(f => ({ ...f, force: v }));
 
   const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
   const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
@@ -51,7 +61,7 @@ export default function OpeningBalancesCreatePage() {
     [["opening-balances"]],
     {
       successMessage: "تم حفظ الأرصدة الافتتاحية",
-      onSuccess: () => setLocation("/finance/opening-balances"),
+      onSuccess: () => { clearDraft(); setLocation("/finance/opening-balances"); },
     },
   );
 
@@ -61,7 +71,7 @@ export default function OpeningBalancesCreatePage() {
     [["opening-balances"]],
     {
       successMessage: "تم استيراد الأرصدة الافتتاحية من ملف CSV",
-      onSuccess: () => setLocation("/finance/opening-balances"),
+      onSuccess: () => { clearDraft(); setLocation("/finance/opening-balances"); },
     },
   );
 
@@ -114,6 +124,12 @@ export default function OpeningBalancesCreatePage() {
 
   return (
     <CreatePageLayout title="أرصدة افتتاحية جديدة" backPath="/finance/opening-balances">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <FormFieldWrapper label="تاريخ بداية الفترة" required>

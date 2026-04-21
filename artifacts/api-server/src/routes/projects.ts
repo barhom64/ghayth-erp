@@ -153,7 +153,6 @@ const PROJECT_TRANSITIONS: Record<string, readonly string[]> = {
   cancelled:   [],
 };
 
-const PHASE_STATUSES = ["pending", "in_progress", "completed", "cancelled"] as const;
 const PHASE_TRANSITIONS: Record<string, readonly string[]> = {
   pending:     ["in_progress", "cancelled"],
   in_progress: ["completed", "cancelled"],

@@ -523,7 +523,7 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
     );
     const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
-  } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء تحديث القالب" }); }
+  } catch (e: any) { handleRouteError(e, res, "Update document template error"); }
 });
 
 router.delete("/templates/:id", requirePermission("documents:delete"), async (req, res) => {
@@ -535,7 +535,7 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ message: "تم حذف القالب بنجاح" });
-  } catch (e: any) { res.status(500).json({ error: "حدث خطأ أثناء حذف القالب" }); }
+  } catch (e: any) { handleRouteError(e, res, "Delete document template error"); }
 });
 
 function fillTemplate(htmlContent: string, data: Record<string, any>): string {

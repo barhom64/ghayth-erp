@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
-import { rawExecute, rawQuery } from "../lib/rawdb.js";
+import { rawQuery } from "../lib/rawdb.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   ensureObligationsTable,
   queryObligations,
@@ -37,7 +38,7 @@ const entityActionSchema = z.object({
 });
 
 // List obligations (filtered)
-obligationsRouter.get("/", async (req, res) => {
+obligationsRouter.get("/", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, status, assignedTo, dueBefore, dueAfter, limit } = req.query as any;
@@ -60,7 +61,7 @@ obligationsRouter.get("/", async (req, res) => {
   }
 });
 
-obligationsRouter.get("/summary", async (req, res) => {
+obligationsRouter.get("/summary", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const summary = await obligationSummary(scope.companyId);
@@ -169,7 +170,7 @@ obligationsRouter.post("/cancel-by-entity", async (req, res) => {
 });
 
 // Manual trigger for the scanner (normally runs via cron)
-obligationsRouter.post("/scan", async (_req, res) => {
+obligationsRouter.post("/scan", requirePermission("operations:create"), async (_req, res) => {
   try {
     const result = await scanObligations();
     res.json({ ...result, scannedAt: new Date().toISOString() });
@@ -177,8 +178,5 @@ obligationsRouter.post("/scan", async (_req, res) => {
     handleRouteError(err, res, "Obligation scan error:");
   }
 });
-
-// Helper: suppress unused import warning
-void rawExecute;
 
 export default obligationsRouter;

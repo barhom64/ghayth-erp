@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -12,6 +11,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "fleet_drivers_create";
 const INITIAL = { name: "", phone: "", licenseNumber: "", licenseExpiry: "", licenseType: "", employeeId: "", status: "available" };
@@ -20,18 +20,14 @@ export default function DriversCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/fleet/drivers", "POST", [["drivers"]]);
-  const { data: employeesData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const employees = employeesData?.data || [];
-
   const handleEmployeeSelect = (empId: string) => {
+    const employees = employeesData?.data || [];
     const emp = employees.find((e: any) => String(e.id) === empId);
     if (emp) {
       setForm((f) => ({ ...f, employeeId: empId, name: emp.name || f.name, phone: emp.phone || f.phone }));
@@ -78,24 +74,19 @@ export default function DriversCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <FormFieldWrapper label="ربط بموظف">
-          <Select value={form.employeeId || "_none"} onValueChange={(v) => handleEmployeeSelect(v === "_none" ? "" : v)}>
-            <SelectTrigger>
-              <SelectValue placeholder="— اختر موظف أو أدخل يدوياً —" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">— اختر موظف أو أدخل يدوياً —</SelectItem>
-              {employees.map((emp: any) => (
-                <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || emp.department || ""}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div>
+          <EmployeeSelect
+            value={form.employeeId}
+            onChange={handleEmployeeSelect}
+            label="ربط بموظف"
+            allowCreate={false}
+          />
           {form.employeeId && (
             <div className="mt-3">
               <EmployeeContextCard employeeId={form.employeeId} />
             </div>
           )}
-        </FormFieldWrapper>
+        </div>
 
         <TextField
           label="الاسم"

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -23,7 +24,7 @@ export default function AccountsEdit() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", code: "", type: "" });
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_accounts_edit", { name: "", code: "", type: "" });
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { data, isLoading, isError } = useApiQuery<any>(["accounts"], "/finance/accounts");
@@ -47,6 +48,7 @@ export default function AccountsEdit() {
     setSaving(true);
     try {
       await apiPatch(`/finance/accounts/${params?.id}`, { name: form.name, type: form.type });
+      clearDraft();
       toast({ title: "تم تحديث الحساب" });
       qc.invalidateQueries({ queryKey: ["accounts"] });
       setLocation("/finance/accounts");
@@ -67,6 +69,12 @@ export default function AccountsEdit() {
       subtitle="تعديل بيانات الحساب في شجرة الحسابات"
       backPath="/finance/accounts"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField label="اسم الحساب" required value={form.name} onChange={(v) => setForm({ ...form, name: v })} error={fieldErrors.name} />

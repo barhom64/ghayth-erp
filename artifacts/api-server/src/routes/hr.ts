@@ -2444,7 +2444,7 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
     ).catch(() => [] as any[]);
 
     res.json({ ...item, memos });
-  } catch (err) { console.error("Get violation detail error:", err); res.status(500).json({ error: "خطأ في الخادم" }); }
+  } catch (err) { handleRouteError(err, res, "Get violation detail error"); }
 });
 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
@@ -3774,31 +3774,28 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
         );
       }
 
-      await withTransaction(async (client) => {
-        const runRes = await client.query(
-          `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
-          [status, Number(req.params.id), scope.companyId]
-        );
-        if (!runRes.rows[0]) throw new Error("دورة الرواتب غير موجودة");
+      const [updatedRun] = await rawQuery<any>(
+        `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
+        [status, Number(req.params.id), scope.companyId]
+      );
+      if (!updatedRun) throw new Error("دورة الرواتب غير موجودة");
 
-        const jeRef = `PAYROLL-POST-${period}`;
-        const jeRes = await client.query(
-          `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type,"sourceType","sourceId")
-           VALUES ($1,$2,$3,$4,$5,'payroll','payroll_run',$6) RETURNING id`,
-          [scope.companyId, scope.branchId, scope.activeAssignmentId, jeRef, `قيد إقفال رواتب ${period}`, Number(req.params.id)]
-        );
-        const journalId = jeRes.rows[0].id;
-
-        for (const l of jlLines) {
-          const accRes = await client.query(
-            `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 LIMIT 1`,
-            [scope.companyId, l.code]
-          );
-          await client.query(
-            `INSERT INTO journal_lines ("journalId","accountCode","accountId",debit,credit,description) VALUES ($1,$2,$3,$4,$5,$6)`,
-            [journalId, l.code, accRes.rows[0]?.id ?? null, l.debit, l.credit, l.desc]
-          );
-        }
+      const jeRef = `PAYROLL-POST-${period}`;
+      await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: jeRef,
+        description: `قيد إقفال رواتب ${period}`,
+        type: "payroll",
+        sourceType: "payroll_run",
+        sourceId: Number(req.params.id),
+        lines: jlLines.map(l => ({
+          accountCode: l.code,
+          debit: l.debit,
+          credit: l.credit,
+          description: l.desc,
+        })),
       });
 
       // Register monthly GOSI submission obligation (due 14th of NEXT month)

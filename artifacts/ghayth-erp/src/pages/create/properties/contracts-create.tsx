@@ -8,6 +8,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -38,7 +39,7 @@ export default function ContractsCreate() {
   const errCls = (field: string) => fieldErrorClass(fieldErrors[field]);
   const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
 
-  const [form, setForm] = useState({
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_contracts_create", {
     unitId: "",
     tenantId: "",
     tenantName: "",
@@ -203,6 +204,7 @@ export default function ContractsCreate() {
         ...(attachments.length > 0 ? { attachments } : {}),
       });
       setIsDirty(false);
+      clearDraft();
       toast({ title: "تم إنشاء العقد بنجاح" });
       setLocation("/properties/contracts");
     } catch (err: any) {
@@ -216,6 +218,12 @@ export default function ContractsCreate() {
 
   return (
     <CreatePageLayout title="عقد إيجار جديد" backPath="/properties/contracts">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
