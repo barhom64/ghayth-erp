@@ -51,12 +51,19 @@ export default function UmrahPricing() {
   const [editing, setEditing] = useState<Partial<PricingRow> | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const saveMut = useApiMutation<any, Partial<PricingRow>>(
-    (body) => (body.id ? `/umrah/pricing/${body.id}` : "/umrah/pricing"),
+  const createMut = useApiMutation<any, Partial<PricingRow>>(
+    "/umrah/pricing",
     "POST",
     [["umrah-pricing"]],
     { successMessage: "تم حفظ التسعيرة", onSuccess: () => setEditing(null) },
   );
+  const updateMut = useApiMutation<any, Partial<PricingRow>>(
+    (body) => `/umrah/pricing/${body.id}`,
+    "PATCH",
+    [["umrah-pricing"]],
+    { successMessage: "تم تحديث التسعيرة", onSuccess: () => setEditing(null) },
+  );
+  const saveMut = { isPending: createMut.isPending || updateMut.isPending, mutate: (body: Partial<PricingRow>) => body.id ? updateMut.mutate(body) : createMut.mutate(body) };
 
   const deleteMut = useApiMutation<any, { id: number }>(
     (body) => `/umrah/pricing/${body.id}`,

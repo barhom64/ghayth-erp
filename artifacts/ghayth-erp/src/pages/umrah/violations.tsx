@@ -15,7 +15,7 @@ import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { Eye, AlertTriangle, Clock, HelpCircle, UserX } from "lucide-react";
 
 type ViolationType = "overstay" | "absconded" | "other";
-type ViolationStatus = "open" | "invoiced" | "paid" | "disputed";
+type ViolationStatus = "detected" | "open" | "invoiced" | "paid" | "disputed" | "closed";
 
 interface Violation {
   id: number;
@@ -31,7 +31,8 @@ interface Violation {
   subAgentId?: number;
   subAgentName?: string;
   seasonId?: number;
-  amount: number;
+  penaltyAmount: number;
+  description?: string;
   status: ViolationStatus;
   detectedAt: string;
 }
@@ -43,10 +44,12 @@ const TYPE_LABEL: Record<ViolationType, { label: string; cls: string; icon: Reac
 };
 
 const STATUS_LABEL: Record<ViolationStatus, { label: string; cls: string }> = {
+  detected: { label: "مكتشفة", cls: "bg-purple-100 text-purple-700 border-purple-200" },
   open: { label: "مفتوحة", cls: "bg-red-100 text-red-700 border-red-200" },
   invoiced: { label: "بفاتورة", cls: "bg-blue-100 text-blue-700 border-blue-200" },
   paid: { label: "مسددة", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   disputed: { label: "متنازع عليها", cls: "bg-amber-100 text-amber-700 border-amber-200" },
+  closed: { label: "مغلقة", cls: "bg-slate-100 text-slate-700 border-slate-200" },
 };
 
 export default function UmrahViolations() {
@@ -79,14 +82,16 @@ export default function UmrahViolations() {
 
   const summary = useMemo(() => {
     const openItems = violations.filter((v) => v.status === "open");
-    const totalOpen = openItems.reduce((sum, v) => sum + Number(v.amount || 0), 0);
+    const totalOpen = openItems.reduce((sum, v) => sum + Number(v.penaltyAmount || 0), 0);
     const byType: Record<ViolationType, number> = { overstay: 0, absconded: 0, other: 0 };
     violations.forEach((v) => { byType[v.type] = (byType[v.type] ?? 0) + 1; });
     return { totalOpen, byType, countByStatus: {
+      detected: violations.filter((v) => v.status === "detected").length,
       open: violations.filter((v) => v.status === "open").length,
       invoiced: violations.filter((v) => v.status === "invoiced").length,
       paid: violations.filter((v) => v.status === "paid").length,
       disputed: violations.filter((v) => v.status === "disputed").length,
+      closed: violations.filter((v) => v.status === "closed").length,
     } };
   }, [violations]);
 
@@ -144,7 +149,7 @@ export default function UmrahViolations() {
     {
       key: "amount",
       header: "المبلغ",
-      render: (v) => <span className="font-semibold">{formatCurrency(Number(v.amount))}</span>,
+      render: (v) => <span className="font-semibold">{formatCurrency(Number(v.penaltyAmount))}</span>,
     },
     {
       key: "status",

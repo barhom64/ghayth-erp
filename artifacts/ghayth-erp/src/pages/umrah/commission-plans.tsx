@@ -16,7 +16,7 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { Plus, Eye, Pencil, CheckCircle2, Ban, Trash2, Briefcase } from "lucide-react";
 
-type PlanStatus = "draft" | "pending_approval" | "active" | "suspended" | "expired";
+type PlanStatus = "active" | "suspended" | "expired";
 type CommissionType = "percentage" | "fixed" | "tiered" | "mixed";
 
 interface CommissionPlan {
@@ -36,8 +36,6 @@ interface CommissionPlan {
 }
 
 const STATUS_LABEL: Record<PlanStatus, { label: string; cls: string }> = {
-  draft: { label: "مسودة", cls: "bg-gray-100 text-gray-700 border-gray-200" },
-  pending_approval: { label: "بانتظار الاعتماد", cls: "bg-amber-100 text-amber-700 border-amber-200" },
   active: { label: "مفعّل", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   suspended: { label: "موقوف", cls: "bg-red-100 text-red-700 border-red-200" },
   expired: { label: "منتهي", cls: "bg-slate-100 text-slate-700 border-slate-200" },
@@ -63,9 +61,9 @@ export default function UmrahCommissionPlans() {
   const [empFilter, setEmpFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [seasonFilter, setSeasonFilter] = useState<string>("");
-  const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "suspend" | "delete"; plan: CommissionPlan } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "activate" | "suspend" | "delete"; plan: CommissionPlan } | null>(null);
 
-  const actionMut = useApiMutation<any, { id: number; action: "approve" | "suspend" }>(
+  const actionMut = useApiMutation<any, { id: number; action: "activate" | "suspend" }>(
     (body) => `/umrah/commission-plans/${body.id}/${body.action}`,
     "POST",
     [["umrah-commission-plans"]],
@@ -91,7 +89,7 @@ export default function UmrahCommissionPlans() {
   const counts = useMemo(() => ({
     total: plans.length,
     active: plans.filter((p) => p.status === "active").length,
-    pending: plans.filter((p) => p.status === "pending_approval").length,
+    suspended: plans.filter((p) => p.status === "suspended").length,
   }), [plans]);
 
   const columns: DataTableColumn<CommissionPlan>[] = [
@@ -113,7 +111,7 @@ export default function UmrahCommissionPlans() {
       key: "status",
       header: "الحالة",
       render: (p) => {
-        const s = STATUS_LABEL[p.status] ?? STATUS_LABEL.draft;
+        const s = STATUS_LABEL[p.status] ?? STATUS_LABEL.active;
         return <Badge variant="outline" className={s.cls}>{s.label}</Badge>;
       },
     },
@@ -152,16 +150,16 @@ export default function UmrahCommissionPlans() {
               <Pencil className="h-3.5 w-3.5" />
             </Link>
           </GuardedButton>
-          {p.status === "pending_approval" && (
+          {p.status === "suspended" && (
             <GuardedButton
               perm="umrah:write"
               size="sm"
               variant="outline"
               className="text-emerald-700"
-              onClick={() => setConfirmAction({ type: "approve", plan: p })}
+              onClick={() => setConfirmAction({ type: "activate", plan: p })}
             >
               <CheckCircle2 className="h-3.5 w-3.5 ms-1" />
-              اعتماد
+              تفعيل
             </GuardedButton>
           )}
           {p.status === "active" && (
@@ -174,16 +172,6 @@ export default function UmrahCommissionPlans() {
             >
               <Ban className="h-3.5 w-3.5 ms-1" />
               إيقاف
-            </GuardedButton>
-          )}
-          {p.status === "draft" && (
-            <GuardedButton
-              perm="umrah:write"
-              size="sm"
-              variant="ghost"
-              onClick={() => setConfirmAction({ type: "delete", plan: p })}
-            >
-              <Trash2 className="h-3.5 w-3.5 text-red-600" />
             </GuardedButton>
           )}
         </div>
@@ -295,15 +283,15 @@ export default function UmrahCommissionPlans() {
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>
-              {confirmAction?.type === "approve" && "اعتماد الخطة"}
+              {confirmAction?.type === "activate" && "تفعيل الخطة"}
               {confirmAction?.type === "suspend" && "إيقاف الخطة"}
               {confirmAction?.type === "delete" && "حذف الخطة"}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {confirmAction?.type === "approve" && "سيتم تفعيل هذه الخطة واحتسابها عند توليد مسيّر الرواتب."}
+            {confirmAction?.type === "activate" && "سيتم تفعيل هذه الخطة واحتسابها عند توليد مسيّر الرواتب."}
             {confirmAction?.type === "suspend" && "سيتم إيقاف الخطة ولن تُحتسب في دورة الرواتب القادمة."}
-            {confirmAction?.type === "delete" && "سيتم حذف المسوّدة نهائياً — لا يمكن التراجع."}
+            {confirmAction?.type === "delete" && "سيتم حذف الخطة نهائياً — لا يمكن التراجع."}
           </p>
           {confirmAction && (
             <div className="bg-muted/30 rounded p-3 text-sm">

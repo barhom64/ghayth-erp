@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, Calendar, Receipt, Bus,
-  UserCircle, AlertTriangle, Upload,
+  UserCircle, AlertTriangle, Upload, UserPlus, Tag, Briefcase, ShieldAlert,
 } from "lucide-react";
 
 const TABS = [
@@ -10,9 +10,13 @@ const TABS = [
   { href: "/umrah/pilgrims", label: "المعتمرون", icon: Users, match: ["/umrah/pilgrims"] },
   { href: "/umrah/packages", label: "الباقات", icon: Package, match: ["/umrah/packages"] },
   { href: "/umrah/seasons", label: "المواسم", icon: Calendar, match: ["/umrah/seasons"] },
-  { href: "/umrah/invoices", label: "الفواتير", icon: Receipt, match: ["/umrah/invoices"] },
-  { href: "/umrah/transport", label: "النقل", icon: Bus, match: ["/umrah/transport"] },
   { href: "/umrah/agents", label: "الوكلاء", icon: UserCircle, match: ["/umrah/agents"] },
+  { href: "/umrah/sub-agents", label: "الوكلاء الفرعيون", icon: UserPlus, match: ["/umrah/sub-agents"] },
+  { href: "/umrah/pricing", label: "التسعير", icon: Tag, match: ["/umrah/pricing"] },
+  { href: "/umrah/invoices", label: "الفواتير", icon: Receipt, match: ["/umrah/invoices"] },
+  { href: "/umrah/violations", label: "المخالفات", icon: ShieldAlert, match: ["/umrah/violations"] },
+  { href: "/umrah/commission-plans", label: "العمولات", icon: Briefcase, match: ["/umrah/commission-plans"] },
+  { href: "/umrah/transport", label: "النقل", icon: Bus, match: ["/umrah/transport"] },
   { href: "/umrah/penalties", label: "الغرامات", icon: AlertTriangle, match: ["/umrah/penalties"] },
   { href: "/umrah/import", label: "الاستيراد", icon: Upload, match: ["/umrah/import"] },
 ];

@@ -60,15 +60,19 @@ export default function UmrahSubAgents() {
   const [linking, setLinking] = useState<SubAgent | null>(null);
   const [linkClientId, setLinkClientId] = useState<string>("");
 
-  const saveMut = useApiMutation<any, Partial<SubAgent>>(
-    (body) => (body.id ? `/umrah/sub-agents/${body.id}` : "/umrah/sub-agents"),
+  const createMut = useApiMutation<any, Partial<SubAgent>>(
+    "/umrah/sub-agents",
     "POST",
     [["umrah-sub-agents"]],
-    {
-      successMessage: "تم حفظ الوكيل الفرعي",
-      onSuccess: () => setEditing(null),
-    },
+    { successMessage: "تم حفظ الوكيل الفرعي", onSuccess: () => setEditing(null) },
   );
+  const updateMut = useApiMutation<any, Partial<SubAgent>>(
+    (body) => `/umrah/sub-agents/${body.id}`,
+    "PATCH",
+    [["umrah-sub-agents"]],
+    { successMessage: "تم تحديث الوكيل الفرعي", onSuccess: () => setEditing(null) },
+  );
+  const saveMut = { isPending: createMut.isPending || updateMut.isPending, mutate: (body: Partial<SubAgent>) => body.id ? updateMut.mutate(body) : createMut.mutate(body) };
 
   const linkMut = useApiMutation<any, { id: number; clientId: number }>(
     (body) => `/umrah/sub-agents/${body.id}/link-client`,
