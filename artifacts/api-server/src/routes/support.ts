@@ -274,10 +274,16 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
           `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND priority != 'critical'`,
           [ticketId]
         );
-        await rawExecute(
-          `INSERT INTO notifications ("companyId",type,title,body,priority,"refType","refId") VALUES ($1,'alert',$2,$3,'high','support_tickets',$4)`,
-          [scope.companyId, `SLA خرق: تذكرة ${ticket.ref}`, `التذكرة "${ticket.title}" تجاوزت وقت SLA المحدد وتحتاج تصعيداً فورياً`, String(ticketId)]
-        );
+        await createNotification({
+          companyId: scope.companyId,
+          assignmentId: scope.activeAssignmentId,
+          type: "alert",
+          title: `SLA خرق: تذكرة ${ticket.ref}`,
+          body: `التذكرة "${ticket.title}" تجاوزت وقت SLA المحدد وتحتاج تصعيداً فورياً`,
+          priority: "high",
+          refType: "support_tickets",
+          refId: Number(ticketId),
+        });
         console.log(`[SLA ESCALATION] Ticket ${ticket.ref} breached SLA — priority escalated to critical, notification created`);
       } catch (slaErr) {
         console.error("Failed to handle SLA breach:", slaErr);
@@ -546,12 +552,16 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
           `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND priority != 'critical'`,
           [ticket.id]
         );
-        await rawExecute(
-          `INSERT INTO notifications ("companyId",type,title,body,priority,"refType","refId")
-           SELECT $1,'alert',$2,$3,'high','support_tickets',$4
-           WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE "refType"='support_tickets' AND "refId"=$4 AND type='alert' AND "createdAt" > NOW() - INTERVAL '4 hours')`,
-          [scope.companyId, `SLA خرق: ${ticket.ref}`, `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`, String(ticket.id)]
-        );
+        await createNotification({
+          companyId: scope.companyId,
+          assignmentId: scope.activeAssignmentId,
+          type: "alert",
+          title: `SLA خرق: ${ticket.ref}`,
+          body: `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`,
+          priority: "high",
+          refType: "support_tickets",
+          refId: ticket.id,
+        });
       } catch (e) { console.error("SLA breach notification error:", e); }
     }
     res.json({ breached: breached.length, tickets: breached });

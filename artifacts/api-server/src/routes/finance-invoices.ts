@@ -18,8 +18,9 @@ import {
   initiateApprovalChain,
   getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
-  updateAccountBalances,
   reverseAccountBalances,
+  computeVat,
+  extractBaseFromGross,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -75,22 +76,7 @@ const createCustomerAdvanceSchema = z.object({
 export const invoicesRouter = Router();
 invoicesRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-/**
- * Role gate — throws ForbiddenError so the error reaches handleRouteError
- * and comes back through the unified { error, code, field, fix } shape.
- * Callers should `assertRole(scope, FINANCE_ROLES)` — no more res+boolean
- * dance.
- */
-function assertRole(scope: any, allowedRoles: string[]): void {
-  if (!allowedRoles.includes(scope.role)) {
-    throw new ForbiddenError("ليس لديك الصلاحية للقيام بهذا الإجراء", {
-      fix: `الأدوار المسموحة: ${allowedRoles.join(", ")}`,
-      meta: { requiredRoles: allowedRoles, yourRole: scope.role },
-    });
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INVOICE STATE MACHINE — Phase C.7 Finance audit
@@ -267,7 +253,7 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
 invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const parsed = createInvoiceSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const {
@@ -367,7 +353,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
 
     const vatAmount = validatedLines.length > 0
       ? Math.round(validatedLines.reduce((sum, l) => sum + l.vatAmount, 0) * 100) / 100
-      : Math.round(baseAmount * (Number(vatRate) / 100) * 100) / 100;
+      : computeVat(baseAmount, Number(vatRate));
     const total = Math.round((baseAmount + vatAmount) * 100) / 100;
 
     let finalDueDate = dueDate ?? null;
@@ -409,31 +395,6 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
         );
       }
 
-      const effectiveBranchId = branchId ?? scope.branchId;
-      const jeResult = await client.query(
-        `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description)
-         VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-        [effectiveCompanyId, effectiveBranchId, scope.activeAssignmentId,
-          `JE-${ref}`, `فاتورة ${ref}${description ? ` – ${description}` : ""}`]
-      );
-      const journalId = jeResult.rows[0].id;
-      const journalLines = [
-        { accountCode: invArCode, debit: total, credit: 0 },
-        { accountCode: invRevenueCode, debit: 0, credit: baseAmount },
-        { accountCode: invVatPayableCode, debit: 0, credit: vatAmount },
-      ];
-      const jlValuesSql: string[] = [];
-      const jlParams: any[] = [];
-      for (const jl of journalLines) {
-        const base = jlParams.length;
-        jlValuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4})`);
-        jlParams.push(journalId, jl.accountCode, jl.debit, jl.credit);
-      }
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ${jlValuesSql.join(",")}`,
-        jlParams
-      );
-
       if (clientId) {
         await client.query(
           `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3`,
@@ -458,17 +419,24 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       }
     });
 
-    // Invoice creation posts a raw journal (AR Dr / Revenue Cr / VAT payable Cr)
-    // but must also push those deltas into chart_of_accounts.currentBalance so
-    // trial balance + dashboards stay consistent. DELETE /invoices/:id now
-    // reverses these same lines.
-    try {
-      await updateAccountBalances(effectiveCompanyId, [
+    // Create the journal entry via the centralized helper (handles balance
+    // validation, rounding-difference auto-correction, updateAccountBalances,
+    // and event bus emission).
+    await createJournalEntry({
+      companyId: effectiveCompanyId,
+      branchId: branchId ?? scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: `JE-${ref}`,
+      description: `فاتورة ${ref}${description ? ` – ${description}` : ""}`,
+      type: "invoice",
+      sourceType: "invoice",
+      sourceId: insertId,
+      lines: [
         { accountCode: invArCode, debit: total, credit: 0 },
         { accountCode: invRevenueCode, debit: 0, credit: baseAmount },
         { accountCode: invVatPayableCode, debit: 0, credit: vatAmount },
-      ]);
-    } catch (e) { console.error("Failed to update account balances for invoice:", e); }
+      ],
+    });
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.created", entity: "invoices", entityId: insertId, details: JSON.stringify({ ref, total, dueDate: finalDueDate, vatAmount, lineCount: validatedLines.length }) }).catch(console.error);
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch(console.error);
@@ -484,7 +452,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
 invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
 
     // Read the joined invoice+client view first — we need the contact info to
@@ -548,7 +516,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
 invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const parsedPayment = createPaymentSchema.safeParse(req.body);
     if (!parsedPayment.success) throw new ValidationError(parsedPayment.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -604,33 +572,26 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
         );
       }
 
-      const jeRes = await client.query(
-        `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type,"sourceType","sourceId")
-         VALUES ($1,$2,$3,$4,$5,'payment','invoice',$6) RETURNING id`,
-        [scope.companyId, scope.branchId, scope.activeAssignmentId,
-          `PAY-${invoiceRef}-${Date.now()}`, `سداد فاتورة ${invoiceRef}`, Number(id)]
-      );
-      const journalId = jeRes.rows[0].id;
-
-      const paymentAmount = Number(amount);
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ($1,$2,$3,$4)`,
-        [journalId, cashAccountCode, paymentAmount, 0]
-      );
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ($1,$2,$3,$4)`,
-        [journalId, arAccountCode, 0, paymentAmount]
-      );
     });
 
-    // Mirror the payment journal into chart_of_accounts so cash goes up and
-    // AR comes down. Without this, trial balance + receivables aging drift.
-    try {
-      await updateAccountBalances(scope.companyId, [
-        { accountCode: cashAccountCode, debit: Number(amount), credit: 0 },
-        { accountCode: arAccountCode, debit: 0, credit: Number(amount) },
-      ]);
-    } catch (e) { console.error("Failed to update account balances for payment:", e); }
+    // Create the payment journal entry via the centralized helper (handles
+    // balance validation, rounding-difference auto-correction,
+    // updateAccountBalances, and event bus emission).
+    const paymentAmount = Number(amount);
+    await createJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: `PAY-${invoiceRef}-${Date.now()}`,
+      description: `سداد فاتورة ${invoiceRef}`,
+      type: "payment",
+      sourceType: "invoice",
+      sourceId: Number(id),
+      lines: [
+        { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
+        { accountCode: arAccountCode, debit: 0, credit: paymentAmount },
+      ],
+    });
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: Number(id), details: JSON.stringify({ amount, method, newStatus }) }).catch(console.error);
 
@@ -671,7 +632,7 @@ invoicesRouter.get("/invoices/:id", requirePermission("finance:read"), async (re
 invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const id = Number(req.params.id);
     const { status, description, dueDate } = req.body as any;
 
@@ -760,7 +721,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
 invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const id = Number(req.params.id);
     const [inv] = await rawQuery<any>(
       `SELECT id, ref, status, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -816,7 +777,7 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
 async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const { notes } = req.body as any;
     const [inv] = await rawQuery<any>(`SELECT * FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
@@ -908,7 +869,7 @@ invoicesRouter.get("/tax/summary", requirePermission("finance:read"), async (req
 invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const id = Number(req.params.id);
     const parsedMemo = createCreditMemoSchema.safeParse(req.body);
     if (!parsedMemo.success) throw new ValidationError(parsedMemo.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -940,7 +901,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
     // If vatIncluded, split the amount into net + VAT based on invoice vatRate
     const vatRate = Number(invoice.vatRate ?? 15);
     const net = vatIncluded
-      ? Math.round((creditAmount / (1 + vatRate / 100)) * 100) / 100
+      ? extractBaseFromGross(creditAmount, vatRate)
       : creditAmount;
     const vat = Math.round((creditAmount - net) * 100) / 100;
 
@@ -1057,7 +1018,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
 invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const id = Number(req.params.id);
     const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
 
@@ -1088,7 +1049,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
 
     const vatRate = Number(invoice.vatRate ?? 15);
     const net = vatIncluded
-      ? Math.round((chargeAmount / (1 + vatRate / 100)) * 100) / 100
+      ? extractBaseFromGross(chargeAmount, vatRate)
       : chargeAmount;
     const vat = Math.round((chargeAmount - net) * 100) / 100;
 
@@ -1282,7 +1243,7 @@ invoicesRouter.get("/bad-debt/preview", requirePermission("finance:read"), async
 invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { period, asOf, rates, notes } = req.body as any;
 
     const targetPeriod = period || new Date().toISOString().slice(0, 7);
@@ -1398,7 +1359,7 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
 invoicesRouter.post("/customer-advances", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const parsedAdvance = createCustomerAdvanceSchema.safeParse(req.body);
     if (!parsedAdvance.success) throw new ValidationError(parsedAdvance.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = parsedAdvance.data;
@@ -1489,7 +1450,7 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
 invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const advanceId = Number(req.params.id);
     const { invoiceId, amount } = req.body as any;
 
@@ -1764,7 +1725,7 @@ invoicesRouter.get("/dunning/preview", requirePermission("finance:read"), async 
 invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     await ensureDunningTables();
     const { invoiceIds, sentVia = "manual" } = req.body as any;
     if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {

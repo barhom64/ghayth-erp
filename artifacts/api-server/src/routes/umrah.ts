@@ -104,14 +104,14 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
         [id, scope.companyId]
       );
       if (Number(open[0]?.c) > 0) {
-        throw new ValidationError(`لا يمكن إغلاق الموسم — يوجد ${open[0].c} معتمر نشط`, { blockers: [{ type: "active_pilgrims", count: Number(open[0].c) }] });
+        throw new ValidationError(`لا يمكن إغلاق الموسم — يوجد ${open[0].c} معتمر نشط`, { meta: { blockers: [{ type: "active_pilgrims", count: Number(open[0].c) }] } });
       }
       const unpaid = await rawQuery(
         `SELECT COUNT(*) as c FROM umrah_agent_invoices WHERE "seasonId"=$1 AND "companyId"=$2 AND status NOT IN ('paid','cancelled')`,
         [id, scope.companyId]
       );
       if (Number(unpaid[0]?.c) > 0) {
-        throw new ValidationError(`لا يمكن إغلاق الموسم — يوجد ${unpaid[0].c} فاتورة غير مسددة`, { blockers: [{ type: "unpaid_invoices", count: Number(unpaid[0].c) }] });
+        throw new ValidationError(`لا يمكن إغلاق الموسم — يوجد ${unpaid[0].c} فاتورة غير مسددة`, { meta: { blockers: [{ type: "unpaid_invoices", count: Number(unpaid[0].c) }] } });
       }
     }
     const params: any[] = [];

@@ -1,6 +1,15 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { eventBus } from "./eventBus.js";
 import { ValidationError } from "./errorHandler.js";
+import { sendNotification } from "./notificationService.js";
+
+export function computeVat(baseAmount: number, vatRatePercent: number): number {
+  return Math.round(baseAmount * (vatRatePercent / 100) * 100) / 100;
+}
+
+export function extractBaseFromGross(grossAmount: number, vatRatePercent: number): number {
+  return Math.round((grossAmount / (1 + vatRatePercent / 100)) * 100) / 100;
+}
 
 export function haversineDistance(
   lat1: number,
@@ -31,22 +40,17 @@ export async function createNotification(params: {
   requiresAck?: boolean;
 }) {
   try {
-    await rawExecute(
-      `INSERT INTO notifications ("companyId","assignmentId",type,title,body,priority,"refType","refId","actionUrl","isRead","requiresAck")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,false,$10)`,
-      [
-        params.companyId,
-        params.assignmentId,
-        params.type,
-        params.title,
-        params.body,
-        params.priority ?? "normal",
-        params.refType ?? null,
-        params.refId ?? null,
-        params.actionUrl ?? null,
-        params.requiresAck ?? false,
-      ]
-    );
+    await sendNotification({
+      companyId: params.companyId,
+      assignmentId: params.assignmentId,
+      type: params.type,
+      title: params.title,
+      body: params.body,
+      priority: (params.priority as "low" | "normal" | "high" | "urgent") ?? "normal",
+      refType: params.refType,
+      refId: params.refId,
+      actionUrl: params.actionUrl,
+    });
   } catch (err) {
     console.error("createNotification error:", err);
   }

@@ -15,8 +15,6 @@ import { pushToDLQ } from "../lib/eventBus.js";
 export const collectionRouter = Router();
 collectionRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance", "director", "owner"];
-
 const COLLECTION_STAGES = [
   { stage: 1, name: "sms_email_reminder", label: "تذكير SMS + إيميل", daysOverdue: 1 },
   { stage: 2, name: "accountant_notification", label: "إشعار محاسب + إيميل ثاني", daysOverdue: 7 },

@@ -19,6 +19,7 @@ import {
   updateBudgetUsed,
   getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
+  computeVat,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -29,16 +30,7 @@ export const purchaseRouter = Router();
 purchaseRouter.use(authMiddleware);
 
 const PROCUREMENT_ROLES = ["procurement", "finance_manager", "general_manager", "owner"];
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-function assertRole(scope: any, allowedRoles: string[]): void {
-  if (!allowedRoles.includes(scope.role)) {
-    throw new ForbiddenError("ليس لديك الصلاحية للقيام بهذا الإجراء", {
-      fix: `الأدوار المسموحة: ${allowedRoles.join(", ")}`,
-      meta: { requiredRoles: allowedRoles, yourRole: scope.role },
-    });
-  }
-}
 
 const createPurchaseRequestSchema = z.object({
   items: z.array(z.object({
@@ -201,7 +193,7 @@ purchaseRouter.get("/purchase-requests", requirePermission("finance:read"), asyn
 purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
+
 
     const parsed = createPurchaseRequestSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -299,7 +291,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
 purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const { approved, notes } = req.body as any;
 
@@ -361,7 +353,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
 purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
+
     const { id } = req.params;
 
     const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
@@ -371,7 +363,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
     const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1`, [Number(id)]);
     const subtotal = Number(pr.totalAmount);
     const vatRate = Number(pr.vatRate ?? 15);
-    const vatAmount = Math.round(subtotal * (vatRate / 100) * 100) / 100;
+    const vatAmount = computeVat(subtotal, vatRate);
     const totalAmount = subtotal + vatAmount;
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
@@ -471,7 +463,7 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
 purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
+
 
     const parsed = createPurchaseOrderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -515,7 +507,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
 async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const { notes } = req.body as any;
 
@@ -564,7 +556,7 @@ purchaseRouter.patch("/purchase-orders/:id/return", requirePermission("finance:u
 purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
+
     const { id } = req.params;
     const { receivedDate, qualityNotes, lines } = req.body as any;
 
@@ -850,7 +842,7 @@ purchaseRouter.get("/purchase-orders/:id/match", requirePermission("finance:read
 purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { cutoffDate, supplierId } = req.query as any;
     const params: any[] = [scope.companyId];
     let where = `po."companyId" = $1 AND po.status = 'invoice_matched' AND po."deletedAt" IS NULL`;
@@ -893,7 +885,7 @@ purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), as
 purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
 
     const parsed = executePaymentRunSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -1042,7 +1034,7 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
 purchaseRouter.get("/payment-run", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     let rows: any[] = [];
     try {
       rows = await rawQuery<any>(
@@ -1064,7 +1056,7 @@ purchaseRouter.get("/payment-run", requirePermission("finance:read"), async (req
 purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
+
     const { id } = req.params;
     const { expectedDelivery, notes } = req.body as any;
 
@@ -1205,7 +1197,7 @@ purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), as
 purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
+
     const { id } = req.params;
     const { confirmedDelivery, notes } = req.body as any;
 
@@ -1245,7 +1237,7 @@ purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", requirePermission("f
 purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const { supplierInvoiceRef, invoicedAmount, invoicedDate } = req.body as any;
 
@@ -1350,7 +1342,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
 purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const { paymentDate, amount, method = "bank_transfer", notes } = req.body as any;
 

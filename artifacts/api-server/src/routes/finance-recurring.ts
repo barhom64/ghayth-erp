@@ -10,13 +10,12 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createJournalEntry, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 import { pushToDLQ } from "../lib/eventBus.js";
 
 export const recurringRouter = Router();
 recurringRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
 export type RecurringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
 
@@ -116,7 +115,7 @@ function validateTemplateLines(lines: any): { ok: true; lines: any[] } | { ok: f
 recurringRouter.post("/recurring-journals", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const {
       name, description, frequency, startDate, active = true,
       templateLines, templateRef, templateDescription,
@@ -190,7 +189,7 @@ recurringRouter.post("/recurring-journals", requirePermission("finance:create"),
 recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const id = Number(req.params.id);
     const b = req.body as any;
 
@@ -332,7 +331,7 @@ export async function runRecurringJournal(params: {
 recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const id = Number(req.params.id);
     const [recurring] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -384,7 +383,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finan
 recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const id = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(

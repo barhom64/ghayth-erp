@@ -49,7 +49,7 @@ export default function LettersCreate() {
       ...(form.relatedProjectId ? { relatedType: "project", relatedId: Number(form.relatedProjectId) } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
     }, {
-      onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/letters"); },
+      onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/communications"); },
       onError: (err: any) => {
         setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الخطاب", description: err?.fix ?? err?.message });
@@ -123,7 +123,7 @@ export default function LettersCreate() {
         <TextAreaField label="المحتوى" value={form.body} onChange={(v) => setForm((f) => ({ ...f, body: v }))} placeholder="نص الخطاب..." rows={5} />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={() => setLocation("/letters")}>إلغاء</Button>
+          <Button type="button" variant="outline" onClick={() => setLocation("/communications")}>إلغاء</Button>
           <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
         </div>
       </div>

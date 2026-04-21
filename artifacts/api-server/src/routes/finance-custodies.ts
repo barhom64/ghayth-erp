@@ -21,7 +21,6 @@ import {
 export const custodiesRouter = Router();
 custodiesRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
 custodiesRouter.get("/custodies", requirePermission("finance:read"), async (req, res) => {
   try {

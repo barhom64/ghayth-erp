@@ -26,8 +26,6 @@ const createBudgetSchema = z.object({
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance", "director", "owner"];
-
 budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;

@@ -3,7 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { z } from "zod";
@@ -82,7 +82,7 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
       deviceFingerprint,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    handleRouteError(err, res, "Request OTP error");
   }
 });
 
@@ -107,8 +107,7 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
     );
 
     if (!record) {
-      res.status(401).json({ error: "رمز التحقق غير صحيح أو منتهي الصلاحية" });
-      return;
+      throw new ValidationError("رمز التحقق غير صحيح أو منتهي الصلاحية");
     }
 
     await rawExecute(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1`, [record.id]);
@@ -141,7 +140,7 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
       verifiedAt: new Date().toISOString(),
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    handleRouteError(err, res, "Verify signature error");
   }
 });
 
@@ -159,7 +158,7 @@ router.get("/logs", requirePermission("documents:write"), async (req, res: Respo
     );
     res.json({ data: rows, total: rows.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    handleRouteError(err, res, "Signature logs error");
   }
 });
 

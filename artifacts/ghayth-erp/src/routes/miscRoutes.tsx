@@ -26,7 +26,6 @@ const TicketDetail = lazy(() => import("@/pages/details/ticket-detail"));
 const OpportunityDetail = lazy(() => import("@/pages/details/opportunity-detail"));
 const Marketing = lazy(() => import("@/pages/marketing"));
 const MarketingCreate = lazy(() => import("@/pages/create/marketing-create"));
-const Letters = lazy(() => import("@/pages/letters"));
 const Notifications = lazy(() => import("@/pages/notifications"));
 const Intelligence = lazy(() => import("@/pages/intelligence"));
 const Insights = lazy(() => import("@/pages/insights"));
@@ -104,7 +103,6 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/marketing/create", component: MarketingCreate, module: "marketing" },
   { path: "/tasks/create", component: TasksCreate, module: "operations" },
   { path: "/tasks", component: Tasks, module: "operations" },
-  { path: "/letters", component: Letters },
   { path: "/notifications", component: Notifications },
   { path: "/intelligence", component: Intelligence, module: "bi" },
   { path: "/insights", component: Insights, module: "bi" },

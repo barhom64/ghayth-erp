@@ -6,7 +6,7 @@ import {
   ForbiddenError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
@@ -15,14 +15,13 @@ import {
   emitEvent,
   createNotification,
 } from "../lib/businessHelpers.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 const CFO_ROLES = ["finance_manager", "general_manager", "owner"];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +51,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", requirePermission("finance:read
 financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, CFO_ROLES);
+
     const { name, startDate, endDate, notes } = req.body as any;
     if (!name || !startDate || !endDate) {
       throw new ValidationError("الاسم وتاريخ البداية والنهاية مطلوبة", {
@@ -94,7 +93,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:cre
 financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, CFO_ROLES);
+
     const periodId = Number(req.params.id);
     const { notes } = req.body as any;
 
@@ -164,7 +163,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("f
 financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["general_manager", "owner"]);
+
     const periodId = Number(req.params.id);
     const { reason } = req.body as any;
     if (!reason) {
@@ -220,7 +219,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("
 financeHardeningRouter.post("/journal-manual", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { description, lines, costCenter, notes } = req.body as any;
     if (!lines || !Array.isArray(lines) || lines.length < 2) {
       throw new ValidationError("القيد يجب أن يحتوي على سطرين على الأقل", {
@@ -333,7 +332,7 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
 financeHardeningRouter.patch("/journal-manual/:id/submit", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const journalId = Number(req.params.id);
 
     // Fetch ref only for the success message; engine does state validation.
@@ -370,7 +369,7 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", requirePermission("fi
 financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const journalId = Number(req.params.id);
     const { approved, notes } = req.body as any;
 
@@ -434,7 +433,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("fi
 financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["finance_manager", "general_manager", "owner"]);
+
     const journalId = Number(req.params.id);
     const { approved, notes } = req.body as any;
 
@@ -487,7 +486,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("f
 financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["finance_manager", "general_manager", "owner"]);
+
     const journalId = Number(req.params.id);
 
     const [je] = await rawQuery<any>(
@@ -571,7 +570,7 @@ financeHardeningRouter.get("/bank-guarantees", requirePermission("finance:read")
 financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = req.body as any;
     if (!ref || !bank || !beneficiary || !amount || !issueDate || !expiryDate) {
       throw new ValidationError(
@@ -616,7 +615,7 @@ financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:creat
 financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const b = req.body as any;
     const sets: string[] = [`"updatedAt"=NOW()`];
@@ -665,7 +664,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:
 financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const guaranteeId = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(
@@ -735,7 +734,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance
 financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const guaranteeId = Number(req.params.id);
     const { reason } = req.body as any;
     if (!reason || !String(reason).trim()) {
@@ -788,7 +787,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("fi
 financeHardeningRouter.post("/bank-guarantees/:id/release", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const guaranteeId = Number(req.params.id);
     const { notes } = req.body as any;
 
@@ -857,7 +856,7 @@ financeHardeningRouter.get("/intercompany", requirePermission("finance:read"), a
 financeHardeningRouter.post("/intercompany", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["general_manager", "owner"]);
+
     const { toCompanyId, amount, description, transactionDate, arAccountCode = "1200", apAccountCode = "2100", revenueAccountCode = "4000", expenseAccountCode = "5000" } = req.body as any;
 
     if (!toCompanyId || !amount) {
@@ -881,46 +880,40 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
 
     const ref = `IC-${Date.now()}`;
     const txDate = transactionDate ?? new Date().toISOString().split("T")[0];
-    let fromJournalId!: number;
-    let toJournalId!: number;
 
-    await withTransaction(async (client) => {
-      const jeFrom = await client.query(
-        `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type)
-         VALUES ($1,$2,$3,$4,$5,'intercompany') RETURNING id`,
-        [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, description ?? `معاملة بين الشركات ${ref}`]
-      );
-      fromJournalId = jeFrom.rows[0].id;
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description) VALUES ($1,$2,$3,0,'ذمم مدينة شركة شقيقة')`,
-        [fromJournalId, arAccountCode, Number(amount)]
-      );
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description) VALUES ($1,$2,0,$3,'إيراد شركة شقيقة')`,
-        [fromJournalId, revenueAccountCode, Number(amount)]
-      );
-
-      const jeTo = await client.query(
-        `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type)
-         VALUES ($1,$2,$3,$4,$5,'intercompany') RETURNING id`,
-        [Number(toCompanyId), scope.branchId, scope.activeAssignmentId, ref, description ?? `معاملة بين الشركات ${ref}`]
-      );
-      toJournalId = jeTo.rows[0].id;
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description) VALUES ($1,$2,$3,0,'مصروف شركة شقيقة')`,
-        [toJournalId, expenseAccountCode, Number(amount)]
-      );
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description) VALUES ($1,$2,0,$3,'ذمم دائنة شركة شقيقة')`,
-        [toJournalId, apAccountCode, Number(amount)]
-      );
-
-      await client.query(
-        `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
-         VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
-        [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromJournalId, toJournalId, scope.activeAssignmentId]
-      );
+    // Journal entry for the FROM company (debit AR, credit Revenue)
+    const fromJournalId = await createJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref,
+      description: description ?? `معاملة بين الشركات ${ref}`,
+      type: "intercompany",
+      lines: [
+        { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
+        { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
+      ],
     });
+
+    // Journal entry for the TO company (debit Expense, credit AP)
+    const toJournalId = await createJournalEntry({
+      companyId: Number(toCompanyId),
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref,
+      description: description ?? `معاملة بين الشركات ${ref}`,
+      type: "intercompany",
+      lines: [
+        { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
+        { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
+      ],
+    });
+
+    await rawExecute(
+      `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
+      [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromJournalId, toJournalId, scope.activeAssignmentId]
+    );
 
     emitEvent({
       companyId: scope.companyId,
@@ -1024,7 +1017,7 @@ financeHardeningRouter.get("/projects", requirePermission("finance:read"), async
 financeHardeningRouter.post("/projects", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { name, description, budget, startDate, endDate, branchId, ref } = req.body as any;
     if (!name) {
       throw new ValidationError("اسم المشروع مطلوب", {
