@@ -10,7 +10,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createJournalEntry, checkFinancialPeriodOpen, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 import { pushToDLQ } from "../lib/eventBus.js";
 
 export const accountsRouter = Router();
@@ -64,7 +64,7 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
 accountsRouter.post("/accounts", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["director", "owner"]);
+
     const b = req.body;
     if (!b.code || !b.name) {
       throw new ValidationError("رمز الحساب واسمه مطلوبان", {
@@ -104,7 +104,7 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
 accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["director", "owner"]);
+
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -148,7 +148,7 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
 accountsRouter.delete("/accounts/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["director", "owner"]);
+
     const accountId = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(
@@ -226,7 +226,7 @@ accountsRouter.get("/journal", requirePermission("finance:read"), async (req, re
 accountsRouter.post("/journal", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["finance_manager", "general_manager", "owner"]);
+
     const { ref, description, lines, date: journalBodyDate } = req.body as any;
     if (!lines || !Array.isArray(lines) || lines.length === 0) {
       throw new ValidationError("بنود القيد مطلوبة", {

@@ -684,21 +684,6 @@ router.get("/job-titles", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { res.json({ data: [], total: 0 }); }
 });
 
-router.get("/contracts", requirePermission("hr:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const rows = await rawQuery<any>(
-      `SELECT ec.*, e.name AS "employeeName", e."empNumber"
-       FROM employee_contracts ec
-       JOIN employees e ON e.id = ec."employeeId"
-       WHERE ec."companyId" = $1
-       ORDER BY ec."createdAt" DESC LIMIT 200`,
-      [scope.companyId]
-    );
-    res.json({ data: rows, total: rows.length });
-  } catch (err) { res.json({ data: [], total: 0 }); }
-});
-
 router.get("/documents", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;

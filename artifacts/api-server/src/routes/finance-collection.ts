@@ -10,7 +10,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 
 export const collectionRouter = Router();
 collectionRouter.use(authMiddleware);
@@ -75,7 +75,7 @@ collectionRouter.get("/collection", requirePermission("finance:read"), async (re
 collectionRouter.post("/collection/:invoiceId/action", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { invoiceId } = req.params;
     const { stage, notes } = req.body as any;
 

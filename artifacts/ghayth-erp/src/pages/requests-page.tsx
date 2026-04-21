@@ -209,7 +209,7 @@ function RequestsList() {
     if (filterType && r.typeName !== filterType && String(r.typeId) !== filterType) return false;
     if (filterDateFrom && r.createdAt && r.createdAt < filterDateFrom) return false;
     if (filterDateTo && r.createdAt && r.createdAt > filterDateTo + "T23:59:59") return false;
-    if (searchText && !r.title?.toLowerCase().includes(searchText.toLowerCase()) && !r.requesterName?.toLowerCase().includes(searchText.toLowerCase())) return false;
+    if (searchText && !r.title?.toLowerCase().includes(searchText.toLowerCase()) && !r.requesterName?.toLowerCase().includes(searchText.toLowerCase()) && !r.ref?.toLowerCase().includes(searchText.toLowerCase())) return false;
     if (tagFilteredIds && !tagFilteredIds.has(r.id)) return false;
     return true;
   });
@@ -261,6 +261,15 @@ function RequestsList() {
       width: "2rem",
       render: (r: any) => (
         <BulkCheckbox checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} />
+      ),
+    },
+    {
+      key: "ref",
+      header: "رقم المرجع",
+      render: (r: any) => (
+        <span className="font-mono text-sm font-semibold text-blue-700 tracking-wide">
+          {r.ref || "—"}
+        </span>
       ),
     },
     {
@@ -475,6 +484,7 @@ function RequestsList() {
         onClear={clearSelection}
         invalidateKeys={[["requests"]]}
         csvColumns={[
+          { key: "ref", label: "رقم المرجع" },
           { key: "title", label: "العنوان" },
           { key: "requesterName", label: "مقدم الطلب" },
           { key: "priority", label: "الأولوية" },
