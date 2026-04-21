@@ -787,6 +787,27 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
       );
     }
     await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
+
+    // CRITICAL: If the invoice is rejected or returned after the GL was
+    // already posted at creation time, reverse the AR/Revenue/VAT balances
+    // so the books stay balanced. Without this the accounts are permanently
+    // overstated. Uses the same reversal pattern as invoice deletion above.
+    if (newStatus === "rejected" || newStatus === "returned") {
+      const [je] = await rawQuery<any>(
+        `SELECT id, status FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+        [scope.companyId, `JE-${inv.ref}`]
+      );
+      if (je && je.status !== "cancelled" && je.status !== "reversed") {
+        try {
+          await reverseAccountBalances(scope.companyId, Number(je.id));
+          await rawExecute(
+            `UPDATE journal_entries SET status = 'reversed' WHERE id = $1`,
+            [Number(je.id)]
+          );
+        } catch (e) { console.error("Failed to reverse invoice GL on rejection:", e); }
+      }
+    }
+
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
     createAuditLog({
