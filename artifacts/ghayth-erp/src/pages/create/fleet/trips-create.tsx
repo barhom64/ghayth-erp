@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { VehicleSelect, EmployeeSelect, ClientSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "fleet_trips_create";
 const INITIAL = {
@@ -24,19 +24,10 @@ export default function TripsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/fleet/trips", "POST", [["trips"]]);
-  const { data: vehiclesData, isLoading: loadingV, isError: errorV } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
-  const { data: driversData, isLoading: loadingD, isError: errorD } = useApiQuery<{ data: any[] }>(["fleet-drivers"], "/fleet/drivers");
-  const { data: clientsData, isLoading: loadingC, isError: errorC } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
-  const vehicles = vehiclesData?.data || [];
-  const drivers = driversData?.data || [];
-  const clients = clientsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  if (loadingV || loadingD || loadingC) return <LoadingSpinner />;
-  if (errorV || errorD || errorC) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -85,42 +76,16 @@ export default function TripsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <FormFieldWrapper label="المركبة" required error={fieldErrors.vehicleId} className="md:col-span-3">
-          <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
-            <SelectTrigger><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
-            <SelectContent>
-              {vehicles.map((v: any) => (
-                <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="md:col-span-3">
+          <VehicleSelect value={form.vehicleId} onChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))} label="المركبة" required error={fieldErrors.vehicleId} />
           {form.vehicleId && (
             <div className="mt-3">
               <VehicleContextCard vehicleId={form.vehicleId} section="trip" />
             </div>
           )}
-        </FormFieldWrapper>
-        <FormFieldWrapper label="السائق" required error={fieldErrors.driverId}>
-          <Select value={form.driverId} onValueChange={(v) => setForm((f) => ({ ...f, driverId: v }))}>
-            <SelectTrigger><SelectValue placeholder="اختر السائق" /></SelectTrigger>
-            <SelectContent>
-              {drivers.map((d: any) => (
-                <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <FormFieldWrapper label="العميل">
-          <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
-            <SelectTrigger><SelectValue placeholder="— بدون عميل —" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">— بدون عميل —</SelectItem>
-              {clients.map((c: any) => (
-                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
+        </div>
+        <EmployeeSelect value={form.driverId} onChange={(v) => setForm((f) => ({ ...f, driverId: v }))} label="السائق" required error={fieldErrors.driverId} />
+        <ClientSelect value={form.clientId} onChange={(v) => setForm((f) => ({ ...f, clientId: v }))} label="العميل" />
         <TextField label="من" required value={form.fromLocation} onChange={(v) => setForm((f) => ({ ...f, fromLocation: v }))} placeholder="نقطة الانطلاق" error={fieldErrors.fromLocation} />
         <TextField label="إلى" required value={form.toLocation} onChange={(v) => setForm((f) => ({ ...f, toLocation: v }))} placeholder="الوجهة" error={fieldErrors.toLocation} />
         <NumberField label="المسافة (كم)" value={form.distance} onChange={(v) => setForm((f) => ({ ...f, distance: v }))} min={0} />

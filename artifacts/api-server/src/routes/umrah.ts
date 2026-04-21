@@ -3,7 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import {
   createJournalEntry,
   getAccountCodeFromMapping,
@@ -104,14 +104,14 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
         [id, scope.companyId]
       );
       if (Number(open[0]?.c) > 0) {
-        res.status(400).json({ error: `لا يمكن إغلاق الموسم — يوجد ${open[0].c} معتمر نشط`, blockers: [{ type: "active_pilgrims", count: Number(open[0].c) }] }); return;
+        throw new ValidationError(`لا يمكن إغلاق الموسم — يوجد ${open[0].c} معتمر نشط`, { meta: { blockers: [{ type: "active_pilgrims", count: Number(open[0].c) }] } });
       }
       const unpaid = await rawQuery(
         `SELECT COUNT(*) as c FROM umrah_agent_invoices WHERE "seasonId"=$1 AND "companyId"=$2 AND status NOT IN ('paid','cancelled')`,
         [id, scope.companyId]
       );
       if (Number(unpaid[0]?.c) > 0) {
-        res.status(400).json({ error: `لا يمكن إغلاق الموسم — يوجد ${unpaid[0].c} فاتورة غير مسددة`, blockers: [{ type: "unpaid_invoices", count: Number(unpaid[0].c) }] }); return;
+        throw new ValidationError(`لا يمكن إغلاق الموسم — يوجد ${unpaid[0].c} فاتورة غير مسددة`, { meta: { blockers: [{ type: "unpaid_invoices", count: Number(unpaid[0].c) }] } });
       }
     }
     const params: any[] = [];
@@ -337,7 +337,7 @@ router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): P
        LEFT JOIN umrah_seasons s ON p."seasonId"=s.id
        WHERE p.id=$1 AND p."companyId"=$2`, [req.params.id, scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المعتمر غير موجود" }); return; }
+    if (!row) { throw new NotFoundError("المعتمر غير موجود"); }
     const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC`, [req.params.id, scope.companyId]);
     res.json({ ...row, penalties });
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
@@ -348,7 +348,7 @@ router.post("/import", requirePermission("umrah:write"), async (req, res): Promi
     const scope = req.scope!;
     const { seasonId, rows: importRows, fileType, fileName } = req.body;
     if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
-      res.status(400).json({ error: "بيانات الاستيراد غير مكتملة" }); return;
+      throw new ValidationError("بيانات الاستيراد غير مكتملة");
     }
 
     const { insertId: logId } = await rawExecute(
@@ -567,15 +567,15 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
   try {
     const scope = req.scope!;
     const { agentId, seasonId } = req.body;
-    if (!agentId || !seasonId) { res.status(400).json({ error: "الوكيل والموسم مطلوبان" }); return; }
+    if (!agentId || !seasonId) { throw new ValidationError("الوكيل والموسم مطلوبان"); }
     const pilgrims = await rawQuery(
       `SELECT COUNT(*) as c FROM umrah_pilgrims WHERE "agentId"=$1 AND "seasonId"=$2 AND "companyId"=$3`,
       [agentId, seasonId, scope.companyId]
     );
     const pilgrimCount = Number(pilgrims[0]?.c || 0);
-    if (pilgrimCount === 0) { res.status(400).json({ error: "لا يوجد معتمرين لهذا الوكيل في هذا الموسم" }); return; }
+    if (pilgrimCount === 0) { throw new ValidationError("لا يوجد معتمرين لهذا الوكيل في هذا الموسم"); }
     const [agent] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2`, [agentId, scope.companyId]);
-    if (!agent) { res.status(404).json({ error: "الوكيل غير موجود" }); return; }
+    if (!agent) { throw new NotFoundError("الوكيل غير موجود"); }
     const penalties = await rawQuery(
       `SELECT COALESCE(SUM(amount),0) as total FROM umrah_penalties WHERE "agentId"=$1 AND "seasonId"=$2 AND "companyId"=$3 AND status='pending'`,
       [agentId, seasonId, scope.companyId]
@@ -749,7 +749,7 @@ router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): 
     const scope = req.scope!;
     const { pilgrimIds, agentId } = req.body;
     if (!agentId || !Array.isArray(pilgrimIds) || pilgrimIds.length === 0) {
-      res.status(400).json({ error: "بيانات التوزيع غير مكتملة" }); return;
+      throw new ValidationError("بيانات التوزيع غير مكتملة");
     }
     const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 3}`).join(",");
     await rawExecute(

@@ -10,7 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createJournalEntry, getAccountCodeFromMapping, checkFinancialPeriodOpen } from "../lib/businessHelpers.js";
+import { createJournalEntry, getAccountCodeFromMapping, checkFinancialPeriodOpen, updateAccountBalances } from "../lib/businessHelpers.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -755,37 +755,31 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
     const newBookValue = Math.max(Number(asset.purchaseCost) - newAccumulated, Number(asset.salvageValue));
 
     let entryId: number | undefined;
-    await withTransaction(async (client) => {
-      const jeRes = await client.query(
-        `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type)
-         VALUES ($1,$2,$3,$4,$5,'depreciation') RETURNING id`,
-        [scope.companyId, scope.branchId ?? asset.branchId, scope.activeAssignmentId,
-         `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
-         `إهلاك شهري: ${asset.name} — ${targetPeriod}`]
-      );
-      const journalId = jeRes.rows[0].id;
 
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description) VALUES ($1,$2,$3,0,$4)`,
-        [journalId, asset.depreciationAccountCode ?? "6100", depAmount, `إهلاك ${asset.name}`]
-      );
-      await client.query(
-        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description) VALUES ($1,$2,0,$3,$4)`,
-        [journalId, asset.accDepreciationAccountCode ?? "1590", depAmount, `مجمع إهلاك ${asset.name}`]
-      );
-
-      const entRes = await client.query(
-        `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW()) RETURNING id`,
-        [id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
-      );
-      entryId = entRes.rows[0].id;
-
-      await client.query(
-        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
-        [newAccumulated, newBookValue, id]
-      );
+    const journalId = await createJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? asset.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
+      description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
+      type: "depreciation",
+      lines: [
+        { accountCode: asset.depreciationAccountCode ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}` },
+        { accountCode: asset.accDepreciationAccountCode ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}` },
+      ],
     });
+
+    const entRes = await rawQuery<any>(
+      `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW()) RETURNING id`,
+      [id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
+    );
+    entryId = entRes[0].id;
+
+    await rawExecute(
+      `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
+      [newAccumulated, newBookValue, id]
+    );
 
     res.status(201).json({
       entryId,
@@ -830,32 +824,28 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("
       const newAccumulated = Number(asset.accumulatedDepreciation) + depAmount;
       const newBookValue = Math.max(Number(asset.purchaseCost) - newAccumulated, Number(asset.salvageValue));
 
-      await withTransaction(async (client) => {
-        const jeRes = await client.query(
-          `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type)
-           VALUES ($1,$2,$3,$4,$5,'depreciation') RETURNING id`,
-          [scope.companyId, asset.branchId ?? scope.branchId, scope.activeAssignmentId,
-           `DEP-${asset.code ?? asset.id}-${targetPeriod}`, `إهلاك شهري: ${asset.name} — ${targetPeriod}`]
-        );
-        const journalId = jeRes.rows[0].id;
-        await client.query(
-          `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ($1,$2,$3,0)`,
-          [journalId, asset.depreciationAccountCode ?? "6100", depAmount]
-        );
-        await client.query(
-          `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ($1,$2,0,$3)`,
-          [journalId, asset.accDepreciationAccountCode ?? "1590", depAmount]
-        );
-        await client.query(
-          `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
-           VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW())`,
-          [asset.id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
-        );
-        await client.query(
-          `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
-          [newAccumulated, newBookValue, asset.id]
-        );
+      const journalId = await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: asset.branchId ?? scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
+        description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
+        type: "depreciation",
+        lines: [
+          { accountCode: asset.depreciationAccountCode ?? "6100", debit: depAmount, credit: 0 },
+          { accountCode: asset.accDepreciationAccountCode ?? "1590", debit: 0, credit: depAmount },
+        ],
       });
+
+      await rawExecute(
+        `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW())`,
+        [asset.id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
+      );
+      await rawExecute(
+        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
+        [newAccumulated, newBookValue, asset.id]
+      );
 
       results.push({ assetId: asset.id, assetName: asset.name, depAmount, newBookValue });
       processed++;
@@ -1045,6 +1035,10 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", requirePermission("f
       [journalEntryId, diff > 0 ? diff : 0, diff < 0 ? Math.abs(diff) : 0,
        description ?? "فرق تقريب تلقائي"]
     );
+
+    await updateAccountBalances(scope.companyId, [
+      { accountCode: "9999", debit: diff > 0 ? diff : 0, credit: diff < 0 ? Math.abs(diff) : 0 },
+    ]);
 
     res.json({ message: `تم تسجيل فرق التقريب (${diff.toFixed(2)} ﷼) في حساب 9999` });
   } catch (err) {

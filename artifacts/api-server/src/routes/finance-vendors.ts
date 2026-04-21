@@ -11,7 +11,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 
 export const vendorsRouter = Router();
 vendorsRouter.use(authMiddleware);
@@ -76,7 +76,7 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
 vendorsRouter.post("/vendors/create", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
+
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
 
     if (!name) {
@@ -167,7 +167,7 @@ vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (
 vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PROCUREMENT_ROLES);
+
     const vendorId = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(

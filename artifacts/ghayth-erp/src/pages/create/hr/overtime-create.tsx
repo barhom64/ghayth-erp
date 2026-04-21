@@ -16,6 +16,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Clock, User, Calculator, Info } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "hr_overtime_create";
 
@@ -133,26 +134,13 @@ export default function OvertimeCreate() {
 
         {/* الموظف والتاريخ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormFieldWrapper
+          <EmployeeSelect
+            value={form.assignmentId}
+            onChange={(v) => setForm({ ...form, assignmentId: v })}
             label="الموظف"
             required
             error={fieldErrors.assignmentId}
-            hint={selectedEmployee && salary > 0 ? `معدل الساعة: ${formatCurrency(hourlyRate)}` : undefined}
-          >
-            <Select value={form.assignmentId} onValueChange={(v) => setForm({ ...form, assignmentId: v })}>
-              <SelectTrigger><SelectValue placeholder="اختر الموظف..." /></SelectTrigger>
-              <SelectContent>
-                {employees.map((emp: any) => (
-                  <SelectItem
-                    key={emp.activeAssignmentId || emp.assignmentId || emp.id}
-                    value={String(emp.activeAssignmentId || emp.assignmentId || emp.id)}
-                  >
-                    {emp.name} {emp.empNumber ? `(#${emp.empNumber})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          />
 
           <FormFieldWrapper label="تاريخ الوقت الإضافي" required error={fieldErrors.overtimeDate}>
             <DatePicker

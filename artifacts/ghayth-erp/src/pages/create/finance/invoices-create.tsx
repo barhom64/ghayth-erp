@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -18,6 +16,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+import { ClientSelect, BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -50,17 +49,7 @@ export default function InvoicesCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/invoices", "POST", [["invoices"]]);
-  const { data: clientsData, isLoading: clientsLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
-  const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
-  const clients = clientsData?.data || [];
-  const branches = branchesData?.data || [];
   const { data: copySource } = useApiQuery<any>(["invoice-copy", copyFromId || ""], `/finance/invoices/${copyFromId}`, !!copyFromId);
-
-  const clientOptions: AutocompleteOption[] = clients.map((c: any) => ({
-    value: String(c.id),
-    label: c.name,
-    subtitle: c.email || c.phone || undefined,
-  }));
 
   const copyDefaults = (() => {
     const params = new URLSearchParams(window.location.search);
@@ -76,6 +65,7 @@ export default function InvoicesCreate() {
     vatRate: copyDefaults?.vatRate ? String(copyDefaults.vatRate) : "15",
     branchId: selectedBranchId ? String(selectedBranchId) : "",
     companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
+    costCenter: "",
     paymentTermsDays: "",
     notes: copyDefaults?.notes || "",
     isTaxLinked: false,
@@ -109,9 +99,6 @@ export default function InvoicesCreate() {
     }
   }, [copySource, copied]);
   const autoNumberRef = useRef(`INV-${Date.now().toString(36).toUpperCase()}`);
-
-  if (clientsLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const addLine = () => setLines([...lines, { description: "", quantity: "1", unitPrice: "" }]);
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
@@ -151,6 +138,7 @@ export default function InvoicesCreate() {
         total,
         branchId: form.branchId ? Number(form.branchId) : undefined,
         companyId: form.companyId ? Number(form.companyId) : undefined,
+        costCenter: form.costCenter || undefined,
         paymentTermsDays: form.paymentTermsDays ? Number(form.paymentTermsDays) : undefined,
         notes: form.notes || undefined,
         isTaxLinked: form.isTaxLinked,
@@ -190,30 +178,26 @@ export default function InvoicesCreate() {
         </FormFieldWrapper>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <FormFieldWrapper label="العميل" required error={fieldErrors.clientId}>
-          <Autocomplete
-            options={clientOptions}
+        <div>
+          <ClientSelect
             value={form.clientId}
-            onChange={(val) => setForm(prev => ({ ...prev, clientId: String(val) }))}
-            placeholder="ابحث عن عميل..."
-            loading={clientsLoading}
-            className={fieldErrorClass(fieldErrors.clientId)}
+            onChange={(v) => setForm((f) => ({ ...f, clientId: v }))}
+            label="العميل"
+            required
+            error={fieldErrors.clientId}
           />
           {form.clientId && (
             <div className="mt-3">
               <ClientContextCard clientId={form.clientId} section="invoice" />
             </div>
           )}
-        </FormFieldWrapper>
-        <FormFieldWrapper label="الفرع" required>
-          <Select value={form.branchId || "_none"} onValueChange={(v) => setForm(prev => ({ ...prev, branchId: v === "_none" ? "" : v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">اختر الفرع</SelectItem>
-              {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
+        </div>
+        <BranchSelect
+          value={form.branchId}
+          onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+          label="الفرع"
+          required
+        />
         <NumberField label="نسبة الضريبة %" value={form.vatRate} onChange={(v) => setForm({ ...form, vatRate: v })} min={0} max={100} step={0.01} />
         <FormFieldWrapper label="شروط الدفع" required>
           <Select value={form.paymentTermsDays || "_none"} onValueChange={(v) => setForm(prev => ({ ...prev, paymentTermsDays: v === "_none" ? "" : v }))}>
@@ -226,6 +210,11 @@ export default function InvoicesCreate() {
         <FormFieldWrapper label={`تاريخ الاستحقاق ${!form.paymentTermsDays ? "*" : ""}`} error={fieldErrors.dueDate}>
           <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
         </FormFieldWrapper>
+        <CostCenterSelect
+          value={form.costCenter}
+          onChange={(v) => setForm((f) => ({ ...f, costCenter: v }))}
+          label="مركز التكلفة"
+        />
         <TextField label="الوصف" value={form.description} onChange={(v) => setForm({ ...form, description: v })} className="md:col-span-3" />
         <TextField label="ملاحظات إضافية" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} placeholder="ملاحظات أو تعليمات للعميل" className="md:col-span-3" />
       </div>

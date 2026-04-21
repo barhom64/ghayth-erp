@@ -11,7 +11,7 @@ import {
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -25,8 +25,6 @@ const createBudgetSchema = z.object({
 
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
-
-const FINANCE_ROLES = ["finance", "director", "owner"];
 
 budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) => {
   try {
@@ -50,7 +48,7 @@ budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) 
 budgetRouter.post("/budget", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["director", "owner"]);
+
     const parsed = createBudgetSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { accountCode, period, amount, branchId } = parsed.data;
@@ -130,7 +128,7 @@ budgetRouter.post("/budget/validate", requirePermission("finance:create"), async
 budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["director", "owner"]);
+
     const id = Number(req.params.id);
     const b = req.body;
     const fields: string[] = [];
@@ -174,7 +172,7 @@ budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (re
 budgetRouter.delete("/budget/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, ["director", "owner"]);
+
     const budgetId = Number(req.params.id);
 
     const [existing] = await rawQuery<any>(
@@ -559,7 +557,7 @@ budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (re
 budgetRouter.post("/fiscal-periods/:period/close", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const period = String(req.params.period);
 
     if (!/^\d{4}-\d{2}$/.test(period)) {

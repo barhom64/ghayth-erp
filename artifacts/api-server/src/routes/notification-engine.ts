@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { getDeliveryStats } from "../lib/notificationEngine.js";
@@ -96,7 +96,7 @@ const router = Router();
 router.get("/preferences", requirePermission("notifications:read"), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope;
-    if (!scope) return res.status(401).json({ error: "Unauthorized" });
+    if (!scope) throw new ForbiddenError("Unauthorized");
     const { companyId } = scope;
 
     const rows = await rawQuery<Record<string, unknown>>(
@@ -128,7 +128,7 @@ router.put("/preferences", requirePermission("admin:write"), async (req: Request
     if (!parsed_updatePreferencesSchema.success) throw new ValidationError(parsed_updatePreferencesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updatePreferencesSchema.data;
     const scope = req.scope;
-    if (!scope) return res.status(401).json({ error: "Unauthorized" });
+    if (!scope) throw new ForbiddenError("Unauthorized");
     const { companyId } = scope;
 
     const preferences = body.preferences;

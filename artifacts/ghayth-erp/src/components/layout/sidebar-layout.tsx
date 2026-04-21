@@ -322,7 +322,6 @@ const allNavSections: NavSection[] = [
       { label: "التواصل", path: "/communications", icon: Mail, module: "comms", children: [
         { label: "سجل الاتصالات", path: "/communications", icon: MessageSquare },
         { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
-        { label: "الخطابات والمراسلات", path: "/letters", icon: Mail },
         { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap },
       ]},
       { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [

@@ -16,12 +16,11 @@ import {
   initiateApprovalChain,
   getAccountCodeFromMapping,
 } from "../lib/businessHelpers.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 
 export const custodiesRouter = Router();
 custodiesRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
 custodiesRouter.get("/custodies", requirePermission("finance:read"), async (req, res) => {
   try {
@@ -365,7 +364,7 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
 custodiesRouter.post("/custodies", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { assignmentId, employeeName, amount, description, sourceAccountCode, purpose, expectedReturnDate } = req.body as any;
 
     if (!amount) {
@@ -483,7 +482,7 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
 custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { custodyRef, amount, description, sourceAccountCode } = req.body as any;
 
     if (!amount || !custodyRef) {
@@ -602,7 +601,7 @@ custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), a
 custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const custodyId = Number(req.params.id);
     const { amount, description, sourceAccountCode } = req.body as any;
 
@@ -719,7 +718,7 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
 custodiesRouter.patch("/custodies/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const custodyId = Number(req.params.id);
     const { approved, notes } = req.body as any;
 

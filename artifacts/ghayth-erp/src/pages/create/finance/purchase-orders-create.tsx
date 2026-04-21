@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/ui/date-picker";
 import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
@@ -14,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { CostCenterSelect } from "@/components/shared/entity-selects";
+import { CostCenterSelect, SupplierSelect, BranchSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -29,11 +28,7 @@ export default function PurchaseOrdersCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/purchase-requests", "POST", [["purchase-orders"], ["purchase-requests"]]);
-  const { data: suppliersData, isLoading, isError } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
-  const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
-  const { data: productsData } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
-  const suppliers = suppliersData?.data || [];
-  const branches = branchesData?.data || [];
+  const { data: productsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
   const products = productsData?.data || [];
   const { data: copySource } = useApiQuery<any>(["po-copy", copyFromId || ""], `/finance/purchase-orders/${copyFromId}`, !!copyFromId);
 
@@ -126,30 +121,27 @@ export default function PurchaseOrdersCreate() {
         </FormFieldWrapper>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <FormFieldWrapper label="المورد" required error={fieldErrors.supplierId}>
-          <Autocomplete
+        <div>
+          <SupplierSelect
             value={form.supplierId}
-            onChange={(v) => setForm((f) => ({ ...f, supplierId: String(v) }))}
-            options={suppliers.map((s: any) => ({ value: String(s.id), label: s.name }))}
-            placeholder="ابحث عن مورد..."
-            emptyMessage="لا يوجد موردين"
+            onChange={(v) => setForm((f) => ({ ...f, supplierId: v }))}
+            label="المورد"
+            required
+            error={fieldErrors.supplierId}
           />
           {form.supplierId && (
             <div className="mt-3">
               <SupplierContextCard supplierId={form.supplierId} />
             </div>
           )}
-        </FormFieldWrapper>
-        <FormFieldWrapper label="الفرع" required error={fieldErrors.branchId}>
-          <Select value={form.branchId} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v }))}>
-            <SelectTrigger><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
-            <SelectContent>
-              {branches.map((b: any) => (
-                <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
+        </div>
+        <BranchSelect
+          value={form.branchId}
+          onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+          label="الفرع"
+          required
+          error={fieldErrors.branchId}
+        />
         <CostCenterSelect
           value={form.costCenter}
           onChange={(v) => setForm((f) => ({ ...f, costCenter: v }))}

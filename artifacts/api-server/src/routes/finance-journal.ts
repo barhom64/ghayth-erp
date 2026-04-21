@@ -18,21 +18,18 @@ import {
   reverseAccountBalances,
   checkFinancialPeriodOpen,
   getAccountCodeFromMapping,
+  computeVat,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 export const journalRouter = Router();
 journalRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 const PAYROLL_ROLES = ["hr_manager", "finance_manager", "general_manager", "owner"];
 
-// Role guard is the shared `assertRole` from `../lib/roleGuards.js` (imported
-// above). The local duplicate helper that used to live here was removed in
-// Phase 8.1 — every finance route now goes through the same helper so the
-// typed-error contract is uniform across files.
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JOURNAL ENTRY STATE MACHINE — Phase C.7 Finance audit
@@ -225,7 +222,7 @@ journalRouter.post("/expenses/impact-preview", requirePermission("finance:create
 journalRouter.post("/expenses", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const {
       accountCode, amount, description, period, sourceAccountCode,
       branchId, companyId: bodyCompanyId, departmentId, costCenter, expenseType, subAccountCode,
@@ -306,7 +303,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
 
     const baseAmount = Number(amount);
     const vatRateVal = rawVatRate != null ? Number(rawVatRate) : 0;
-    const computedVat = rawVatAmount != null ? Number(rawVatAmount) : Math.round(baseAmount * (vatRateVal / 100) * 100) / 100;
+    const computedVat = rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal);
     const totalWithVat = baseAmount + computedVat;
 
     let finalDescription = description;
@@ -398,7 +395,7 @@ journalRouter.delete("/expenses/:id", requirePermission("finance:delete"), async
 journalRouter.patch("/expenses/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const expenseId = Number(req.params.id);
     const { approved, notes } = req.body as any;
 
@@ -485,7 +482,7 @@ journalRouter.get("/vouchers", requirePermission("finance:read"), async (req, re
 journalRouter.post("/vouchers", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const {
       type, amount, description, payee, accountCode, method = "cash", sourceAccountCode,
       subAccountCode, relatedEntityType, relatedEntityId, relatedEntityName,
@@ -545,7 +542,7 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
 
     const baseAmount = Number(amount);
     const vatRateVal = rawVatRate != null ? Number(rawVatRate) : 0;
-    const computedVat = rawVatAmount != null ? Number(rawVatAmount) : Math.round(baseAmount * (vatRateVal / 100) * 100) / 100;
+    const computedVat = rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal);
     const totalWithVat = baseAmount + computedVat;
 
     const isReceipt = type === "receipt";
@@ -624,7 +621,7 @@ journalRouter.get("/salary-advances", requirePermission("finance:read"), async (
 journalRouter.post("/salary-advances", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PAYROLL_ROLES);
+
     const { employeeName, amount, description, deductMonths = 1, sourceAccountCode, employeeId } = req.body as any;
     if (!amount || !employeeName) { throw new ValidationError("اسم الموظف والمبلغ مطلوبان"); return; }
     const sourceAcct = sourceAccountCode || "1100";
@@ -652,7 +649,7 @@ journalRouter.post("/salary-advances", requirePermission("finance:create"), asyn
 journalRouter.patch("/salary-advances/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, PAYROLL_ROLES);
+
     const advanceId = Number(req.params.id);
     const { approved, notes } = req.body as any;
 
@@ -752,7 +749,7 @@ journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req,
 journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) { throw new ValidationError("معرّف القيد غير صالح"); return; }
     const { reason, reverseDate } = req.body as { reason?: string; reverseDate?: string };
@@ -938,7 +935,7 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
 journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const period = String(req.params.period);
     const dryRun = String(req.query.dryRun ?? "").toLowerCase() === "true";
     const { retainedEarningsAccountCode = "3300", force = false } = (req.body ?? {}) as { retainedEarningsAccountCode?: string; force?: boolean };
@@ -1189,7 +1186,7 @@ async function createOpeningBalanceEntry(params: {
 journalRouter.post("/opening-balances", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { periodStart, lines, force } = req.body as any;
     const result = await createOpeningBalanceEntry({ scope, periodStart, lines, force: !!force });
     if ("error" in result) {
@@ -1205,7 +1202,7 @@ journalRouter.post("/opening-balances", requirePermission("finance:create"), asy
 journalRouter.post("/opening-balances/import-csv", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { periodStart, csv, force } = req.body as { periodStart?: string; csv?: string; force?: boolean };
     if (!csv || typeof csv !== "string") {
       throw new ValidationError("محتوى CSV مطلوب");

@@ -95,10 +95,8 @@ export const STATUS_MAP = {
     on_hold:              { label: "معلَّق",           tone: "warning"  },
     deleted:              { label: "محذوف",           tone: "muted"    },
     auto_declined:        { label: "رفض تلقائي",     tone: "danger"   },
-    // Communications (letters/messages) statuses, used by
-    // `src/pages/communications/letters.tsx` after replacing its local
-    // map. Keeping them in the shared domain so any future messaging
-    // surface that stores these raw values gets the same chip.
+    // Communications (letters/messages) statuses.
+    // Shared domain statuses for any messaging surface.
     sent:                 { label: "مرسل",            tone: "success"  },
     delivered:            { label: "تم التسليم",      tone: "success"  },
     queued:               { label: "في الانتظار",    tone: "warning"  },

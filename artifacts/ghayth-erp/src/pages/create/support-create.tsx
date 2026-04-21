@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useApiMutation } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { ClientSelect, EmployeeSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "support_create";
 const INITIAL = { title: "", clientId: "", assigneeId: "", category: "", priority: "medium", status: "open", description: "" };
@@ -22,16 +22,9 @@ export default function SupportCreate() {
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const addTicket = useApiMutation("/support/tickets", "POST", [["support-tickets"], ["support-stats"]]);
-  const { data: clientsData, isLoading: loadingC, isError: errorC } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
-  const { data: employeesData, isLoading: loadingE, isError: errorE } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-  const clients = clientsData?.data || [];
-  const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  if (loadingC || loadingE) return <LoadingSpinner />;
-  if (errorC || errorE) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -83,31 +76,15 @@ export default function SupportCreate() {
             placeholder="عنوان التذكرة"
             error={fieldErrors.title}
           />
-          <FormFieldWrapper label="العميل">
-            <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
-              <SelectTrigger><SelectValue placeholder="بدون عميل" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">بدون عميل</SelectItem>
-                {clients.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div>
+            <ClientSelect value={form.clientId} onChange={(v) => setForm((f) => ({ ...f, clientId: v }))} label="العميل" />
             {form.clientId && (
               <div className="mt-3">
                 <ClientContextCard clientId={form.clientId} section="ticket" />
               </div>
             )}
-          </FormFieldWrapper>
-          <FormFieldWrapper label="المسؤول عن التذكرة">
-            <Select value={form.assigneeId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, assigneeId: v === "_none" ? "" : v }))}>
-              <SelectTrigger><SelectValue placeholder="— غير محدد —" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">— غير محدد —</SelectItem>
-                {employees.map((emp: any) => (
-                  <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || emp.department || ""}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          </div>
+          <EmployeeSelect value={form.assigneeId} onChange={(v) => setForm((f) => ({ ...f, assigneeId: v }))} label="المسؤول عن التذكرة" />
           <FormFieldWrapper label="الفئة">
             <Select value={form.category || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, category: v === "_none" ? "" : v }))}>
               <SelectTrigger><SelectValue placeholder="اختر الفئة" /></SelectTrigger>

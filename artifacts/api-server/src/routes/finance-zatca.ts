@@ -6,7 +6,7 @@ import {
   ForbiddenError,
   IntegrationError,
 } from "../lib/errorHandler.js";
-import { assertRole } from "../lib/roleGuards.js";
+
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -18,10 +18,8 @@ import QRCode from "qrcode";
 export const zatcaRouter = Router();
 zatcaRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
-// Role gate is imported from lib/roleGuards.js as `assertRole`.
-// The older local `requireRole` was orphaned when callsites migrated.
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TLV (Tag-Length-Value) QR Code Encoder — ZATCA compliant
@@ -211,7 +209,7 @@ function computeInvoiceHash(xmlContent: string): string {
 zatcaRouter.get("/zatca/settings", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const [settings] = await rawQuery<any>(
       `SELECT id, "companyId", enabled, environment, "vatRegistrationNumber", "crNumber",
               "organizationName", "organizationNameEn", "streetName", "buildingNumber",
@@ -234,7 +232,7 @@ zatcaRouter.get("/zatca/settings", requirePermission("finance:read"), async (req
 zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const {
       enabled, environment, vatRegistrationNumber, crNumber,
       organizationName, organizationNameEn, streetName, buildingNumber,
@@ -326,7 +324,7 @@ zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (r
 zatcaRouter.post("/zatca/test-connection", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
 
     const [settings] = await rawQuery<any>(
       `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
@@ -360,7 +358,7 @@ zatcaRouter.post("/zatca/test-connection", requirePermission("finance:create"), 
 zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
 
     const [settings] = await rawQuery<any>(
@@ -447,7 +445,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
 zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
 
     const [settings] = await rawQuery<any>(
@@ -578,7 +576,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
 zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
 
     const [settings] = await rawQuery<any>(
@@ -654,7 +652,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
 zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { page = "1", limit: lim = "20", status = "" } = req.query as any;
     const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
 
@@ -720,7 +718,7 @@ zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (
 zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const { isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason } = req.body as any;
 
@@ -751,7 +749,7 @@ zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), asy
 zatcaRouter.patch("/zatca/expense/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    assertRole(scope, FINANCE_ROLES);
+
     const { id } = req.params;
     const { isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason } = req.body as any;
 
