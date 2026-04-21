@@ -75,7 +75,7 @@ async function getUserModules(userId: number, fallbackRole?: string): Promise<{ 
 export function requireModule(...requiredModules: string[]) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const scope = req.scope;
-    if (!scope) { res.status(401).json({ error: "غير مصرح" }); return; }
+    if (!scope) { res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" }); return; }
 
     if (scope.isOwner || scope.role === "owner") { next(); return; }
 
@@ -97,7 +97,9 @@ export function requireModule(...requiredModules: string[]) {
 
         res.status(403).json({
           error: "لا تملك صلاحية الوصول لهذا القسم",
-          requiredModule: requiredModules,
+          code: "FORBIDDEN",
+          fix: "اطلب من المسؤول منحك الوصول لهذا القسم",
+          meta: { requiredModule: requiredModules, role: scope.role },
         });
         return;
       }
@@ -118,14 +120,16 @@ export function requireModule(...requiredModules: string[]) {
 
         res.status(403).json({
           error: "لا تملك صلاحية الوصول لهذا القسم",
-          requiredModule: requiredModules,
+          code: "FORBIDDEN",
+          fix: "اطلب من المسؤول منحك الوصول لهذا القسم",
+          meta: { requiredModule: requiredModules, role: scope.role },
         });
         return;
       }
       next();
     } catch (err) {
       console.error("Role guard error:", err);
-      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات" });
+      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
 }
@@ -133,7 +137,7 @@ export function requireModule(...requiredModules: string[]) {
 export function requireMinLevel(minLevel: number) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const scope = req.scope;
-    if (!scope) { res.status(401).json({ error: "غير مصرح" }); return; }
+    if (!scope) { res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" }); return; }
 
     if (scope.isOwner || scope.role === "owner") { next(); return; }
 
@@ -159,15 +163,16 @@ export function requireMinLevel(minLevel: number) {
 
         res.status(403).json({
           error: "مستوى الصلاحيات غير كافٍ للوصول لهذا المورد",
-          required: minLevel,
-          current: effectiveLevel,
+          code: "FORBIDDEN",
+          fix: "هذا الإجراء يتطلب دوراً بمستوى أعلى",
+          meta: { requiredLevel: minLevel, currentLevel: effectiveLevel, role: scope.role },
         });
         return;
       }
       next();
     } catch (err) {
       console.error("Role guard error:", err);
-      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات" });
+      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
 }
@@ -175,7 +180,7 @@ export function requireMinLevel(minLevel: number) {
 export function requireRole(...requiredRoles: string[]) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const scope = req.scope;
-    if (!scope) { res.status(401).json({ error: "غير مصرح" }); return; }
+    if (!scope) { res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" }); return; }
 
     if (scope.isOwner || scope.role === "owner") { next(); return; }
 
@@ -199,13 +204,18 @@ export function requireRole(...requiredRoles: string[]) {
           ip,
         }).catch(console.error);
 
-        res.status(403).json({ error: "لا تملك الدور المطلوب لهذا الإجراء" });
+        res.status(403).json({
+          error: "لا تملك الدور المطلوب لهذا الإجراء",
+          code: "FORBIDDEN",
+          fix: "هذا الإجراء مخصص لأدوار محددة",
+          meta: { requiredRoles, role: scope.role },
+        });
         return;
       }
       next();
     } catch (err) {
       console.error("Role guard error:", err);
-      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات" });
+      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
 }

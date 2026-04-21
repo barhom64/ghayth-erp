@@ -29,7 +29,13 @@ declare global {
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "غير مصرح: لا يوجد توكن" });
+    // 401 — no bearer token at all. Frontend reads `code: AUTH_MISSING` to
+    // trigger login redirect instead of showing a generic error page.
+    res.status(401).json({
+      error: "غير مصرح: لا يوجد توكن",
+      code: "AUTH_MISSING",
+      fix: "يرجى تسجيل الدخول",
+    });
     return;
   }
 
@@ -42,7 +48,12 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     next();
   } catch (err: any) {
     console.error("[AUTH] Token verification failed:", err?.message || err);
-    res.status(401).json({ error: "توكن غير صالح أو منتهي" });
+    const isExpired = /expired/i.test(String(err?.message ?? ""));
+    res.status(401).json({
+      error: isExpired ? "انتهت صلاحية الجلسة" : "توكن غير صالح",
+      code: isExpired ? "AUTH_EXPIRED" : "AUTH_INVALID",
+      fix: "يرجى تسجيل الدخول مجدداً",
+    });
   }
 }
 

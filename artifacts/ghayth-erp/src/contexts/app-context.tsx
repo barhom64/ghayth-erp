@@ -148,6 +148,20 @@ interface AppContextType {
   permissions: PermissionSet;
   hasPermission: (permission: PermissionKey) => boolean;
 
+  /**
+   * Raw `module:action` permissions from the backend. Use `can()` for
+   * fine-grained permission gating that mirrors the backend exactly.
+   * Unlike `hasPermission(key)` which is limited to 16 preset keys, `can()`
+   * accepts any `module:action` string and respects wildcards (`*`, `module:*`).
+   *
+   *   can("finance:create")   // show "Create Invoice" button?
+   *   can("hr:approve")       // show "Approve Leave" action?
+   *
+   * Returns true for owner and for any matching permission in the raw set.
+   */
+  can: (permission: string) => boolean;
+  rawPermissions: string[];
+
   allowedModules: ModuleType[];
   canAccessModule: (module: ModuleType) => boolean;
 
@@ -369,6 +383,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const hasPermission = (permission: PermissionKey) => permissions[permission];
   const canAccessModule = (module: ModuleType) => allowedModules.includes(module);
 
+  const rawPermissions = apiData?.permissions ?? [];
+  const isOwnerRole = selectedRole?.roleKey === "owner" || effectiveRoleLevel >= 100;
+  const can = useCallback((permission: string): boolean => {
+    if (isOwnerRole) return true;
+    if (!permission) return true;
+    if (rawPermissions.includes("*")) return true;
+    if (rawPermissions.includes(permission)) return true;
+    const [module] = permission.split(":");
+    if (module && rawPermissions.includes(`${module}:*`)) return true;
+    return false;
+  }, [rawPermissions, isOwnerRole]);
+
   const canAccessSubPage = useCallback((module: string, subKey: string) => {
     if (!selectedRole) return false;
     const rk = selectedRole.roleKey;
@@ -409,6 +435,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       filteredBranches,
       permissions,
       hasPermission,
+      can,
+      rawPermissions,
       allowedModules,
       canAccessModule,
       canAccessSubPage,

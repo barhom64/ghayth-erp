@@ -249,6 +249,42 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
+// Inline preview — serves the file with `Content-Disposition: inline` so the
+// browser renders it directly (PDF viewer, image, etc.) instead of downloading.
+// Used by the frontend <AttachmentPreview> component for side-panel preview
+// without leaving the current page. Same scope + permission checks as
+// /download, but skips the attachment header so browsers embed the content.
+router.get("/:id/preview", requirePermission("documents:download"), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const [doc] = await rawQuery<any>(
+      `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!doc) throw new NotFoundError("المستند غير موجود");
+    if (!doc.storageKey) throw new NotFoundError("لا يوجد ملف مرفق");
+
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(doc.storageKey);
+      const response = await objectStorageService.downloadObject(objectFile);
+
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
+      if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("Cache-Control", "private, max-age=300");
+      res.status(response.status);
+
+      if (response.body) {
+        const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+        nodeStream.pipe(res);
+      } else {
+        res.end();
+      }
+    } catch {
+      throw new NotFoundError("الملف غير موجود في التخزين");
+    }
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
 // P02-S4-HIGH — `POST /:id/versions` used to read documents with the
 // `("companyId"=$2 OR "companyId" IS NULL)` filter (so global system
 // documents passed the precheck) and then UPDATE by raw `id` with no
