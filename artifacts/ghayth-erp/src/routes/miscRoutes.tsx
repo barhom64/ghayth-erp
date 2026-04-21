@@ -18,6 +18,10 @@ const WarehouseCreate = lazy(() => import("@/pages/create/warehouse-create"));
 const WarehouseMovementsCreate = lazy(() => import("@/pages/create/warehouse/movements-create"));
 const WarehouseCategoriesCreate = lazy(() => import("@/pages/create/warehouse/categories-create"));
 const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/warehouse/suppliers-create"));
+const WarehouseProductDetail = lazy(() => import("@/pages/details/warehouse-product-detail"));
+const WarehouseMovementDetail = lazy(() => import("@/pages/details/warehouse-movement-detail"));
+const WarehouseCategoryDetail = lazy(() => import("@/pages/details/warehouse-category-detail"));
+const WarehouseSupplierDetail = lazy(() => import("@/pages/details/warehouse-supplier-detail"));
 const Support = lazy(() => import("@/pages/support"));
 const SupportCreate = lazy(() => import("@/pages/create/support-create"));
 const SupportReplies = lazy(() => import("@/pages/support/replies"));
@@ -92,6 +96,10 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/warehouse/movements/create", component: WarehouseMovementsCreate, module: "warehouse" },
   { path: "/warehouse/categories/create", component: WarehouseCategoriesCreate, module: "warehouse" },
   { path: "/warehouse/suppliers/create", component: WarehouseSuppliersCreate, module: "warehouse" },
+  { path: "/warehouse/products/:id", component: WarehouseProductDetail, module: "warehouse" },
+  { path: "/warehouse/movements/:id", component: WarehouseMovementDetail, module: "warehouse" },
+  { path: "/warehouse/categories/:id", component: WarehouseCategoryDetail, module: "warehouse" },
+  { path: "/warehouse/suppliers/:id", component: WarehouseSupplierDetail, module: "warehouse" },
   { path: "/warehouse/movements", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/categories", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/suppliers", component: Warehouse, module: "warehouse" },

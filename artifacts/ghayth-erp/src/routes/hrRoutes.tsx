@@ -79,6 +79,8 @@ const AttendanceDetail = lazy(() => import("@/pages/details/attendance-detail"))
 const ExcuseDetail = lazy(() => import("@/pages/details/excuse-detail"));
 const HrContractDetail = lazy(() => import("@/pages/details/hr-contract-detail"));
 const TransferDetail = lazy(() => import("@/pages/details/transfer-detail"));
+const PayrollDetail = lazy(() => import("@/pages/details/payroll-detail"));
+const PerformanceDetail = lazy(() => import("@/pages/details/performance-detail"));
 
 export const hrRoutes = [
   { path: "/hr", component: HR },
@@ -99,9 +101,11 @@ export const hrRoutes = [
   { path: "/hr/payroll", component: Payroll, subKey: "payroll" },
   { path: "/hr/payroll/create", component: PayrollCreate, subKey: "payroll" },
   { path: "/hr/payroll/salary-components", component: SalaryComponents, subKey: "payroll" },
+  { path: "/hr/payroll/:id", component: PayrollDetail, subKey: "payroll" },
   { path: "/hr/performance", component: Performance, subKey: "performance" },
   { path: "/hr/performance/create", component: PerformanceCreate, subKey: "performance" },
   { path: "/hr/performance/advanced", component: PerformanceAdvanced, subKey: "performance" },
+  { path: "/hr/performance/:id", component: PerformanceDetail, subKey: "performance" },
   { path: "/hr/training", component: Training, subKey: "training" },
   { path: "/hr/training/create", component: TrainingCreate, subKey: "training" },
   { path: "/hr/training/advanced", component: TrainingAdvanced, subKey: "training" },
