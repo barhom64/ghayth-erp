@@ -45,7 +45,7 @@ interface CommissionPlan {
   minSalesPercent?: number;
   minAvgPrice?: number;
   tiers?: Tier[];
-  excludedHijriMonths?: number[];
+  excludedMonths?: number[];
   notes?: string;
 }
 
@@ -71,7 +71,7 @@ export default function UmrahCommissionPlanEditor() {
     commissionType: "tiered",
     conditionType: "none",
     tiers: [emptyTier(1)],
-    excludedHijriMonths: [],
+    excludedMonths: [],
     baseSalary: 0,
   });
 
@@ -95,7 +95,7 @@ export default function UmrahCommissionPlanEditor() {
       setPlan({
         ...loaded,
         tiers: loaded.tiers?.length ? loaded.tiers : [emptyTier(1)],
-        excludedHijriMonths: loaded.excludedHijriMonths ?? [],
+        excludedMonths: loaded.excludedMonths ?? [],
       });
     }
   }, [isEditMode, loadQ.data]);
@@ -162,10 +162,10 @@ export default function UmrahCommissionPlanEditor() {
 
   const toggleMonth = (m: number) => {
     setPlan((p) => {
-      const current = p.excludedHijriMonths ?? [];
+      const current = p.excludedMonths ?? [];
       return {
         ...p,
-        excludedHijriMonths: current.includes(m) ? current.filter((x) => x !== m) : [...current, m],
+        excludedMonths: current.includes(m) ? current.filter((x) => x !== m) : [...current, m],
       };
     });
   };
@@ -501,7 +501,7 @@ export default function UmrahCommissionPlanEditor() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {HIJRI_MONTHS.map((name, idx) => {
                     const m = idx + 1;
-                    const excluded = (plan.excludedHijriMonths ?? []).includes(m);
+                    const excluded = (plan.excludedMonths ?? []).includes(m);
                     return (
                       <label
                         key={m}

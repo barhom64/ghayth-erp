@@ -20,10 +20,9 @@ type ViolationStatus = "detected" | "open" | "invoiced" | "paid" | "disputed" | 
 interface Violation {
   id: number;
   type: ViolationType;
-  reference?: string;
-  groupCode?: string;
+  referenceType?: "group" | "passport" | "border" | "mutamer";
+  referenceNumber?: string;
   passportNumber?: string;
-  borderRef?: string;
   mutamerId?: number;
   mutamerName?: string;
   agentId?: number;
@@ -113,14 +112,15 @@ export default function UmrahViolations() {
     {
       key: "reference",
       header: "المرجع",
-      render: (v) => (
-        <div className="text-xs font-mono space-y-0.5" dir="ltr">
-          {v.groupCode && <div>مجموعة: {v.groupCode}</div>}
-          {v.passportNumber && <div>جواز: {v.passportNumber}</div>}
-          {v.borderRef && <div>حدود: {v.borderRef}</div>}
-          {!v.groupCode && !v.passportNumber && !v.borderRef && "—"}
-        </div>
-      ),
+      render: (v) => {
+        if (!v.referenceNumber) return <span className="text-muted-foreground">—</span>;
+        const typeLabel: Record<string, string> = { group: "مجموعة", passport: "جواز", border: "حدود", mutamer: "معتمر" };
+        return (
+          <div className="text-xs font-mono" dir="ltr">
+            <span className="text-muted-foreground">{typeLabel[v.referenceType ?? ""] ?? ""}:</span> {v.referenceNumber}
+          </div>
+        );
+      },
     },
     {
       key: "mutamer",

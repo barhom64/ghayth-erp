@@ -310,6 +310,8 @@ CREATE TABLE IF NOT EXISTS employee_commission_plans (
   "baseSalary" NUMERIC(12,2),
   "commissionType" VARCHAR(20)
     CHECK ("commissionType" IN ('percentage','fixed','tiered','mixed')),
+  "percentageRate" NUMERIC(5,2),
+  "fixedAmount" NUMERIC(12,2),
   "conditionType" VARCHAR(20)
     CHECK ("conditionType" IN ('profit_avg','sales_percent','both_or','none')),
   "minProfitPerVisa" NUMERIC(10,2),
