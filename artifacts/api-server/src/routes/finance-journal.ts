@@ -27,17 +27,9 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 export const journalRouter = Router();
 journalRouter.use(authMiddleware);
 
-const PAYROLL_ROLES = ["hr_manager", "finance_manager", "general_manager", "owner"];
-
-
-
 // ─────────────────────────────────────────────────────────────────────────────
 // JOURNAL ENTRY STATE MACHINE — Phase C.7 Finance audit
 // ─────────────────────────────────────────────────────────────────────────────
-const JOURNAL_STATUSES = [
-  "draft", "pending_approval", "approved", "rejected", "returned",
-  "posted", "reversed", "cancelled",
-] as const;
 const JOURNAL_TRANSITIONS: Record<string, readonly string[]> = {
   draft:            ["pending_approval", "approved", "cancelled", "rejected", "returned"],
   pending_approval: ["approved", "rejected", "returned", "cancelled"],

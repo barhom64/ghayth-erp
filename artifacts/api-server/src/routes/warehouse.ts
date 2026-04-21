@@ -44,7 +44,6 @@ const PRODUCT_TRANSITIONS: Record<string, readonly string[]> = {
   inactive:     ["active", "discontinued"],
   discontinued: [],
 };
-const COUNT_STATUSES = ["draft", "in_progress", "approved", "cancelled"] as const;
 const COUNT_TRANSITIONS: Record<string, readonly string[]> = {
   draft:       ["in_progress", "approved", "cancelled"],
   in_progress: ["approved", "cancelled"],

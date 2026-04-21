@@ -16,8 +16,6 @@ import { pushToDLQ } from "../lib/eventBus.js";
 export const vendorsRouter = Router();
 vendorsRouter.use(authMiddleware);
 
-const PROCUREMENT_ROLES = ["procurement", "finance", "director", "owner"];
-
 vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;

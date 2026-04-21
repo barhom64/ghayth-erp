@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -19,7 +20,7 @@ const sq1 = async (sql: string, params: any[] = [], fb: any = {}): Promise<any> 
   return rows[0] ?? fb;
 };
 
-router.get("/hr", async (req, res) => {
+router.get("/hr", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -56,7 +57,7 @@ router.get("/hr", async (req, res) => {
   }
 });
 
-router.get("/finance", async (req, res) => {
+router.get("/finance", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -91,7 +92,7 @@ router.get("/finance", async (req, res) => {
   }
 });
 
-router.get("/fleet", async (req, res) => {
+router.get("/fleet", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -119,7 +120,7 @@ router.get("/fleet", async (req, res) => {
   }
 });
 
-router.get("/legal", async (req, res) => {
+router.get("/legal", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -145,7 +146,7 @@ router.get("/legal", async (req, res) => {
   }
 });
 
-router.get("/properties", async (req, res) => {
+router.get("/properties", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

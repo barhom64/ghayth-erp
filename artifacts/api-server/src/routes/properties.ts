@@ -198,7 +198,6 @@ const INSPECTION_TRANSITIONS: Record<string, readonly string[]> = {
   cancelled:   [],
 };
 
-const DEPOSIT_STATUSES = ["held", "refunded", "forfeited", "partial_refund"] as const;
 const DEPOSIT_TRANSITIONS: Record<string, readonly string[]> = {
   held:           ["refunded", "forfeited", "partial_refund"],
   partial_refund: ["refunded", "forfeited"],

@@ -24,7 +24,7 @@ const bulkActionSchema = z.object({
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/comments/:entityType/:entityId", async (req, res) => {
+router.get("/comments/:entityType/:entityId", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.params;
@@ -95,7 +95,7 @@ router.delete("/comments/:id", requirePermission("admin:write"), async (req, res
   }
 });
 
-router.get("/tags/:entityType/:entityId", async (req, res) => {
+router.get("/tags/:entityType/:entityId", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.params;
@@ -171,7 +171,7 @@ router.delete("/tags/:id", requirePermission("admin:write"), async (req, res) =>
   }
 });
 
-router.get("/tags-filter/:entityType", async (req, res): Promise<void> => {
+router.get("/tags-filter/:entityType", requirePermission("operations:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -190,7 +190,7 @@ router.get("/tags-filter/:entityType", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/tags-list/:entityType", async (req, res) => {
+router.get("/tags-list/:entityType", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;

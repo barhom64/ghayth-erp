@@ -101,15 +101,6 @@ const INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
   posted:    [],
 };
 
-const COLLECTION_STAGES = [
-  { stage: 1, name: "sms_email_reminder", label: "تذكير SMS + إيميل", daysOverdue: 1 },
-  { stage: 2, name: "accountant_notification", label: "إشعار محاسب + إيميل ثاني", daysOverdue: 7 },
-  { stage: 3, name: "field_collection", label: "مهمة تحصيل ميداني", daysOverdue: 14 },
-  { stage: 4, name: "cfo_escalation", label: "تصعيد للمدير المالي", daysOverdue: 21 },
-  { stage: 5, name: "gm_penalty", label: "إشعار GM + غرامة 2%", daysOverdue: 30 },
-  { stage: 6, name: "legal_churned", label: "إشعار القانونية + تصنيف churned", daysOverdue: 60 },
-];
-
 // Impact preview — lets the create form show exactly what will happen
 invoicesRouter.post("/invoices/impact-preview", requirePermission("finance:create"), async (req, res) => {
   try {

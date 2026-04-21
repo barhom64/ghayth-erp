@@ -15,7 +15,7 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect } from "@/components/shared/entity-selects";
+import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
@@ -166,7 +166,7 @@ export default function ExpensesCreate() {
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
   const { data: suppliersData } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
-  const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+
   const { data: contractsData } = useApiQuery<{ data: any[] }>(["contracts-list"], "/properties/contracts");
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["units-list"], "/properties/units");
   const { data: legalCasesData } = useApiQuery<{ data: any[] }>(["legal-cases-list"], "/legal/cases");
@@ -624,36 +624,20 @@ export default function ExpensesCreate() {
                   </Select>
                 </FormFieldWrapper>
                 {form.govEntityType === "employee" && (
-                  <FormFieldWrapper label="الموظف المرتبط">
-                    <Select
-                      value={form.govEntityId || "_none"}
-                      onValueChange={(v) => setForm({ ...form, govEntityId: v === "_none" ? "" : v })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">— اختر الموظف —</SelectItem>
-                        {(employeesData?.data || []).map((emp: any) => (
-                          <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} ({emp.iqamaNumber || emp.empNumber || "-"})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormFieldWrapper>
+                  <EmployeeSelect
+                    value={form.govEntityId}
+                    onChange={(v) => setForm({ ...form, govEntityId: v })}
+                    label="الموظف المرتبط"
+                    allowCreate={false}
+                  />
                 )}
                 {form.govEntityType === "vehicle" && (
-                  <FormFieldWrapper label="المركبة المرتبطة">
-                    <Select
-                      value={form.govEntityId || "_none"}
-                      onValueChange={(v) => setForm({ ...form, govEntityId: v === "_none" ? "" : v })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">— اختر المركبة —</SelectItem>
-                        {(vehiclesData?.data || []).map((v: any) => (
-                          <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormFieldWrapper>
+                  <VehicleSelect
+                    value={form.govEntityId}
+                    onChange={(v) => setForm({ ...form, govEntityId: v })}
+                    label="المركبة المرتبطة"
+                    allowCreate={false}
+                  />
                 )}
               </div>
             )}

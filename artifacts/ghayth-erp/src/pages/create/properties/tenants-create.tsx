@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -8,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { User, Building2, Shield, Phone, Briefcase } from "lucide-react";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -17,8 +17,7 @@ export default function TenantsCreate() {
   const { toast } = useToast();
   const createMut = useApiMutation("/properties/tenants", "POST", [["property-tenants-list"]]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  const [form, setForm] = useState({
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_tenants_create", {
     name: "",
     phone: "",
     email: "",
@@ -71,6 +70,7 @@ export default function TenantsCreate() {
         gender: form.gender || undefined,
         maritalStatus: form.maritalStatus || undefined,
       });
+      clearDraft();
       toast({ title: "تم إضافة المستأجر بنجاح" });
       setLocation("/properties/tenants");
     } catch (err: any) {
@@ -81,6 +81,12 @@ export default function TenantsCreate() {
 
   return (
     <CreatePageLayout title="إضافة مستأجر جديد" backPath="/properties/tenants">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-6">
         <CreationDateField />
         <Card>

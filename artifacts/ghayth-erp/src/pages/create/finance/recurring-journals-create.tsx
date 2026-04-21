@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -13,6 +12,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { Plus, Trash2 } from "lucide-react";
 import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -33,13 +33,31 @@ export default function RecurringJournalsCreatePage() {
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [frequency, setFrequency] = useState("monthly");
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-  const [templateRef, setTemplateRef] = useState("");
-  const [active, setActive] = useState(true);
-  const [lines, setLines] = useState<TemplateLine[]>([emptyLine(), emptyLine()]);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_recurring_journals_create", {
+    name: "",
+    description: "",
+    frequency: "monthly",
+    startDate: new Date().toISOString().slice(0, 10),
+    templateRef: "",
+    active: true,
+    lines: [emptyLine(), emptyLine()] as TemplateLine[],
+  });
+  const name = form.name;
+  const setName = (v: string) => setForm(f => ({ ...f, name: v }));
+  const description = form.description;
+  const setDescription = (v: string) => setForm(f => ({ ...f, description: v }));
+  const frequency = form.frequency;
+  const setFrequency = (v: string) => setForm(f => ({ ...f, frequency: v }));
+  const startDate = form.startDate;
+  const setStartDate = (v: string) => setForm(f => ({ ...f, startDate: v }));
+  const templateRef = form.templateRef;
+  const setTemplateRef = (v: string) => setForm(f => ({ ...f, templateRef: v }));
+  const active = form.active;
+  const setActive = (v: boolean) => setForm(f => ({ ...f, active: v }));
+  const lines = form.lines;
+  const setLines = (updater: TemplateLine[] | ((prev: TemplateLine[]) => TemplateLine[])) => {
+    setForm(f => ({ ...f, lines: typeof updater === "function" ? updater(f.lines) : updater }));
+  };
 
   const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
   const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
@@ -51,7 +69,7 @@ export default function RecurringJournalsCreatePage() {
     [["recurring-journals"]],
     {
       successMessage: "تم إنشاء القيد الدوري",
-      onSuccess: () => setLocation("/finance/recurring-journals"),
+      onSuccess: () => { clearDraft(); setLocation("/finance/recurring-journals"); },
     },
   );
 
@@ -104,6 +122,12 @@ export default function RecurringJournalsCreatePage() {
 
   return (
     <CreatePageLayout title="قيد دوري جديد" backPath="/finance/recurring-journals">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <TextField label="اسم القيد" required value={name} onChange={setName} placeholder="مثال: إهلاك شهري للسيارات" className="md:col-span-2" />

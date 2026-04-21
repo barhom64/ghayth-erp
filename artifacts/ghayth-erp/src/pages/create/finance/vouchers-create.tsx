@@ -19,7 +19,7 @@ import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect } from "@/components/shared/entity-selects";
+import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect, EmployeeSelect, ClientSelect, SupplierSelect } from "@/components/shared/entity-selects";
 
 const OPERATION_TYPES_RECEIPT = [
   { value: "receipt", label: "قبض إيراد عام" },
@@ -305,47 +305,72 @@ export default function VouchersCreate() {
               </SelectContent>
             </Select>
           </FormFieldWrapper>
-          {form.relatedEntityType && (
+          {form.relatedEntityType === "employee" && (
+            <EmployeeSelect
+              value={form.relatedEntityId}
+              onChange={(val) => {
+                const emp = (employeesData?.data || []).find((e: any) => String(e.id) === val);
+                const label = emp ? `${emp.name} - ${emp.jobTitle || ""}` : "";
+                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
+              }}
+              label="الجهة المرتبطة"
+              allowCreate={false}
+            />
+          )}
+          {form.relatedEntityType === "supplier" && (
+            <SupplierSelect
+              value={form.relatedEntityId}
+              onChange={(val) => {
+                const s = (suppliersData?.data || []).find((s: any) => String(s.id) === val);
+                const label = s ? s.name : "";
+                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
+              }}
+              label="الجهة المرتبطة"
+              allowCreate={false}
+            />
+          )}
+          {form.relatedEntityType === "customer" && (
+            <ClientSelect
+              value={form.relatedEntityId}
+              onChange={(val) => {
+                const c = (clientsData?.data || []).find((c: any) => String(c.id) === val);
+                const label = c ? c.name : "";
+                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
+              }}
+              label="الجهة المرتبطة"
+              allowCreate={false}
+            />
+          )}
+          {form.relatedEntityType === "contract" && (
             <FormFieldWrapper label="الجهة المرتبطة">
               <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
                 const val = v === "_none" ? "" : v;
-                let label = "";
-                if (val) {
-                  if (form.relatedEntityType === "employee") {
-                    const emp = (employeesData?.data || []).find((e: any) => String(e.id) === val);
-                    label = emp ? `${emp.name} - ${emp.jobTitle || ""}` : "";
-                  } else if (form.relatedEntityType === "supplier") {
-                    const s = (suppliersData?.data || []).find((s: any) => String(s.id) === val);
-                    label = s ? s.name : "";
-                  } else if (form.relatedEntityType === "customer") {
-                    const c = (clientsData?.data || []).find((c: any) => String(c.id) === val);
-                    label = c ? c.name : "";
-                  } else if (form.relatedEntityType === "contract") {
-                    const c = (contractsData?.data || []).find((c: any) => String(c.id) === val);
-                    label = c ? `${c.tenantName} - عقد #${c.id}` : "";
-                  } else if (form.relatedEntityType === "property") {
-                    const u = (unitsData?.data || []).find((u: any) => String(u.id) === val);
-                    label = u ? `${u.unitNumber || u.name} - ${u.type || "وحدة"}` : "";
-                  }
-                }
+                const c = val ? (contractsData?.data || []).find((c: any) => String(c.id) === val) : null;
+                const label = c ? `${c.tenantName} - عقد #${c.id}` : "";
                 setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
               }}>
                 <SelectTrigger><SelectValue placeholder="— اختر —" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">— اختر —</SelectItem>
-                  {form.relatedEntityType === "employee" && (employeesData?.data || []).map((emp: any) => (
-                    <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || ""}</SelectItem>
-                  ))}
-                  {form.relatedEntityType === "supplier" && (suppliersData?.data || []).map((s: any) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                  ))}
-                  {form.relatedEntityType === "customer" && (clientsData?.data || []).map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                  ))}
-                  {form.relatedEntityType === "contract" && (contractsData?.data || []).map((c: any) => (
+                  {(contractsData?.data || []).map((c: any) => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.tenantName} - عقد #{c.id}</SelectItem>
                   ))}
-                  {form.relatedEntityType === "property" && (unitsData?.data || []).map((u: any) => (
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          )}
+          {form.relatedEntityType === "property" && (
+            <FormFieldWrapper label="الجهة المرتبطة">
+              <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
+                const val = v === "_none" ? "" : v;
+                const u = val ? (unitsData?.data || []).find((u: any) => String(u.id) === val) : null;
+                const label = u ? `${u.unitNumber || u.name} - ${u.type || "وحدة"}` : "";
+                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
+              }}>
+                <SelectTrigger><SelectValue placeholder="— اختر —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— اختر —</SelectItem>
+                  {(unitsData?.data || []).map((u: any) => (
                     <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber || u.name} - {u.type || "وحدة"}</SelectItem>
                   ))}
                 </SelectContent>

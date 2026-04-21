@@ -519,7 +519,7 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
       try {
         await rawExecute(`DELETE FROM companies WHERE id = $1`, [companyId]);
       } catch (_cleanupErr) {}
-      res.status(500).json({ error: "فشل إنشاء الشركة مع الإعدادات الافتراضية" });
+      handleRouteError(bootstrapErr, res, "Bootstrap company error");
       return;
     }
 

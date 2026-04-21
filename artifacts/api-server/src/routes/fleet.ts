@@ -92,7 +92,6 @@ const MAINTENANCE_TRANSITIONS: Record<string, readonly string[]> = {
   cancelled:   [],
 };
 
-const VIOLATION_STATUSES = ["pending", "paid", "disputed", "cancelled"] as const;
 const VIOLATION_TRANSITIONS: Record<string, readonly string[]> = {
   pending:   ["paid", "disputed", "cancelled"],
   disputed:  ["paid", "cancelled"],

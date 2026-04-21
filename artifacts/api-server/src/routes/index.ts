@@ -202,8 +202,6 @@ router.use("/request-catalog", requireModule("requests"), (req, res, next) => {
   req.url = "/catalog";
   requestsRouter(req, res, next);
 });
-router.use("/training", requireModule("hr"), trainingRouter);
-router.use("/recruitment", requireModule("hr"), recruitmentRouter);
 router.use("/marketing", requireModule("marketing"), marketingRouter);
 router.use("/settings", requireModule("settings"), requireMinLevel(70), settingsRouter);
 router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);

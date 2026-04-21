@@ -29,9 +29,6 @@ import { z } from "zod";
 export const purchaseRouter = Router();
 purchaseRouter.use(authMiddleware);
 
-const PROCUREMENT_ROLES = ["procurement", "finance_manager", "general_manager", "owner"];
-
-
 const createPurchaseRequestSchema = z.object({
   items: z.array(z.object({
     description: z.string().optional(),

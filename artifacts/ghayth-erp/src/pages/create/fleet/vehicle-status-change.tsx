@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@/components/create-page-layout";
 
@@ -39,7 +40,11 @@ export default function VehicleStatusChangePage() {
 
   const { data: vehicle, isLoading } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
 
-  const [selectedNewStatus, setSelectedNewStatus] = useState("");
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("fleet_vehicle_status_change", {
+    selectedNewStatus: "",
+  });
+  const selectedNewStatus = form.selectedNewStatus;
+  const setSelectedNewStatus = (v: string) => setForm(f => ({ ...f, selectedNewStatus: v }));
   const [impactData, setImpactData] = useState<any>(null);
   const [impactLoading, setImpactLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -66,6 +71,7 @@ export default function VehicleStatusChangePage() {
         method: "PATCH",
         body: JSON.stringify({ status: selectedNewStatus }),
       });
+      clearDraft();
       toast({ title: "تم تغيير الحالة بنجاح" });
       qc.invalidateQueries({ queryKey: ["vehicle-detail", id] });
       qc.invalidateQueries({ queryKey: ["fleet-vehicles"] });
@@ -86,6 +92,12 @@ export default function VehicleStatusChangePage() {
       subtitle={`${vehicle.plateNumber || vehicle.make} ${vehicle.model}`}
       backPath={`/fleet/${id}`}
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-5">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
           <Pencil className="h-5 w-5 text-blue-500" /> تغيير الحالة
