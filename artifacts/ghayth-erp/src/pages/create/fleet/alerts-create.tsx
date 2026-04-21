@@ -1,6 +1,5 @@
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -10,6 +9,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { VehicleSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "fleet_alerts_create";
 const INITIAL = { vehicleId: "", type: "scheduled", description: "", serviceDate: "", performedBy: "" };
@@ -18,14 +18,9 @@ export default function FleetAlertsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/fleet/maintenance", "POST", [["fleet-alerts"], ["fleet-maintenance"]]);
-  const { data: vehiclesData, isLoading, isError } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
-  const vehicles = vehiclesData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -66,21 +61,14 @@ export default function FleetAlertsCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormFieldWrapper label="المركبة" required error={fieldErrors.vehicleId} className="md:col-span-2">
-          <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
-            <SelectTrigger><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
-            <SelectContent>
-              {vehicles.map((v: any) => (
-                <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="md:col-span-2">
+          <VehicleSelect value={form.vehicleId} onChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))} label="المركبة" required error={fieldErrors.vehicleId} />
           {form.vehicleId && (
             <div className="mt-3">
               <VehicleContextCard vehicleId={form.vehicleId} section="maintenance" />
             </div>
           )}
-        </FormFieldWrapper>
+        </div>
         <FormFieldWrapper label="نوع التنبيه" required error={fieldErrors.type}>
           <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>

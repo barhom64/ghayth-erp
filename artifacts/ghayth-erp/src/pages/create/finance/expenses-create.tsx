@@ -15,7 +15,7 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { CostCenterSelect, ProjectSelect } from "@/components/shared/entity-selects";
+import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
@@ -162,10 +162,7 @@ export default function ExpensesCreate() {
   const createMut = useApiMutation("/finance/expenses", "POST", [["expenses"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { data: accountsData, isLoading: accountsLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
-  const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
-  const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const { data: govIntegrationsData } = useApiQuery<{ data: any[] }>(["gov-integrations"], "/gov-integrations");
-  const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
   const { data: suppliersData } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
@@ -174,9 +171,6 @@ export default function ExpensesCreate() {
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["units-list"], "/properties/units");
   const { data: legalCasesData } = useApiQuery<{ data: any[] }>(["legal-cases-list"], "/legal/cases");
   const accounts = accountsData?.data || [];
-  const branches = branchesData?.data || [];
-  const departments = departmentsData?.data || [];
-  const projects = projectsData?.data || [];
   const expenseAccounts = accounts.filter((a: any) => a.type === "expense" || a.code?.startsWith("5"));
   // خزائن وبنوك فقط (11xx = نقد، 12xx = بنوك) — لتفادي اختيار حسابات مدينة/ذمم عن طريق الخطأ
   const sourceAccounts = accounts.filter((a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"));
@@ -428,24 +422,17 @@ export default function ExpensesCreate() {
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الجهة المرتبطة ومركز التكلفة</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormFieldWrapper label="الفرع" required>
-              <Select value={form.branchId || "_none"} onValueChange={(v) => setForm({ ...form, branchId: v === "_none" ? "" : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">اختر الفرع</SelectItem>
-                  {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
-            <FormFieldWrapper label="القسم / الإدارة">
-              <Select value={form.departmentId || "_none"} onValueChange={(v) => setForm({ ...form, departmentId: v === "_none" ? "" : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">اختر القسم</SelectItem>
-                  {departments.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
+            <BranchSelect
+              value={form.branchId}
+              onChange={(v) => setForm({ ...form, branchId: v })}
+              label="الفرع"
+              required
+            />
+            <DepartmentSelect
+              value={form.departmentId}
+              onChange={(v) => setForm({ ...form, departmentId: v })}
+              label="القسم / الإدارة"
+            />
             <CostCenterSelect
               value={form.costCenter}
               onChange={(v) => setForm({ ...form, costCenter: v })}

@@ -1,9 +1,7 @@
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
@@ -12,6 +10,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { VehicleSelect, EmployeeSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "fleet_fuel_create";
 const INITIAL = {
@@ -23,16 +22,9 @@ export default function FuelCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/fleet/fuel-logs", "POST", [["fleet-fuel"], ["fuel"]]);
-  const { data: vehiclesData, isLoading, isError } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
-  const { data: driversData } = useApiQuery<{ data: any[] }>(["fleet-drivers"], "/fleet/drivers");
-  const vehicles = vehiclesData?.data || [];
-  const drivers = driversData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -76,32 +68,15 @@ export default function FuelCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <FormFieldWrapper label="المركبة" required error={fieldErrors.vehicleId} className="md:col-span-3">
-          <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
-            <SelectTrigger><SelectValue placeholder="اختر المركبة" /></SelectTrigger>
-            <SelectContent>
-              {vehicles.map((v: any) => (
-                <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="md:col-span-3">
+          <VehicleSelect value={form.vehicleId} onChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))} label="المركبة" required error={fieldErrors.vehicleId} />
           {form.vehicleId && (
             <div className="mt-3">
               <VehicleContextCard vehicleId={form.vehicleId} section="fuel" />
             </div>
           )}
-        </FormFieldWrapper>
-        <FormFieldWrapper label="السائق">
-          <Select value={form.driverId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, driverId: v === "_none" ? "" : v }))}>
-            <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">— اختياري —</SelectItem>
-              {drivers.map((d: any) => (
-                <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
+        </div>
+        <EmployeeSelect value={form.driverId} onChange={(v) => setForm((f) => ({ ...f, driverId: v }))} label="السائق" />
         <NumberField label="اللترات" required value={form.liters} onChange={(v) => setForm((f) => ({ ...f, liters: v }))} step={0.01} min={0} error={fieldErrors.liters} />
         <NumberField label="سعر اللتر" value={form.costPerLiter} onChange={(v) => setForm((f) => ({ ...f, costPerLiter: v }))} step={0.01} min={0} />
         {totalCost > 0 && (

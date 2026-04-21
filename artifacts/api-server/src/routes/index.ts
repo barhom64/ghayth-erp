@@ -74,6 +74,7 @@ import { collectionRouter } from "./finance-collection.js";
 import { budgetRouter } from "./finance-budget.js";
 import { accountsRouter } from "./finance-accounts.js";
 import { vendorsRouter } from "./finance-vendors.js";
+import { costCentersRouter } from "./finance-cost-centers.js";
 import disciplineRouter from "./hr-discipline.js";
 import loansRouter from "./hr-loans.js";
 import overtimeRouter from "./hr-overtime.js";
@@ -176,6 +177,7 @@ router.use("/finance", requireModule("finance"), accountsRouter);
 router.use("/finance", requireModule("finance"), vendorsRouter);
 router.use("/finance", requireModule("finance"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), recurringRouter);
+router.use("/finance", requireModule("finance"), costCentersRouter);
 // financeRouter (finance.ts monolith) removed in Phase 7.1 — the 13
 // singleton routes it still owned were migrated to finance-purchase.ts,
 // finance-vendors.ts, and finance-reports.ts during canonicalisation.

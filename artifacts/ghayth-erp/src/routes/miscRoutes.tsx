@@ -52,8 +52,10 @@ const ProjectRisks = lazy(() => import("@/pages/projects/risks"));
 const InventoryCount = lazy(() => import("@/pages/warehouse/inventory-count"));
 const Obligations = lazy(() => import("@/pages/obligations"));
 const CalendarPage = lazy(() => import("@/pages/calendar"));
+const Dashboard = lazy(() => import("@/pages/dashboard"));
 
 export const miscRoutes: { path: string; component: any; module?: ModuleType; minRoleLevel?: number }[] = [
+  { path: "/dashboard", component: Dashboard },
   { path: "/my-space", component: MySpace },
   { path: "/my-requests", component: MyRequests },
   { path: "/my-leave-request", component: MyLeaveRequest },

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +19,7 @@ import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 
 const OPERATION_TYPES_RECEIPT = [
   { value: "receipt", label: "قبض إيراد عام" },
@@ -77,20 +77,11 @@ export default function VouchersCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/vouchers", "POST", [["vouchers"], ["vouchers-list"]]);
-  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
-  const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
-  const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const { data: suppliersData } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
   const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const { data: contractsData } = useApiQuery<{ data: any[] }>(["contracts-list"], "/properties/contracts");
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["units-list"], "/properties/units");
-  const accounts = accountsData?.data || [];
-  const branches = branchesData?.data || [];
-  const departments = departmentsData?.data || [];
-  // خزائن وبنوك فقط (11xx = نقد، 12xx = بنوك) — لتفادي اختيار حسابات مدينة/ذمم عن طريق الخطأ
-  const sourceAccounts = accounts.filter((a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"));
-  const targetAccounts = accounts;
   const autoNumberRef = useRef(`VCH-${Date.now().toString(36).toUpperCase()}`);
 
   const INITIAL_FORM = {
@@ -111,6 +102,7 @@ export default function VouchersCreate() {
     attachmentType: "receipt",
     branchId: "",
     departmentId: "",
+    costCenter: "",
     relatedEntityType: "",
     relatedEntityId: "",
     relatedEntityName: "",
@@ -142,8 +134,6 @@ export default function VouchersCreate() {
     }
   }, [form.autoDescription, form.operationType, form.payee, form.relatedEntityName, form.amount, form.type]);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const vatAmount = form.vatRate ? Math.round(Number(form.amount) * (Number(form.vatRate) / 100) * 100) / 100 : 0;
   const totalWithVat = Number(form.amount) + vatAmount;
@@ -190,6 +180,7 @@ export default function VouchersCreate() {
         attachmentType: form.attachmentType || undefined,
         branchId: form.branchId ? Number(form.branchId) : undefined,
         departmentId: form.departmentId ? Number(form.departmentId) : undefined,
+        costCenter: form.costCenter || undefined,
         relatedEntityType: form.relatedEntityType || undefined,
         relatedEntityId: form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
         relatedEntityName: form.relatedEntityName || undefined,
@@ -279,28 +270,21 @@ export default function VouchersCreate() {
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الحسابات</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormFieldWrapper label="الحساب المقابل" required error={fieldErrors.accountCode}>
-            <Select value={form.accountCode || "_none"} onValueChange={(v) => setField("accountCode", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="اختر الحساب..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">— اختر الحساب —</SelectItem>
-                {targetAccounts.map((a: any) => (
-                  <SelectItem key={a.code || a.id} value={a.code}>{a.code} - {a.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <FormFieldWrapper label="الخزنة / البنك">
-            <Select value={form.sourceAccountCode || "_none"} onValueChange={(v) => setField("sourceAccountCode", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="اختر الخزنة أو البنك..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">— اختر الخزنة —</SelectItem>
-                {sourceAccounts.map((a: any) => (
-                  <SelectItem key={a.code || a.id} value={a.code}>{a.code} - {a.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          <AccountSelect
+            value={form.accountCode}
+            onChange={(v) => setField("accountCode", v)}
+            label="الحساب المقابل"
+            required
+            error={fieldErrors.accountCode}
+            placeholder="اختر الحساب..."
+          />
+          <AccountSelect
+            value={form.sourceAccountCode}
+            onChange={(v) => setField("sourceAccountCode", v)}
+            label="الخزنة / البنك"
+            placeholder="اختر الخزنة أو البنك..."
+            filter={(a: any) => a.code?.startsWith("11") || a.code?.startsWith("12")}
+          />
         </div>
       </div>
 
@@ -383,24 +367,23 @@ export default function VouchersCreate() {
           {form.operationType === "rent" && (
             <NumberField label="رقم العقد" value={form.contractId} onChange={(v) => setField("contractId", v)} placeholder="رقم العقد" />
           )}
-          <FormFieldWrapper label="الفرع" required error={fieldErrors.branchId}>
-            <Select value={form.branchId || "_none"} onValueChange={(v) => setField("branchId", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">اختر الفرع</SelectItem>
-                {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <FormFieldWrapper label="القسم / الإدارة">
-            <Select value={form.departmentId || "_none"} onValueChange={(v) => setField("departmentId", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">اختر القسم</SelectItem>
-                {departments.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          <BranchSelect
+            value={form.branchId}
+            onChange={(v) => setField("branchId", v)}
+            label="الفرع"
+            required
+            error={fieldErrors.branchId}
+          />
+          <DepartmentSelect
+            value={form.departmentId}
+            onChange={(v) => setField("departmentId", v)}
+            label="القسم / الإدارة"
+          />
+          <CostCenterSelect
+            value={form.costCenter}
+            onChange={(v) => setField("costCenter", v)}
+            label="مركز التكلفة"
+          />
         </div>
       </div>
 

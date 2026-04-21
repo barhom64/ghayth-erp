@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
@@ -69,15 +70,13 @@ export default function ContractsCreate() {
       </div>
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormFieldWrapper label="الموظف" required error={fieldErrors.employeeId}>
-            <Select value={form.employeeId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, employeeId: v === "_none" ? "" : v }))}>
-              <SelectTrigger><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">اختر الموظف</SelectItem>
-                {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} - {e.empNumber}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          <EmployeeSelect
+            value={form.employeeId}
+            onChange={(v) => setForm((f) => ({ ...f, employeeId: v }))}
+            label="الموظف"
+            required
+            error={fieldErrors.employeeId}
+          />
           <FormFieldWrapper label="نوع العقد" required error={fieldErrors.contractType}>
             <Select value={form.contractType} onValueChange={(v) => setForm((f) => ({ ...f, contractType: v }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>

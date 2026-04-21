@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +13,7 @@ import { Star, Target, TrendingUp, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
 
 interface Competency {
   name: string;
@@ -153,18 +153,13 @@ export default function PerformanceCreate() {
             معلومات التقييم الأساسية
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormFieldWrapper label="الموظف" required error={fieldErrors.assignmentId}>
-              <Select value={form.assignmentId} onValueChange={(v) => setForm((f) => ({ ...f, assignmentId: v }))}>
-                <SelectTrigger><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
-                <SelectContent>
-                  {employees.map((emp: any) => (
-                    <SelectItem key={emp.assignmentId || emp.id} value={String(emp.assignmentId || emp.id)}>
-                      {emp.name} {emp.empNumber ? `(${emp.empNumber})` : ""} {emp.jobTitle ? `— ${emp.jobTitle}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
+            <EmployeeSelect
+              value={form.assignmentId}
+              onChange={(v) => setForm((f) => ({ ...f, assignmentId: v }))}
+              label="الموظف"
+              required
+              error={fieldErrors.assignmentId}
+            />
             <TextField
               label="فترة التقييم"
               required

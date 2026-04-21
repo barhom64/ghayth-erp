@@ -15,6 +15,7 @@ import { LOAN_TYPES } from "@/lib/hr-type-maps";
 import { Banknote, Info, Calculator, AlertTriangle } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "hr_loans_create";
 
@@ -117,21 +118,13 @@ export default function LoansCreate() {
 
         {/* بيانات الموظف */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormFieldWrapper label="الموظف" required error={fieldErrors.assignmentId}>
-            <Select value={form.assignmentId} onValueChange={(v) => setForm({ ...form, assignmentId: v })}>
-              <SelectTrigger><SelectValue placeholder="اختر الموظف..." /></SelectTrigger>
-              <SelectContent>
-                {employees.map((emp: any) => (
-                  <SelectItem
-                    key={emp.activeAssignmentId || emp.assignmentId || emp.id}
-                    value={String(emp.activeAssignmentId || emp.assignmentId || emp.id)}
-                  >
-                    {emp.name} {emp.empNumber ? `(#${emp.empNumber})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          <EmployeeSelect
+            value={form.assignmentId}
+            onChange={(v) => setForm({ ...form, assignmentId: v })}
+            label="الموظف"
+            required
+            error={fieldErrors.assignmentId}
+          />
 
           <FormFieldWrapper label="نوع السلفة">
             <Select value={form.loanType} onValueChange={(v) => setForm({ ...form, loanType: v })}>
