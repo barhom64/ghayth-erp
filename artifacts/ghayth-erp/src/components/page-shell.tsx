@@ -160,9 +160,15 @@ export function PageShell(props: PageShellProps) {
         </div>
       )}
 
-      {breadcrumbs && breadcrumbs.length > 0 && (
-        <BreadcrumbsRow crumbs={breadcrumbs} />
-      )}
+      {/*
+        Breadcrumbs are rendered globally by SidebarLayout (buildBreadcrumbs())
+        based on the navigation tree. Rendering them again here from the
+        `breadcrumbs` prop produced a duplicated path row on every page that
+        passed the prop — the exact "تكرار في مسار المسارات" complaint. The
+        prop is kept on the type so existing call sites still compile, but
+        it's intentionally not displayed. Remove the prop from callers over
+        time as a cosmetic cleanup; not urgent.
+      */}
 
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0 flex-1">

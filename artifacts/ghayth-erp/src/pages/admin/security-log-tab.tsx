@@ -10,6 +10,7 @@ import { ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 const REASON_LABELS: Record<string, string> = {
   permission_denied: "صلاحية مرفوضة",
@@ -137,7 +138,7 @@ export function SecurityLogTab() {
         </div>
         <div className="flex-1 min-w-[150px]">
           <Label className="text-xs mb-1 block">من تاريخ</Label>
-          <Input type="date" className="text-sm" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} />
+          <UnifiedDateInput inputClassName="text-sm" value={from} onChange={(iso) => { setFrom(iso); setPage(1); }} placeholder="من تاريخ" />
         </div>
       </div>
 

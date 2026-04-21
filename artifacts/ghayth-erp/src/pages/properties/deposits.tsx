@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 export default function DepositsPage() {
   const [showForm, setShowForm] = useState(false);
@@ -108,7 +109,7 @@ export default function DepositsPage() {
             </div>
             <div>
               <Label>تاريخ الاستلام</Label>
-              <Input type="date" value={form.receivedDate} onChange={(e) => setForm({ ...form, receivedDate: e.target.value })} />
+              <UnifiedDateInput value={form.receivedDate} onChange={(iso) => setForm({ ...form, receivedDate: iso })} />
             </div>
             <div>
               <Label>ملاحظات</Label>

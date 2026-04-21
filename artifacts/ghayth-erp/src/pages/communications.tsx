@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 export default function Communications() {
   const [tab, setTab] = useState("monitor");
@@ -198,20 +199,20 @@ function MonitorTab() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">
             <label className="text-xs text-gray-500">من:</label>
-            <input
-              type="date"
+            <UnifiedDateInput
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="text-xs border rounded px-2 py-1"
+              onChange={(iso) => setDateFrom(iso)}
+              inputClassName="text-xs border rounded px-2 py-1"
+              placeholder="من تاريخ"
             />
           </div>
           <div className="flex items-center gap-1">
             <label className="text-xs text-gray-500">إلى:</label>
-            <input
-              type="date"
+            <UnifiedDateInput
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="text-xs border rounded px-2 py-1"
+              onChange={(iso) => setDateTo(iso)}
+              inputClassName="text-xs border rounded px-2 py-1"
+              placeholder="إلى تاريخ"
             />
           </div>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>

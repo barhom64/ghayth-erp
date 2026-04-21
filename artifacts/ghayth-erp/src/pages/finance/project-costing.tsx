@@ -12,6 +12,7 @@ import { PageShell } from "@/components/page-shell";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 type Project = {
   id: number;
@@ -185,7 +186,7 @@ export default function ProjectCostingPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">التاريخ</label>
-                <Input type="date" value={costForm.date} onChange={e => setCostForm(f => ({ ...f, date: e.target.value }))} />
+                <UnifiedDateInput value={costForm.date} onChange={(iso) => setCostForm(f => ({ ...f, date: iso }))} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">البيان</label>

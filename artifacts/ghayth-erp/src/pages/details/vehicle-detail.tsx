@@ -23,6 +23,7 @@ import { CheckSquare } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
@@ -224,7 +225,7 @@ export default function VehicleDetail() {
                 </div>
                 <div>
                   <label className="text-sm font-medium">انتهاء الاستمارة</label>
-                  <Input type="date" value={editForm.registrationExpiry} onChange={e => setEditForm(f => ({...f, registrationExpiry: e.target.value}))} className="mt-1" />
+                  <UnifiedDateInput value={editForm.registrationExpiry} onChange={(iso) => setEditForm(f => ({...f, registrationExpiry: iso}))} className="mt-1" />
                 </div>
                 <div>
                   <label className="text-sm font-medium">نوع اللوحة</label>
@@ -246,11 +247,11 @@ export default function VehicleDetail() {
                 </div>
                 <div>
                   <label className="text-sm font-medium">تاريخ آخر فحص</label>
-                  <Input type="date" value={editForm.inspectionDate} onChange={e => setEditForm(f => ({...f, inspectionDate: e.target.value}))} className="mt-1" />
+                  <UnifiedDateInput value={editForm.inspectionDate} onChange={(iso) => setEditForm(f => ({...f, inspectionDate: iso}))} className="mt-1" />
                 </div>
                 <div>
                   <label className="text-sm font-medium">الفحص القادم</label>
-                  <Input type="date" value={editForm.nextInspectionDate} onChange={e => setEditForm(f => ({...f, nextInspectionDate: e.target.value}))} className="mt-1" />
+                  <UnifiedDateInput value={editForm.nextInspectionDate} onChange={(iso) => setEditForm(f => ({...f, nextInspectionDate: iso}))} className="mt-1" />
                 </div>
               </div>
             </div>

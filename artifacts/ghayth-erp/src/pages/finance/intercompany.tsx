@@ -13,6 +13,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 export default function IntercompanyPage() {
   const { scopeQueryString } = useAppContext();
@@ -159,7 +160,7 @@ export default function IntercompanyPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">تاريخ المعاملة</label>
-                <Input type="date" value={form.transactionDate} onChange={e => setForm(f => ({ ...f, transactionDate: e.target.value }))} />
+                <UnifiedDateInput value={form.transactionDate} onChange={(iso) => setForm(f => ({ ...f, transactionDate: iso }))} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">البيان</label>

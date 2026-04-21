@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { cn } from "@/lib/utils";
@@ -598,22 +599,20 @@ export default function BankGuaranteesPage() {
               </div>
               <div>
                 <Label htmlFor="issueDate">تاريخ الإصدار *</Label>
-                <Input
+                <UnifiedDateInput
                   id="issueDate"
                   required
-                  type="date"
                   value={form.issueDate}
-                  onChange={(e) => setForm((f) => ({ ...f, issueDate: e.target.value }))}
+                  onChange={(iso) => setForm((f) => ({ ...f, issueDate: iso }))}
                 />
               </div>
               <div>
                 <Label htmlFor="expiryDate">تاريخ الانتهاء *</Label>
-                <Input
+                <UnifiedDateInput
                   id="expiryDate"
                   required
-                  type="date"
                   value={form.expiryDate}
-                  onChange={(e) => setForm((f) => ({ ...f, expiryDate: e.target.value }))}
+                  onChange={(iso) => setForm((f) => ({ ...f, expiryDate: iso }))}
                 />
               </div>
               <div>
