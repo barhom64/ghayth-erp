@@ -6,8 +6,8 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import {
-  parseMutamersWorkbook,
-  parseVouchersWorkbook,
+  normalizeMutamerRows,
+  normalizeVoucherRows,
   previewMutamersImport,
   previewVouchersImport,
   confirmMutamersImport,
@@ -509,9 +509,10 @@ router.post("/import/preview", requirePermission("umrah:write"), async (req, res
       throw new ValidationError("نوع الملف والموسم والبيانات مطلوبة");
     }
     const importScope = { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: Number(seasonId) };
+    const normalised = fileType === "mutamers" ? normalizeMutamerRows(rows) : normalizeVoucherRows(rows);
     const diff = fileType === "mutamers"
-      ? await previewMutamersImport(importScope, rows)
-      : await previewVouchersImport(importScope, rows);
+      ? await previewMutamersImport(importScope, normalised)
+      : await previewVouchersImport(importScope, normalised);
     res.json(diff);
   } catch (err) { handleRouteError(err, res, "Import preview"); }
 });
@@ -522,7 +523,8 @@ router.post("/import/mutamers", requirePermission("umrah:write"), async (req, re
     const { seasonId, rows, fileName } = req.body;
     if (!seasonId || !Array.isArray(rows)) throw new ValidationError("الموسم والبيانات مطلوبة");
     const importScope = { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: Number(seasonId) };
-    const result = await confirmMutamersImport(importScope, rows, fileName || "mutamers.xlsx");
+    const normalised = normalizeMutamerRows(rows);
+    const result = await confirmMutamersImport(importScope, normalised, fileName || "mutamers.xlsx");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_batches", entityId: result.batchId, after: result }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import mutamers"); }
@@ -534,7 +536,8 @@ router.post("/import/vouchers", requirePermission("umrah:write"), async (req, re
     const { seasonId, rows, fileName } = req.body;
     if (!seasonId || !Array.isArray(rows)) throw new ValidationError("الموسم والبيانات مطلوبة");
     const importScope = { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: Number(seasonId) };
-    const result = await confirmVouchersImport(importScope, rows, fileName || "vouchers.xlsx");
+    const normalised = normalizeVoucherRows(rows);
+    const result = await confirmVouchersImport(importScope, normalised, fileName || "vouchers.xlsx");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_batches", entityId: result.batchId, after: result }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers"); }
