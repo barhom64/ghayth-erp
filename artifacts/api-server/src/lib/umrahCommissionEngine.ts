@@ -1,0 +1,382 @@
+import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
+import { emitEvent } from "./businessHelpers.js";
+import type pg from "pg";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface CommissionPlan {
+  id: number;
+  companyId: number;
+  branchId: number;
+  employeeId: number;
+  assignmentId: number;
+  seasonId: number;
+  planName: string;
+  baseSalary: number;
+  commissionType: string;
+  percentageRate: number | null;
+  fixedAmount: number | null;
+  conditionType: string;
+  minProfitPerVisa: number | null;
+  minSalesPercent: number | null;
+  minAvgPrice: number | null;
+  excludedMonths: number[];
+  tierUnit: number;
+  partialTiersAllowed: boolean;
+  violationBlocksCommission: boolean;
+  status: string;
+}
+
+interface CommissionTier {
+  id: number;
+  planId: number;
+  fromCount: number;
+  toCount: number | null;
+  bonusPerUnit: number;
+  isCumulative: boolean;
+  tierOrder: number;
+}
+
+export interface CalculationResult {
+  planId: number;
+  employeeId: number;
+  month: number;
+  year: number;
+  totalMutamers: number;
+  avgProfitPerVisa: number;
+  salesPercent: number;
+  avgSalePrice: number;
+  conditionMet: boolean;
+  conditionDetails: string;
+  completedTiers: number;
+  commissionAmount: number;
+  hasViolations: boolean;
+  finalAmount: number;
+  isExcludedMonth: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Calculate commission for a single plan + month
+// ---------------------------------------------------------------------------
+
+export async function calculateCommissionForPlan(
+  planId: number,
+  month: number,
+  year: number,
+  userId: number,
+): Promise<CalculationResult> {
+  const [plan] = await rawQuery<CommissionPlan>(
+    `SELECT * FROM employee_commission_plans WHERE id = $1 AND status = 'active' AND "deletedAt" IS NULL`,
+    [planId]
+  );
+  if (!plan) throw new Error("الخطة غير موجودة أو غير مفعّلة");
+
+  const tiers = await rawQuery<CommissionTier>(
+    `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
+    [planId]
+  );
+
+  return withTransaction(async (client) => {
+    const result = await compute(client, plan, tiers, month, year);
+
+    const [existing] = (await client.query(
+      `SELECT id FROM employee_commission_calculations
+       WHERE "companyId"=$1 AND "planId"=$2 AND year=$3 AND month=$4 AND "deletedAt" IS NULL`,
+      [plan.companyId, planId, year, month]
+    )).rows;
+
+    if (existing) {
+      await client.query(
+        `UPDATE employee_commission_calculations SET
+         "totalMutamers"=$1, "avgProfitPerVisa"=$2, "salesPercent"=$3, "avgSalePrice"=$4,
+         "conditionMet"=$5, "conditionDetails"=$6, "completedTiers"=$7, "commissionAmount"=$8,
+         "hasViolations"=$9, "finalAmount"=$10, "isExcludedMonth"=$11, status='calculated',
+         "updatedBy"=$12, "updatedAt"=NOW()
+         WHERE id=$13`,
+        [
+          result.totalMutamers, result.avgProfitPerVisa, result.salesPercent, result.avgSalePrice,
+          result.conditionMet, result.conditionDetails, result.completedTiers, result.commissionAmount,
+          result.hasViolations, result.finalAmount, result.isExcludedMonth,
+          userId, existing.id,
+        ]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO employee_commission_calculations
+         ("companyId","branchId","planId","employeeId",month,year,
+          "totalMutamers","avgProfitPerVisa","salesPercent","avgSalePrice",
+          "conditionMet","conditionDetails","completedTiers","commissionAmount",
+          "hasViolations","finalAmount","isExcludedMonth",status,"createdBy","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'calculated',$18,NOW(),NOW())`,
+        [
+          plan.companyId, plan.branchId, planId, plan.employeeId, month, year,
+          result.totalMutamers, result.avgProfitPerVisa, result.salesPercent, result.avgSalePrice,
+          result.conditionMet, result.conditionDetails, result.completedTiers, result.commissionAmount,
+          result.hasViolations, result.finalAmount, result.isExcludedMonth,
+          userId,
+        ]
+      );
+    }
+
+    emitEvent({
+      companyId: plan.companyId, branchId: plan.branchId, userId,
+      action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: planId,
+      after: { month, year, finalAmount: result.finalAmount },
+    }).catch(() => {});
+
+    return result;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Simulate — read-only, no writes
+// ---------------------------------------------------------------------------
+
+export async function simulateCommission(
+  planId: number,
+  month: number,
+  year: number,
+): Promise<CalculationResult> {
+  const [plan] = await rawQuery<CommissionPlan>(
+    `SELECT * FROM employee_commission_plans WHERE id = $1 AND "deletedAt" IS NULL`,
+    [planId]
+  );
+  if (!plan) throw new Error("الخطة غير موجودة");
+
+  const tiers = await rawQuery<CommissionTier>(
+    `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
+    [planId]
+  );
+
+  const client = { query: (sql: string, params: any[]) => rawQuery(sql, params).then((rows) => ({ rows })) } as any;
+  return compute(client, plan, tiers, month, year);
+}
+
+// ---------------------------------------------------------------------------
+// Core computation
+// ---------------------------------------------------------------------------
+
+async function compute(
+  client: pg.PoolClient | any,
+  plan: CommissionPlan,
+  tiers: CommissionTier[],
+  month: number,
+  year: number,
+): Promise<CalculationResult> {
+  const excludedMonths: number[] = Array.isArray(plan.excludedMonths) ? plan.excludedMonths : [];
+  const isExcludedMonth = excludedMonths.includes(month);
+
+  const mutamerStats = (await client.query(
+    `SELECT
+       COUNT(*)::int AS total,
+       COALESCE(AVG(pkg."sellPrice" - pkg."costPrice"), 0)::numeric(10,2) AS avg_profit,
+       COALESCE(AVG(pkg."sellPrice"), 0)::numeric(10,2) AS avg_price
+     FROM umrah_pilgrims p
+     LEFT JOIN umrah_packages pkg ON p."packageId" = pkg.id
+     WHERE p."companyId" = $1 AND p."seasonId" = $2
+       AND EXTRACT(MONTH FROM p."createdAt") = $3
+       AND EXTRACT(YEAR FROM p."createdAt") = $4
+       AND p."deletedAt" IS NULL`,
+    [plan.companyId, plan.seasonId, month, year]
+  )).rows[0] ?? { total: 0, avg_profit: 0, avg_price: 0 };
+
+  const totalMutamers = Number(mutamerStats.total) || 0;
+  const avgProfitPerVisa = Number(mutamerStats.avg_profit) || 0;
+  const avgSalePrice = Number(mutamerStats.avg_price) || 0;
+
+  const totalSalesRes = (await client.query(
+    `SELECT COALESCE(SUM("totalAmount"), 0)::numeric(12,2) AS total_sales
+     FROM umrah_nusk_invoices
+     WHERE "companyId" = $1 AND EXTRACT(MONTH FROM "issueDate") = $2 AND EXTRACT(YEAR FROM "issueDate") = $3
+       AND "deletedAt" IS NULL`,
+    [plan.companyId, month, year]
+  )).rows[0];
+  const totalCompanySales = Number(totalSalesRes?.total_sales) || 1;
+
+  const employeeSalesRes = (await client.query(
+    `SELECT COALESCE(SUM(ni."totalAmount"), 0)::numeric(12,2) AS emp_sales
+     FROM umrah_nusk_invoices ni
+     JOIN umrah_pilgrims p ON p."companyId" = ni."companyId" AND p."groupId" = ni."groupId"
+     WHERE ni."companyId" = $1 AND EXTRACT(MONTH FROM ni."issueDate") = $2 AND EXTRACT(YEAR FROM ni."issueDate") = $3
+       AND ni."deletedAt" IS NULL`,
+    [plan.companyId, month, year]
+  )).rows[0];
+  const salesPercent = totalCompanySales > 0
+    ? Math.round((Number(employeeSalesRes?.emp_sales) / totalCompanySales) * 10000) / 100
+    : 0;
+
+  const { conditionMet, conditionDetails } = checkConditions(plan, avgProfitPerVisa, salesPercent);
+
+  const violationRes = (await client.query(
+    `SELECT COUNT(*)::int AS cnt FROM umrah_violations
+     WHERE "companyId" = $1 AND status IN ('detected','open')
+       AND "createdAt" >= DATE_TRUNC('month', MAKE_DATE($2, $3, 1))
+       AND "createdAt" < DATE_TRUNC('month', MAKE_DATE($2, $3, 1)) + INTERVAL '1 month'
+       AND "deletedAt" IS NULL`,
+    [plan.companyId, year, month]
+  )).rows[0];
+  const hasViolations = Number(violationRes?.cnt) > 0;
+
+  let commissionAmount = 0;
+
+  if (isExcludedMonth) {
+    commissionAmount = 0;
+  } else if (plan.commissionType === "tiered" || plan.commissionType === "mixed") {
+    commissionAmount = computeTieredBonus(totalMutamers, tiers, plan.tierUnit, plan.partialTiersAllowed);
+    if (plan.commissionType === "mixed") {
+      if (plan.percentageRate) commissionAmount += totalMutamers * avgSalePrice * (plan.percentageRate / 100);
+      if (plan.fixedAmount) commissionAmount += plan.fixedAmount;
+    }
+  } else if (plan.commissionType === "percentage") {
+    commissionAmount = totalMutamers * avgSalePrice * ((plan.percentageRate ?? 0) / 100);
+  } else if (plan.commissionType === "fixed") {
+    commissionAmount = plan.fixedAmount ?? 0;
+  }
+
+  let finalAmount = commissionAmount;
+  if (!conditionMet && plan.conditionType !== "none") finalAmount = 0;
+  if (hasViolations && plan.violationBlocksCommission) finalAmount = 0;
+  if (isExcludedMonth) finalAmount = 0;
+
+  finalAmount = Math.round(finalAmount * 100) / 100;
+  commissionAmount = Math.round(commissionAmount * 100) / 100;
+
+  const completedTiers = plan.partialTiersAllowed
+    ? tiers.filter((t) => totalMutamers >= t.fromCount).length
+    : tiers.filter((t) => totalMutamers >= (t.toCount ?? Infinity)).length;
+
+  return {
+    planId: plan.id,
+    employeeId: plan.employeeId,
+    month,
+    year,
+    totalMutamers,
+    avgProfitPerVisa,
+    salesPercent,
+    avgSalePrice,
+    conditionMet,
+    conditionDetails,
+    completedTiers,
+    commissionAmount,
+    hasViolations,
+    finalAmount,
+    isExcludedMonth,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tiered bonus: floor(total / tierUnit) completed units only
+// ---------------------------------------------------------------------------
+
+function computeTieredBonus(
+  totalMutamers: number,
+  tiers: CommissionTier[],
+  tierUnit: number,
+  partialAllowed: boolean,
+): number {
+  if (tiers.length === 0 || totalMutamers === 0) return 0;
+
+  const completedUnits = partialAllowed
+    ? totalMutamers / (tierUnit || 1)
+    : Math.floor(totalMutamers / (tierUnit || 1));
+
+  if (completedUnits <= 0) return 0;
+
+  let bonus = 0;
+  let remaining = completedUnits;
+
+  for (const tier of tiers) {
+    const tierFrom = tier.fromCount / (tierUnit || 1);
+    const tierTo = tier.toCount != null ? tier.toCount / (tierUnit || 1) : Infinity;
+    const tierSpan = tierTo - tierFrom;
+
+    if (remaining <= 0) break;
+
+    const unitsInTier = Math.min(remaining, tierSpan);
+
+    if (tier.isCumulative) {
+      bonus += unitsInTier * Number(tier.bonusPerUnit);
+    } else {
+      bonus = unitsInTier * Number(tier.bonusPerUnit);
+    }
+
+    remaining -= unitsInTier;
+  }
+
+  return bonus;
+}
+
+// ---------------------------------------------------------------------------
+// Condition check
+// ---------------------------------------------------------------------------
+
+function checkConditions(
+  plan: CommissionPlan,
+  avgProfit: number,
+  salesPercent: number,
+): { conditionMet: boolean; conditionDetails: string } {
+  if (plan.conditionType === "none" || !plan.conditionType) {
+    return { conditionMet: true, conditionDetails: "بدون شرط" };
+  }
+
+  const profitOk = plan.minProfitPerVisa == null || avgProfit >= plan.minProfitPerVisa;
+  const salesOk = plan.minSalesPercent == null || salesPercent >= plan.minSalesPercent;
+
+  if (plan.conditionType === "profit_avg") {
+    return {
+      conditionMet: profitOk,
+      conditionDetails: profitOk
+        ? `متوسط الربح ${avgProfit} >= ${plan.minProfitPerVisa}`
+        : `متوسط الربح ${avgProfit} < ${plan.minProfitPerVisa} (لم يتحقق)`,
+    };
+  }
+
+  if (plan.conditionType === "sales_percent") {
+    return {
+      conditionMet: salesOk,
+      conditionDetails: salesOk
+        ? `نسبة المبيعات ${salesPercent}% >= ${plan.minSalesPercent}%`
+        : `نسبة المبيعات ${salesPercent}% < ${plan.minSalesPercent}% (لم يتحقق)`,
+    };
+  }
+
+  if (plan.conditionType === "both_or") {
+    const met = profitOk || salesOk;
+    return {
+      conditionMet: met,
+      conditionDetails: met
+        ? `أحد الشرطين تحقق: ربح=${profitOk}, مبيعات=${salesOk}`
+        : `لم يتحقق أي شرط: ربح=${avgProfit}<${plan.minProfitPerVisa}, مبيعات=${salesPercent}%<${plan.minSalesPercent}%`,
+    };
+  }
+
+  return { conditionMet: true, conditionDetails: "نوع شرط غير معروف" };
+}
+
+// ---------------------------------------------------------------------------
+// Bulk calculate: all active plans for a company + month
+// ---------------------------------------------------------------------------
+
+export async function calculateAllForCompany(
+  companyId: number,
+  month: number,
+  year: number,
+  userId: number,
+): Promise<CalculationResult[]> {
+  const plans = await rawQuery<{ id: number }>(
+    `SELECT id FROM employee_commission_plans WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL`,
+    [companyId]
+  );
+  const results: CalculationResult[] = [];
+  for (const p of plans) {
+    try {
+      const r = await calculateCommissionForPlan(p.id, month, year, userId);
+      results.push(r);
+    } catch (err) {
+      console.error(`Commission calc error plan=${p.id}:`, err);
+    }
+  }
+  return results;
+}
