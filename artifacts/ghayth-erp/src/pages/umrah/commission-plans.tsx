@@ -219,8 +219,8 @@ export default function UmrahCommissionPlans() {
             <CheckCircle2 className="w-5 h-5 text-amber-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-amber-700">{formatNumber(counts.pending)}</p>
-            <p className="text-xs text-muted-foreground">بانتظار الاعتماد</p>
+            <p className="text-2xl font-bold text-amber-700">{formatNumber(counts.suspended)}</p>
+            <p className="text-xs text-muted-foreground">موقوف</p>
           </div>
         </CardContent></Card>
       </div>

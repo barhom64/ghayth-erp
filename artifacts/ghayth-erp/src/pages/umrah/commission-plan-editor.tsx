@@ -85,7 +85,7 @@ export default function UmrahCommissionPlanEditor() {
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
   // TODO: endpoint not yet implemented — placeholder response
   const assignmentsQ = useApiQuery<{ data: any[] }>(
-    ["umrah-employee-assignments", plan.employeeId ?? ""],
+    ["umrah-employee-assignments", String(plan.employeeId ?? "")],
     plan.employeeId ? `/umrah/employees/${plan.employeeId}/assignments` : null,
   );
 
