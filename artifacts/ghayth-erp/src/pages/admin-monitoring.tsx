@@ -1,6 +1,6 @@
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -31,10 +31,7 @@ function formatUptime(seconds: number): string {
 }
 
 export default function AdminMonitoring() {
-  const { data: health, isLoading, isError, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const { data: health, isLoading, error, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
 
   const services = health?.services || {};
   const memUsage = health?.memoryUsage || {};
@@ -43,6 +40,13 @@ export default function AdminMonitoring() {
   const cronJobs = health?.cronJobs || [];
   const recentCronLogs = health?.recentCronLogs || [];
   const recentErrors = health?.recentErrors || [];
+
+  // Split cron jobs into failed vs healthy so the failed ones surface at
+  // the top of the page with full error detail instead of being hidden in
+  // a 150px-wide truncated cell. When the user sees "أخطاء Cron: 13" on
+  // the dashboard this is the page that must tell them WHICH 13.
+  const failedCronJobs = cronJobs.filter((j: any) => j.lastStatus === "failed" && j.isActive);
+  const healthyCronJobs = cronJobs.filter((j: any) => j.lastStatus !== "failed" || !j.isActive);
 
   return (
     <PageShell
@@ -55,11 +59,44 @@ export default function AdminMonitoring() {
         </Button>
       }
     >
-      {isLoading && !health ? (
-        <div className="flex items-center justify-center min-h-[40vh]">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (<>
+      <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
+      <div className="space-y-6">
+      {/* Failed cron jobs banner — full error text, sorted to the top */}
+      {failedCronJobs.length > 0 && (
+        <Card className="border-red-200 bg-red-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-red-700">
+              <AlertTriangle className="w-4 h-4" />
+              مهام مجدولة فاشلة ({failedCronJobs.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {failedCronJobs.map((job: any, i: number) => (
+              <div key={i} className="bg-white border border-red-100 rounded p-3 text-sm">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-red-800">{job.name}</p>
+                    {job.description && <p className="text-xs text-gray-600 mt-0.5">{job.description}</p>}
+                    <p className="text-xs text-gray-500 mt-1">
+                      الجدولة: <span className="font-mono">{job.schedule}</span>
+                      {job.lastRunAt && <span className="ms-2">— آخر تشغيل: {formatDateAr(job.lastRunAt)}</span>}
+                    </p>
+                  </div>
+                </div>
+                {job.lastError && (
+                  <div className="mt-2 bg-red-50 border border-red-100 rounded p-2">
+                    <p className="text-[10px] font-medium text-red-700 mb-0.5">تفاصيل الخطأ:</p>
+                    <pre className="text-xs text-red-800 whitespace-pre-wrap break-words font-mono leading-relaxed">
+                      {job.lastError}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className={cn("border-0 shadow-sm", services.api?.status === "healthy" ? "bg-green-50/50" : "bg-red-50/50")}>
           <CardContent className="p-4 flex items-center gap-3">
@@ -154,7 +191,7 @@ export default function AdminMonitoring() {
                   <th className="p-2 text-start">الحالة</th>
                 </tr></thead>
                 <tbody>
-                  {cronJobs.map((job: any, i: number) => (
+                  {healthyCronJobs.map((job: any, i: number) => (
                     <tr key={i} className="border-b hover:bg-gray-50">
                       <td className="p-2 font-medium text-xs">{job.name}</td>
                       <td className="p-2 font-mono text-xs text-gray-500">{job.schedule}</td>
@@ -168,11 +205,10 @@ export default function AdminMonitoring() {
                           )}
                           {job.lastStatus && <PageStatusBadge status={job.lastStatus} />}
                         </div>
-                        {job.lastError && <p className="text-[10px] text-red-500 mt-0.5 truncate max-w-[150px]">{job.lastError}</p>}
                       </td>
                     </tr>
                   ))}
-                  {cronJobs.length === 0 && (
+                  {healthyCronJobs.length === 0 && (
                     <tr><td colSpan={4} className="p-6 text-center text-gray-400">لا توجد مهام مجدولة</td></tr>
                   )}
                 </tbody>
@@ -236,7 +272,8 @@ export default function AdminMonitoring() {
           </CardContent>
         </Card>
       )}
-      </>)}
+      </div>
+      </PageStateWrapper>
     </PageShell>
   );
 }

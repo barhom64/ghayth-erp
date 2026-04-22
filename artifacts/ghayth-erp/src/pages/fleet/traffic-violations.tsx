@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 const VIOLATION_TYPES: Record<string, string> = {
   speeding: "تجاوز السرعة",
@@ -116,7 +117,7 @@ export default function TrafficViolationsPage() {
             </div>
             <div>
               <Label>تاريخ المخالفة</Label>
-              <Input type="date" value={form.violationDate} onChange={(e) => setForm({ ...form, violationDate: e.target.value })} />
+              <UnifiedDateInput value={form.violationDate} onChange={(iso) => setForm({ ...form, violationDate: iso })} />
             </div>
             <div>
               <Label>مبلغ الغرامة (ر.س)</Label>

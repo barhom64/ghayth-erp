@@ -37,6 +37,7 @@ import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة", icon: Activity },
@@ -555,7 +556,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">انتهاء التأشيرة</p>
-                      <Input type="date" value={govForm.visaExpiry} onChange={e => setGovForm(f => ({ ...f, visaExpiry: e.target.value }))} />
+                      <UnifiedDateInput value={govForm.visaExpiry} onChange={(iso) => setGovForm(f => ({ ...f, visaExpiry: iso }))} />
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">رقم الكفيل / المنشأة</p>
@@ -567,7 +568,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">انتهاء رخصة العمل</p>
-                      <Input type="date" value={govForm.workPermitExpiry} onChange={e => setGovForm(f => ({ ...f, workPermitExpiry: e.target.value }))} />
+                      <UnifiedDateInput value={govForm.workPermitExpiry} onChange={(iso) => setGovForm(f => ({ ...f, workPermitExpiry: iso }))} />
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">حالة الإقامة</p>

@@ -11,6 +11,7 @@ import { Plus, Calendar } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 export default function UmrahSeasons() {
   const { data: resp, refetch, isLoading, isError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -63,8 +64,8 @@ export default function UmrahSeasons() {
         <Card>
           <CardContent className="p-4 grid grid-cols-3 gap-4">
             <div><Label>العنوان *</Label><Input value={form.title || ""} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
-            <div><Label>تاريخ البداية *</Label><Input type="date" value={form.startDate || ""} onChange={e => setForm({ ...form, startDate: e.target.value })} /></div>
-            <div><Label>تاريخ النهاية *</Label><Input type="date" value={form.endDate || ""} onChange={e => setForm({ ...form, endDate: e.target.value })} /></div>
+            <div><Label>تاريخ البداية *</Label><UnifiedDateInput required value={form.startDate || ""} onChange={(iso) => setForm({ ...form, startDate: iso })} /></div>
+            <div><Label>تاريخ النهاية *</Label><UnifiedDateInput required value={form.endDate || ""} onChange={(iso) => setForm({ ...form, endDate: iso })} /></div>
             <div className="col-span-full flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
               <Button onClick={save} disabled={!form.title || !form.startDate || !form.endDate}>حفظ</Button>

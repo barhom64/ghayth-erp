@@ -13,6 +13,7 @@ const PropertiesCreate = lazy(() => import("@/pages/create/properties-create"));
 const ContractsCreate = lazy(() => import("@/pages/create/properties/contracts-create"));
 const TenantsCreate = lazy(() => import("@/pages/create/properties/tenants-create"));
 const PropertyMaintenanceCreate = lazy(() => import("@/pages/create/properties/maintenance-create"));
+const PropertyMaintenanceDetail = lazy(() => import("@/pages/details/property-maintenance-detail"));
 const OwnersCreate = lazy(() => import("@/pages/create/properties/owners-create"));
 const BuildingsCreate = lazy(() => import("@/pages/create/properties/buildings-create"));
 const PaymentRecord = lazy(() => import("@/pages/create/properties/payment-record"));
@@ -25,6 +26,8 @@ const PropertyInspections = lazy(() => import("@/pages/properties/inspections"))
 const PropertyDeposits = lazy(() => import("@/pages/properties/deposits"));
 const OccupancyReport = lazy(() => import("@/pages/properties/occupancy-report"));
 const ContractDetail = lazy(() => import("@/pages/properties/contract-detail"));
+const OwnerDetail = lazy(() => import("@/pages/details/owner-detail"));
+const PropertyPaymentDetail = lazy(() => import("@/pages/details/property-payment-detail"));
 
 export const propertyRoutes = [
   { path: "/properties/dashboard", component: PropertiesDashboard },
@@ -35,14 +38,17 @@ export const propertyRoutes = [
   { path: "/properties/tenants/:id", component: TenantDetail },
   { path: "/properties/tenants", component: PropertiesTenants },
   { path: "/properties/owners/create", component: OwnersCreate },
+  { path: "/properties/owners/:id", component: OwnerDetail },
   { path: "/properties/owners", component: PropertiesOwners },
   { path: "/properties/contracts/create", component: ContractsCreate },
   { path: "/properties/contracts/:contractId/pay/:installmentId", component: PaymentRecord },
   { path: "/properties/contracts/:id", component: ContractDetail },
   { path: "/properties/contracts", component: PropertiesContracts },
   { path: "/properties/payments/:paymentId/pay", component: PaymentRegister },
+  { path: "/properties/payments/:id", component: PropertyPaymentDetail },
   { path: "/properties/payments", component: PropertiesPayments },
   { path: "/properties/maintenance/create", component: PropertyMaintenanceCreate },
+  { path: "/properties/maintenance/:id", component: PropertyMaintenanceDetail },
   { path: "/properties/maintenance", component: PropertiesMaintenance },
   { path: "/properties/create", component: PropertiesCreate },
   { path: "/properties/inspections", component: PropertyInspections },

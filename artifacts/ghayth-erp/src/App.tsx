@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -61,7 +61,26 @@ const allModuleRoutes: RouteConfig[] = [
   ...miscRoutes,
 ];
 
-const queryClient = new QueryClient();
+// QueryCache + MutationCache with noop onError — without this, a query that
+// fails with ApiError has a brief window where React Query considers the
+// rejection "unhandled" (even though it's stored in .error), which trips
+// Replit's runtime-error-modal overlay. Registering onError tells React
+// Query we acknowledge errors globally; the actual user-facing message
+// still comes from <PageStateWrapper> which reads .error from the hook.
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: () => { /* handled by PageStateWrapper */ } }),
+  mutationCache: new MutationCache({ onError: () => { /* handled by useApiMutation toast */ } }),
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      throwOnError: false,
+    },
+    mutations: {
+      throwOnError: false,
+    },
+  },
+});
 
 function PageLoader() {
   return (

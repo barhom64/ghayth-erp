@@ -9,7 +9,7 @@ import { Plus, Users, Phone, Mail, Star, Building2, Calendar } from "lucide-reac
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageStateWrapper } from "@/components/shared/page-state";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
@@ -37,7 +37,7 @@ export default function VendorsPage() {
   const createPath = isWarehouseContext ? "/warehouse/suppliers/create" : "/finance/vendors/create";
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
+  const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["vendors", scopeQueryString],
     `/finance/vendors${scopeSuffix}`,
   );
@@ -46,9 +46,6 @@ export default function VendorsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["name", "contactPerson", "category"],
@@ -174,19 +171,22 @@ export default function VendorsPage() {
         csvFileName="الموردين"
       />
 
-      <DataTable
-        columns={columns}
-        data={filtered}
+      <PageStateWrapper
         isLoading={isLoading}
-        isError={isError}
-        error={error as Error | null}
+        error={error}
         onRetry={() => refetch()}
-        onRowClick={(v) => navigate(`/finance/vendors/${v.id}`)}
-        pageSize={pageSize}
-        emptyMessage="لا يوجد موردين"
-        emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
-        noToolbar
-      />
+        emptyText="لا يوجد موردون"
+      >
+        <DataTable
+          columns={columns}
+          data={filtered}
+          onRowClick={(v) => navigate(`/finance/vendors/${v.id}`)}
+          pageSize={pageSize}
+          emptyMessage="لا يوجد موردين"
+          emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
+          noToolbar
+        />
+      </PageStateWrapper>
     </PageShell>
   );
 }

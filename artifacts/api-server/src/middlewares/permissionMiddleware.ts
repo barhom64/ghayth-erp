@@ -94,7 +94,7 @@ export function requirePermission(...requiredPerms: string[]) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const scope = req.scope;
     if (!scope) {
-      res.status(401).json({ error: "غير مصرح" });
+      res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" });
       return;
     }
 
@@ -133,9 +133,15 @@ export function requirePermission(...requiredPerms: string[]) {
           ip,
         }).catch(console.error);
 
+        // Typed-error shape (P0.3) so the frontend's PageErrorBoundary and
+        // useApiMutation toast pipeline can read the code + meta without
+        // re-parsing the message. `meta.requiredPermissions` shows the user
+        // exactly what they're missing so admins can grant it quickly.
         res.status(403).json({
           error: "لا تملك الصلاحية اللازمة",
-          required: missingPerms,
+          code: "FORBIDDEN",
+          fix: "اطلب من المسؤول منحك هذه الصلاحية",
+          meta: { requiredPermissions: missingPerms, role: scope.role },
         });
         return;
       }
@@ -143,7 +149,10 @@ export function requirePermission(...requiredPerms: string[]) {
       next();
     } catch (err) {
       console.error("Permission check error:", err);
-      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات" });
+      res.status(500).json({
+        error: "خطأ في التحقق من الصلاحيات",
+        code: "SERVER_ERROR",
+      });
     }
   };
 }
@@ -158,7 +167,7 @@ export function requireAnyPermission(...candidatePerms: string[]) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const scope = req.scope;
     if (!scope) {
-      res.status(401).json({ error: "غير مصرح" });
+      res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" });
       return;
     }
 
@@ -198,7 +207,9 @@ export function requireAnyPermission(...candidatePerms: string[]) {
 
         res.status(403).json({
           error: "لا تملك الصلاحية اللازمة",
-          requiredAny: candidatePerms,
+          code: "FORBIDDEN",
+          fix: "اطلب من المسؤول منحك إحدى هذه الصلاحيات",
+          meta: { requiredAnyPermissions: candidatePerms, role: scope.role },
         });
         return;
       }
@@ -206,7 +217,10 @@ export function requireAnyPermission(...candidatePerms: string[]) {
       next();
     } catch (err) {
       console.error("Permission check error:", err);
-      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات" });
+      res.status(500).json({
+        error: "خطأ في التحقق من الصلاحيات",
+        code: "SERVER_ERROR",
+      });
     }
   };
 }

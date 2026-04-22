@@ -7,9 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Upload, Download, Plus, X, FileUp, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { FileText, Upload, Download, Plus, X, FileUp, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDateAr } from "@/lib/formatters";
+import { AttachmentPreview, type PreviewableAttachment } from "./attachment-preview";
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -48,6 +48,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
     !!entityId
   );
   const docs = asList(docsResp);
+  const [previewDoc, setPreviewDoc] = useState<PreviewableAttachment | null>(null);
 
   const handleDownload = async (docId: number, fileName: string) => {
     try {
@@ -108,9 +109,29 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
                     <Badge className={cn("text-[10px]", st.color)}>{st.label}</Badge>
                     {d.currentVersion > 1 && <Badge variant="secondary" className="text-[10px]">v{d.currentVersion}</Badge>}
                     {d.storageKey && (
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownload(d.id, d.fileName)}>
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setPreviewDoc({
+                            id: d.id,
+                            title: d.title,
+                            fileName: d.fileName,
+                            mimeType: d.mimeType,
+                            fileSize: d.fileSize,
+                            category: d.category,
+                            uploadedAt: d.createdAt,
+                            uploaderName: d.uploaderName,
+                          })}
+                          title="معاينة"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownload(d.id, d.fileName)} title="تنزيل">
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -119,6 +140,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
           </div>
         )}
       </CardContent>
+      <AttachmentPreview attachment={previewDoc} open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)} />
     </Card>
   );
 }

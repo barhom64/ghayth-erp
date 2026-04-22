@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 // P4.8 — Finance expenses: shared header + status chips from P1.
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -173,7 +174,7 @@ export default function ExpensesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }]}
       actions={
         <Link href="/finance/expenses/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</Button>
+          <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</GuardedButton>
         </Link>
       }
     >

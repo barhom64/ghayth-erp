@@ -14,6 +14,7 @@ import { Link } from "wouter";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 export default function FixedAssetsPage() {
   const [showCreate, setShowCreate] = useState(false);
@@ -167,7 +168,7 @@ export default function FixedAssetsPage() {
                   </div>
                   <div>
                     <Label>تاريخ الشراء *</Label>
-                    <Input type="date" required value={form.purchaseDate} onChange={e => setForm(f => ({ ...f, purchaseDate: e.target.value }))} />
+                    <UnifiedDateInput required value={form.purchaseDate} onChange={(iso) => setForm(f => ({ ...f, purchaseDate: iso }))} />
                   </div>
                   <div>
                     <Label>تكلفة الشراء (﷼) *</Label>

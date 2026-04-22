@@ -2,24 +2,22 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, FileBarChart, TrendingUp, CheckCircle, PieChart } from "lucide-react";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 export default function BudgetPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["budget", scopeQueryString], `/finance/budget${scopeSuffix}`);
+  const { data, isLoading, error, refetch } = useApiQuery<any>(["budget", scopeQueryString], `/finance/budget${scopeSuffix}`);
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["accountName", "accountCode", "period"],
@@ -133,17 +131,19 @@ export default function BudgetPage() {
         resultCount={filtered?.length}
       />
 
-      <DataTable
-        columns={columns}
-        data={filtered}
+      <PageStateWrapper
         isLoading={isLoading}
-        isError={isError}
-        error={error as Error | null}
+        error={error}
         onRetry={() => refetch()}
-        emptyMessage="لا توجد بنود ميزانية"
-        emptyIcon={<FileBarChart className="h-6 w-6 text-slate-400" />}
-        noToolbar
-      />
+      >
+        <DataTable
+          columns={columns}
+          data={filtered}
+          emptyMessage="لا توجد بنود ميزانية"
+          emptyIcon={<FileBarChart className="h-6 w-6 text-slate-400" />}
+          noToolbar
+        />
+      </PageStateWrapper>
     </PageShell>
   );
 }

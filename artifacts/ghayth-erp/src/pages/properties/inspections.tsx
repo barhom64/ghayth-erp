@@ -15,6 +15,7 @@ import { PageShell } from "@/components/page-shell";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 const TYPES: Record<string, string> = {
   move_in: "دخول مستأجر",
@@ -102,7 +103,7 @@ export default function InspectionsPage() {
             </div>
             <div>
               <Label>تاريخ الفحص</Label>
-              <Input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
+              <UnifiedDateInput value={form.scheduledDate} onChange={(iso) => setForm({ ...form, scheduledDate: iso })} />
             </div>
             <div>
               <Label>اسم المفتش</Label>

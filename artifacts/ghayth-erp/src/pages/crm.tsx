@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, asList } from "@/lib/api";
+import { PageStateWrapper } from "@/components/shared/page-state";
 import { Target, BarChart3, Plus, Eye, DollarSign, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 // P4.3 — CRM domain sweep. Shared header + status chips from P1 primitives.
@@ -139,12 +140,7 @@ function OpportunitiesTab() {
     },
   ];
 
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isError) return <PageStateWrapper error={error} onRetry={refetch}><div /></PageStateWrapper>;
 
   return (
     <div className="space-y-6">
@@ -241,14 +237,9 @@ function OpportunitiesTab() {
 }
 
 function PipelineTab() {
-  const { data: pipelineResp, isLoading, isError } = useApiQuery<any>(["crm-pipeline"], "/crm/pipeline");
+  const { data: pipelineResp, isLoading, isError, error, refetch } = useApiQuery<any>(["crm-pipeline"], "/crm/pipeline");
   const pipeline = asList(pipelineResp);
-  if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
-  );
+  if (isError) return <PageStateWrapper error={error} onRetry={refetch}><div /></PageStateWrapper>;
 
   return (
     <div className="space-y-6">

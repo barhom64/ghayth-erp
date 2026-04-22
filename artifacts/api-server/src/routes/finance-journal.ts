@@ -431,6 +431,20 @@ journalRouter.patch("/expenses/:id/approve", requirePermission("finance:update")
       after: { ref: exp.ref, decision: newStatus, notes: notes ?? null },
     });
 
+    // CRITICAL: Expense journal_entries update GL balances at creation time.
+    // If the expense is rejected or returned after that posting, the GL
+    // balances must be reversed or the books stay overstated. Runs OUTSIDE
+    // the lifecycle transaction because reverseAccountBalances has its own
+    // transactional flow; failures are logged but don't block the status
+    // change (which has already succeeded).
+    if (newStatus === "rejected" || newStatus === "returned") {
+      try {
+        await reverseAccountBalances(scope.companyId, expenseId);
+      } catch (e) {
+        console.error("Failed to reverse expense GL on rejection:", e);
+      }
+    }
+
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({
       message: labels[newStatus] || newStatus,

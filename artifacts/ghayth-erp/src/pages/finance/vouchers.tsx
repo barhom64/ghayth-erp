@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, FileText, ArrowDownCircle, ArrowUpCircle, Wallet, ChevronDown, ChevronUp, ExternalLink, Paperclip, Calendar } from "lucide-react";
@@ -129,9 +130,9 @@ export default function VouchersPage() {
       loading={isLoading}
       actions={
         <Link href="/finance/vouchers/create">
-          <Button size="sm">
+          <GuardedButton perm="finance:create" size="sm">
             <Plus className="h-4 w-4 me-1" />سند جديد
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >

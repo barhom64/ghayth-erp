@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -121,11 +122,11 @@ export default function PreventivePlansPage() {
             </div>
             <div>
               <Label>آخر خدمة</Label>
-              <Input type="date" value={form.lastServiceDate} onChange={(e) => setForm({ ...form, lastServiceDate: e.target.value })} />
+              <UnifiedDateInput value={form.lastServiceDate} onChange={(iso) => setForm({ ...form, lastServiceDate: iso })} />
             </div>
             <div>
               <Label>موعد الخدمة القادمة</Label>
-              <Input type="date" value={form.nextServiceDate} onChange={(e) => setForm({ ...form, nextServiceDate: e.target.value })} />
+              <UnifiedDateInput value={form.nextServiceDate} onChange={(iso) => setForm({ ...form, nextServiceDate: iso })} />
             </div>
             <div>
               <Label>التكلفة التقديرية (ر.س)</Label>

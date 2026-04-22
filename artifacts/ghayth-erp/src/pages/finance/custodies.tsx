@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -204,7 +205,7 @@ export default function CustodiesPage() {
               تقرير أعمار العهد
             </Link>
           </Button>
-          <Button size="sm" onClick={() => setShowForm((s) => !s)}>
+          <GuardedButton perm="finance:create" size="sm" onClick={() => setShowForm((s) => !s)}>
             {showForm ? (
               <>
                 <X className="h-4 w-4 me-1" />
@@ -216,7 +217,7 @@ export default function CustodiesPage() {
                 عهدة جديدة
               </>
             )}
-          </Button>
+          </GuardedButton>
         </div>
       }
     >

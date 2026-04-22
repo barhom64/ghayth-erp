@@ -13,6 +13,7 @@ import { ClipboardCheck, Plus, Package, CheckCircle, ChevronDown, ChevronUp, Arr
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 export default function InventoryCountPage() {
   const [showForm, setShowForm] = useState(false);
@@ -104,7 +105,7 @@ export default function InventoryCountPage() {
           <CardContent className="grid grid-cols-3 gap-4">
             <div>
               <Label>تاريخ الجرد</Label>
-              <Input type="date" value={form.countDate} onChange={(e) => setForm({ ...form, countDate: e.target.value })} />
+              <UnifiedDateInput value={form.countDate} onChange={(iso) => setForm({ ...form, countDate: iso })} />
             </div>
             <div>
               <Label>موقع المستودع</Label>

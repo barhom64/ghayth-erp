@@ -5,6 +5,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useAppContext } from "@/contexts/app-context";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 // P4.8 — Finance invoices: shared header + status chips from P1.
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -165,7 +166,7 @@ export default function InvoicesPage() {
       loading={isLoading}
       actions={
         <Link href="/finance/invoices/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</Button>
+          <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</GuardedButton>
         </Link>
       }
     >

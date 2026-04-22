@@ -16,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 export function CAPATab() {
   const { data: capaResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-capa"], "/governance/capa");
@@ -92,7 +93,7 @@ export function CAPATab() {
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">تاريخ الاستحقاق</label>
-              <Input type="date" className="text-sm" value={newForm.dueDate} onChange={e => setNewForm(p => ({ ...p, dueDate: e.target.value }))} />
+              <UnifiedDateInput inputClassName="text-sm" value={newForm.dueDate} onChange={(iso) => setNewForm(p => ({ ...p, dueDate: iso }))} />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">السبب الجذري</label>
