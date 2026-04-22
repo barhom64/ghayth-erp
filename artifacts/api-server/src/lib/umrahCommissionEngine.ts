@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { emitEvent } from "./businessHelpers.js";
-import type pg from "pg";
+
+type QueryFn = (sql: string, params: any[]) => Promise<{ rows: any[] }>;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,7 +80,8 @@ export async function calculateCommissionForPlan(
   );
 
   return withTransaction(async (client) => {
-    const result = await compute(client, plan, tiers, month, year);
+    const txQuery: QueryFn = (sql, params) => client.query(sql, params);
+    const result = await compute(txQuery, plan, tiers, month, year);
 
     const [existing] = (await client.query(
       `SELECT id FROM employee_commission_calculations
@@ -150,8 +152,8 @@ export async function simulateCommission(
     [planId]
   );
 
-  const client = { query: (sql: string, params: any[]) => rawQuery(sql, params).then((rows) => ({ rows })) } as any;
-  return compute(client, plan, tiers, month, year);
+  const queryFn: QueryFn = (sql, params) => rawQuery(sql, params).then((rows) => ({ rows }));
+  return compute(queryFn, plan, tiers, month, year);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +161,7 @@ export async function simulateCommission(
 // ---------------------------------------------------------------------------
 
 async function compute(
-  client: pg.PoolClient | any,
+  queryFn: QueryFn,
   plan: CommissionPlan,
   tiers: CommissionTier[],
   month: number,
@@ -168,7 +170,7 @@ async function compute(
   const excludedMonths: number[] = Array.isArray(plan.excludedMonths) ? plan.excludedMonths : [];
   const isExcludedMonth = excludedMonths.includes(month);
 
-  const mutamerStats = (await client.query(
+  const mutamerStats = (await queryFn(
     `SELECT
        COUNT(*)::int AS total,
        COALESCE(AVG(pkg."sellPrice" - pkg."costPrice"), 0)::numeric(10,2) AS avg_profit,
@@ -186,7 +188,7 @@ async function compute(
   const avgProfitPerVisa = Number(mutamerStats.avg_profit) || 0;
   const avgSalePrice = Number(mutamerStats.avg_price) || 0;
 
-  const totalSalesRes = (await client.query(
+  const totalSalesRes = (await queryFn(
     `SELECT COALESCE(SUM("totalAmount"), 0)::numeric(12,2) AS total_sales
      FROM umrah_nusk_invoices
      WHERE "companyId" = $1 AND EXTRACT(MONTH FROM "issueDate") = $2 AND EXTRACT(YEAR FROM "issueDate") = $3
@@ -195,7 +197,7 @@ async function compute(
   )).rows[0];
   const totalCompanySales = Number(totalSalesRes?.total_sales) || 1;
 
-  const employeeSalesRes = (await client.query(
+  const employeeSalesRes = (await queryFn(
     `SELECT COALESCE(SUM(ni."totalAmount"), 0)::numeric(12,2) AS emp_sales
      FROM umrah_nusk_invoices ni
      JOIN umrah_pilgrims p ON p."companyId" = ni."companyId" AND p."groupId" = ni."groupId"
@@ -209,7 +211,7 @@ async function compute(
 
   const { conditionMet, conditionDetails } = checkConditions(plan, avgProfitPerVisa, salesPercent);
 
-  const violationRes = (await client.query(
+  const violationRes = (await queryFn(
     `SELECT COUNT(*)::int AS cnt FROM umrah_violations
      WHERE "companyId" = $1 AND status IN ('detected','open')
        AND "createdAt" >= DATE_TRUNC('month', MAKE_DATE($2, $3, 1))
