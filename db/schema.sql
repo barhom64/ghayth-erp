@@ -3998,7 +3998,19 @@ CREATE TABLE public.employee_contracts (
     "probationAlertSent" boolean DEFAULT false,
     status character varying(20) DEFAULT 'active'::character varying,
     notes text,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    salary numeric(12,2),
+    "housingAllowance" numeric(12,2),
+    "transportAllowance" numeric(12,2),
+    "otherAllowances" jsonb DEFAULT '{}'::jsonb,
+    "templateId" integer,
+    "branchId" integer,
+    ref character varying(50),
+    "approvalStatus" character varying(20) DEFAULT 'draft'::character varying,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp without time zone
 );
 
 
