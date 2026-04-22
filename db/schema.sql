@@ -4010,7 +4010,9 @@ CREATE TABLE public.employee_contracts (
     "createdBy" integer,
     "updatedBy" integer,
     "updatedAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp without time zone
+    "deletedAt" timestamp without time zone,
+    "approvedBy" integer,
+    "approvedAt" timestamp without time zone
 );
 
 

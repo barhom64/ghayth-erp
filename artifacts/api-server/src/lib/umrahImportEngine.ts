@@ -137,6 +137,85 @@ export function parseVouchersWorkbook(buffer: Buffer): ParsedRow[] {
   return parseWorkbook(buffer, VOUCHER_HEADER_MAP, "vouchers");
 }
 
+// ---------------------------------------------------------------------------
+// Normalize already-parsed rows (Arabic header keys → DB field names).
+// The frontend import-wizard parses the xlsx client-side and sends rows as
+// { "رقم المعتمر في النظام": "...", ... }. These helpers map those Arabic
+// keys to the DB column names the import engine expects, and coerce values
+// exactly the same way parseWorkbook does.
+// ---------------------------------------------------------------------------
+
+export function normalizeMutamerRows(rawRows: Record<string, any>[]): ParsedRow[] {
+  return normaliseRows(rawRows, MUTAMER_HEADER_MAP);
+}
+
+export function normalizeVoucherRows(rawRows: Record<string, any>[]): ParsedRow[] {
+  return normaliseRows(rawRows, VOUCHER_HEADER_MAP);
+}
+
+function normaliseRows(rawRows: Record<string, any>[], headerMap: Record<string, string>): ParsedRow[] {
+  // Build a reverse lookup keyed by the NORMALISED Arabic header so the
+  // mapping is resilient to ي/ى differences and stray whitespace.
+  const normalisedMap = new Map<string, string>();
+  for (const [arabic, field] of Object.entries(headerMap)) {
+    normalisedMap.set(normalizeHeader(arabic), field);
+  }
+
+  const out: ParsedRow[] = [];
+  for (const raw of rawRows) {
+    if (!raw || Object.keys(raw).length === 0) continue;
+
+    const row: ParsedRow = {};
+    for (const [key, rawVal] of Object.entries(raw)) {
+      const field = normalisedMap.get(normalizeHeader(String(key)));
+      if (!field) continue;
+
+      let val: any = rawVal instanceof Date ? rawVal.toISOString().split("T")[0] : String(rawVal ?? "").trim();
+      row[field] = coerceValue(field, val);
+    }
+
+    // Skip rows where no recognisable keys were present.
+    if (Object.keys(row).length === 0) continue;
+    out.push(row);
+  }
+
+  return out;
+}
+
+// Spec: overstay_days = actual_stay_days - program_duration when positive.
+// Fall back to the explicit "أيام التجاوز" column if provided.
+function computeOverstayDays(row: ParsedRow): number {
+  const actual = Number(row.actualStayDays);
+  const program = Number(row.programDuration);
+  if (Number.isFinite(actual) && Number.isFinite(program) && actual > program) {
+    return actual - program;
+  }
+  const explicit = Number(row.overstayDays);
+  return Number.isFinite(explicit) && explicit > 0 ? explicit : 0;
+}
+
+function coerceValue(field: string, val: string): any {
+  if (field === "status") return STATUS_MAP[val] ?? val;
+  if (field === "nuskStatus") return NUSK_STATUS_MAP[val] ?? val;
+  if (field === "gender") {
+    if (val === "ذكر" || val === "male") return "male";
+    if (val === "أنثى" || val === "female") return "female";
+    return val || null;
+  }
+  if (field === "isInsideKingdom" || field === "hasUmrahPermit") return BOOL_TRUE.has(String(val).toLowerCase());
+  if (["programDuration", "actualStayDays", "overstayDays", "mutamerCount"].includes(field)) {
+    return val ? Number(val) || 0 : null;
+  }
+  if ([
+    "groundServices", "electronicFees", "visaFees", "insuranceFees",
+    "enrichmentServices", "additionalServices", "transportTotal",
+    "hotelTotal", "refundAmount", "netCost", "totalAmount",
+  ].includes(field)) {
+    return val ? Number(val) || 0 : 0;
+  }
+  return val || null;
+}
+
 function parseWorkbook(buffer: Buffer, headerMap: Record<string, string>, fileType: string): ParsedRow[] {
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const sheetName = wb.SheetNames[0];
@@ -420,7 +499,8 @@ export async function confirmMutamersImport(
                 row.status || "pending",
                 row.entryPort || null, row.entryFlight || null,
                 row.exitPort || null, row.exitFlight || null,
-                row.actualStayDays ?? null, row.programDuration ?? 14, row.overstayDays ?? 0,
+                row.actualStayDays ?? null, row.programDuration ?? 14,
+                computeOverstayDays(row),
                 row.borderNumber || null, row.mofaNumber || null,
                 row.isInsideKingdom ?? false, row.hasUmrahPermit ?? false,
                 scope.userId,
@@ -542,7 +622,11 @@ export async function confirmVouchersImport(
               row.groundServices ?? 0, row.electronicFees ?? 0, row.visaFees ?? 0,
               row.insuranceFees ?? 0, row.enrichmentServices ?? 0, row.additionalServices ?? 0,
               row.transportTotal ?? 0, row.hotelTotal ?? 0, row.refundAmount ?? 0,
-              row.netCost ?? 0, row.totalAmount ?? 0,
+              // Spec: net_cost = total_amount - refund_amount. Prefer that
+              // over any server-supplied net_cost so the stored row is always
+              // internally consistent.
+              Math.max(0, (Number(row.totalAmount) || 0) - (Number(row.refundAmount) || 0)),
+              row.totalAmount ?? 0,
               row.nuskStatus || "pending",
               row.issueDate || null, row.expiryDate || null,
               row.programDuration ?? null, scope.userId,
