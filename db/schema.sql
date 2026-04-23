@@ -10811,6 +10811,308 @@ CREATE SEQUENCE public.umrah_transport_id_seq
 
 ALTER SEQUENCE public.umrah_transport_id_seq OWNED BY public.umrah_transport.id;
 
+-- Stub tables created by migration 067_umrah_extended.sql
+CREATE TABLE public.umrah_sub_agents (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "nuskCode" character varying(30),
+    name character varying(255) NOT NULL,
+    "agentId" integer,
+    "clientId" integer,
+    "paymentTerms" character varying(20) DEFAULT 'postpaid',
+    "defaultPricePerMutamer" numeric(12,2),
+    phone character varying(50),
+    email character varying(200),
+    country character varying(100),
+    "isActive" boolean DEFAULT true,
+    notes text,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.umrah_groups (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "nuskGroupNumber" character varying(30) NOT NULL,
+    name character varying(255),
+    "agentId" integer,
+    "subAgentId" integer,
+    "seasonId" integer,
+    "mutamerCount" integer DEFAULT 0,
+    "programDuration" integer,
+    status character varying(30) DEFAULT 'imported',
+    "nuskInvoiceNumber" character varying(30),
+    "salesInvoiceId" integer,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.umrah_pricing (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "subAgentId" integer,
+    "agentId" integer,
+    "seasonId" integer,
+    "pricePerMutamer" numeric(10,2) NOT NULL,
+    "includesHotel" boolean DEFAULT false,
+    "includesTransport" boolean DEFAULT false,
+    "validFrom" date NOT NULL,
+    "validTo" date NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.umrah_nusk_invoices (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "nuskInvoiceNumber" character varying(30) NOT NULL,
+    "agentId" integer,
+    "subAgentId" integer,
+    "groupId" integer,
+    "mutamerCount" integer DEFAULT 0,
+    "groundServices" numeric(12,2) DEFAULT 0,
+    "electronicFees" numeric(12,2) DEFAULT 0,
+    "visaFees" numeric(12,2) DEFAULT 0,
+    "insuranceFees" numeric(12,2) DEFAULT 0,
+    "enrichmentServices" numeric(12,2) DEFAULT 0,
+    "additionalServices" numeric(12,2) DEFAULT 0,
+    "transportTotal" numeric(12,2) DEFAULT 0,
+    "hotelTotal" numeric(12,2) DEFAULT 0,
+    "refundAmount" numeric(12,2) DEFAULT 0,
+    "netCost" numeric(12,2) DEFAULT 0,
+    "totalAmount" numeric(12,2) DEFAULT 0,
+    "nuskStatus" character varying(20) DEFAULT 'pending',
+    "issueDate" timestamp with time zone,
+    "expiryDate" timestamp with time zone,
+    "purchaseInvoiceId" integer,
+    "journalEntryId" integer,
+    "programDuration" integer,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.umrah_violations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    type character varying(20) NOT NULL,
+    "referenceType" character varying(20),
+    "referenceNumber" character varying(40),
+    "mutamerId" integer,
+    "groupId" integer,
+    "subAgentId" integer,
+    "agentId" integer,
+    description text,
+    "penaltyAmount" numeric(10,2) DEFAULT 0,
+    status character varying(20) DEFAULT 'open',
+    "linkedInvoiceId" integer,
+    "detectedAt" timestamp with time zone DEFAULT now(),
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.employee_commission_plans (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "employeeId" integer NOT NULL,
+    "assignmentId" integer NOT NULL,
+    "seasonId" integer,
+    "planName" character varying(255) NOT NULL,
+    "baseSalary" numeric(12,2),
+    "commissionType" character varying(20),
+    "percentageRate" numeric(5,2),
+    "fixedAmount" numeric(12,2),
+    "conditionType" character varying(20),
+    "minProfitPerVisa" numeric(10,2),
+    "minSalesPercent" numeric(5,2),
+    "minAvgPrice" numeric(10,2),
+    "excludedMonths" jsonb DEFAULT '[]',
+    "tierUnit" integer DEFAULT 10000,
+    "partialTiersAllowed" boolean DEFAULT false,
+    "violationBlocksCommission" boolean DEFAULT true,
+    status character varying(20) DEFAULT 'active',
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    notes text,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.employee_commission_tiers (
+    id integer NOT NULL,
+    "planId" integer NOT NULL,
+    "fromCount" integer NOT NULL,
+    "toCount" integer,
+    "bonusPerUnit" numeric(12,2) NOT NULL,
+    "isCumulative" boolean DEFAULT true,
+    "tierOrder" integer DEFAULT 1,
+    "createdAt" timestamp with time zone DEFAULT now()
+);
+
+CREATE TABLE public.employee_commission_calculations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "planId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    month integer NOT NULL,
+    year integer NOT NULL,
+    "totalMutamers" integer DEFAULT 0,
+    "avgProfitPerVisa" numeric(10,2),
+    "salesPercent" numeric(5,2),
+    "avgSalePrice" numeric(10,2),
+    "conditionMet" boolean DEFAULT false,
+    "conditionDetails" text,
+    "completedTiers" integer DEFAULT 0,
+    "commissionAmount" numeric(12,2) DEFAULT 0,
+    "hasViolations" boolean DEFAULT false,
+    "finalAmount" numeric(12,2) DEFAULT 0,
+    "isExcludedMonth" boolean DEFAULT false,
+    status character varying(20) DEFAULT 'calculated',
+    "payrollLineId" integer,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.umrah_import_batches (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "seasonId" integer,
+    "fileType" character varying(20) NOT NULL,
+    "fileName" character varying(255),
+    "fileSize" integer,
+    "uploadedBy" integer,
+    "uploadedAt" timestamp with time zone DEFAULT now(),
+    "totalRows" integer DEFAULT 0,
+    "newCount" integer DEFAULT 0,
+    "updatedCount" integer DEFAULT 0,
+    "skippedCount" integer DEFAULT 0,
+    "errorCount" integer DEFAULT 0,
+    "financialImpactCount" integer DEFAULT 0,
+    "manualReviewCount" integer DEFAULT 0,
+    status character varying(20) DEFAULT 'pending',
+    "summaryJson" jsonb,
+    "errorsJson" jsonb,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.umrah_import_changes (
+    id integer NOT NULL,
+    "batchId" integer NOT NULL,
+    "entityType" character varying(30) NOT NULL,
+    "entityId" integer,
+    "changeType" character varying(20) NOT NULL,
+    "fieldName" character varying(100),
+    "oldValue" text,
+    "newValue" text,
+    "hasFinancialImpact" boolean DEFAULT false,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now()
+);
+
+-- Stub tables created by migration 072_umrah_invoicing_and_payments.sql
+CREATE TABLE public.umrah_sales_invoices (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "subAgentId" integer NOT NULL,
+    "clientId" integer,
+    "seasonId" integer,
+    ref character varying(50),
+    "invoiceDate" date DEFAULT CURRENT_DATE,
+    subtotal numeric(12,2) DEFAULT 0,
+    "penaltiesTotal" numeric(12,2) DEFAULT 0,
+    "vatRate" numeric(5,2) DEFAULT 15,
+    "vatAmount" numeric(12,2) DEFAULT 0,
+    total numeric(12,2) DEFAULT 0,
+    "paidAmount" numeric(12,2) DEFAULT 0,
+    status character varying(20) DEFAULT 'draft',
+    "dueDate" date,
+    "nuskInvoiceRefs" text,
+    "groupRefs" text,
+    "pilgrimCount" integer DEFAULT 0,
+    "journalEntryId" integer,
+    notes text,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.umrah_sales_invoice_items (
+    id integer NOT NULL,
+    "invoiceId" integer NOT NULL,
+    "itemType" character varying(20) NOT NULL,
+    "groupId" integer,
+    "violationId" integer,
+    description text,
+    quantity integer DEFAULT 1,
+    "unitPrice" numeric(12,2) DEFAULT 0,
+    "lineTotal" numeric(12,2) DEFAULT 0,
+    "createdAt" timestamp with time zone DEFAULT now()
+);
+
+CREATE TABLE public.umrah_payments (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "subAgentId" integer NOT NULL,
+    ref character varying(50),
+    amount numeric(12,2) NOT NULL,
+    currency character varying(10) DEFAULT 'SAR',
+    "exchangeRate" numeric(10,4),
+    "sarAmount" numeric(12,2) NOT NULL,
+    method character varying(30) DEFAULT 'bank_transfer',
+    "externalReference" character varying(100),
+    "paymentDate" date DEFAULT CURRENT_DATE,
+    "journalEntryId" integer,
+    notes text,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.umrah_payment_allocations (
+    id integer NOT NULL,
+    "paymentId" integer NOT NULL,
+    "invoiceId" integer NOT NULL,
+    amount numeric(12,2) NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now()
+);
+
 
 --
 -- Name: user_activity_log; Type: TABLE; Schema: public; Owner: -
