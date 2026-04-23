@@ -7592,6 +7592,7 @@ CREATE TABLE public.payroll_lines (
     "overtimeHours" numeric DEFAULT 0,
     "gosiEmployer" numeric DEFAULT 0,
     "employeeId" integer,
+    commission numeric(12,2) DEFAULT 0,
     "deletedAt" timestamp with time zone
 );
 

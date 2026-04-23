@@ -1028,6 +1028,123 @@ export function registerEventListeners() {
     await logAudit("request.returned", { ...payload, action: "return", entity: "request" });
   });
 
+  // ── Umrah module ──
+  eventBus.on("umrah.mutamers.imported", async (payload) => {
+    await logEvent("umrah.mutamers.imported", payload);
+    await logAudit("umrah.mutamers.imported", { ...payload, action: "import", entity: "umrah_pilgrims" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "استيراد معتمرين",
+          body: `تم استيراد دفعة معتمرين — ${after?.newCount ?? 0} جديد، ${after?.updatedCount ?? 0} تحديث`,
+          priority: "normal", refType: "umrah_import_batches", refId: payload.entityId as number,
+          actionUrl: "/umrah/imports",
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.vouchers.imported", async (payload) => {
+    await logEvent("umrah.vouchers.imported", payload);
+    await logAudit("umrah.vouchers.imported", { ...payload, action: "import", entity: "umrah_nusk_invoices" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "استيراد فواتير نسك",
+          body: `تم استيراد ${after?.newCount ?? 0} فاتورة نسك جديدة، ${after?.updatedCount ?? 0} تحديث`,
+          priority: "normal", refType: "umrah_import_batches", refId: payload.entityId as number,
+          actionUrl: "/umrah/imports",
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.overstay.detected", async (payload) => {
+    await logEvent("umrah.overstay.detected", payload);
+    await logAudit("umrah.overstay.detected", { ...payload, action: "detect", entity: "umrah_violations" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "تنبيه تجاوز مدة",
+          body: `تم رصد حالة تجاوز مدة الإقامة — مخالفة #${payload.entityId}`,
+          priority: "high", refType: "umrah_violations", refId: payload.entityId as number,
+          actionUrl: `/umrah/violations/${payload.entityId}`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.absconder.detected", async (payload) => {
+    await logEvent("umrah.absconder.detected", payload);
+    await logAudit("umrah.absconder.detected", { ...payload, action: "detect", entity: "umrah_violations" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "تنبيه هارب",
+          body: `تم رصد حالة هروب معتمر — مخالفة #${payload.entityId}`,
+          priority: "urgent", refType: "umrah_violations", refId: payload.entityId as number,
+          actionUrl: `/umrah/violations/${payload.entityId}`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.invoice.generated", async (payload) => {
+    await logEvent("umrah.invoice.generated", payload);
+    await logAudit("umrah.invoice.generated", { ...payload, action: "create", entity: "umrah_sales_invoices" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "فاتورة عمرة جديدة",
+          body: `تم إصدار فاتورة مبيعات عمرة ${after?.ref ?? ""} بقيمة ${after?.total ?? 0} ر.س`,
+          priority: "normal", refType: "umrah_sales_invoices", refId: payload.entityId as number,
+          actionUrl: `/umrah/invoices/${payload.entityId}`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.payment.received", async (payload) => {
+    await logEvent("umrah.payment.received", payload);
+    await logAudit("umrah.payment.received", { ...payload, action: "create", entity: "umrah_payments" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "دفعة عمرة مستلمة",
+          body: `تم تسجيل دفعة ${after?.ref ?? ""} بقيمة ${after?.sarAmount ?? 0} ر.س`,
+          priority: "normal", refType: "umrah_payments", refId: payload.entityId as number,
+          actionUrl: `/umrah/payments`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.commission.calculated", async (payload) => {
+    await logEvent("umrah.commission.calculated", payload);
+    await logAudit("umrah.commission.calculated", { ...payload, action: "calculate", entity: "employee_commission_plans" });
+  });
+
+  eventBus.on("umrah.agent.linked", async (payload) => {
+    await logEvent("umrah.agent.linked", payload);
+    await logAudit("umrah.agent.linked", { ...payload, action: "link", entity: "umrah_sub_agents" });
+  });
+
   const auditEntities = [
     "employee", "client", "invoice", "voucher", "expense", "purchase_request",
     "purchase_order", "salary_advance", "custody", "vendor", "leave_request",

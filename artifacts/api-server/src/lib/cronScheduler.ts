@@ -2814,6 +2814,143 @@ async function dailyAutoViolationDetection(): Promise<string> {
   return `الرصد التلقائي: ${result.totalDetected} واقعة مكتشفة، ${result.totalMemos} محضر جديد عبر ${result.companies} شركة`;
 }
 
+// ── Umrah cron handlers (C29-C32) ──
+
+async function umrahOverdueInvoiceEscalation(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  let escalated = 0;
+  for (const c of companies) {
+    const overdue = await rawQuery<any>(
+      `SELECT si.id, si.ref, si.total, si."paidAmount", si."dueDate", si."subAgentId",
+              sa.name AS "subAgentName"
+       FROM umrah_sales_invoices si
+       JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
+       WHERE si."companyId"=$1 AND si.status NOT IN ('paid','cancelled')
+         AND si."dueDate" < CURRENT_DATE AND si."deletedAt" IS NULL`,
+      [c.id]
+    );
+    if (overdue.length === 0) continue;
+    await rawExecute(
+      `UPDATE umrah_sales_invoices SET status='overdue', "updatedAt"=NOW()
+       WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled','overdue')
+         AND "dueDate" < CURRENT_DATE AND "deletedAt" IS NULL`,
+      [c.id]
+    );
+    const mgr = await getManagerAssignmentId(c.id, 0);
+    if (mgr) {
+      await createNotification({
+        companyId: c.id, assignmentId: mgr,
+        type: "umrah", title: "فواتير عمرة متأخرة",
+        body: `${overdue.length} فاتورة عمرة متأخرة بقيمة إجمالية ${overdue.reduce((s: number, i: any) => s + Number(i.total) - Number(i.paidAmount), 0).toFixed(2)} ر.س`,
+        priority: "high",
+      });
+    }
+    escalated += overdue.length;
+  }
+  return `تصعيد فواتير العمرة المتأخرة: ${escalated} فاتورة عبر ${companies.length} شركة`;
+}
+
+async function umrahWeeklyAgentPerformance(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  let reports = 0;
+  for (const c of companies) {
+    const stats = await rawQuery<any>(
+      `SELECT sa.id, sa.name,
+              COUNT(DISTINCT p.id)::int AS pilgrim_count,
+              COUNT(DISTINCT v.id) FILTER (WHERE v.status IN ('detected','open'))::int AS violation_count,
+              COALESCE(SUM(si.total), 0)::numeric(12,2) AS total_invoiced,
+              COALESCE(SUM(si."paidAmount"), 0)::numeric(12,2) AS total_paid
+       FROM umrah_sub_agents sa
+       LEFT JOIN umrah_pilgrims p ON p."subAgentId"=sa.id AND p."companyId"=sa."companyId" AND p."deletedAt" IS NULL
+       LEFT JOIN umrah_violations v ON v."subAgentId"=sa.id AND v."companyId"=sa."companyId" AND v."deletedAt" IS NULL
+       LEFT JOIN umrah_sales_invoices si ON si."subAgentId"=sa.id AND si."companyId"=sa."companyId" AND si."deletedAt" IS NULL
+       WHERE sa."companyId"=$1 AND sa."deletedAt" IS NULL
+       GROUP BY sa.id, sa.name
+       HAVING COUNT(DISTINCT p.id) > 0`,
+      [c.id]
+    );
+    if (stats.length === 0) continue;
+    const mgr = await getManagerAssignmentId(c.id, 0);
+    if (mgr) {
+      const top = stats.sort((a: any, b: any) => b.pilgrim_count - a.pilgrim_count).slice(0, 5);
+      await createNotification({
+        companyId: c.id, assignmentId: mgr,
+        type: "umrah", title: "تقرير أداء وكلاء العمرة الأسبوعي",
+        body: `${stats.length} وكيل فرعي نشط — أعلى 5: ${top.map((s: any) => `${s.name}(${s.pilgrim_count})`).join("، ")}`,
+        priority: "normal",
+      });
+    }
+    reports++;
+  }
+  return `تقارير أداء وكلاء العمرة: ${reports} شركة`;
+}
+
+async function umrahVisaExpiryAlerts(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  let alerted = 0;
+  for (const c of companies) {
+    const expiring = await rawQuery<any>(
+      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g."groupName"
+       FROM umrah_pilgrims p
+       LEFT JOIN umrah_groups g ON g.id = p."groupId"
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+         AND p.status NOT IN ('departed','cancelled')
+         AND p."visaExpiry" IS NOT NULL
+         AND p."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
+      [c.id]
+    );
+    if (expiring.length === 0) continue;
+    const mgr = await getManagerAssignmentId(c.id, 0);
+    if (mgr) {
+      await createNotification({
+        companyId: c.id, assignmentId: mgr,
+        type: "umrah", title: "تنبيه انتهاء تأشيرات عمرة",
+        body: `${expiring.length} تأشيرة ستنتهي خلال 7 أيام — ${expiring.slice(0, 3).map((p: any) => p.fullName).join("، ")}${expiring.length > 3 ? "..." : ""}`,
+        priority: "high",
+      });
+    }
+    alerted += expiring.length;
+  }
+  return `تنبيهات انتهاء التأشيرات: ${alerted} تأشيرة عبر ${companies.length} شركة`;
+}
+
+async function umrahMonthlyFinancialSummary(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  let sent = 0;
+  for (const c of companies) {
+    const summary = await rawQuery<any>(
+      `SELECT
+         COUNT(DISTINCT si.id)::int AS invoice_count,
+         COALESCE(SUM(si.total), 0)::numeric(12,2) AS total_invoiced,
+         COALESCE(SUM(si."paidAmount"), 0)::numeric(12,2) AS total_paid,
+         COALESCE(SUM(si.total) - SUM(si."paidAmount"), 0)::numeric(12,2) AS outstanding,
+         COUNT(DISTINCT si.id) FILTER (WHERE si.status='overdue')::int AS overdue_count,
+         COALESCE(SUM(ni."totalAmount"), 0)::numeric(12,2) AS total_cost
+       FROM umrah_sales_invoices si
+       LEFT JOIN umrah_nusk_invoices ni ON ni."companyId"=si."companyId" AND ni."deletedAt" IS NULL
+       WHERE si."companyId"=$1 AND si."deletedAt" IS NULL
+         AND si."createdAt" >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+         AND si."createdAt" < DATE_TRUNC('month', CURRENT_DATE)`,
+      [c.id]
+    );
+    const s = summary[0];
+    if (!s || Number(s.invoice_count) === 0) continue;
+    const cfo = await getCfoAssignmentId(c.id, 0);
+    const mgr = await getManagerAssignmentId(c.id, 0);
+    const target = cfo || mgr;
+    if (target) {
+      await createNotification({
+        companyId: c.id, assignmentId: target,
+        type: "umrah", title: "ملخص العمرة المالي الشهري",
+        body: `الشهر الماضي: ${s.invoice_count} فاتورة، إيرادات ${s.total_invoiced} ر.س، محصّل ${s.total_paid} ر.س، مستحق ${s.outstanding} ر.س، متأخر ${s.overdue_count}`,
+        priority: "normal",
+      });
+    }
+    sent++;
+  }
+  return `الملخص المالي الشهري للعمرة: ${sent} شركة`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
@@ -2827,6 +2964,10 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "hourly_approval_escalation", description: "تصعيد الموافقات كل ساعة", schedule: "0 * * * *", handler: hourlyApprovalEscalation },
   { name: "daily_deduction_check", description: "خصومات الغياب اليومية", schedule: "0 23 * * *", handler: dailyDeductionCheck },
   { name: "daily_auto_violation_detection", description: "الرصد التلقائي للمخالفات — تأخر وغياب ومغادرة مبكرة وخروج GPS", schedule: "30 23 * * *", handler: dailyAutoViolationDetection },
+  { name: "umrah_overdue_invoice_escalation", description: "تصعيد فواتير العمرة المتأخرة يومياً", schedule: "0 8 * * *", handler: umrahOverdueInvoiceEscalation },
+  { name: "umrah_weekly_agent_performance", description: "تقرير أداء وكلاء العمرة الأسبوعي", schedule: "0 9 * * 0", handler: umrahWeeklyAgentPerformance },
+  { name: "umrah_visa_expiry_alerts", description: "تنبيهات انتهاء تأشيرات العمرة", schedule: "0 7 * * *", handler: umrahVisaExpiryAlerts },
+  { name: "umrah_monthly_financial_summary", description: "ملخص العمرة المالي الشهري", schedule: "0 9 1 * *", handler: umrahMonthlyFinancialSummary },
   { name: "daily_invoice_overdue", description: "تصعيد الفواتير المتأخرة 6 مراحل", schedule: "0 8 * * *", handler: dailyInvoiceOverdueEscalation },
   { name: "daily_fuel_monitor", description: "مراقبة استهلاك الوقود", schedule: "0 9 * * *", handler: dailyFuelMonitor },
   { name: "daily_inventory_check", description: "فحص المخزون + طلب شراء تلقائي", schedule: "0 10 * * *", handler: dailyInventoryCheck },

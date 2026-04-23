@@ -128,6 +128,41 @@ export async function calculateCommissionForPlan(
       after: { month, year, finalAmount: result.finalAmount },
     }).catch(() => {});
 
+    if (result.finalAmount > 0) {
+      try {
+        const [activeRun] = (await client.query(
+          `SELECT id FROM payroll_runs
+           WHERE "companyId"=$1 AND month=$2 AND year=$3 AND status IN ('draft','processing')
+             AND "deletedAt" IS NULL
+           ORDER BY id DESC LIMIT 1`,
+          [plan.companyId, month, year]
+        )).rows;
+
+        if (activeRun) {
+          const [existingLine] = (await client.query(
+            `SELECT id FROM payroll_lines
+             WHERE "runId"=$1 AND "assignmentId"=$2 AND "deletedAt" IS NULL`,
+            [activeRun.id, plan.assignmentId]
+          )).rows;
+
+          if (existingLine) {
+            await client.query(
+              `UPDATE payroll_lines SET commission=$1, "netSalary"="netSalary"+$1 WHERE id=$2`,
+              [result.finalAmount, existingLine.id]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"grossSalary",commission,"netSalary")
+               VALUES ($1,$2,$3,0,0,$4,$4)`,
+              [activeRun.id, plan.assignmentId, plan.employeeId, result.finalAmount]
+            );
+          }
+        }
+      } catch (plErr) {
+        console.error(`[UmrahCommission] Payroll line link failed for plan ${planId}:`, plErr);
+      }
+    }
+
     return result;
   });
 }

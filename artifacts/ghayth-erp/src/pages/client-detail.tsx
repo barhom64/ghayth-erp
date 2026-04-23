@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   User, Phone, Mail, FileText, Target, Headphones, FolderKanban,
   Clock, DollarSign, MessageCircle, TrendingUp, AlertTriangle,
-  CheckCircle, Activity, BookOpen, CheckSquare, Globe,
+  CheckCircle, Activity, BookOpen, CheckSquare, Globe, Plane,
 } from "lucide-react";
 import { useRoute } from "wouter";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ const TABS = [
   { key: "projects", label: "المشاريع", icon: FolderKanban },
   { key: "conversations", label: "المحادثات", icon: MessageCircle },
   { key: "documents", label: "المستندات", icon: FileText },
+  { key: "umrah", label: "العمرة", icon: Plane },
   { key: "portal", label: "بوابة العميل", icon: Globe },
 ] as const;
 
@@ -610,6 +611,10 @@ export default function ClientDetail() {
         <EntityDocuments entityType="client" entityId={id} />
       )}
 
+      {activeTab === "umrah" && id && (
+        <UmrahTab clientId={id} />
+      )}
+
       {activeTab === "portal" && id && (
         <ClientPortalTab clientId={id} clientEmail={client.email} />
       )}
@@ -797,6 +802,76 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function UmrahTab({ clientId }: { clientId: string }) {
+  const { data, isLoading } = useApiQuery<any>(["umrah-client", clientId], `/umrah/entities/sub-agents?clientId=${clientId}`);
+  const subAgents: any[] = data?.rows ?? data ?? [];
+
+  if (isLoading) return <Skeleton className="h-48 w-full rounded-xl" />;
+
+  if (!subAgents.length) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <Plane className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+          <p>لا يوجد ربط عمرة لهذا العميل</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {subAgents.map((sa: any) => (
+        <Card key={sa.id}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Plane className="h-4 w-4 text-emerald-600" />
+              {sa.name || sa.nuskCode || `وكيل فرعي #${sa.id}`}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div className="p-2 rounded-lg bg-emerald-50 text-center">
+                <p className="text-lg font-bold text-emerald-700">{sa.pilgrimCount ?? sa.totalMutamers ?? 0}</p>
+                <p className="text-[10px] text-emerald-600">معتمر</p>
+              </div>
+              <div className="p-2 rounded-lg bg-blue-50 text-center">
+                <p className="text-lg font-bold text-blue-700">{sa.groupCount ?? 0}</p>
+                <p className="text-[10px] text-blue-600">مجموعة</p>
+              </div>
+              <div className="p-2 rounded-lg bg-orange-50 text-center">
+                <p className="text-lg font-bold text-orange-700">{sa.violationCount ?? 0}</p>
+                <p className="text-[10px] text-orange-600">مخالفة</p>
+              </div>
+              <div className="p-2 rounded-lg bg-purple-50 text-center">
+                <p className="text-lg font-bold text-purple-700">{formatCurrency(Number(sa.totalInvoiced ?? 0))}</p>
+                <p className="text-[10px] text-purple-600">إجمالي فواتير</p>
+              </div>
+            </div>
+            {sa.invoices?.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">آخر الفواتير</p>
+                {sa.invoices.slice(0, 3).map((inv: any) => (
+                  <div key={inv.id} className="flex items-center justify-between p-2 rounded border text-sm">
+                    <div>
+                      <span className="font-mono text-xs">{inv.ref}</span>
+                      <span className="text-xs text-muted-foreground ms-2">{inv.invoiceDate ? formatDateAr(inv.invoiceDate) : ""}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <PageStatusBadge status={inv.status} />
+                      <span className="font-bold text-xs">{formatCurrency(Number(inv.total ?? 0))}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }
 

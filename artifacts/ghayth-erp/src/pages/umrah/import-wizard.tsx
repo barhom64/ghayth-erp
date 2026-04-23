@@ -84,7 +84,7 @@ export default function UmrahImportWizard() {
       const wb = XLSX.read(bytes, { type: "array", cellDates: true });
       const sheetName = wb.SheetNames[0];
       if (!sheetName) { setParseError("الملف لا يحتوي على أوراق عمل"); return; }
-      const data = XLSX.utils.sheet_to_json<any>(wb.Sheets[sheetName], { defval: "" });
+      const data: any[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
       if (data.length === 0) { setParseError("الملف فارغ"); return; }
       const rows = data.map((row: any) => {
         const mapped: any = {};

@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { emitEvent, createAuditLog } from "./businessHelpers.js";
+import { emitEvent, createAuditLog, createJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
 import { ValidationError } from "./errorHandler.js";
 import type pg from "pg";
 
@@ -549,6 +549,38 @@ export async function confirmVouchersImport(
             ]
           );
           await logChange(client, batchId, "nusk_invoice", res.rows[0].id, "created");
+
+          const nuskId = res.rows[0].id;
+          const totalAmt = Number(row.totalAmount ?? 0);
+          if (totalAmt > 0) {
+            try {
+              const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
+              const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
+              const jeId = await createJournalEntry({
+                companyId: scope.companyId,
+                branchId: scope.branchId || 0,
+                createdBy: scope.userId,
+                ref: `NUSK-JE-${row.nuskInvoiceNumber}`,
+                description: `قيد فاتورة نسك ${row.nuskInvoiceNumber}`,
+                type: "purchase",
+                sourceType: "umrah_nusk_invoices",
+                sourceId: nuskId,
+                lines: [
+                  { accountCode: expCode, debit: totalAmt, credit: 0, description: "تكلفة خدمات نسك" },
+                  { accountCode: apCode, debit: 0, credit: totalAmt, description: "مستحقات نسك" },
+                ],
+              });
+              if (jeId) {
+                await client.query(
+                  `UPDATE umrah_nusk_invoices SET "purchaseInvoiceId"=$1 WHERE id=$2`,
+                  [jeId, nuskId]
+                );
+              }
+            } catch (jeErr) {
+              console.error(`[UmrahImport] Journal entry failed for NUSK ${row.nuskInvoiceNumber}:`, jeErr);
+            }
+          }
+
           newCount++;
         } else {
           const FIELDS = ["totalAmount", "netCost", "nuskStatus", "mutamerCount"];
