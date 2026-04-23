@@ -552,7 +552,8 @@ export async function confirmVouchersImport(
 
           const nuskId = res.rows[0].id;
           const totalAmt = Number(row.totalAmount ?? 0);
-          if (totalAmt > 0) {
+          const nuskStatus = String(row.nuskStatus || "pending").toLowerCase();
+          if (totalAmt > 0 && nuskStatus === "paid") {
             try {
               const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
               const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");

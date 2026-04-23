@@ -2816,6 +2816,45 @@ async function dailyAutoViolationDetection(): Promise<string> {
 
 // ── Umrah cron handlers (C29-C32) ──
 
+async function umrahDailyAbsconderCheck(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  let detected = 0;
+  for (const c of companies) {
+    const absconders = await rawQuery<any>(
+      `SELECT p.id, p."fullName", p."passportNumber", p."groupId", p."subAgentId"
+       FROM umrah_pilgrims p
+       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+         AND p.status = 'absconded'
+         AND NOT EXISTS (
+           SELECT 1 FROM umrah_violations v
+           WHERE v."companyId"=$1 AND v."mutamerId"=p.id AND v.type='absconded' AND v."deletedAt" IS NULL
+         )`,
+      [c.id]
+    );
+    for (const ab of absconders) {
+      await rawExecute(
+        `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber",
+          "mutamerId","groupId","subAgentId","penaltyAmount",status,description,"createdAt","updatedAt")
+         VALUES ($1,0,'absconded','passport',$2,$3,$4,$5,2000,'detected','غرامة هروب معتمر — رصد تلقائي',NOW(),NOW())`,
+        [c.id, ab.passportNumber || '', ab.id, ab.groupId, ab.subAgentId]
+      );
+      detected++;
+    }
+    if (absconders.length > 0) {
+      const mgr = await getManagerAssignmentId(c.id, 0);
+      if (mgr) {
+        await createNotification({
+          companyId: c.id, assignmentId: mgr,
+          type: "umrah", title: "رصد هاربين جدد",
+          body: `تم رصد ${absconders.length} معتمر متغيّب جديد وإنشاء غرامات 2,000 ر.س لكل منهم`,
+          priority: "urgent",
+        });
+      }
+    }
+  }
+  return `فحص الهاربين: ${detected} حالة جديدة عبر ${companies.length} شركة`;
+}
+
 async function umrahOverdueInvoiceEscalation(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
   let escalated = 0;
@@ -2964,6 +3003,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "hourly_approval_escalation", description: "تصعيد الموافقات كل ساعة", schedule: "0 * * * *", handler: hourlyApprovalEscalation },
   { name: "daily_deduction_check", description: "خصومات الغياب اليومية", schedule: "0 23 * * *", handler: dailyDeductionCheck },
   { name: "daily_auto_violation_detection", description: "الرصد التلقائي للمخالفات — تأخر وغياب ومغادرة مبكرة وخروج GPS", schedule: "30 23 * * *", handler: dailyAutoViolationDetection },
+  { name: "umrah_daily_absconder_check", description: "فحص المعتمرين الهاربين يومياً وإنشاء غرامات", schedule: "0 6 * * *", handler: umrahDailyAbsconderCheck },
   { name: "umrah_overdue_invoice_escalation", description: "تصعيد فواتير العمرة المتأخرة يومياً", schedule: "0 8 * * *", handler: umrahOverdueInvoiceEscalation },
   { name: "umrah_weekly_agent_performance", description: "تقرير أداء وكلاء العمرة الأسبوعي", schedule: "0 9 * * 0", handler: umrahWeeklyAgentPerformance },
   { name: "umrah_visa_expiry_alerts", description: "تنبيهات انتهاء تأشيرات العمرة", schedule: "0 7 * * *", handler: umrahVisaExpiryAlerts },

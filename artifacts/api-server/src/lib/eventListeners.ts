@@ -1138,11 +1138,72 @@ export function registerEventListeners() {
   eventBus.on("umrah.commission.calculated", async (payload) => {
     await logEvent("umrah.commission.calculated", payload);
     await logAudit("umrah.commission.calculated", { ...payload, action: "calculate", entity: "employee_commission_plans" });
+    if (payload.companyId) {
+      const after = payload.after as Record<string, unknown> | undefined;
+      if (after?.employeeAssignmentId) {
+        await createNotification({
+          companyId: payload.companyId,
+          assignmentId: after.employeeAssignmentId as number,
+          type: "umrah", title: "تم حساب عمولتك",
+          body: `عمولة شهر ${after?.month}/${after?.year}: ${after?.finalAmount ?? 0} ر.س`,
+          priority: "normal", refType: "employee_commission_plans", refId: payload.entityId as number,
+        });
+      }
+    }
   });
 
   eventBus.on("umrah.agent.linked", async (payload) => {
     await logEvent("umrah.agent.linked", payload);
     await logAudit("umrah.agent.linked", { ...payload, action: "link", entity: "umrah_sub_agents" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "ربط وكيل فرعي بعميل",
+          body: `تم ربط وكيل فرعي بعميل في النظام`,
+          priority: "normal", refType: "umrah_sub_agents", refId: payload.entityId as number,
+          actionUrl: `/umrah/sub-agents`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.violation.created", async (payload) => {
+    await logEvent("umrah.violation.created", payload);
+    await logAudit("umrah.violation.created", { ...payload, action: "create", entity: "umrah_violations" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "مخالفة عمرة جديدة",
+          body: `تم تسجيل مخالفة ${after?.type === "absconded" ? "هروب" : "تجاوز"} — غرامة ${after?.penaltyAmount ?? 0} ر.س`,
+          priority: after?.type === "absconded" ? "urgent" : "high",
+          refType: "umrah_violations", refId: payload.entityId as number,
+          actionUrl: `/umrah/violations`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.season.opened", async (payload) => {
+    await logEvent("umrah.season.opened", payload);
+    await logAudit("umrah.season.opened", { ...payload, action: "create", entity: "umrah_seasons" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "موسم عمرة جديد",
+          body: `تم فتح ${after?.name ?? "موسم جديد"} — يرجى مراجعة ربط الوكلاء`,
+          priority: "high", refType: "umrah_seasons", refId: payload.entityId as number,
+          actionUrl: `/umrah/sub-agents`,
+        });
+      }
+    }
   });
 
   const auditEntities = [
