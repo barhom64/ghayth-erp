@@ -10995,6 +10995,8 @@ CREATE TABLE public.employee_commission_calculations (
     "isExcludedMonth" boolean DEFAULT false,
     status character varying(20) DEFAULT 'calculated',
     "payrollLineId" integer,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
     "createdBy" integer,
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),

@@ -120,6 +120,11 @@ export function registerEventListeners() {
   eventBus.on("invoice.paid", async (payload) => {
     await logEvent("invoice.paid", payload);
     await logAudit("invoice.paid", { ...payload, action: "update" });
+
+    // Cross-module: mark financial obligation as fulfilled
+    if (payload.companyId && payload.entityId) {
+      await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch(() => {});
+    }
   });
 
   eventBus.on("leave.requested", async (payload) => {
@@ -339,6 +344,29 @@ export function registerEventListeners() {
   eventBus.on("expense.created", async (payload) => {
     await logEvent("expense.created", payload);
     await logAudit("expense.created", { ...payload, action: "create" });
+
+    // Cross-module: register payment obligation for the expense
+    if (payload.companyId && payload.entityId) {
+      try {
+        const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
+        if (Number(details.amount) > 0) {
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 14);
+          await registerObligation({
+            companyId: payload.companyId,
+            branchId: payload.branchId as number,
+            entityType: "expenses",
+            entityId: payload.entityId as number,
+            obligationType: "payment",
+            title: `مصروف #${payload.entityId} — ${Number(details.amount)} ر.س`,
+            dueAt: dueDate,
+            dedupeKey: `expense-${payload.entityId}`,
+          });
+        }
+      } catch (oblErr) {
+        console.error("[EventReaction] Expense obligation failed:", oblErr);
+      }
+    }
   });
 
   eventBus.on("vendor.created", async (payload) => {
@@ -720,6 +748,22 @@ export function registerEventListeners() {
   eventBus.on("employee.terminated", async (payload) => {
     await logEvent("employee.terminated", payload);
     await logAudit("employee.terminated", { ...payload, action: "terminate", entity: "employee" });
+
+    // Cross-module: deactivate umrah commission plans for terminated employee
+    if (payload.companyId && payload.entityId) {
+      try {
+        const result = await rawExecute(
+          `UPDATE employee_commission_plans SET status = 'suspended', "updatedAt" = NOW()
+           WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
+          [payload.entityId, payload.companyId]
+        );
+        if (result.affectedRows > 0) {
+          console.log(`[EventReaction] Suspended ${result.affectedRows} commission plan(s) for terminated employee #${payload.entityId}`);
+        }
+      } catch (err) {
+        console.error("[EventReaction] Commission plan suspension on termination failed:", err);
+      }
+    }
   });
   eventBus.on("leave.cancelled", async (payload) => {
     await logEvent("leave.cancelled", payload);
