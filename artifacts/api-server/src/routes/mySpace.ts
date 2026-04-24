@@ -129,7 +129,7 @@ router.get("/", async (req, res) => {
       let overtimeReqs: any[] = [];
       try {
         overtimeReqs = await rawQuery<any>(
-          `SELECT id, 'overtime' AS type, CONCAT('وقت إضافي ', "overtimeNumber") AS title, status, "createdAt"
+          `SELECT id, 'overtime' AS type, CONCAT('وقت إضافي ', "requestNumber") AS title, status, "createdAt"
            FROM hr_overtime_requests
            WHERE "assignmentId" = $1 AND status IN ('pending') AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 5`,
@@ -195,7 +195,7 @@ router.get("/", async (req, res) => {
         try {
           overtimeApprovals = await rawQuery<any>(
             `SELECT o.id, 'overtime' AS type, e.name AS "employeeName",
-                    CONCAT('وقت إضافي ', o."overtimeNumber", ' — ', o.hours, ' ساعة') AS title,
+                    CONCAT('وقت إضافي ', o."requestNumber", ' — ', o.hours, ' ساعة') AS title,
                     o.status, o."createdAt"
              FROM hr_overtime_requests o
              JOIN employees e ON e.id = o."employeeId"
