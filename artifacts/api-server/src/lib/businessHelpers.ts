@@ -1,4 +1,4 @@
-import { rawQuery, rawExecute } from "./rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { eventBus } from "./eventBus.js";
 import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
@@ -99,10 +99,6 @@ export async function emitEvent(params: {
   [key: string]: any;
 }) {
   try {
-    // NOTE: The previous implementation wrote to event_logs here. That
-    // write is now done by `logEvent` inside the listener in
-    // eventListeners.ts (one row per event, end of story). See the
-    // function doc above for the rationale.
     eventBus.emit(params.action, {
       companyId: params.companyId,
       branchId: params.branchId,
@@ -115,7 +111,16 @@ export async function emitEvent(params: {
       after: params.after,
     });
   } catch (err) {
-    console.error("emitEvent error:", err);
+    // Fallback: write directly to event_logs so no event is ever lost
+    try {
+      await rawExecute(
+        `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [params.companyId, params.userId, params.action, params.entity,
+         String(params.entityId), params.details ?? null]
+      );
+    } catch { /* DB also failed — last resort */ }
+    console.error("[emitEvent] listener failed, event persisted to event_logs:", err);
   }
 }
 
@@ -181,16 +186,57 @@ export async function createJournalEntry(params: {
   type?: string;
   sourceType?: string;
   sourceId?: number;
+  sourceKey?: string;
   operationType?: string;
   lines: JournalEntryLine[];
+  skipPeriodCheck?: boolean;
 }) {
-  // Idempotency: if a journal entry already exists for this source, return it
-  if (params.sourceType && params.sourceId) {
+  // Financial period guard: prevent posting to closed periods
+  if (!params.skipPeriodCheck) {
+    const postingDate = new Date().toISOString().split("T")[0];
+    const periodCheck = await checkFinancialPeriodOpen(params.companyId, postingDate);
+    if (!periodCheck.open) {
+      throw new ValidationError(
+        `الفترة المالية "${periodCheck.periodName}" مغلقة — لا يمكن ترحيل قيود في هذا التاريخ`,
+        { field: "financialPeriod", fix: "افتح الفترة المالية أو اختر تاريخاً في فترة مفتوحة" }
+      );
+    }
+  }
+
+  // Idempotency: composite key check (sourceKey takes priority over sourceType+sourceId)
+  const idempotencyKey = params.sourceKey ?? null;
+  if (idempotencyKey) {
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceKey"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [params.companyId, idempotencyKey]
+    );
+    if (existing) return existing.id;
+  } else if (params.sourceType && params.sourceId) {
     const [existing] = await rawQuery<any>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceType"=$2 AND "sourceId"=$3 AND "deletedAt" IS NULL LIMIT 1`,
       [params.companyId, params.sourceType, params.sourceId]
     );
     if (existing) return existing.id;
+  }
+
+  // Validate all account codes BEFORE creating the journal header
+  const uniqueCodes = [...new Set(params.lines.map(l => l.accountCode).filter(Boolean))];
+  if (uniqueCodes.length > 0) {
+    const placeholders = uniqueCodes.map((_, i) => `$${i + 2}`).join(",");
+    const accountRows = await rawQuery<any>(
+      `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId" = $1 AND code IN (${placeholders}) AND "deletedAt" IS NULL`,
+      [params.companyId, ...uniqueCodes]
+    );
+    const accountMap = new Map(accountRows.map((a: any) => [a.code, a]));
+    for (const code of uniqueCodes) {
+      const acc = accountMap.get(code);
+      if (!acc) {
+        throw new ValidationError(`الحساب "${code}" غير موجود في شجرة الحسابات`, { field: "accountCode", fix: "اختر حساباً موجوداً من شجرة الحسابات" });
+      }
+      if (acc.allowPosting === false) {
+        throw new ValidationError(`لا يمكن الترحيل على الحساب "${code}" — هذا حساب تجميعي (رئيسي). استخدم حساباً فرعياً يقبل الحركة`, { field: "accountCode", fix: "اختر حساباً فرعياً (تفصيلياً) يقبل الحركة" });
+      }
+    }
   }
 
   const totalDebit = params.lines.reduce((s, l) => s + Number(l.debit), 0);
@@ -234,69 +280,62 @@ export async function createJournalEntry(params: {
     );
   }
 
-  const { insertId: journalId } = await rawExecute(
-    `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type,"sourceType","sourceId")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [
-      params.companyId, params.branchId, params.createdBy, params.ref, params.description,
-      params.type ?? "manual", params.sourceType ?? null, params.sourceId ?? null,
-    ]
-  );
-
-  // Validate all account codes exist and allow posting
-  const uniqueCodes = [...new Set(params.lines.map(l => l.accountCode).filter(Boolean))];
-  if (uniqueCodes.length > 0) {
-    const placeholders = uniqueCodes.map((_, i) => `$${i + 2}`).join(",");
-    const accountRows = await rawQuery<any>(
-      `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId" = $1 AND code IN (${placeholders}) AND "deletedAt" IS NULL`,
-      [params.companyId, ...uniqueCodes]
-    );
-    const accountMap = new Map(accountRows.map((a: any) => [a.code, a]));
-    for (const code of uniqueCodes) {
-      const acc = accountMap.get(code);
-      if (!acc) {
-        throw new ValidationError(`الحساب "${code}" غير موجود في شجرة الحسابات`, { field: "accountCode", fix: "اختر حساباً موجوداً من شجرة الحسابات" });
-      }
-      if (acc.allowPosting === false) {
-        throw new ValidationError(`لا يمكن الترحيل على الحساب "${code}" — هذا حساب تجميعي (رئيسي). استخدم حساباً فرعياً يقبل الحركة`, { field: "accountCode", fix: "اختر حساباً فرعياً (تفصيلياً) يقبل الحركة" });
-      }
-    }
-  }
-
-  const accountCodesToUpdate: string[] = [];
-  for (const line of params.lines) {
-    let accountId = line.accountId ?? null;
-    if (!accountId && line.accountCode) {
-      const [acc] = await rawQuery<any>(
-        `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 LIMIT 1`,
-        [params.companyId, line.accountCode]
-      );
-      accountId = acc?.id ?? null;
-    }
-
-    await rawExecute(
-      `INSERT INTO journal_lines (
-        "journalId","accountCode","accountId",debit,credit,description,"costCenter",
-        "departmentId","projectId","employeeId","vehicleId","propertyId","contractId",
-        "productId","clientId","vendorId","driverId","activityType","templateId"
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+  const journalId = await withTransaction(async (client) => {
+    const headerResult = await client.query(
+      `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type,"sourceType","sourceId","sourceKey")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [
-        journalId, line.accountCode, accountId, line.debit, line.credit,
-        line.description ?? null, line.costCenter ?? null,
-        line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
-        line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
-        line.productId ?? null, line.clientId ?? null, line.vendorId ?? null, line.driverId ?? null,
-        line.activityType ?? null, line.templateId ?? null,
+        params.companyId, params.branchId, params.createdBy, params.ref, params.description,
+        params.type ?? "manual", params.sourceType ?? null, params.sourceId ?? null,
+        idempotencyKey,
       ]
     );
-    if (line.accountCode) accountCodesToUpdate.push(line.accountCode);
-  }
+    const jId = headerResult.rows[0].id as number;
 
-  await updateAccountBalances(params.companyId, params.lines);
+    for (const line of params.lines) {
+      let accountId = line.accountId ?? null;
+      if (!accountId && line.accountCode) {
+        const accResult = await client.query(
+          `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 LIMIT 1`,
+          [params.companyId, line.accountCode]
+        );
+        accountId = accResult.rows[0]?.id ?? null;
+      }
 
-  // Bus emission — closes the dead listener in eventListeners.ts:276 so every
-  // journal entry (from fleet trips, payroll, invoices, manual postings …)
-  // produces one audit_logs row + one event_logs row via the subscriber.
+      await client.query(
+        `INSERT INTO journal_lines (
+          "journalId","accountCode","accountId",debit,credit,description,"costCenter",
+          "departmentId","projectId","employeeId","vehicleId","propertyId","contractId",
+          "productId","clientId","vendorId","driverId","activityType","templateId"
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+        [
+          jId, line.accountCode, accountId, line.debit, line.credit,
+          line.description ?? null, line.costCenter ?? null,
+          line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
+          line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
+          line.productId ?? null, line.clientId ?? null, line.vendorId ?? null, line.driverId ?? null,
+          line.activityType ?? null, line.templateId ?? null,
+        ]
+      );
+    }
+
+    const balanceChanges = new Map<string, number>();
+    for (const line of params.lines) {
+      if (!line.accountCode) continue;
+      const delta = Number(line.debit) - Number(line.credit);
+      balanceChanges.set(line.accountCode, (balanceChanges.get(line.accountCode) || 0) + delta);
+    }
+    for (const [accountCode, delta] of balanceChanges) {
+      if (Math.abs(delta) < 0.001) continue;
+      await client.query(
+        `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
+        [delta, params.companyId, accountCode]
+      );
+    }
+
+    return jId;
+  });
+
   eventBus.emit("journal.entry.created", {
     companyId: params.companyId,
     branchId: params.branchId,

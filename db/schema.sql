@@ -6242,6 +6242,7 @@ CREATE TABLE public.invoices (
     "discountAmount" numeric(15,2) DEFAULT 0 NOT NULL,
     "discountPercent" numeric(5,2) DEFAULT 0 NOT NULL,
     "journalEntryId" integer,
+    "glStatus" character varying(20) DEFAULT 'pending',
     "sentAt" timestamp with time zone,
     notes text,
     "deletedAt" timestamp with time zone,
@@ -6464,6 +6465,7 @@ CREATE TABLE public.journal_entries (
     "reversedById" integer,
     "reversedAt" timestamp with time zone,
     "reversalReason" text,
+    "sourceKey" character varying(200),
     CONSTRAINT "journal_entries_approvalStatus_check" CHECK ((("approvalStatus")::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_review'::character varying)::text, ('approved'::character varying)::text, ('posted'::character varying)::text, ('rejected'::character varying)::text]))),
     CONSTRAINT journal_entries_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('posted'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('returned'::character varying)::text, ('cancelled'::character varying)::text])))
 );
@@ -7670,6 +7672,8 @@ CREATE TABLE public.payroll_runs (
     "approvedBy" integer,
     "approvedAt" timestamp without time zone,
     "paidAt" timestamp without time zone,
+    "journalEntryId" integer,
+    "glStatus" character varying(20) DEFAULT 'pending',
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone
 );
@@ -8799,6 +8803,8 @@ CREATE TABLE public.purchase_orders (
     "createdBy" integer,
     "createdAt" timestamp without time zone DEFAULT now(),
     "branchId" integer,
+    "journalEntryId" integer,
+    "glStatus" character varying(20) DEFAULT 'pending',
     "deletedAt" timestamp with time zone,
     CONSTRAINT purchase_orders_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text])))
 );
@@ -17515,6 +17521,12 @@ CREATE INDEX journal_entries_deleted_at_idx ON public.journal_entries USING btre
 --
 
 CREATE UNIQUE INDEX uq_journal_entries_source ON public.journal_entries USING btree ("companyId", "sourceType", "sourceId") WHERE ("sourceType" IS NOT NULL AND "sourceId" IS NOT NULL AND "deletedAt" IS NULL);
+
+--
+-- Name: uq_journal_entries_source_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_journal_entries_source_key ON public.journal_entries USING btree ("companyId", "sourceKey") WHERE ("sourceKey" IS NOT NULL AND "deletedAt" IS NULL);
 
 
 --
