@@ -128,7 +128,7 @@ export default function MyAttendance() {
         })}
       </div>
 
-      <DataTable<any>
+      <DataTable
         columns={attendanceColumns}
         data={records}
         emptyMessage="لا توجد سجلات حضور لهذا الشهر"
