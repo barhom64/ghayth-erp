@@ -291,6 +291,7 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE id=$1`, [insertId]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.reply.created", entity: "ticket_replies", entityId: insertId, details: JSON.stringify({ ticketId, isInternal: b.isInternal || false }) }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create reply error:"); }
 });
@@ -335,6 +336,7 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
       } catch (e) { console.error("Field visit notification error:", e); }
     }
 
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.field_visit", entity: "support_tickets", entityId: ticketId, details: JSON.stringify({ distanceKm, visitDate: b.visitDate }) }).catch(console.error);
     res.json({
       ticketId, status: 'field_visit', distanceKm,
       visitDate: b.visitDate, assigneeId: ticket.assigneeId,
@@ -629,6 +631,7 @@ router.post("/tickets/:id/csat", requirePermission("support:write"), async (req,
       `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
       [ticketId, scope.companyId, ticket.assigneeId, score, comment || null]
     );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.csat_rated", entity: "ticket_csat_ratings", entityId: ticketId, details: JSON.stringify({ score }) }).catch(console.error);
     res.status(201).json({ ticketId, score, comment });
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
@@ -692,6 +695,7 @@ router.post("/kb", requirePermission("support:write"), async (req, res) => {
       [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [insertId]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
@@ -711,6 +715,7 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [id]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
@@ -720,6 +725,7 @@ router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) =
     const scope = req.scope!;
     const id = Number(req.params.id);
     await rawExecute(`UPDATE kb_articles SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.deleted", entity: "kb_articles", entityId: id, details: "{}" }).catch(console.error);
     res.json({ message: "تم حذف المقالة بنجاح" });
   } catch (err) { handleRouteError(err, res, "KB delete error:"); }
 });

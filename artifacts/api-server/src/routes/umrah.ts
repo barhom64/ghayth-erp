@@ -137,7 +137,7 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
 router.get("/agents", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List agents error"); }
 });
@@ -190,10 +190,27 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Update agent error"); }
 });
 
+router.delete("/agents/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT id, name FROM umrah_agents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!existing) throw new NotFoundError("الوكيل غير موجود");
+    const [inUse] = await rawQuery<any>(`SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "agentId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (Number(inUse?.c) > 0) {
+      throw new ConflictError(`لا يمكن حذف الوكيل — مرتبط بـ ${inUse.c} معتمر`);
+    }
+    await rawExecute(`UPDATE umrah_agents SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_agents", entityId: id, before: { name: existing.name } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.deleted", entity: "umrah_agents", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch(console.error);
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete agent error"); }
+});
+
 router.get("/packages", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 ORDER BY p.name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 AND p."deletedAt" IS NULL ORDER BY p.name`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List packages error"); }
 });
@@ -260,8 +277,9 @@ router.delete("/packages/:id", requirePermission("umrah:write"), async (req, res
     if (Number(inUse[0]?.c) > 0) {
       throw new ConflictError(`لا يمكن حذف الباقة — مرتبطة بـ ${inUse[0].c} معتمر`);
     }
-    await rawExecute(`DELETE FROM umrah_packages WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
+    await rawExecute(`UPDATE umrah_packages SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_packages", entityId: Number(req.params.id) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.deleted", entity: "umrah_packages", entityId: Number(req.params.id), details: "{}" }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete package error"); }
 });
@@ -416,6 +434,26 @@ router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): P
     const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC`, [req.params.id, scope.companyId]);
     res.json({ ...row, penalties });
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
+});
+
+router.delete("/pilgrims/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT id, "fullName", status FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!existing) throw new NotFoundError("المعتمر غير موجود");
+    if (existing.status === "arrived") {
+      throw new ConflictError("لا يمكن حذف معتمر وصل بالفعل");
+    }
+    const [invoiced] = await rawQuery<any>(`SELECT COUNT(*)::int AS c FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 AND status='invoiced'`, [id, scope.companyId]);
+    if (Number(invoiced?.c) > 0) {
+      throw new ConflictError("لا يمكن حذف معتمر عليه غرامات مُفوترة");
+    }
+    await rawExecute(`UPDATE umrah_pilgrims SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_pilgrims", entityId: id, before: { fullName: existing.fullName } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.deleted", entity: "umrah_pilgrims", entityId: id, details: JSON.stringify({ fullName: existing.fullName }) }).catch(console.error);
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete pilgrim error"); }
 });
 
 router.post("/import", requirePermission("umrah:write"), async (req, res): Promise<void> => {

@@ -344,6 +344,22 @@ router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List violations"); }
 });
 
+router.get("/violations/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<any>(
+      `SELECT v.*, a.name AS "agentName", sa.name AS "subAgentName"
+       FROM umrah_violations v
+       LEFT JOIN umrah_agents a ON v."agentId"=a.id
+       LEFT JOIN umrah_sub_agents sa ON v."subAgentId"=sa.id
+       WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
+      [req.params.id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المخالفة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get violation"); }
+});
+
 router.post("/violations", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;

@@ -252,6 +252,15 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       action: "overtime.created", entity: "hr_overtime_requests", entityId: insertId,
       reason: `طلب وقت إضافي: ${requestNumber} — ${hours} ساعات`,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.overtime.created",
+      entity: "hr_overtime_requests",
+      entityId: insertId,
+      details: JSON.stringify({ requestNumber, hours, totalAmount, overtimeDate: b.overtimeDate, assignmentId: b.assignmentId }),
+    }).catch(console.error);
 
     res.status(201).json({
       id: insertId, requestNumber, totalAmount,
@@ -305,6 +314,15 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
         body: `تم رفض الطلب ${item.requestNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_overtime_request", refId: item.id,
       }).catch(console.error);
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "hr.overtime.rejected",
+        entity: "hr_overtime_requests",
+        entityId: item.id,
+        details: JSON.stringify({ requestNumber: item.requestNumber, reason: rejectionReason }),
+      }).catch(console.error);
       res.json({ success: true, message: "تم رفض الطلب" });
       return;
     }
@@ -347,6 +365,15 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       action: "overtime.approved", entity: "hr_overtime_requests", entityId: item.id,
       reason: `اعتماد الوقت الإضافي: ${item.requestNumber}`,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.overtime.approved",
+      entity: "hr_overtime_requests",
+      entityId: item.id,
+      details: JSON.stringify({ requestNumber: item.requestNumber, hours: item.hours, totalAmount: item.totalAmount }),
+    }).catch(console.error);
 
     res.json({ success: true, message: "تم اعتماد طلب الوقت الإضافي" });
   } catch (err) {
@@ -390,6 +417,15 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
       body: `تم رفض الطلب ${item.requestNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.overtime.rejected",
+      entity: "hr_overtime_requests",
+      entityId: item.id,
+      details: JSON.stringify({ requestNumber: item.requestNumber, reason: b.reason }),
     }).catch(console.error);
 
     res.json({ success: true });

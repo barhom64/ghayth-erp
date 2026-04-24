@@ -5,7 +5,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { getDeliveryStats } from "../lib/notificationEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -164,6 +164,15 @@ router.put("/preferences", requirePermission("admin:write"), async (req: Request
       entity: "notification_preferences", entityId: 0,
       after: { preferences },
     }).catch(console.error);
+    emitEvent({
+      companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.preferences.updated",
+      entity: "notification_preferences",
+      entityId: 0,
+      details: JSON.stringify({ count: preferences.length }),
+    }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {
@@ -218,6 +227,15 @@ router.post("/routing-rules", requirePermission("admin:write"), async (req: Requ
       entity: "notification_routing_rules", entityId: rows[0]?.id ?? 0,
       after: { eventCategory, channels, priority, description, fallbackChainId, isActive },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.routing_rule.created",
+      entity: "notification_routing_rules",
+      entityId: rows[0]?.id ?? 0,
+      details: JSON.stringify({ eventCategory, channels }),
+    }).catch(console.error);
 
     res.json({ data: rows[0] });
   } catch (err) {
@@ -251,6 +269,15 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
       entity: "notification_routing_rules", entityId: Number(req.params.id),
       after: { channels, priority, description, fallbackChainId, isActive },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.routing_rule.updated",
+      entity: "notification_routing_rules",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ channels, priority }),
+    }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {
@@ -274,6 +301,15 @@ router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req
       companyId: scope.companyId, userId: scope.userId, action: "delete_routing_rule",
       entity: "notification_routing_rules", entityId: Number(req.params.id),
       before,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.routing_rule.deleted",
+      entity: "notification_routing_rules",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ eventCategory: (before as any)?.eventCategory }),
     }).catch(console.error);
 
     res.json({ success: true });
@@ -329,6 +365,15 @@ router.post("/templates", requirePermission("admin:write"), async (req: Request,
       entity: "notification_templates", entityId: rows[0]?.id ?? 0,
       after: { templateKey, channel, titleTemplate, bodyTemplate, language, isActive },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.template.created",
+      entity: "notification_templates",
+      entityId: rows[0]?.id ?? 0,
+      details: JSON.stringify({ templateKey, channel, language }),
+    }).catch(console.error);
 
     res.json({ data: rows[0] });
   } catch (err) {
@@ -361,6 +406,15 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
       entity: "notification_templates", entityId: Number(req.params.id),
       after: { titleTemplate, bodyTemplate, isActive },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.template.updated",
+      entity: "notification_templates",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ titleTemplate, isActive }),
+    }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {
@@ -384,6 +438,15 @@ router.delete("/templates/:id", requirePermission("admin:write"), async (req: Re
       companyId: scope.companyId, userId: scope.userId, action: "delete_notification_template",
       entity: "notification_templates", entityId: Number(req.params.id),
       before,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.template.deleted",
+      entity: "notification_templates",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ templateKey: (before as any)?.templateKey }),
     }).catch(console.error);
 
     res.json({ success: true });
@@ -428,6 +491,15 @@ router.post("/fallback-chains", requirePermission("admin:write"), async (req: Re
       entity: "notification_fallback_chains", entityId: rows[0]?.id ?? 0,
       after: { name, description, steps, isActive },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.fallback_chain.created",
+      entity: "notification_fallback_chains",
+      entityId: rows[0]?.id ?? 0,
+      details: JSON.stringify({ name, stepsCount: steps.length }),
+    }).catch(console.error);
 
     res.json({ data: rows[0] });
   } catch (err) {
@@ -460,6 +532,15 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
       entity: "notification_fallback_chains", entityId: Number(req.params.id),
       after: { name, description, steps, isActive },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.fallback_chain.updated",
+      entity: "notification_fallback_chains",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ name }),
+    }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {
@@ -483,6 +564,15 @@ router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (r
       companyId: scope.companyId, userId: scope.userId, action: "delete_fallback_chain",
       entity: "notification_fallback_chains", entityId: Number(req.params.id),
       before,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.fallback_chain.deleted",
+      entity: "notification_fallback_chains",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ name: (before as any)?.name }),
     }).catch(console.error);
 
     res.json({ success: true });
@@ -536,6 +626,15 @@ router.post("/webhooks", requirePermission("admin:write"), async (req: Request, 
       entity: "notification_webhooks", entityId: rows[0]?.id ?? 0,
       after: { name, url, events, isActive },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.webhook.created",
+      entity: "notification_webhooks",
+      entityId: rows[0]?.id ?? 0,
+      details: JSON.stringify({ name, url }),
+    }).catch(console.error);
 
     res.json({ data: rows[0] });
   } catch (err) {
@@ -584,6 +683,15 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
       entity: "notification_webhooks", entityId: Number(req.params.id),
       after: { name, url, events, isActive },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.webhook.updated",
+      entity: "notification_webhooks",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ name, url }),
+    }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {
@@ -607,6 +715,15 @@ router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Req
       companyId: scope.companyId, userId: scope.userId, action: "delete_webhook",
       entity: "notification_webhooks", entityId: Number(req.params.id),
       before,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "notification.webhook.deleted",
+      entity: "notification_webhooks",
+      entityId: Number(req.params.id),
+      details: JSON.stringify({ name: (before as any)?.name }),
     }).catch(console.error);
 
     res.json({ success: true });
