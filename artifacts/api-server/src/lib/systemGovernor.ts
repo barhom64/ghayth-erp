@@ -136,3 +136,26 @@ export async function checkSystemGuards(
 export function registerGuard(guard: GuardFn, scope: GuardScope): void {
   GUARD_REGISTRY.push({ guard, scope });
 }
+
+import type { Request, Response, NextFunction } from "express";
+
+export function requireGuards(scope: GuardScope = "financial") {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
+    const companyId = (req as any).scope?.companyId;
+    if (!companyId) return next();
+    const result = await checkSystemGuards(companyId, scope, {
+      date: new Date().toISOString().split("T")[0],
+      entity: req.path.split("/")[1],
+    });
+    if (!result.allowed) {
+      const reasons = result.violations.map(v => v.reason).join(" | ");
+      return _res.status(403).json({
+        error: reasons,
+        code: "SYSTEM_GUARD_BLOCK",
+        violations: result.violations,
+      });
+    }
+    next();
+  };
+}

@@ -87,6 +87,7 @@ import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
 import contractsRouter from "./hr-contracts.js";
 import correspondenceRouter from "./correspondence.js";
+import { requireGuards } from "../lib/systemGovernor.js";
 
 const router: IRouter = Router();
 
@@ -164,21 +165,21 @@ router.use("/hr", requireModule("hr"), overtimeRouter);
 router.use("/hr", requireModule("hr"), exitRouter);
 router.use("/hr/training", requireModule("hr"), trainingRouter);
 router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
-router.use("/finance", requireModule("finance"), invoicesRouter);
-router.use("/finance", requireModule("finance"), journalRouter);
-router.use("/finance", requireModule("finance"), purchaseRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), invoicesRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), journalRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), purchaseRouter);
 router.use("/finance", requireModule("finance"), reportsRouter);
-router.use("/finance", requireModule("finance"), custodiesRouter);
-router.use("/finance", requireModule("finance"), zatcaRouter);
-router.use("/finance", requireModule("finance"), accountingEngineRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), custodiesRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), zatcaRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), accountingEngineRouter);
 router.use("/finance", requireModule("finance"), financeAlgorithmsRouter);
-router.use("/finance", requireModule("finance"), collectionRouter);
-router.use("/finance", requireModule("finance"), budgetRouter);
-router.use("/finance", requireModule("finance"), accountsRouter);
-router.use("/finance", requireModule("finance"), vendorsRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), collectionRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), budgetRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), accountsRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorsRouter);
 router.use("/finance", requireModule("finance"), financeHardeningRouter);
-router.use("/finance", requireModule("finance"), recurringRouter);
-router.use("/finance", requireModule("finance"), costCentersRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
 // financeRouter (finance.ts monolith) removed in Phase 7.1 — the 13
 // singleton routes it still owned were migrated to finance-purchase.ts,
 // finance-vendors.ts, and finance-reports.ts during canonicalisation.
