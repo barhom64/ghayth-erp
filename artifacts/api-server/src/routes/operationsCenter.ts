@@ -4,7 +4,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ValidationError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
-import { emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 // ── Zod validation schemas ──────────────────────────────────────────
@@ -581,6 +581,12 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       `INSERT INTO daily_close_log ("companyId", "closeDate", "closedBy", notes, forced) VALUES ($1, $2, $3, $4, $5)`,
       [cid, today, userId, notes, forceClose]
     );
+
+    createAuditLog({
+      companyId: cid, userId: scope.userId,
+      action: "create", entity: "daily_close", entityId: 0,
+      reason: forceClose ? `إقفال يومي بتجاوز - ${today}` : `إقفال يومي - ${today}`,
+    }).catch(console.error);
 
     try {
       await rawQuery(

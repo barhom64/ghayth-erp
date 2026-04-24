@@ -614,6 +614,7 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
       [req.params.id, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.updated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ planName: b.planName }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_commission_plans", entityId: Number(req.params.id), after: { planName: b.planName } }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update commission plan"); }
 });
@@ -625,6 +626,7 @@ router.post("/commission-plans/:id/simulate", requirePermission("umrah:read"), a
     const scope = req.scope!;
     const result = await simulateCommission(Number(req.params.id), month, year);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.simulated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ month, year }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_commission_plans", entityId: Number(req.params.id), after: { month, year } }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Simulate commission"); }
 });
@@ -636,6 +638,7 @@ router.post("/commission-plans/:id/calculate", requirePermission("umrah:write"),
     if (!month || !year) throw new ValidationError("الشهر والسنة مطلوبان");
     const result = await calculateCommissionForPlan(Number(req.params.id), month, year, scope.userId);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ month, year }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_commissions", entityId: Number(req.params.id), after: { month, year } }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Calculate commission"); }
 });
@@ -677,6 +680,7 @@ router.post("/import/preview", requirePermission("umrah:write"), async (req, res
       ? await previewMutamersImport(importScope, rows)
       : await previewVouchersImport(importScope, rows);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, action: "umrah.import.previewed", entity: "umrah_import_logs", entityId: 0, details: JSON.stringify({ fileType, seasonId, rowCount: rows.length }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_pilgrims", entityId: 0, after: { fileType, seasonId, rowCount: rows.length } }).catch(console.error);
     res.json(diff);
   } catch (err) { handleRouteError(err, res, "Import preview"); }
 });

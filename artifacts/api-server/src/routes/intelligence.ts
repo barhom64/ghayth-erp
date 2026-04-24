@@ -537,6 +537,10 @@ router.post("/algorithms/haversine", requirePermission("admin:write"), async (re
     const scope = req.scope!;
     const { lat1, lon1, lat2, lon2 } = body;
     const distance = haversineDistance(lat1, lon1, lat2, lon2);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "preview", entity: "algorithms", entityId: 0,
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -558,6 +562,10 @@ router.post("/algorithms/moving-average", requirePermission("admin:write"), asyn
     const scope = req.scope!;
     const { values, periods } = body;
     const result = movingAverage(values, periods);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "preview", entity: "algorithms", entityId: 0,
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -579,6 +587,10 @@ router.post("/algorithms/load-balance", requirePermission("admin:write"), async 
     const scope = req.scope!;
     const { resources, targetLat, targetLon, maxWorkload } = body;
     const selected = selectLeastLoadedResource(resources, { targetLat, targetLon, maxWorkload });
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "preview", entity: "algorithms", entityId: 0,
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,

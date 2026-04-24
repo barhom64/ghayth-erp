@@ -532,6 +532,12 @@ router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, re
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "fleet_vehicles", entityId: id,
+      after: { plateNumber: existing.plateNumber, status: existing.status },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المركبة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
 });
@@ -665,6 +671,12 @@ router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res
       entityId: id,
       before: { name: existing.name, status: existing.status },
       after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "fleet_drivers", entityId: id,
+      after: { name: existing.name, status: existing.status },
     }).catch(console.error);
 
     res.json({ message: "تم حذف السائق بنجاح" });
@@ -1062,6 +1074,13 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
       action: "fleet.trip.cancelled", entity: "fleet_trips", entityId: tripId,
       details: JSON.stringify({ tripId, reason }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "fleet_trips", entityId: tripId,
+      after: { status: "cancelled", reason },
+    }).catch(console.error);
+
     res.json({ ...updated, event: "fleet.trip.cancelled" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -1097,6 +1116,13 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
       action: "fleet.trip.waypoint_added", entity: "fleet_trip_waypoints", entityId: insertId,
       details: JSON.stringify({ tripId, lat, lon }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_trip_waypoints", entityId: insertId,
+      after: { tripId, lat, lon, speed: b.speed || 0 },
+    }).catch(console.error);
+
     res.status(201).json({ id: insertId, tripId, lat, lon });
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
@@ -1217,6 +1243,12 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
       }
     } catch (obErr) { console.error("Maintenance obligation registration failed:", obErr); }
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_maintenance", entityId: insertId,
+      after: { vehicleId: b.vehicleId, type: b.type, description: b.description, cost: b.cost || 0 },
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create maintenance error:"); }
 });
@@ -1297,6 +1329,12 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       details: `إكمال صيانة #${id} بتكلفة ${finalCost} ريال`,
     });
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "fleet_maintenance", entityId: id,
+      after: { status: "completed", cost: finalCost, vehicleId: m.vehicleId },
+    }).catch(console.error);
+
     res.json({ ...m, status: 'completed', cost: finalCost, event: "fleet.maintenance.completed" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1345,6 +1383,12 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       entityId: id,
       details: `إلغاء صيانة #${id}: ${b.reason}`,
     });
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "fleet_maintenance", entityId: id,
+      after: { status: "cancelled", reason: b.reason },
+    }).catch(console.error);
 
     const [updated] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1`, [id]);
     res.json({ ...updated, event: "fleet.maintenance.cancelled" });
@@ -1601,6 +1645,13 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       action: "fleet.fuel_log.created", entity: "fleet_fuel_logs", entityId: insertId,
       details: JSON.stringify({ vehicleId: resolvedVehicleId, liters, totalCost }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_fuel_logs", entityId: insertId,
+      after: { vehicleId: resolvedVehicleId, liters, totalCost, fuelDate, stationName },
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create fuel log error:"); }
 });
@@ -1685,6 +1736,13 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
       action: "fleet.insurance.created", entity: "fleet_insurance", entityId: insertId,
       details: JSON.stringify({ vehicleId: b.vehicleId, provider: b.provider, premium }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_insurance", entityId: insertId,
+      after: { vehicleId: b.vehicleId, provider: b.provider, policyNumber: b.policyNumber, premium },
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create insurance error:"); }
 });
@@ -1823,6 +1881,12 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "fleet_trips", entityId: id,
+      after: { status: existing.status },
+    }).catch(console.error);
+
     res.json({ success: true, message: "تم حذف الرحلة" });
   } catch (err) { handleRouteError(err, res, "Delete trip error:"); }
 });
@@ -1952,6 +2016,12 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "fleet_maintenance", entityId: id,
+      after: { status: existing.status, vehicleId: existing.vehicleId },
+    }).catch(console.error);
+
     res.json({ success: true, message: "تم حذف سجل الصيانة" });
   } catch (err) { handleRouteError(err, res, "Delete maintenance error:"); }
 });
@@ -2052,6 +2122,12 @@ router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, r
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "fleet_fuel_logs", entityId: id,
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ success: true, message: "تم حذف سجل الوقود" });
   } catch (err) { handleRouteError(err, res, "Delete fuel log error:"); }
 });
@@ -2149,6 +2225,12 @@ router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, r
       action: "fleet.insurance.deleted",
       entity: "fleet_insurance",
       entityId: id,
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "fleet_insurance", entityId: id,
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
@@ -2264,6 +2346,13 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
       action: "fleet.preventive.created", entity: "fleet_preventive_plans", entityId: insertId,
       details: JSON.stringify({ vehicleId: b.vehicleId, serviceType: b.serviceType }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_preventive_plans", entityId: insertId,
+      after: { vehicleId: b.vehicleId, serviceType: b.serviceType, intervalKm: b.intervalKm, intervalDays: b.intervalDays },
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create preventive plan error:"); }
 });
@@ -2342,6 +2431,13 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
       action: "fleet.preventive.updated", entity: "fleet_preventive_plans", entityId: id,
       details: JSON.stringify({ id }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "fleet_preventive_plans", entityId: id,
+      after: { ...b },
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update preventive plan error:"); }
 });

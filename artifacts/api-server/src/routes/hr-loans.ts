@@ -492,6 +492,11 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       entityId: loan.id,
       details: JSON.stringify({ loanNumber: loan.loanNumber, reason: b.reason }),
     }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_employee_loans", entityId: Number(req.params.id),
+      after: { status: "rejected", rejectionReason: b.reason || null, loanNumber: loan.loanNumber },
+    }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {

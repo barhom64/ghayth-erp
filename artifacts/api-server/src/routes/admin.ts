@@ -642,6 +642,15 @@ router.post("/integrations/:id/test", requirePermission("admin:write"), async (r
       body: "هذه رسالة اختبار من نظام غيث ERP للتحقق من إعداد التكامل.",
     });
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "preview", entity: "gov_integrations", entityId: Number(req.params.id),
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "admin.integration.tested", entity: "gov_integrations", entityId: Number(req.params.id),
+      details: JSON.stringify({ success: result.success, channel: integration.type }),
+    }).catch(console.error);
     res.json({ success: result.success, error: result.error, logId: result.logId });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });

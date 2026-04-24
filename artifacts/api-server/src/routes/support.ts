@@ -292,6 +292,11 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
 
     const [row] = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE id=$1`, [insertId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.reply.created", entity: "ticket_replies", entityId: insertId, details: JSON.stringify({ ticketId, isInternal: b.isInternal || false }) }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "ticket_replies", entityId: insertId,
+      after: { ticketId, message: b.message, isInternal: b.isInternal || false },
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create reply error:"); }
 });
@@ -337,6 +342,11 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
     }
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.field_visit", entity: "support_tickets", entityId: ticketId, details: JSON.stringify({ distanceKm, visitDate: b.visitDate }) }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "field_visits", entityId: ticketId,
+      after: { ticketId, distanceKm, visitDate: b.visitDate, assigneeId: ticket.assigneeId },
+    }).catch(console.error);
     res.json({
       ticketId, status: 'field_visit', distanceKm,
       visitDate: b.visitDate, assigneeId: ticket.assigneeId,
@@ -508,6 +518,11 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1`, [ticketId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "support_tickets", entityId: ticketId,
+      after: { status: b.status, assigneeId: b.assigneeId, priority: b.priority },
+    }).catch(console.error);
     res.json({ ...row, surveyQueued });
   } catch (err) { handleRouteError(err, res, "Update ticket error:"); }
 });
@@ -529,6 +544,12 @@ router.delete("/tickets/:id", requirePermission("support:delete"), async (req, r
       entityId: id,
       before: { status: existing.status, ref: existing.ref },
       after: { status: "deleted" },
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "support_tickets", entityId: id,
+      after: { ref: existing.ref, status: existing.status },
     }).catch(console.error);
 
     res.json({ message: "تم حذف التذكرة بنجاح" });
@@ -561,6 +582,16 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
         });
       } catch (e) { console.error("SLA breach notification error:", e); }
     }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "support.sla.checked", entity: "support_tickets", entityId: 0,
+      details: JSON.stringify({ breachedCount: breached.length }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "support_tickets", entityId: 0,
+      after: { breachedCount: breached.length },
+    }).catch(console.error);
     res.json({ breached: breached.length, tickets: breached });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -627,6 +658,11 @@ router.post("/tickets/:id/csat", requirePermission("support:write"), async (req,
       [ticketId, scope.companyId, ticket.assigneeId, score, comment || null]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.csat_rated", entity: "ticket_csat_ratings", entityId: ticketId, details: JSON.stringify({ score }) }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "ticket_csat", entityId: ticketId,
+      after: { ticketId, score, comment: comment || null },
+    }).catch(console.error);
     res.status(201).json({ ticketId, score, comment });
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
@@ -691,6 +727,11 @@ router.post("/kb", requirePermission("support:write"), async (req, res) => {
     );
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [insertId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "knowledge_base", entityId: insertId,
+      after: { title, category: category || 'general', tags },
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
@@ -711,6 +752,11 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
     await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [id]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "knowledge_base", entityId: id,
+      after: { title: b.title, content: b.content, category: b.category, tags: b.tags, status: b.status },
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
@@ -721,6 +767,11 @@ router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) =
     const id = Number(req.params.id);
     await rawExecute(`UPDATE kb_articles SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.deleted", entity: "kb_articles", entityId: id, details: "{}" }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "knowledge_base", entityId: id,
+      after: { id },
+    }).catch(console.error);
     res.json({ message: "تم حذف المقالة بنجاح" });
   } catch (err) { handleRouteError(err, res, "KB delete error:"); }
 });
@@ -754,6 +805,16 @@ router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, r
         [id, scope.companyId]
       );
     }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "support.kb.feedback", entity: "kb_articles", entityId: id,
+      details: JSON.stringify({ helpful: helpful === true || helpful === 'true' }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "kb_feedback", entityId: id,
+      after: { articleId: id, helpful: helpful === true || helpful === 'true' },
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "KB feedback error:"); }
 });

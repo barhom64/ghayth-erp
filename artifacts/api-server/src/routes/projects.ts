@@ -264,6 +264,27 @@ router.post("/impact-preview", requirePermission("projects:read"), async (req, r
     }
 
     const hasWarning = items.some((i) => i.severity === "warning");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "preview",
+      entity: "projects",
+      entityId: 0,
+      after: { managerId, budget, startDate, endDate, type },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.impact_preview",
+      entity: "projects",
+      entityId: 0,
+      after: { managerId, budget, startDate, endDate, type },
+    }).catch(console.error);
+
     res.json({
       actionType: "create_project",
       employeeId: 0,
@@ -685,6 +706,16 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
 
     await rawExecute(`UPDATE projects SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "delete",
+      entity: "projects",
+      entityId: id,
+      after: { name: existing.name, status: existing.status, deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -717,6 +748,16 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
       [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM project_phases WHERE id=$1`, [insertId]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "create",
+      entity: "project_phases",
+      entityId: insertId,
+      after: { projectId, name: b.name.trim(), orderIndex: b.orderIndex || 0 },
+    }).catch(console.error);
 
     emitEvent({
       companyId: scope.companyId,
@@ -753,6 +794,16 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
     }
 
     await rawExecute(`UPDATE project_phases SET status='completed' WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "project_phases",
+      entityId: phaseId,
+      after: { projectId, status: "completed", previousStatus: phase.status ?? "pending" },
+    }).catch(console.error);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1336,6 +1387,16 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
       }
     } catch (obErr) { console.error("Milestone obligation failed:", obErr); }
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "create",
+      entity: "project_milestones",
+      entityId: insertId,
+      after: { projectId, title: b.title, targetDate: b.targetDate },
+    }).catch(console.error);
+
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1412,6 +1473,16 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       await markObligationMet(scope.companyId, "project_milestone", id, "delivery").catch(console.error);
     }
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "project_milestones",
+      entityId: id,
+      after: { title: b.title, status: b.status, targetDate: b.targetDate },
+    }).catch(console.error);
+
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1466,6 +1537,16 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
        b.mitigationPlan || null, b.responsibleId || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM project_risks WHERE id=$1`, [insertId]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "create",
+      entity: "project_risks",
+      entityId: insertId,
+      after: { projectId, title: b.title, riskScore, riskLevel },
+    }).catch(console.error);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1546,6 +1627,16 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
     );
     if (!rows[0]) throw new NotFoundError("المخاطرة غير موجودة");
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "project_risks",
+      entityId: id,
+      after: { title: b.title, status: b.status, probability: b.probability, impact: b.impact },
+    }).catch(console.error);
+
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1598,6 +1689,16 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
        b.startDate || null, b.endDate || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM project_resources WHERE id=$1`, [insertId]);
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "create",
+      entity: "project_resources",
+      entityId: insertId,
+      after: { projectId, employeeId: b.employeeId, role: b.role },
+    }).catch(console.error);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1768,6 +1869,16 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
 
     const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1`, [insertId]);
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "create",
+      entity: "project_costs",
+      entityId: insertId,
+      after: { projectId, description: b.description, amount: b.amount, category: b.category },
+    }).catch(console.error);
+
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1886,6 +1997,26 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
       }
       throw err;
     }
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "update",
+      entity: "projects",
+      entityId: projectId,
+      after: { status: "completed", totalWip, journalEntryId },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.closed",
+      entity: "projects",
+      entityId: projectId,
+      after: { status: "completed", totalWip, journalEntryId },
+    }).catch(console.error);
 
     // Cancel all outstanding delivery/milestone obligations for this project
     // (runs after the transition commits so a failure here doesn't undo the

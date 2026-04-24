@@ -536,6 +536,12 @@ router.delete("/products/:id", requirePermission("warehouse:delete"), async (req
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "warehouse_products", entityId: id,
+      after: { sku: existing.sku, name: existing.name, deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المنتج بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete product error:"); }
 });
@@ -759,6 +765,12 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       }),
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "warehouse_movements", entityId: insertId,
+      after: { productId: b.productId, type: b.type, quantity: b.quantity, unitCost, reference: b.reference },
+    }).catch(console.error);
+
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
       try {
@@ -868,6 +880,12 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       details: JSON.stringify({ transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId }),
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "warehouse_transfers", entityId: outId,
+      after: { transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId, unitCost },
+    }).catch(console.error);
+
     res.status(201).json({
       transferRef,
       outMovementId: outId,
@@ -932,6 +950,11 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       entityId: insertId,
       details: JSON.stringify({ name: b.name.trim(), parentId: b.parentId || null }),
     }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "warehouse_categories", entityId: insertId,
+      after: { name: b.name.trim(), parentId: b.parentId || null },
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create category error:"); }
 });
@@ -987,6 +1010,11 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
       entityId: insertId,
       details: JSON.stringify({ name: b.name.trim() }),
     }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "warehouse_suppliers", entityId: insertId,
+      after: { name: b.name.trim(), contactPerson: b.contactPerson, phone: b.phone, email: b.email, taxNumber: b.taxNumber },
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create supplier error:"); }
 });
@@ -1012,6 +1040,11 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
       entity: "warehouse_categories",
       entityId: id,
       details: JSON.stringify({ name: b.name, parentId: b.parentId }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "warehouse_categories", entityId: id,
+      after: { name: b.name, parentId: b.parentId },
     }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
@@ -1058,6 +1091,11 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
       entityId: id,
       details: JSON.stringify({ name: existing.name }),
     }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "warehouse_categories", entityId: id,
+      after: { name: existing.name },
+    }).catch(console.error);
     res.json({ message: "تم حذف الفئة" });
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
 });
@@ -1090,6 +1128,11 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
       entityId: id,
       details: JSON.stringify({ name: b.name }),
     }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "warehouse_suppliers", entityId: id,
+      after: { name: b.name, contactPerson: b.contactPerson, phone: b.phone, email: b.email, taxNumber: b.taxNumber },
+    }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
@@ -1109,6 +1152,11 @@ router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (re
       entity: "suppliers",
       entityId: id,
       details: JSON.stringify({ id }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "warehouse_suppliers", entityId: id,
+      after: { id },
     }).catch(console.error);
     res.json({ message: "تم حذف المورد" });
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
@@ -1169,6 +1217,11 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
       entity: "inventory_counts",
       entityId: insertId,
       details: JSON.stringify({ countDate: b.countDate, warehouseLocation: b.warehouseLocation }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "inventory_counts", entityId: insertId,
+      after: { countDate: b.countDate, warehouseLocation: b.warehouseLocation },
     }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create count error:"); }
@@ -1269,6 +1322,11 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
       entity: "inventory_count_items",
       entityId: countId,
       details: JSON.stringify({ productId: b.productId, systemStock, physicalCount, variance }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "inventory_count_items", entityId: countId,
+      after: { productId: b.productId, systemStock, physicalCount, variance },
     }).catch(console.error);
     res.json({ productId: b.productId, systemStock, physicalCount, variance });
   } catch (err) { handleRouteError(err, res, "Count item error:"); }
@@ -1382,6 +1440,11 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
       entity: "inventory_counts",
       entityId: countId,
       details: JSON.stringify({ itemsAdjusted, totalItems: items.length }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "inventory_counts", entityId: countId,
+      after: { status: "approved", itemsAdjusted, totalItems: items.length },
     }).catch(console.error);
     const baseMessage = "تم اعتماد الجرد وتحديث المخزون";
     if (glFailures.length > 0 || glSkipped.length > 0) {

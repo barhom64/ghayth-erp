@@ -218,6 +218,9 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
           refId: relatedId,
         });
       }
+
+      emitEvent({ companyId, userId: 0, action: "communication.whatsapp.received", entity: "communication_logs", entityId: 0, details: JSON.stringify({ from, msgType, senderName: sender.name, senderType: sender.type }) }).catch(console.error);
+      createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "whatsapp", direction: "inbound", from, senderName: sender.name, senderType: sender.type } }).catch(console.error);
     }
   } catch (err) {
     console.error("[WhatsApp] Webhook error:", err);
@@ -281,6 +284,9 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
       refId: pbxId,
     });
 
+    emitEvent({ companyId, userId: 0, action: "communication.pbx.incoming", entity: "communication_logs", entityId: pbxId, details: JSON.stringify({ callId, callerNumber, calledNumber, direction, senderName: sender.name, senderType: sender.type }) }).catch(console.error);
+    createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: pbxId, after: { channel: "pbx", direction, callId, callerNumber, calledNumber, senderName: sender.name } }).catch(console.error);
+
     res.status(200).json({
       status: "ok",
       callId,
@@ -343,6 +349,9 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
       });
     }
 
+    emitEvent({ companyId, userId: 0, action: "communication.pbx.completed", entity: "communication_logs", entityId: call.id, details: JSON.stringify({ callId, duration, status }) }).catch(console.error);
+    createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: call.id, after: { channel: "pbx", callId, duration, status, recordingUrl } }).catch(console.error);
+
     res.status(200).json({ status: "ok", callId, duration, callStatus: status });
   } catch (err) {
     handleRouteError(err, res, "[PBX] Completed error:");
@@ -358,6 +367,9 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
       `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE "callId"=$3`,
       [status ?? "in_progress", answeredBy ?? null, callId]
     );
+
+    emitEvent({ companyId: 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: 0, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch(console.error);
+    createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch(console.error);
 
     res.status(200).json({ status: "ok" });
   } catch (err) {
@@ -778,6 +790,7 @@ router.post("/push/test", requirePermission("communications:write"), async (req,
       { type: "test" }
     );
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "communications.push.test", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "push_notifications", entityId: 0, after: { type: "test" } }).catch(console.error);
     res.json({ success: true, ...result });
   } catch (err) { handleRouteError(err, res, "Push test error:"); }
 });

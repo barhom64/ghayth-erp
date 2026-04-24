@@ -374,7 +374,20 @@ router.post("/regulation/reseed", requirePermission("hr:create"), async (req, re
       `SELECT hr_clone_default_regulation($1) AS count`,
       [scope.companyId]
     );
-    res.json({ ok: true, inserted: Number(row?.count ?? 0) });
+    const inserted = Number(row?.count ?? 0);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "discipline_regulations", entityId: 0,
+      after: { inserted },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "discipline_regulations.reseeded", entity: "discipline_regulations", entityId: 0,
+    }).catch(console.error);
+
+    res.json({ ok: true, inserted });
   } catch (err) {
     handleRouteError(err, res, "Reseed regulation error:");
   }
@@ -543,6 +556,12 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       details: JSON.stringify({ memoNumber, incidentType, source: "manual" }),
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "discipline_memos", entityId: memoId,
+      after: { memoNumber, incidentType, incidentDate, assignmentId, regulationId: resolvedRegulationId, source: "manual" },
+    }).catch(console.error);
+
     res.status(201).json({ id: memoId, memoNumber, regulationId: resolvedRegulationId, penaltyPreview });
   } catch (err) {
     handleRouteError(err, res, "Create memo error:");
@@ -611,6 +630,12 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
       details: JSON.stringify({ declined: !!declined }),
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "discipline_memos", entityId: id,
+      after: { status: "pending_manager", declined: !!declined },
+    }).catch(console.error);
+
     res.json({ ok: true, status: "pending_manager" });
   } catch (err) {
     handleRouteError(err, res, "Justify memo error:");
@@ -652,6 +677,12 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
       companyId: scope.companyId, userId: scope.userId,
       action: "hr.memo.manager_recommended", entity: "hr_inquiry_memo", entityId: id,
       details: JSON.stringify({ recommendation }),
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "discipline_memos", entityId: id,
+      after: { status: "pending_gm", recommendation, comment },
     }).catch(console.error);
 
     res.json({ ok: true, status: "pending_gm" });
@@ -814,6 +845,12 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
       details: JSON.stringify({ decision }),
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "discipline_memos", entityId: id,
+      after: { status: decision === "approved" ? "approved" : "rejected", decision, comment },
+    }).catch(console.error);
+
     res.json({ ok: true, status: decision === "approved" ? "approved" : "rejected" });
   } catch (err) {
     handleRouteError(err, res, "GM decision error:");
@@ -859,6 +896,11 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
       entity: "hr_memos",
       entityId: id,
       details: JSON.stringify({ reason, memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "discipline_memos", entityId: id,
+      after: { status: "cancelled", reason, memoNumber: memo.memoNumber },
     }).catch(console.error);
     res.json({ ok: true });
   } catch (err) {
@@ -906,6 +948,11 @@ router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) 
       entity: "hr_memos",
       entityId: id,
       details: JSON.stringify({ reason: reason.trim(), memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "discipline_memos", entityId: id,
+      after: { status: "appeal_pending", reason: reason.trim(), memoNumber: memo.memoNumber },
     }).catch(console.error);
     res.json({ ok: true, status: "appeal_pending" });
   } catch (err) { handleRouteError(err, res, "Appeal error:"); }
@@ -957,6 +1004,11 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
       entityId: id,
       details: JSON.stringify({ decision, comment, newStatus, memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
     }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "discipline_memos", entityId: id,
+      after: { status: newStatus, decision, comment, memoNumber: memo.memoNumber },
+    }).catch(console.error);
     res.json({ ok: true, status: newStatus });
   } catch (err) { handleRouteError(err, res, "Appeal decision error:"); }
 });
@@ -997,6 +1049,11 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
       entityId: id,
       details: JSON.stringify({ memoNumber: memo.memoNumber, employeeId: memo.employeeId, previousStatus: memo.status }),
     }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "discipline_memos", entityId: id,
+      after: { status: "closed", previousStatus: memo.status, memoNumber: memo.memoNumber },
+    }).catch(console.error);
     res.json({ ok: true, status: "closed" });
   } catch (err) { handleRouteError(err, res, "Close memo error:"); }
 });
@@ -1027,6 +1084,17 @@ router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) =
       disruptsOthers: !!disruptsOthers,
       customRegulationId: regulationId,
     });
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "discipline_regulations", entityId: assignmentId,
+      after: { incidentType, incidentDate, assignmentId },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "discipline_regulations.penalty_previewed", entity: "discipline_regulations", entityId: assignmentId,
+    }).catch(console.error);
+
     res.json({ dailyWage, resolution });
   } catch (err) {
     handleRouteError(err, res, "Penalty preview error:");
@@ -1129,6 +1197,11 @@ router.put("/auto-detection/settings", requirePermission("hr:update"), async (re
       reason: "تحديث إعدادات الرصد التلقائي",
     });
 
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "discipline.auto_detection_settings_updated", entity: "system_settings", entityId: 0,
+    }).catch(console.error);
+
     const updated = await getAutoDetectionSettings(scope.companyId);
     res.json({ success: true, settings: updated });
   } catch (err) {
@@ -1157,6 +1230,11 @@ router.post("/auto-detection/run", requirePermission("hr:update"), async (req, r
       entity: "auto_detection_log", entityId: 0,
       reason: `تشغيل يدوي: ${targetDate} — رصد ${result.detected} مخالفة`,
     });
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "discipline.auto_detection_run", entity: "auto_detection_log", entityId: 0,
+    }).catch(console.error);
 
     res.json(result);
   } catch (err) {

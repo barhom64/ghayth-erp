@@ -427,6 +427,11 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       entityId: item.id,
       details: JSON.stringify({ requestNumber: item.requestNumber, reason: b.reason }),
     }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_overtime_requests", entityId: Number(req.params.id),
+      after: { status: "rejected", rejectionReason: b.reason || null, requestNumber: item.requestNumber },
+    }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {

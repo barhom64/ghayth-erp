@@ -133,6 +133,7 @@ router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE marketing_campaigns SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify(b) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: b }).catch(console.error);
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1`, [id]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
@@ -146,6 +147,7 @@ router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (re
     if (!existing) throw new NotFoundError("الحملة غير موجودة");
     await rawExecute(`UPDATE marketing_campaigns SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.deleted", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "marketing_campaigns", entityId: id }).catch(console.error);
     res.json({ message: "تم حذف الحملة بنجاح" });
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
@@ -237,6 +239,7 @@ router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), as
     const { revenue } = req.body;
     await rawExecute(`UPDATE marketing_campaigns SET revenue=$1 WHERE id=$2 AND "companyId"=$3`, [revenue || 0, id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.revenue_updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ revenue: revenue || 0 }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: { revenue: revenue || 0 } }).catch(console.error);
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1`, [id]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }

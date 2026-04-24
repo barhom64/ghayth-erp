@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
-import { emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -272,6 +272,10 @@ router.post("/", async (req, res): Promise<void> => {
       }
     }
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "preview", entity: "impact_preview", entityId: Number(entityId) || 0,
+    }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "impact.previewed", entity: entityType, entityId: Number(entityId) || 0, details: JSON.stringify({ entityType, entityId, action }) }).catch(console.error);
     res.json({ impacts });
   } catch (err) {

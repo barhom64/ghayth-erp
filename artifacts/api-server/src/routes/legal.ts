@@ -351,6 +351,11 @@ router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, r
     }
     await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "legal_contracts", entityId: id,
+      after: { title: existing.title, status: existing.status },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -424,6 +429,11 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
         renewalCount: (current.renewalCount ?? 0) + 1,
       },
     });
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "legal_contracts", entityId: id,
+      after: { newEndDate, newValue: newValue ?? current.value, renewalCount: (current.renewalCount ?? 0) + 1 },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -473,6 +483,11 @@ router.post("/contracts/:id/terminate", requirePermission("legal:write"), async 
         terminationDate: effectiveDate ?? new Date().toISOString(),
       },
     });
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "legal_contracts", entityId: id,
+      after: { status: "terminated", terminationReason: reason, terminationDate: effectiveDate ?? new Date().toISOString() },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -684,6 +699,11 @@ router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) 
     }
     await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "legal_cases", entityId: id,
+      after: { title: existing.title, status: existing.status },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -904,6 +924,11 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       }, { table: "legal_sessions", id: insertId });
     }
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "legal_case_sessions", entityId: insertId,
+      after: { caseId, sessionDate: b.sessionDate, location: b.location, judge: b.judge },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -963,6 +988,11 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
     );
     const [row] = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE id=$1`, [insertId]);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "legal_case_correspondence", entityId: insertId,
+      after: { caseId, direction: b.direction, subject: b.subject },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1061,6 +1091,12 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
       });
     } catch (obErr) { console.error("Legal judgment obligation failed:", obErr); }
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "legal_case_judgments", entityId: insertId,
+      after: { caseId, judgmentDate: b.judgmentDate, judgmentType: b.judgmentType, verdict: b.verdict, amount: b.amount },
+    }).catch(console.error);
+
     const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [insertId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create judgment error:"); }
@@ -1112,6 +1148,11 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
       ).catch(console.error);
     }
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "legal_case_judgments", entityId: id,
+      after: { caseId, paidAmount: b.paidAmount, verdict: b.verdict, dueDate: b.dueDate },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,

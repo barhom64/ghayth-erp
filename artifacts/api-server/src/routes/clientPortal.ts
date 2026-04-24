@@ -4,7 +4,7 @@ import { hashPassword, verifyPassword } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, isTypedError } from "../lib/errorHandler.js";
-import { emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
@@ -204,6 +204,7 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
       [account.id]
     );
     emitEvent({ companyId: account.companyId, branchId: 0, userId: 0, action: "portal.login", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: account.clientId, email }) }).catch(console.error);
+    createAuditLog({ companyId: account.companyId, userId: 0, action: "login", entity: "client_portal_accounts", entityId: account.id, after: { clientId: account.clientId, email } }).catch(console.error);
     const token = signPortalToken({
       accountId: account.id,
       clientId: account.clientId,
@@ -461,6 +462,15 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
       `UPDATE support_tickets SET status = 'in_progress', "updatedAt" = NOW() WHERE id = $1 AND status = 'open'`,
       [Number(id)]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.accountId,
+      action: "create", entity: "ticket_replies", entityId: Number(id),
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.accountId,
+      action: "portal.ticket_reply.created", entity: "ticket_replies", entityId: Number(id),
+      details: JSON.stringify({ ticketId: Number(id), clientId: scope.clientId }),
+    }).catch(console.error);
     res.status(201).json({ message: "تم إرسال الرد بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Portal ticket reply error:");
@@ -486,6 +496,15 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
       `SELECT id, ref, title, status, priority, category, "invoiceId", "contractId", "createdAt" FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [clientId, companyId, insertId]
     );
+    createAuditLog({
+      companyId, userId: scope.accountId,
+      action: "create", entity: "support_tickets", entityId: insertId,
+    }).catch(console.error);
+    emitEvent({
+      companyId, userId: scope.accountId,
+      action: "portal.ticket.created", entity: "support_tickets", entityId: insertId,
+      details: JSON.stringify({ ref, title, clientId }),
+    }).catch(console.error);
     res.status(201).json(ticket);
   } catch (err) {
     handleRouteError(err, res, "Portal create ticket error:");
@@ -514,6 +533,15 @@ protectedRouter.patch("/profile/password", withPortalScope(async (req, res) => {
       `UPDATE client_portal_accounts SET "passwordHash" = $1, "mustChangePassword" = false, "updatedAt" = NOW() WHERE id = $4 AND "clientId" = $2 AND "companyId" = $3`,
       [newHash, clientId, companyId, accountId]
     );
+    createAuditLog({
+      companyId, userId: accountId,
+      action: "update", entity: "client_portal_accounts", entityId: accountId,
+    }).catch(console.error);
+    emitEvent({
+      companyId, userId: accountId,
+      action: "portal.password.changed", entity: "client_portal_accounts", entityId: accountId,
+      details: JSON.stringify({ clientId }),
+    }).catch(console.error);
     res.json({ message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Portal change password error:");
@@ -550,6 +578,15 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
       [invoice.id, scope.companyId, scope.clientId, payAmt, method, paymentRef]
     ).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.accountId,
+      action: "update", entity: "invoices", entityId: invoice.id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.accountId,
+      action: "portal.invoice.paid", entity: "invoices", entityId: invoice.id,
+      details: JSON.stringify({ paidAmount: payAmt, totalPaid: newPaid, status: newStatus, paymentRef, clientId: scope.clientId }),
+    }).catch(console.error);
     res.json({
       invoiceId: invoice.id,
       invoiceRef: invoice.ref,
@@ -581,6 +618,15 @@ protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
       `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
       [Number(id), scope.companyId, ticket.assigneeId, score, comment || null]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.accountId,
+      action: "create", entity: "invoice_csat", entityId: Number(id),
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.accountId,
+      action: "portal.csat.submitted", entity: "invoice_csat", entityId: Number(id),
+      details: JSON.stringify({ score, ticketId: Number(id), clientId: scope.clientId }),
+    }).catch(console.error);
     res.status(201).json({ ticketId: Number(id), score, comment });
   } catch (err) {
     handleRouteError(err, res, "Portal CSAT error:");
@@ -633,6 +679,15 @@ protectedRouter.post("/kb/:id/feedback", withPortalScope(async (req, res) => {
     } else {
       await rawExecute(`UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1`, [id]);
     }
+    createAuditLog({
+      companyId: req.portalScope!.companyId, userId: req.portalScope!.accountId,
+      action: "create", entity: "kb_feedback", entityId: id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: req.portalScope!.companyId, userId: req.portalScope!.accountId,
+      action: "portal.kb_feedback.submitted", entity: "kb_feedback", entityId: id,
+      details: JSON.stringify({ helpful, articleId: id }),
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Portal KB feedback error:");

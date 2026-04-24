@@ -72,6 +72,7 @@ const registerLimiter = rateLimit({
 
 router.post("/register", registerLimiter, async (_req, res) => {
   emitEvent({ companyId: 0, userId: 0, action: "auth.register", entity: "users", entityId: 0 }).catch(console.error);
+  createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "users", entityId: 0, after: { blocked: true, reason: "self_registration_not_permitted" } }).catch(console.error);
   res.status(405).json({ error: "إنشاء الحسابات يتم بواسطة المسؤول فقط — Self-registration is not permitted" });
 });
 
@@ -248,6 +249,7 @@ router.post("/refresh", async (req, res) => {
     });
 
     emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch(console.error);
+    createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch(console.error);
     res.json({ token: newToken });
   } catch (err) {
     handleRouteError(err, res, "Refresh token error:");
@@ -268,6 +270,8 @@ router.post("/logout", authMiddleware, async (req, res) => {
         logger.error({ err: revokeErr, userId: scope.userId }, "Failed to revoke refresh token on logout");
       }
     }
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.logout", entity: "users", entityId: scope.userId }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "logout" } }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Logout error:");
@@ -294,6 +298,7 @@ router.post("/switch-assignment", authMiddleware, async (req, res) => {
     }
     const token = signToken({ userId: scope.userId, assignmentId: Number(assignmentId), role: assignment.role });
     emitEvent({ companyId: assignment.companyId, userId: scope.userId, action: "auth.switch_assignment", entity: "user_assignments", entityId: Number(assignmentId) }).catch(console.error);
+    createAuditLog({ companyId: assignment.companyId, userId: scope.userId, action: "update", entity: "employee_assignments", entityId: Number(assignmentId), after: { switchedTo: assignmentId, role: assignment.role } }).catch(console.error);
     res.json({ token });
   } catch (err) {
     handleRouteError(err, res, "Switch assignment error:");
