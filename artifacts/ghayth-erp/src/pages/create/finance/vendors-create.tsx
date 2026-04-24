@@ -18,7 +18,7 @@ const INITIAL = { name: "", contactPerson: "", phone: "", email: "", taxNumber: 
 export default function VendorsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/finance/vendors/create", "POST", [["vendors"]]);
+  const createMut = useApiMutation("/finance/vendors", "POST", [["vendors"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();

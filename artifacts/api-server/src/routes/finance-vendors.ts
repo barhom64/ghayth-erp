@@ -71,46 +71,6 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
   }
 });
 
-vendorsRouter.post("/vendors/create", requirePermission("finance:create"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-
-    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
-
-    if (!name) {
-      throw new ValidationError("اسم المورد مطلوب", {
-        field: "name",
-        fix: "أدخل اسم المورد",
-      });
-    }
-
-    const { insertId } = await rawExecute(
-      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null]
-    );
-
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "vendor.created", entity: "suppliers", entityId: insertId,
-      details: JSON.stringify({ name }),
-    }).catch((err) => pushToDLQ("event", { action: "vendor.created", entityId: insertId }, err, scope.companyId));
-
-    createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "create",
-      entity: "suppliers",
-      entityId: insertId,
-      after: { name, source: "procurement" },
-    }).catch((err) => console.error("[audit] vendor.created:", err));
-
-    res.status(201).json({ id: insertId, name, contactPerson, phone, email, taxNumber });
-  } catch (err) {
-    handleRouteError(err, res, "Create vendor error:");
-  }
-});
-
 vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;

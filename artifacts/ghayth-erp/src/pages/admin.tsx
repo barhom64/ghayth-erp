@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, KeyRound, ScrollText, UserCog, Lock, FileSearch, ShieldAlert,
-  Shield, Layers, Activity, GitBranch, AlertTriangle, Scale, Cog, Zap } from "lucide-react";
+  Shield, Layers, GitBranch, AlertTriangle, Scale, Cog, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { UsersTab } from "./admin/users-tab";

@@ -4,7 +4,6 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDateAr } from "@/lib/formatters";
 import {
   RefreshCw, CheckCircle, AlertTriangle, Scale,
 } from "lucide-react";
