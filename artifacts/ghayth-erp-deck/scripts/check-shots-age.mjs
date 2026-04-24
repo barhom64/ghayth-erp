@@ -1,5 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import { resolve, join } from "node:path";
+import { writeReport, SHOT_SOURCES } from "./shots-report.mjs";
 
 const MAX_AGE_DAYS = Number(process.env.SHOTS_MAX_AGE_DAYS || 14);
 const DIR = resolve(process.cwd(), "public/screenshots");
@@ -12,24 +13,8 @@ const PAGES_ROOT = resolve(
   "pages",
 );
 
-// Map each screenshot name to the source files/folders that drive its UI.
+// SHOT_SOURCES is the single source of truth in shots-report.mjs.
 // Paths are relative to PAGES_ROOT. Folders are walked recursively.
-const SHOT_SOURCES = {
-  dashboard: ["dashboard.tsx", "module-dashboards.tsx"],
-  hr: ["hr.tsx", "hr"],
-  finance: ["finance.tsx", "finance"],
-  operations: ["operations-center.tsx"],
-  fleet: ["fleet.tsx", "fleet"],
-  properties: [
-    "properties-dashboard.tsx",
-    "properties.tsx",
-    "properties",
-  ],
-  legal: ["legal.tsx", "legal"],
-  projects: ["projects.tsx", "projects"],
-  support: ["support.tsx", "support"],
-  crm: ["crm.tsx", "crm"],
-};
 
 async function latestMtime(absPath) {
   let s;
@@ -65,17 +50,35 @@ async function latestSourceMtime(name) {
   return max;
 }
 
+async function emitReport() {
+  try {
+    const { path: reportPath, stats } = await writeReport({
+      shotsDir: DIR,
+      pagesRoot: PAGES_ROOT,
+      maxAgeDays: MAX_AGE_DAYS,
+    });
+    const need = stats.rows.filter((r) => r.status === "⚠").length;
+    console.log(
+      `[check-shots-age] 📝 report: ${reportPath} (${need}/${stats.rows.length} need recapture)`,
+    );
+  } catch (err) {
+    console.warn(`[check-shots-age] report generation failed: ${err.message}`);
+  }
+}
+
 async function main() {
   let entries;
   try {
     entries = await readdir(DIR);
   } catch (err) {
     console.error(`[check-shots-age] cannot read ${DIR}: ${err.message}`);
+    await emitReport();
     process.exit(FAIL_ON_STALE ? 1 : 0);
   }
   const pngs = entries.filter((f) => f.endsWith(".png"));
   if (pngs.length === 0) {
     console.warn(`[check-shots-age] no screenshots found in ${DIR}`);
+    await emitReport();
     process.exit(FAIL_ON_STALE ? 1 : 0);
   }
 
@@ -118,6 +121,20 @@ async function main() {
     );
     for (const o of outdated)
       console.warn(`  - ${o.f} (source أحدث بـ ${o.lagHours} ساعة)`);
+  }
+
+  try {
+    const { path: reportPath, stats } = await writeReport({
+      shotsDir: DIR,
+      pagesRoot: PAGES_ROOT,
+      maxAgeDays: MAX_AGE_DAYS,
+    });
+    const need = stats.rows.filter((r) => r.status === "⚠").length;
+    console.log(
+      `[check-shots-age] 📝 report: ${reportPath} (${need}/${stats.rows.length} need recapture)`,
+    );
+  } catch (err) {
+    console.warn(`[check-shots-age] report generation failed: ${err.message}`);
   }
 
   if (bad) {
