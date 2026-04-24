@@ -49,15 +49,11 @@ export const PERMISSIONS = [
   "hr:write",
   "hr:delete",
   "hr:approve",
-  "hr:discipline:approve",
-  // `hr:self` gates self-service endpoints (check-in/out, submit own leave).
-  // Routes pair it with `hr:create` via requireAnyPermission so managers
-  // retain access through their existing create grant, while employees are
-  // unblocked through this narrower self-scoped permission. Role bindings
-  // live in migration 070_rbac_self_service_and_gaps.sql (employee,
-  // branch_manager, hr_manager) rather than ROLE_PERMISSIONS here, because
-  // the catalog's role map encodes the conservative 068 seed intent.
   "hr:self",
+  "hr:discipline:read",
+  "hr:discipline:create",
+  "hr:discipline:update",
+  "hr:discipline:approve",
 
   // Finance
   "finance:read",
@@ -65,6 +61,7 @@ export const PERMISSIONS = [
   "finance:update",
   "finance:write",
   "finance:delete",
+  "finance:approve",
 
   // Fleet
   "fleet:read",
@@ -101,18 +98,21 @@ export const PERMISSIONS = [
   "legal:read",
   "legal:create",
   "legal:update",
+  "legal:write",
   "legal:delete",
 
   // Support / Tickets
   "support:read",
   "support:create",
   "support:update",
+  "support:write",
   "support:delete",
 
   // CRM / Clients
   "crm:read",
   "crm:create",
   "crm:update",
+  "crm:write",
   "crm:delete",
 
   // Marketing
@@ -166,111 +166,84 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   general_manager: ["*"],
 
   hr_manager: [
-    "hr:read",
-    "hr:create",
-    "hr:update",
-    "hr:delete",
-    "hr:approve",
-    "hr:discipline:approve",
-    "documents:read",
-    "documents:create",
-    "documents:download",
+    "hr:read", "hr:create", "hr:update", "hr:delete", "hr:approve", "hr:self",
+    "hr:discipline:read", "hr:discipline:create", "hr:discipline:update", "hr:discipline:approve",
+    "documents:read", "documents:create", "documents:download",
+    "operations:read",
+    "tasks:read", "tasks:write",
   ],
 
   finance_manager: [
-    "finance:read",
-    "finance:create",
-    "finance:update",
-    "finance:delete",
-    "documents:read",
-    "documents:download",
+    "finance:read", "finance:create", "finance:update", "finance:delete", "finance:approve",
+    "hr:read", "fleet:read", "projects:read", "property:read", "warehouse:read", "crm:read",
+    "documents:read", "documents:download",
+    "reports:read", "audit:read",
   ],
 
   fleet_manager: [
-    "fleet:read",
-    "fleet:create",
-    "fleet:update",
-    "fleet:delete",
-    "documents:read",
-    "documents:download",
+    "fleet:read", "fleet:create", "fleet:update", "fleet:delete",
+    "documents:read", "documents:download",
   ],
 
   warehouse_manager: [
-    "warehouse:read",
-    "warehouse:create",
-    "warehouse:update",
-    "warehouse:delete",
+    "warehouse:read", "warehouse:create", "warehouse:update", "warehouse:delete",
   ],
 
   property_manager: [
-    "property:read",
-    "property:create",
-    "property:update",
-    "property:delete",
-    "documents:read",
-    "documents:download",
+    "property:read", "property:create", "property:update", "property:delete",
+    "documents:read", "documents:download",
   ],
 
   projects_manager: [
-    "projects:read",
-    "projects:create",
-    "projects:update",
-    "projects:delete",
-    "operations:read",
-    "operations:create",
-    "operations:update",
-    "operations:delete",
+    "projects:read", "projects:create", "projects:update", "projects:delete",
+    "operations:read", "operations:create", "operations:update", "operations:delete",
   ],
 
   legal_manager: [
-    "legal:read",
-    "legal:create",
-    "legal:update",
-    "legal:delete",
-    "documents:read",
-    "documents:create",
-    "documents:update",
-    "documents:delete",
-    "documents:download",
+    "legal:read", "legal:create", "legal:update", "legal:write", "legal:delete",
+    "documents:read", "documents:create", "documents:update", "documents:delete", "documents:download",
   ],
 
   support_manager: [
-    "support:read",
-    "support:create",
-    "support:update",
-    "support:delete",
+    "support:read", "support:create", "support:update", "support:delete",
+    "hr:read", "operations:read",
   ],
 
   crm_manager: [
-    "crm:read",
-    "crm:create",
-    "crm:update",
-    "crm:delete",
+    "crm:read", "crm:create", "crm:update", "crm:delete",
+    "operations:read",
+    "tasks:write",
   ],
 
   bi_manager: [
-    "bi:read",
-    "reports:read",
-    "audit:read",
+    "bi:read", "bi:write",
+    "reports:read", "audit:read",
   ],
 
   branch_manager: [
-    "hr:read",
-    "finance:read",
-    "fleet:read",
-    "warehouse:read",
-    "property:read",
-    "projects:read",
-    "operations:read",
+    "hr:read", "hr:create", "hr:update", "hr:approve", "hr:self",
+    "finance:read", "finance:create", "finance:update", "finance:approve",
+    "fleet:read", "fleet:create", "fleet:update", "fleet:delete",
+    "warehouse:read", "warehouse:create", "warehouse:update",
+    "property:read", "property:create", "property:update",
+    "projects:read", "projects:create", "projects:update",
+    "operations:read", "operations:create", "operations:update",
     "legal:read",
-    "support:read",
-    "crm:read",
-    "documents:read",
-    "documents:download",
-    "reports:read",
+    "support:read", "support:create", "support:update",
+    "crm:read", "crm:create", "crm:update",
+    "documents:read", "documents:download",
+    "tasks:read", "tasks:write",
+    "reports:read", "audit:read",
   ],
 
-  employee: ["hr:read"],
+  employee: [
+    "hr:read", "hr:self",
+    "operations:read", "operations:create", "operations:update",
+    "documents:read", "documents:download",
+    "notifications:read", "notifications:write",
+    "support:read", "support:create",
+    "tasks:read", "tasks:write",
+  ],
 };
 
 /** Returns the default permissions for a role, or an empty array if unknown. */
