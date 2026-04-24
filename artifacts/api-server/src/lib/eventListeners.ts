@@ -364,7 +364,12 @@ export function registerEventListeners() {
           });
         }
       } catch (oblErr) {
-        console.error("[EventReaction] Expense obligation failed:", oblErr);
+        await rawExecute(
+          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+           VALUES ($1,$2,$3,$4,false)`,
+          [payload.companyId, "expense_obligation", payload.entityId ?? 0,
+           `فشل تسجيل التزام المصروف: ${String(oblErr)}`]
+        ).catch(() => {});
       }
     }
   });
@@ -563,7 +568,12 @@ export function registerEventListeners() {
         }
       }
     } catch (err) {
-      console.error("[hr.letter.approved] dispatch failed:", err);
+      await rawExecute(
+        `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+         VALUES ($1,$2,$3,$4,false)`,
+        [payload.companyId, "hr_letter_dispatch", payload.entityId ?? 0,
+         `فشل إرسال الخطاب الرسمي: ${String(err)}`]
+      ).catch(() => {});
     }
   });
 
@@ -761,7 +771,12 @@ export function registerEventListeners() {
           console.log(`[EventReaction] Suspended ${result.affectedRows} commission plan(s) for terminated employee #${payload.entityId}`);
         }
       } catch (err) {
-        console.error("[EventReaction] Commission plan suspension on termination failed:", err);
+        await rawExecute(
+          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+           VALUES ($1,$2,$3,$4,false)`,
+          [payload.companyId, "commission_suspension", payload.entityId ?? 0,
+           `فشل تعليق خطط العمولة عند إنهاء خدمة الموظف: ${String(err)}`]
+        ).catch(() => {});
       }
     }
   });
@@ -802,7 +817,12 @@ export function registerEventListeners() {
           }
         }
       } catch (commErr) {
-        console.error("[EventReaction] Auto-commission calculation on payroll.run failed:", commErr);
+        await rawExecute(
+          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+           VALUES ($1,$2,$3,$4,false)`,
+          [payload.companyId, "commission_auto_calc", payload.entityId ?? 0,
+           `فشل حساب العمولات التلقائي عند إنشاء مسيّر الرواتب: ${String(commErr)}`]
+        ).catch(() => {});
       }
     }
   });
@@ -849,7 +869,12 @@ export function registerEventListeners() {
           });
         }
       } catch (glErr) {
-        console.error("[EventReaction] Payroll GL posting failed:", glErr);
+        await rawExecute(
+          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+           VALUES ($1,$2,$3,$4,false)`,
+          [payload.companyId, "payroll_gl_posting", payload.entityId ?? 0,
+           `فشل ترحيل قيد الرواتب: ${String(glErr)}`]
+        ).catch(() => {});
       }
     }
   });
@@ -1244,7 +1269,12 @@ export function registerEventListeners() {
         dedupeKey: `umrah-inv-${payload.entityId}`,
       });
     } catch (oblErr) {
-      console.error("[EventReaction] Obligation registration failed:", oblErr);
+      await rawExecute(
+        `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+         VALUES ($1,$2,$3,$4,false)`,
+        [payload.companyId, "obligation_registration", payload.entityId ?? 0,
+         `فشل تسجيل الالتزام: ${String(oblErr)}`]
+      ).catch(() => {});
     }
 
     // Notification to manager
@@ -1299,7 +1329,12 @@ export function registerEventListeners() {
           });
         }
       } catch (glErr) {
-        console.error("[EventReaction] Payment GL recovery failed:", glErr);
+        await rawExecute(
+          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+           VALUES ($1,$2,$3,$4,false)`,
+          [payload.companyId, "payment_gl_recovery", payload.entityId ?? 0,
+           `فشل استعادة قيد الدفعة: ${String(glErr)}`]
+        ).catch(() => {});
       }
     }
 
@@ -1368,7 +1403,12 @@ export function registerEventListeners() {
             ],
           });
         } catch (glErr) {
-          console.error("[EventReaction] Commission GL recovery failed:", glErr);
+          await rawExecute(
+            `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+             VALUES ($1,$2,$3,$4,false)`,
+            [payload.companyId, "commission_gl_recovery", planId,
+             `فشل استعادة قيد العمولة: ${String(glErr)}`]
+          ).catch(() => {});
         }
       }
     }
