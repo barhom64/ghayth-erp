@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PageShell } from "@/components/page-shell";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -17,13 +17,10 @@ import { useRoute } from "wouter";
 import { cn } from "@/lib/utils";
 import { CLASSIFICATIONS } from "@/lib/constants";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { useToast } from "@/hooks/use-toast";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Activity },
@@ -36,7 +33,6 @@ const TABS = [
   { key: "tickets", label: "التذاكر", icon: Headphones },
   { key: "projects", label: "المشاريع", icon: FolderKanban },
   { key: "conversations", label: "المحادثات", icon: MessageCircle },
-  { key: "documents", label: "المستندات", icon: FileText },
   { key: "umrah", label: "العمرة", icon: Plane },
   { key: "portal", label: "بوابة العميل", icon: Globe },
 ] as const;
@@ -64,35 +60,17 @@ export default function ClientDetail() {
   const { data: client, isLoading, isError } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError || !client) return <ErrorState />;
+  const invoices: any[] = client?.invoices || [];
+  const opportunities: any[] = client?.opportunities || [];
+  const tickets: any[] = client?.tickets || [];
+  const projects: any[] = client?.projects || [];
+  const financials: any = client?.financials || {};
+  const conversations: any[] = client?.conversations || [];
+  const timeline: any[] = client?.timeline || [];
+  const activeServices: any = client?.activeServices || {};
 
-  const invoices: any[] = client.invoices || [];
-  const opportunities: any[] = client.opportunities || [];
-  const tickets: any[] = client.tickets || [];
-  const projects: any[] = client.projects || [];
-  const financials: any = client.financials || {};
-  const conversations: any[] = client.conversations || [];
-  const timeline: any[] = client.timeline || [];
-  const activeServices: any = client.activeServices || {};
-
-  return (
-    <PageShell
-      title="ملف العميل 360°"
-      subtitle={client.name}
-      actions={
-        <>
-          <Badge
-            className={cn("text-sm px-3 py-1", CLASSIFICATION_COLORS[client.classification] || "bg-gray-100")}
-          >
-            {CLASSIFICATIONS[client.classification] || client.classification}
-          </Badge>
-          {client.isBlacklisted && (
-            <Badge variant="destructive" className="text-sm px-3 py-1">قائمة سوداء</Badge>
-          )}
-        </>
-      }
-    >
+  const overview = (
+    <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <QuickStat
           label="إجمالي الفواتير"
@@ -223,29 +201,29 @@ export default function ClientDetail() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-xs text-gray-500">الاسم</p>
-                    <p className="font-medium">{client.name}</p>
+                    <p className="font-medium">{client?.name}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">التصنيف</p>
-                    <Badge className={cn("text-xs", CLASSIFICATION_COLORS[client.classification] || "bg-gray-100")}>
-                      {CLASSIFICATIONS[client.classification] || client.classification || "-"}
+                    <Badge className={cn("text-xs", CLASSIFICATION_COLORS[client?.classification] || "bg-gray-100")}>
+                      {CLASSIFICATIONS[client?.classification] || client?.classification || "-"}
                     </Badge>
                   </div>
-                  {client.phone && <div>
+                  {client?.phone && <div>
                     <p className="text-xs text-gray-500">الجوال</p>
-                    <p className="font-medium" dir="ltr">{client.phone}</p>
+                    <p className="font-medium" dir="ltr">{client?.phone}</p>
                   </div>}
-                  {client.email && <div>
+                  {client?.email && <div>
                     <p className="text-xs text-gray-500">البريد</p>
-                    <p className="font-medium text-xs">{client.email}</p>
+                    <p className="font-medium text-xs">{client?.email}</p>
                   </div>}
                   <div>
                     <p className="text-xs text-gray-500">المصدر</p>
-                    <p className="font-medium">{client.source || "-"}</p>
+                    <p className="font-medium">{client?.source || "-"}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">تاريخ الإنشاء</p>
-                    <p className="font-medium">{client.createdAt ? formatDateAr(client.createdAt) : "-"}</p>
+                    <p className="font-medium">{client?.createdAt ? formatDateAr(client?.createdAt) : "-"}</p>
                   </div>
                 </div>
               </CardContent>
@@ -318,14 +296,14 @@ export default function ClientDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <InfoRow label="الاسم" value={client.name} />
-              <InfoRow label={<span className="flex items-center gap-2"><Phone className="h-4 w-4" /> الجوال</span>} value={client.phone || "-"} dir="ltr" />
-              <InfoRow label={<span className="flex items-center gap-2"><Mail className="h-4 w-4" /> البريد</span>} value={client.email || "-"} />
-              <InfoRow label="التصنيف" value={CLASSIFICATIONS[client.classification] || client.classification || "-"} />
-              <InfoRow label="المصدر" value={client.source || "-"} />
-              {client.code && <InfoRow label="الرمز" value={client.code} />}
-              <InfoRow label="إجمالي الإيرادات" value={formatCurrency(Number(client.totalRevenue) || 0)} bold />
-              <InfoRow label="تاريخ الإنشاء" value={client.createdAt ? formatDateAr(client.createdAt) : "-"} last />
+              <InfoRow label="الاسم" value={client?.name} />
+              <InfoRow label={<span className="flex items-center gap-2"><Phone className="h-4 w-4" /> الجوال</span>} value={client?.phone || "-"} dir="ltr" />
+              <InfoRow label={<span className="flex items-center gap-2"><Mail className="h-4 w-4" /> البريد</span>} value={client?.email || "-"} />
+              <InfoRow label="التصنيف" value={CLASSIFICATIONS[client?.classification] || client?.classification || "-"} />
+              <InfoRow label="المصدر" value={client?.source || "-"} />
+              {client?.code && <InfoRow label="الرمز" value={client?.code} />}
+              <InfoRow label="إجمالي الإيرادات" value={formatCurrency(Number(client?.totalRevenue) || 0)} bold />
+              <InfoRow label="تاريخ الإنشاء" value={client?.createdAt ? formatDateAr(client?.createdAt) : "-"} last />
             </CardContent>
           </Card>
 
@@ -603,36 +581,41 @@ export default function ClientDetail() {
         </Card>
       )}
 
-      {activeTab === "tasks" && id && (
-        <LinkedTasks entityType="client" entityId={id} />
-      )}
-
-      {activeTab === "documents" && id && (
-        <EntityDocuments entityType="client" entityId={id} />
-      )}
-
       {activeTab === "umrah" && id && (
         <UmrahTab clientId={id} />
       )}
 
       {activeTab === "portal" && id && (
-        <ClientPortalTab clientId={id} clientEmail={client.email} />
+        <ClientPortalTab clientId={id} clientEmail={client?.email} />
       )}
+    </div>
+  );
 
-      {id && activeTab !== "portal" && (
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Activity className="h-5 w-5 text-muted-foreground" />
-              سجل الأحداث
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <EntityTimeline entityType="client" entityId={id} />
-          </CardContent>
-        </Card>
-      )}
-    </PageShell>
+  return (
+    <DetailPageLayout
+      title="ملف العميل 360°"
+      subtitle={client?.name}
+      backPath="/crm/clients"
+      entityType="client"
+      entityId={id || ""}
+      overview={overview}
+      isLoading={isLoading}
+      error={isError ? new Error("خطأ في تحميل بيانات العميل") : undefined}
+      onRetry={() => {}}
+      hideTabs={["tasks"]}
+      actions={
+        <>
+          {client && (
+            <Badge className={cn("text-sm px-3 py-1", CLASSIFICATION_COLORS[client?.classification] || "bg-gray-100")}>
+              {CLASSIFICATIONS[client?.classification] || client?.classification}
+            </Badge>
+          )}
+          {client?.isBlacklisted && (
+            <Badge variant="destructive" className="text-sm px-3 py-1">قائمة سوداء</Badge>
+          )}
+        </>
+      }
+    />
   );
 }
 
