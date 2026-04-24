@@ -396,6 +396,7 @@ export async function confirmMutamersImport(
 
       for (const row of batch) {
         if (!row.nuskNumber) { errorCount++; continue; }
+        await client.query("SAVEPOINT sp_row");
         try {
           const groupId = await resolveGroup(client, scope, row);
           const agentId = await resolveAgent(client, scope, row);
@@ -474,9 +475,19 @@ export async function confirmMutamersImport(
               skippedCount++;
             }
           }
+          await client.query("RELEASE SAVEPOINT sp_row");
         } catch (err: any) {
-          errorCount++;
-          await logChange(client, batchId, "mutamer", 0, "error", null, null, err?.message);
+          await client.query("ROLLBACK TO SAVEPOINT sp_row");
+          await client.query("RELEASE SAVEPOINT sp_row");
+          const msg = String(err?.message || "");
+          // Treat duplicate (companyId, passportNumber, seasonId) as skipped (idempotent)
+          if (/duplicate key|unique constraint|already exists/i.test(msg) && /passport/i.test(msg)) {
+            skippedCount++;
+            try { await logChange(client, batchId, "mutamer", 0, "skipped", null, null, "duplicate"); } catch {}
+          } else {
+            errorCount++;
+            try { await logChange(client, batchId, "mutamer", 0, "error", null, null, msg); } catch {}
+          }
         }
       }
     }
@@ -515,6 +526,7 @@ export async function confirmVouchersImport(
 
     for (const row of rows) {
       if (!row.nuskInvoiceNumber) { errorCount++; continue; }
+      await client.query("SAVEPOINT sp_row");
       try {
         const groupId = await resolveGroup(client, scope, row);
         const agentId = await resolveAgent(client, scope, row);
@@ -619,9 +631,18 @@ export async function confirmVouchersImport(
             skippedCount++;
           }
         }
+        await client.query("RELEASE SAVEPOINT sp_row");
       } catch (err: any) {
-        errorCount++;
-        await logChange(client, batchId, "nusk_invoice", 0, "error", null, null, err?.message);
+        await client.query("ROLLBACK TO SAVEPOINT sp_row");
+        await client.query("RELEASE SAVEPOINT sp_row");
+        const msg = String(err?.message || "");
+        if (/duplicate key|unique constraint|already exists/i.test(msg)) {
+          skippedCount++;
+          try { await logChange(client, batchId, "nusk_invoice", 0, "skipped", null, null, "duplicate"); } catch {}
+        } else {
+          errorCount++;
+          try { await logChange(client, batchId, "nusk_invoice", 0, "error", null, null, msg); } catch {}
+        }
       }
     }
 
