@@ -2,6 +2,7 @@ import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { eventBus } from "./eventBus.js";
 import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
+import { validateEventPayload } from "./eventCatalog.js";
 
 export function computeVat(baseAmount: number, vatRatePercent: number): number {
   return Math.round(baseAmount * (vatRatePercent / 100) * 100) / 100;
@@ -98,6 +99,13 @@ export async function emitEvent(params: {
   after?: any;
   [key: string]: any;
 }) {
+  const validation = validateEventPayload(params.action, params);
+  if (!validation.cataloged) {
+    console.warn(`[emitEvent] uncataloged event: ${params.action}`);
+  } else if (!validation.valid) {
+    console.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
+  }
+
   try {
     eventBus.emit(params.action, {
       companyId: params.companyId,

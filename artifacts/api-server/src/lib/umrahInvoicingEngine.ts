@@ -152,7 +152,14 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     });
   }
 
-  const total = subtotal + penaltiesTotal;
+  // VAT: fetch company umrah VAT policy (defaults to 0 for exempt umrah services)
+  const [vatSetting] = await rawQuery<any>(
+    `SELECT value FROM company_settings WHERE "companyId" = $1 AND key = 'umrah_vat_rate' AND "deletedAt" IS NULL LIMIT 1`,
+    [scope.companyId]
+  );
+  const vatRate = vatSetting ? Number(vatSetting.value) : 0;
+  const vatAmount = Math.round(subtotal * (vatRate / 100) * 100) / 100;
+  const total = subtotal + penaltiesTotal + vatAmount;
 
   const [seqRow] = await rawQuery<any>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
   const seqNum = Number(seqRow.seq);
@@ -167,12 +174,12 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
        ("companyId","branchId","subAgentId","clientId","seasonId",ref,"invoiceDate",
         subtotal,"penaltiesTotal","vatRate","vatAmount",total,"paidAmount",status,
         "dueDate","nuskInvoiceRefs","groupRefs","pilgrimCount","createdBy","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7,$8,0,0,$9,0,'draft',
-               CURRENT_DATE + INTERVAL '30 days',$10,$11,$12,$13,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7,$8,$9,$10,$11,0,'draft',
+               CURRENT_DATE + INTERVAL '30 days',$12,$13,$14,$15,NOW(),NOW())
        RETURNING id`,
       [
         scope.companyId, scope.branchId || null, subAgentId, subAgent.clientId, seasonId,
-        ref, subtotal, penaltiesTotal, total,
+        ref, subtotal, penaltiesTotal, vatRate, vatAmount, total,
         nuskInvoiceRefs.join(","), groupRefs.join(","), totalPilgrims, scope.userId,
       ]
     );
@@ -212,11 +219,23 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     }
   });
 
-  // GL: Debit Accounts Receivable, Credit Umrah Revenue — BLOCKING (financial integrity)
-  const [arCode, revCode] = await Promise.all([
+  // GL: Debit Accounts Receivable, Credit Umrah Revenue + Penalty Revenue + VAT — BLOCKING
+  const [arCode, revCode, penaltyRevCode] = await Promise.all([
     getAccountCodeFromMapping(scope.companyId, "umrah_invoice_ar", "debit", "1200"),
     getAccountCodeFromMapping(scope.companyId, "umrah_invoice_revenue", "credit", "4200"),
+    getAccountCodeFromMapping(scope.companyId, "umrah_penalty_revenue", "credit", "4210"),
   ]);
+  const glLines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [
+    { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}` },
+    { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}` },
+  ];
+  if (penaltiesTotal > 0) {
+    glLines.push({ accountCode: penaltyRevCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}` });
+  }
+  if (vatAmount > 0) {
+    const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2160");
+    glLines.push({ accountCode: vatPayableCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${ref}` });
+  }
   await createGuardedJournalEntry({
     companyId: scope.companyId,
     branchId: scope.branchId || 0,
@@ -226,17 +245,13 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     type: "sales",
     sourceType: "umrah_sales_invoices",
     sourceId: invoiceId,
-    lines: [
-      { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}` },
-      { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}` },
-      ...(penaltiesTotal > 0 ? [{ accountCode: revCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}` }] : []),
-    ],
+    lines: glLines,
   }, { table: "umrah_sales_invoices", id: invoiceId });
 
   emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: invoiceId, details: JSON.stringify({ ref, total, subAgentId, groupCount: groups.length, pilgrimCount: totalPilgrims }) }).catch(console.error);
   createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total } }).catch(console.error);
 
-  return { invoiceId, ref, subtotal, penaltiesTotal, total, pilgrimCount: totalPilgrims, lineItems: lineItems.length, nuskInvoiceRefs, groupRefs };
+  return { invoiceId, ref, subtotal, penaltiesTotal, vatRate, vatAmount, total, pilgrimCount: totalPilgrims, lineItems: lineItems.length, nuskInvoiceRefs, groupRefs };
 }
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -1395,13 +1395,41 @@ export function registerEventListeners() {
       });
     }
 
-    // Cross-module: detect commission calculated without active payroll run
+    // Cross-module: link commission to payroll run (event-driven, not direct write)
     if (finalAmount > 0) {
+      const assignmentId = after?.assignmentId as number | undefined;
+      const employeeId = after?.employeeId as number | undefined;
       const [activeRun] = await rawQuery<any>(
-        `SELECT id FROM payroll_runs WHERE "companyId"=$1 AND month=$2 AND year=$3 AND status IN ('draft','processing') LIMIT 1`,
+        `SELECT id FROM payroll_runs WHERE "companyId"=$1 AND month=$2 AND year=$3 AND status IN ('draft','processing') AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 1`,
         [payload.companyId, month, year]
       );
-      if (!activeRun && mgr) {
+      if (activeRun && assignmentId) {
+        try {
+          const [existingLine] = await rawQuery<any>(
+            `SELECT id FROM payroll_lines WHERE "runId"=$1 AND "assignmentId"=$2 AND "deletedAt" IS NULL`,
+            [activeRun.id, assignmentId]
+          );
+          if (existingLine) {
+            await rawExecute(
+              `UPDATE payroll_lines SET commission=$1, "netSalary"="netSalary"+$1 WHERE id=$2`,
+              [finalAmount, existingLine.id]
+            );
+          } else {
+            await rawExecute(
+              `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"grossSalary",commission,"netSalary")
+               VALUES ($1,$2,$3,0,0,$4,$4)`,
+              [activeRun.id, assignmentId, employeeId ?? 0, finalAmount]
+            );
+          }
+        } catch (plErr) {
+          await rawExecute(
+            `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+             VALUES ($1,$2,$3,$4,false)`,
+            [payload.companyId, "commission_payroll_link", planId,
+             `فشل ربط العمولة بمسير الرواتب — خطة ${planId} شهر ${month}/${year}: ${String(plErr)}`]
+          ).catch(() => {});
+        }
+      } else if (!activeRun && mgr) {
         await createNotification({
           companyId: payload.companyId, assignmentId: mgr,
           type: "hr", title: "عمولة بدون مسيّر رواتب",
