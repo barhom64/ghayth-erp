@@ -16,6 +16,7 @@ import {
   emitEvent,
   createAuditLog,
   createJournalEntry,
+  createGuardedJournalEntry,
   initiateApprovalChain,
   getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
@@ -513,31 +514,27 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
       after: { ref: invoice.ref, total: invoice.total },
     });
 
-    // GL entry created ONLY upon approval
-    try {
-      const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
-        getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200"),
-        getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000"),
-        getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300"),
-      ]);
-      await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId || 0,
-        createdBy: scope.activeAssignmentId,
-        ref: `JE-${invoice.ref}`,
-        description: `فاتورة ${invoice.ref}${invoice.description ? ` – ${invoice.description}` : ""}`,
-        type: "invoice",
-        sourceType: "invoice",
-        sourceId: id,
-        lines: [
-          { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
-          { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
-          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
-        ],
-      });
-    } catch (glErr) {
-      console.error("[invoice-approve] GL journal entry failed:", glErr);
-    }
+    // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+    const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+    ]);
+    await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId || 0,
+      createdBy: scope.activeAssignmentId,
+      ref: `JE-${invoice.ref}`,
+      description: `فاتورة ${invoice.ref}${invoice.description ? ` – ${invoice.description}` : ""}`,
+      type: "invoice",
+      sourceType: "invoice",
+      sourceId: id,
+      lines: [
+        { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
+        { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
+        { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+      ],
+    }, { table: "invoices", id });
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch(console.error);
 

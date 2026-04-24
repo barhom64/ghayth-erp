@@ -4681,6 +4681,26 @@ ALTER SEQUENCE public.expense_claims_id_seq OWNED BY public.expense_claims.id;
 -- Name: financial_periods; Type: TABLE; Schema: public; Owner: -
 --
 
+CREATE TABLE public.financial_posting_failures (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "sourceType" character varying(50) NOT NULL,
+    "sourceId" integer NOT NULL,
+    error text,
+    resolved boolean DEFAULT false,
+    "resolvedAt" timestamp with time zone,
+    "resolvedBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.financial_posting_failures_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+
+ALTER SEQUENCE public.financial_posting_failures_id_seq OWNED BY public.financial_posting_failures.id;
+
+ALTER TABLE ONLY public.financial_posting_failures ALTER COLUMN id SET DEFAULT nextval('public.financial_posting_failures_id_seq'::regclass);
+
+
 CREATE TABLE public.financial_periods (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
@@ -11083,6 +11103,7 @@ CREATE TABLE public.umrah_sales_invoices (
     "groupRefs" text,
     "pilgrimCount" integer DEFAULT 0,
     "journalEntryId" integer,
+    "glStatus" character varying(20) DEFAULT 'pending',
     notes text,
     "createdBy" integer,
     "updatedBy" integer,
@@ -11118,6 +11139,7 @@ CREATE TABLE public.umrah_payments (
     "externalReference" character varying(100),
     "paymentDate" date DEFAULT CURRENT_DATE,
     "journalEntryId" integer,
+    "glStatus" character varying(20) DEFAULT 'pending',
     notes text,
     "createdBy" integer,
     "updatedBy" integer,
@@ -17486,6 +17508,13 @@ CREATE INDEX journal_entries_date_idx ON public.journal_entries USING btree (dat
 --
 
 CREATE INDEX journal_entries_deleted_at_idx ON public.journal_entries USING btree ("deletedAt") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: uq_journal_entries_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_journal_entries_source ON public.journal_entries USING btree ("companyId", "sourceType", "sourceId") WHERE ("sourceType" IS NOT NULL AND "sourceId" IS NOT NULL AND "deletedAt" IS NULL);
 
 
 --

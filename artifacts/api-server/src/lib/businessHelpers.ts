@@ -184,6 +184,15 @@ export async function createJournalEntry(params: {
   operationType?: string;
   lines: JournalEntryLine[];
 }) {
+  // Idempotency: if a journal entry already exists for this source, return it
+  if (params.sourceType && params.sourceId) {
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceType"=$2 AND "sourceId"=$3 AND "deletedAt" IS NULL LIMIT 1`,
+      [params.companyId, params.sourceType, params.sourceId]
+    );
+    if (existing) return existing.id;
+  }
+
   const totalDebit = params.lines.reduce((s, l) => s + Number(l.debit), 0);
   const totalCredit = params.lines.reduce((s, l) => s + Number(l.credit), 0);
   const imbalance = Math.round((totalDebit - totalCredit) * 10000) / 10000;
@@ -308,6 +317,39 @@ export async function createJournalEntry(params: {
   });
 
   return journalId;
+}
+
+/**
+ * Financial Posting Guard: wraps createJournalEntry to ensure financial operations
+ * never succeed silently when GL fails. On failure, flags the source record
+ * as "pending_financial_posting" for reconciliation.
+ */
+export async function createGuardedJournalEntry(
+  params: Parameters<typeof createJournalEntry>[0],
+  guard: { table: string; id: number }
+): Promise<number> {
+  try {
+    return await createJournalEntry(params);
+  } catch (err) {
+    try {
+      const safeTable = guard.table.replace(/[^a-zA-Z0-9_]/g, "");
+      await rawExecute(
+        `UPDATE "${safeTable}" SET "glStatus" = 'failed', "updatedAt" = NOW() WHERE id = $1`,
+        [guard.id]
+      );
+    } catch { /* column may not exist — best effort */ }
+
+    await rawExecute(
+      `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,"createdAt")
+       VALUES ($1,$2,$3,$4,NOW())
+       ON CONFLICT DO NOTHING`,
+      [params.companyId, params.sourceType ?? guard.table, params.sourceId ?? guard.id,
+       err instanceof Error ? err.message : String(err)]
+    );
+
+    console.error(`[FinancialPostingGuard] GL failed for ${guard.table}#${guard.id}:`, err);
+    throw err;
+  }
 }
 
 export async function updateAccountBalances(

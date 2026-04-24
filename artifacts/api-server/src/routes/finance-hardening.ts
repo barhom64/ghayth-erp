@@ -1223,4 +1223,38 @@ financeHardeningRouter.get("/cost-center-report", requirePermission("finance:rea
   }
 });
 
+// Financial Posting Failures dashboard — surfaces operations where GL entry failed
+financeHardeningRouter.get("/posting-failures", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const resolved = req.query.resolved === "true";
+    const rows = await rawQuery<any>(
+      `SELECT * FROM financial_posting_failures
+       WHERE "companyId" = $1 AND resolved = $2
+       ORDER BY "createdAt" DESC LIMIT 100`,
+      [scope.companyId, resolved]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Posting failures error:");
+  }
+});
+
+financeHardeningRouter.patch("/posting-failures/:id/resolve", requirePermission("finance:approve"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { affectedRows } = await rawExecute(
+      `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = $1
+       WHERE id = $2 AND "companyId" = $3 AND resolved = false`,
+      [scope.userId, id, scope.companyId]
+    );
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود أو مغلق مسبقاً");
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "posting_failure.resolved", entity: "financial_posting_failures", entityId: id }).catch(console.error);
+    res.json({ message: "تم إغلاق المشكلة" });
+  } catch (err) {
+    handleRouteError(err, res, "Resolve posting failure error:");
+  }
+});
+
 export default financeHardeningRouter;
