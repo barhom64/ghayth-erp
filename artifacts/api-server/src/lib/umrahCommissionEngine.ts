@@ -160,7 +160,12 @@ export async function calculateCommissionForPlan(
           }
         }
       } catch (plErr) {
-        console.error(`[UmrahCommission] Payroll line link failed for plan ${planId}:`, plErr);
+        await rawExecute(
+          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+           VALUES ($1,$2,$3,$4,false)`,
+          [plan.companyId, "commission_payroll_link", planId,
+           `فشل ربط العمولة بمسير الرواتب — خطة ${planId} شهر ${month}/${year}: ${String(plErr)}`]
+        ).catch(() => {});
       }
 
       // GL: Debit Commission Expense, Credit Commission Payable (accrual) — BLOCKING
@@ -173,13 +178,14 @@ export async function calculateCommissionForPlan(
         branchId: plan.branchId,
         createdBy: userId,
         ref: `JE-COMM-${planId}-${year}${String(month).padStart(2, "0")}`,
-        description: `استحقاق عمولة — ${plan.planName} — ${month}/${year}`,
+        description: `استحقاق عمولة — ${plan.planName} — ${month}/${year} — موظف #${plan.employeeId}`,
         type: "accrual",
         sourceType: "employee_commission_calculations",
         sourceId: planId,
+        sourceKey: `commission:${planId}:${year}:${month}`,
         lines: [
-          { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}` },
-          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: `عمولة مستحقة — موظف #${plan.employeeId}` },
+          { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}`, employeeId: plan.employeeId },
+          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: `عمولة مستحقة — موظف #${plan.employeeId}`, employeeId: plan.employeeId },
         ],
       }, { table: "employee_commission_calculations", id: planId });
     }
@@ -268,12 +274,17 @@ async function compute(
   const { conditionMet, conditionDetails } = checkConditions(plan, avgProfitPerVisa, salesPercent);
 
   const violationRes = (await queryFn(
-    `SELECT COUNT(*)::int AS cnt FROM umrah_violations
-     WHERE "companyId" = $1 AND status IN ('detected','open')
-       AND "createdAt" >= DATE_TRUNC('month', MAKE_DATE($2, $3, 1))
-       AND "createdAt" < DATE_TRUNC('month', MAKE_DATE($2, $3, 1)) + INTERVAL '1 month'
-       AND "deletedAt" IS NULL`,
-    [plan.companyId, year, month]
+    `SELECT COUNT(*)::int AS cnt FROM umrah_violations v
+     WHERE v."companyId" = $1 AND v.status IN ('detected','open')
+       AND v."createdAt" >= DATE_TRUNC('month', MAKE_DATE($2, $3, 1))
+       AND v."createdAt" < DATE_TRUNC('month', MAKE_DATE($2, $3, 1)) + INTERVAL '1 month'
+       AND v."deletedAt" IS NULL
+       AND EXISTS (
+         SELECT 1 FROM umrah_pilgrims p
+         WHERE p."companyId" = v."companyId" AND p."seasonId" = $4
+           AND (p.id = v."mutamerId" OR p."groupId" = v."groupId")
+       )`,
+    [plan.companyId, year, month, plan.seasonId]
   )).rows[0];
   const hasViolations = Number(violationRes?.cnt) > 0;
 
@@ -433,7 +444,12 @@ export async function calculateAllForCompany(
       const r = await calculateCommissionForPlan(p.id, month, year, userId);
       results.push(r);
     } catch (err) {
-      console.error(`Commission calc error plan=${p.id}:`, err);
+      await rawExecute(
+        `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
+         VALUES ($1,$2,$3,$4,false)`,
+        [companyId, "commission_calculation", p.id,
+         `فشل حساب عمولة الخطة ${p.id} شهر ${month}/${year}: ${String(err)}`]
+      ).catch(() => {});
     }
   }
   return results;
