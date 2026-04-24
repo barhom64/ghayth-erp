@@ -1,4 +1,5 @@
 import { PortalsIcon } from "../../components/ModuleIcons";
+import DeepLinkButton from "../../components/DeepLinkButton";
 
 export default function ModulePortals() {
   return (
@@ -39,6 +40,12 @@ export default function ModulePortals() {
           <div className="font-body text-muted text-[1.05vw] mt-[1.5vh] leading-snug">إعلانات الوظائف، تقديم السيرة، تتبّع الطلب، تقييم وفرز ومقابلات.</div>
         </div>
       </div>
+      <DeepLinkButton
+        to="/deep/slide11"
+        label="تعمّق في هذه الوحدة"
+        variant="to-deep"
+        className="absolute bottom-[2.6vh] right-[6vw]"
+      />
       <div className="absolute bottom-[3vh] left-[6vw] text-muted font-body text-[1vw]">14 / 19</div>
     </div>
   );
