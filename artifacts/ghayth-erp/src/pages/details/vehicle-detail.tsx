@@ -443,7 +443,7 @@ export default function VehicleDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "type", header: "النوع", render: (m) => m.type || m.description || "-" },
                     { key: "scheduledDate", header: "التاريخ", render: (m) => formatDateAr(m.scheduledDate || m.createdAt) },
@@ -594,7 +594,7 @@ export default function VehicleDetail() {
             {trips.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">لا توجد رحلات</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "fromLocation", header: "من", render: (t) => t.fromLocation || "-" },
                   { key: "toLocation", header: "إلى", render: (t) => t.toLocation || "-" },
@@ -620,7 +620,7 @@ export default function VehicleDetail() {
             {maintenance.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد سجلات صيانة</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "type", header: "النوع", render: (m) => <span className="font-medium">{maintenanceTypeLabel(m.type)}</span> },
                   { key: "description", header: "الوصف", render: (m) => <span className="text-gray-500">{m.description || "-"}</span> },
@@ -646,7 +646,7 @@ export default function VehicleDetail() {
             {fuelLogs.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد سجلات وقود</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "fuelDate", header: "التاريخ", render: (f) => <span className="text-gray-500">{f.fuelDate ? formatDateAr(f.fuelDate) : "-"}</span> },
                   { key: "liters", header: "الكمية", render: (f) => `${Number(f.liters || 0).toFixed(1)} لتر` },
