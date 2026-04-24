@@ -1112,4 +1112,30 @@ router.get("/governance/domain-registry", requirePermission("admin:read"), async
   res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
 });
 
+router.get("/governance/gl-reconciliation", requirePermission("admin:read"), async (req, res) => {
+  const companyId = (req as any).companyId;
+  const mismatches = await rawQuery<any>(
+    `SELECT
+       coa.code,
+       coa.name,
+       coa."currentBalance" AS stored_balance,
+       COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)::numeric(15,2) AS computed_balance,
+       (coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0))::numeric(15,2) AS drift
+     FROM chart_of_accounts coa
+     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+       AND jl."journalId" IN (SELECT id FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL)
+     WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL AND coa."allowPosting" = true
+     GROUP BY coa.code, coa.name, coa."currentBalance"
+     HAVING ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) > 0.01
+     ORDER BY ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) DESC
+     LIMIT 50`,
+    [companyId]
+  );
+  res.json({
+    healthy: mismatches.length === 0,
+    driftCount: mismatches.length,
+    mismatches,
+  });
+});
+
 export default router;

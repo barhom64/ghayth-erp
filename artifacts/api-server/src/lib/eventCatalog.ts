@@ -891,3 +891,31 @@ export function countEventsByDomain(): Record<string, number> {
   }
   return out;
 }
+
+export interface EventValidationResult {
+  valid: boolean;
+  cataloged: boolean;
+  warnings: string[];
+}
+
+export function validateEventPayload(
+  action: string,
+  payload: Record<string, any>
+): EventValidationResult {
+  const def = _eventIndex.get(action);
+  if (!def) {
+    return { valid: true, cataloged: false, warnings: [`Event "${action}" not in catalog`] };
+  }
+
+  const warnings: string[] = [];
+  for (const [field, expectedType] of Object.entries(def.payload)) {
+    const val = payload[field] ?? payload.after?.[field];
+    if (val === undefined || val === null) {
+      warnings.push(`Missing required field "${field}" (expected ${expectedType})`);
+    } else if (expectedType === "number" && typeof val !== "number" && isNaN(Number(val))) {
+      warnings.push(`Field "${field}" should be ${expectedType}, got ${typeof val}`);
+    }
+  }
+
+  return { valid: warnings.length === 0, cataloged: true, warnings };
+}

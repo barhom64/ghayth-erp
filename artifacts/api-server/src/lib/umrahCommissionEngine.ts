@@ -129,45 +129,6 @@ export async function calculateCommissionForPlan(
     }).catch(() => {});
 
     if (result.finalAmount > 0) {
-      // Link to payroll run if one exists
-      try {
-        const [activeRun] = (await client.query(
-          `SELECT id FROM payroll_runs
-           WHERE "companyId"=$1 AND month=$2 AND year=$3 AND status IN ('draft','processing')
-             AND "deletedAt" IS NULL
-           ORDER BY id DESC LIMIT 1`,
-          [plan.companyId, month, year]
-        )).rows;
-
-        if (activeRun) {
-          const [existingLine] = (await client.query(
-            `SELECT id FROM payroll_lines
-             WHERE "runId"=$1 AND "assignmentId"=$2 AND "deletedAt" IS NULL`,
-            [activeRun.id, plan.assignmentId]
-          )).rows;
-
-          if (existingLine) {
-            await client.query(
-              `UPDATE payroll_lines SET commission=$1, "netSalary"="netSalary"+$1 WHERE id=$2`,
-              [result.finalAmount, existingLine.id]
-            );
-          } else {
-            await client.query(
-              `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"grossSalary",commission,"netSalary")
-               VALUES ($1,$2,$3,0,0,$4,$4)`,
-              [activeRun.id, plan.assignmentId, plan.employeeId, result.finalAmount]
-            );
-          }
-        }
-      } catch (plErr) {
-        await rawExecute(
-          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-           VALUES ($1,$2,$3,$4,false)`,
-          [plan.companyId, "commission_payroll_link", planId,
-           `فشل ربط العمولة بمسير الرواتب — خطة ${planId} شهر ${month}/${year}: ${String(plErr)}`]
-        ).catch(() => {});
-      }
-
       // GL: Debit Commission Expense, Credit Commission Payable (accrual) — BLOCKING
       const [expenseCode, payableCode] = await Promise.all([
         getAccountCodeFromMapping(plan.companyId, "commission_expense", "debit", "6200"),
