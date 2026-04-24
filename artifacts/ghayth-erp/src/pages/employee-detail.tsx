@@ -641,7 +641,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             {payroll.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">لا يوجد سجل رواتب</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "period", header: "الفترة", render: (p) => <span className="font-mono">{p.period}</span> },
                   { key: "basic", header: "الأساسي", render: (p) => formatCurrency(Number(p.basic || 0)) },
@@ -761,7 +761,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "loanNumber", header: "رقم السلفة", render: (ln) => <span className="font-mono text-xs text-blue-700">{ln.loanNumber}</span> },
                     { key: "loanType", header: "النوع", render: (ln) => {
@@ -791,7 +791,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "requestNumber", header: "رقم الطلب", render: (ot) => <span className="font-mono text-xs text-purple-700">{ot.requestNumber}</span> },
                     { key: "overtimeDate", header: "التاريخ", render: (ot) => <span className="text-gray-600">{formatDateAr(ot.overtimeDate)}</span> },
