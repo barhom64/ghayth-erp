@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { setTimeout as wait } from "node:timers/promises";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { writeReport } from "./shots-report.mjs";
 
 const DOMAIN = process.env.REPLIT_DEV_DOMAIN;
 if (!DOMAIN) {
@@ -96,6 +97,22 @@ async function main() {
     }
   } finally {
     await browser.close();
+  }
+
+  try {
+    const pagesRoot = resolve(process.cwd(), "..", "ghayth-erp", "src", "pages");
+    const maxAgeDays = Number(process.env.SHOTS_MAX_AGE_DAYS || 14);
+    const { path: reportPath, stats } = await writeReport({
+      shotsDir: OUT_DIR,
+      pagesRoot,
+      maxAgeDays,
+    });
+    const need = stats.rows.filter((r) => r.status === "⚠").length;
+    console.log(
+      `[refresh-shots] 📝 report: ${reportPath} (${need}/${stats.rows.length} need recapture)`,
+    );
+  } catch (err) {
+    console.warn(`[refresh-shots] report generation failed: ${err.message}`);
   }
 }
 
