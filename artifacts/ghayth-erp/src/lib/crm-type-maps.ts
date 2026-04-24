@@ -16,32 +16,3 @@ export const ACTIVITY_STATUS: Record<string, { label: string; color: string }> =
   completed: { label: "مكتمل", color: "bg-green-100 text-green-700 border-green-300" },
   scheduled: { label: "مجدول", color: "bg-blue-100 text-blue-700 border-blue-300" },
 };
-
-// -- حالات العملاء المحتملين ------------------------------------------------
-export const LEAD_STATUS: Record<string, string> = {
-  new: "جديد",
-  contacted: "تم التواصل",
-  qualified: "مؤهل",
-  proposal: "عرض سعر",
-  negotiation: "تفاوض",
-  won: "فاز",
-  lost: "خسر",
-};
-
-// -- مراحل الفرص -----------------------------------------------------------
-export const OPPORTUNITY_STAGE: Record<string, string> = {
-  prospecting: "استكشاف",
-  qualification: "تأهيل",
-  proposal: "عرض",
-  negotiation: "تفاوض",
-  closed_won: "مكسب",
-  closed_lost: "خسارة",
-};
-
-// -- الأولوية ---------------------------------------------------------------
-export const PRIORITY: Record<string, string> = {
-  low: "منخفضة",
-  medium: "متوسطة",
-  high: "عالية",
-  urgent: "عاجلة",
-};
