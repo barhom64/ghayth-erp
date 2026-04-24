@@ -60,7 +60,7 @@ export default function PurchaseOrderDetailPage() {
       <Card>
         <CardHeader><CardTitle>بنود أمر الشراء</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "_index", header: "#", render: (_r, i) => <span className="text-gray-400">{i + 1}</span> },
               { key: "description", header: "الوصف", render: (r) => <span className="font-medium">{r.description || r.name || "-"}</span> },
