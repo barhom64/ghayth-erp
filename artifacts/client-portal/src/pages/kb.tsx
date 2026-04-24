@@ -98,7 +98,7 @@ function KBArticle() {
     <div className="text-center py-12 text-gray-500">
       <p className="text-4xl mb-2">😕</p>
       <p>المقالة غير موجودة</p>
-      <Link href="/kb"><a className="text-blue-600 text-sm hover:underline mt-2 block">العودة لمركز المساعدة</a></Link>
+      <Link href="/kb" className="text-blue-600 text-sm hover:underline mt-2 block">العودة لمركز المساعدة</Link>
     </div>
   );
 
