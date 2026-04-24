@@ -1185,4 +1185,157 @@ router.get("/governance/rbac-matrix", requirePermission("admin:read"), async (re
   });
 });
 
+// ── System Master Registry endpoints ──
+
+router.get("/system-registry", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const stats = getSystemStats();
+    const byDomain = countEventsByDomain();
+
+    const [tableCountRows] = await rawQuery<any>(
+      `SELECT COUNT(DISTINCT tablename)::int AS c FROM pg_tables WHERE schemaname = 'public'`,
+      []
+    );
+    const [endpointCountRows] = await rawQuery<any>(
+      `SELECT COUNT(*)::int AS c FROM audit_logs WHERE "companyId" = $1`,
+      [scope.companyId]
+    );
+
+    res.json({
+      overview: {
+        domains: stats.domains,
+        tables: tableCountRows?.c || stats.tables,
+        lifecycleMachines: STATE_MACHINES.length,
+        events: EVENT_CATALOG.length,
+        eventsByDomain: byDomain,
+        permissions: PERMISSIONS.length,
+        roles: Object.keys(ROLE_PERMISSIONS).length,
+        cronJobs: stats.cronJobs,
+        glDomains: stats.glDomains,
+      },
+      domains: DOMAIN_REGISTRY.map(d => ({
+        id: d.id,
+        label: d.label,
+        tables: d.tables,
+        permissions: d.permissions,
+        engines: d.engines,
+        cronJobs: d.cronJobs,
+        glIntegration: d.glIntegration,
+        obligationTypes: d.obligationTypes,
+      })),
+    });
+  } catch (err) { handleRouteError(err, res, "System registry error:"); }
+});
+
+router.get("/system-registry/entities", requirePermission("admin:read"), async (_req, res) => {
+  try {
+    const entities = DOMAIN_REGISTRY.flatMap(d =>
+      d.tables.map(t => ({
+        table: t,
+        domain: d.id,
+        domainLabel: d.label,
+        hasLifecycle: STATE_MACHINES.some((m: any) => m.entity === t),
+        lifecycle: STATE_MACHINES.find((m: any) => m.entity === t) || null,
+      }))
+    );
+    res.json({ entities, total: entities.length });
+  } catch (err) { handleRouteError(err, res, "Entity registry error:"); }
+});
+
+router.get("/system-registry/actions", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const domain = req.query.domain as string | undefined;
+
+    let events = EVENT_CATALOG.map((e: any) => ({
+      action: e.name,
+      domain: e.domain,
+      label: e.label,
+      critical: e.critical || false,
+      sideEffects: e.sideEffects || [],
+    }));
+
+    if (domain) {
+      events = events.filter(e => e.domain === domain);
+    }
+
+    const recentActions = await rawQuery<any>(
+      `SELECT action, entity, COUNT(*)::int AS count
+       FROM event_logs WHERE "companyId" = $1
+       GROUP BY action, entity ORDER BY count DESC LIMIT 30`,
+      [scope.companyId]
+    );
+
+    res.json({ events, total: events.length, recentActions });
+  } catch (err) { handleRouteError(err, res, "Action registry error:"); }
+});
+
+router.get("/system-registry/pages", requirePermission("admin:read"), async (_req, res) => {
+  try {
+    const pages = [
+      { path: "/", component: "Dashboard", domain: "core", lazy: true },
+      { path: "/hr", component: "HR", domain: "hr", lazy: true },
+      { path: "/employees", component: "Employees", domain: "hr", lazy: true },
+      { path: "/finance", component: "FinanceDashboard", domain: "finance", lazy: true },
+      { path: "/finance/invoices", component: "Invoices", domain: "finance", lazy: true },
+      { path: "/finance/journal", component: "Journal", domain: "finance", lazy: true },
+      { path: "/fleet", component: "Fleet", domain: "fleet", lazy: true },
+      { path: "/properties", component: "Properties", domain: "properties", lazy: true },
+      { path: "/projects", component: "Projects", domain: "projects", lazy: true },
+      { path: "/crm", component: "CRM", domain: "crm", lazy: true },
+      { path: "/legal", component: "Legal", domain: "legal", lazy: true },
+      { path: "/support", component: "Support", domain: "support", lazy: true },
+      { path: "/warehouse", component: "Warehouse", domain: "warehouse", lazy: true },
+      { path: "/umrah", component: "Umrah", domain: "umrah", lazy: true },
+      { path: "/governance", component: "Governance", domain: "governance", lazy: true },
+      { path: "/bi", component: "BI", domain: "bi", lazy: true },
+      { path: "/admin", component: "Admin", domain: "admin", lazy: true, minLevel: 90 },
+      { path: "/settings", component: "Settings", domain: "admin", lazy: true, minLevel: 70 },
+    ];
+
+    const domainCounts: Record<string, number> = {};
+    for (const p of pages) {
+      domainCounts[p.domain] = (domainCounts[p.domain] || 0) + 1;
+    }
+
+    res.json({ pages, total: pages.length, byDomain: domainCounts });
+  } catch (err) { handleRouteError(err, res, "Page registry error:"); }
+});
+
+router.get("/system-registry/missing", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+
+    const tablesWithoutEvents = DOMAIN_REGISTRY.flatMap(d =>
+      d.tables.filter(t =>
+        !EVENT_CATALOG.some((e: any) =>
+          e.name.includes(t.replace(/_/g, ".")) || e.name.includes(t.replace(/s$/, ""))
+        )
+      ).map(t => ({ table: t, domain: d.id }))
+    );
+
+    const [orphanNotifications] = await Promise.all([
+      rawQuery<any>(
+        `SELECT DISTINCT type FROM notifications
+         WHERE "companyId" = $1 AND type NOT IN (
+           SELECT DISTINCT type FROM notifications WHERE "companyId" = $1 AND "actionUrl" IS NOT NULL AND "actionUrl" != ''
+         ) LIMIT 20`,
+        [scope.companyId]
+      ),
+    ]);
+
+    const lifecycleEntities = STATE_MACHINES.map((m: any) => m.entity);
+    const domainsWithoutLifecycle = DOMAIN_REGISTRY
+      .filter(d => !d.tables.some(t => lifecycleEntities.includes(t)))
+      .map(d => ({ id: d.id, label: d.label }));
+
+    res.json({
+      tablesWithoutEvents: { items: tablesWithoutEvents, count: tablesWithoutEvents.length },
+      domainsWithoutLifecycle: { items: domainsWithoutLifecycle, count: domainsWithoutLifecycle.length },
+      orphanNotifications: { items: orphanNotifications || [], count: orphanNotifications?.length || 0 },
+    });
+  } catch (err) { handleRouteError(err, res, "Missing registry items error:"); }
+});
+
 export default router;
