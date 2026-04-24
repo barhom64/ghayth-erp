@@ -314,6 +314,12 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
         body: `تم رفض الطلب ${item.requestNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_overtime_request", refId: item.id,
       }).catch(console.error);
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'rejected',$2,$3,$4)`,
+          [item.id, rejectionReason || null, scope.userId, scope.companyId]
+        );
+      } catch (e) { console.error("Failed to log approval action:", e); }
       emitEvent({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -359,6 +365,13 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       body: `تمت الموافقة على ${item.hours} ساعات إضافية — ${item.requestNumber}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
     }).catch(console.error);
+
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'approved',$2,$3,$4)`,
+        [item.id, notes || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error("Failed to log approval action:", e); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

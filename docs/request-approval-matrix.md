@@ -181,7 +181,7 @@ open → in_progress → resolved → closed
 
 ---
 
-## 3. نقاط اعتماد الـ API (31 endpoint)
+## 3. نقاط اعتماد الـ API (36 endpoint)
 
 | # | المسار | الكيان | الإجراء | الصلاحية |
 |---|--------|--------|---------|----------|
@@ -198,24 +198,29 @@ open → in_progress → resolved → closed
 | 11 | PATCH /hr/transfers/:id/approve | employee_transfers | approve | hr:approve |
 | 12 | PATCH /hr/transfers/:id/receive | employee_transfers | receive | hr:update |
 | 13 | PATCH /hr/official-letters/:id/approve | official_letters | approve | hr:approve |
-| 14 | PATCH /hr/discipline/memos/:id/recommendation | hr_inquiry_memos | recommendation | hr:discipline:approve |
-| 15 | PATCH /hr/discipline/memos/:id/gm-decision | hr_inquiry_memos | gm-decision | hr:discipline:approve |
-| 16 | PATCH /hr/discipline/memos/:id/appeal-decision | hr_inquiry_memos | appeal-decision | hr:discipline:approve |
-| 17 | PATCH /hr/discipline/memos/:id/close | hr_inquiry_memos | close | hr:discipline:approve |
-| 18 | PATCH /finance/invoices/:id/approve | invoices | approve | finance:approve |
-| 19 | PATCH /finance/journals/:id/post | journal_entries | post/approve | finance:approve |
-| 20 | PATCH /finance/purchase-orders/:id/approve | purchase_orders | approve | finance:approve |
-| 21 | PATCH /finance/purchase-requests/:id/approve | purchase_requests | approve | finance:approve |
-| 22 | PATCH /finance/purchase-requests/:id/reject | purchase_requests | reject | finance:approve |
-| 23 | PATCH /finance/budgets/:id/approve | budgets | approve | finance:approve |
-| 24 | PATCH /support/tickets/:id/resolve | support_tickets | resolve | support:update |
-| 25 | PATCH /warehouse/inventory-counts/:id/approve | inventory_counts | approve | warehouse:update |
-| 26 | PATCH /governance/policies/:id/archive | governance_policies | archive | governance:write |
-| 27 | PATCH /legal/cases/:id (status transition) | legal_cases | transition | legal:update |
-| 28 | PATCH /legal/contracts/:id (status transition) | legal_contracts | transition | legal:update |
-| 29 | POST /requests/:id/approve | requests | approve | requests:write |
-| 30 | POST /requests/:id/reject | requests | reject | requests:write |
-| 31 | POST /requests/:id/return | requests | return | requests:write |
+| 14 | PATCH /hr/excuse-requests/:id/approve | hr_excuse_requests | approve | hr:approve |
+| 15 | PATCH /hr/discipline/memos/:id/recommendation | hr_inquiry_memos | recommendation | hr:discipline:approve |
+| 16 | PATCH /hr/discipline/memos/:id/gm-decision | hr_inquiry_memos | gm-decision | hr:discipline:approve |
+| 17 | PATCH /hr/discipline/memos/:id/appeal-decision | hr_inquiry_memos | appeal-decision | hr:discipline:approve |
+| 18 | PATCH /hr/discipline/memos/:id/close | hr_inquiry_memos | close | hr:discipline:approve |
+| 19 | PATCH /hr/programs/:id/approve | training_programs | approve | hr:update |
+| 20 | PATCH /hr/programs/:id/reject | training_programs | reject | hr:update |
+| 21 | PATCH /finance/invoices/:id/approve | invoices | approve | finance:approve |
+| 22 | PATCH /finance/journals/:id/post | journal_entries | post/approve | finance:approve |
+| 23 | PATCH /finance/purchase-orders/:id/approve | purchase_orders | approve | finance:approve |
+| 24 | PATCH /finance/purchase-requests/:id/approve | purchase_requests | approve | finance:approve |
+| 25 | PATCH /finance/purchase-requests/:id/reject | purchase_requests | reject | finance:approve |
+| 26 | PATCH /finance/custodies/:id/approve | custodies | approve | finance:approve |
+| 27 | PATCH /finance/journal-manual/:id/approve | journal_entries | approve | finance:approve |
+| 28 | PATCH /finance/budgets/:id/approve | budgets | approve | finance:approve |
+| 29 | PATCH /property/maintenance-requests/:id/approve | maintenance_requests | approve | property:update |
+| 30 | PATCH /support/tickets/:id/resolve | support_tickets | resolve | support:update |
+| 31 | PATCH /warehouse/inventory-counts/:id/approve | inventory_counts | approve | warehouse:update |
+| 32 | PATCH /governance/policies/:id/archive | governance_policies | archive | governance:write |
+| 33 | PATCH /legal/cases/:id (status transition) | legal_cases | transition | legal:update |
+| 34 | PATCH /legal/contracts/:id (status transition) | legal_contracts | transition | legal:update |
+| 35 | POST /requests/:id/approve | requests | approve | requests:write |
+| 36 | POST /requests/:id/reject | requests | reject | requests:write |
 
 ---
 
@@ -236,7 +241,7 @@ open → in_progress → resolved → closed
 | المقياس | القيمة |
 |---------|--------|
 | أنواع الطلبات | 16 |
-| نقاط اعتماد (API) | 31 |
+| نقاط اعتماد (API) | 36 |
 | سلاسل اعتماد متعددة المراحل | 4 (إجازات، مذكرات تأديبية، أوامر شراء، سير عمل) |
 | تصعيد تلقائي | 5 كيانات |
 | إشعارات الاعتماد | 15+ نوع |

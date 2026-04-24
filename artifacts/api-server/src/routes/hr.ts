@@ -5674,6 +5674,13 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
         }).catch(console.error);
       }
 
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('employee_transfer',$1,'approved',$2,$3,$4)`,
+          [id, notes || null, scope.userId, scope.companyId]
+        );
+      } catch (e) { console.error("Failed to log approval action:", e); }
+
       emitEvent({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -5703,6 +5710,13 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
           priority: "high", refType: "employee_transfer", refId: id,
         }).catch(console.error);
       }
+
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('employee_transfer',$1,'rejected',$2,$3,$4)`,
+          [id, notes || null, scope.userId, scope.companyId]
+        );
+      } catch (e) { console.error("Failed to log approval action:", e); }
 
       emitEvent({
         companyId: scope.companyId,
@@ -6727,6 +6741,13 @@ router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), asy
        "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
       [newStatus, scope.activeAssignmentId, rejectionReason || null, Number(id)]
     );
+
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_excuse_request',$1,$2,$3,$4,$5)`,
+        [Number(id), newStatus, rejectionReason || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error("Failed to log approval action:", e); }
 
     createNotification({
       companyId: scope.companyId, assignmentId: excuse.assignmentId,
