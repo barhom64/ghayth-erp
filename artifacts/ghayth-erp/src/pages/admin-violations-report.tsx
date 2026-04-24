@@ -328,7 +328,7 @@ export default function ViolationsReportPage() {
 
       <Card>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={violationColumns}
             data={violations}
             isLoading={isLoading}
