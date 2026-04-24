@@ -111,7 +111,7 @@ export default function InvoiceDetail() {
       <div className="text-center py-12 text-gray-500">
         <p className="text-4xl mb-2">😕</p>
         <p>الفاتورة غير موجودة</p>
-        <Link href="/invoices"><a className="text-blue-600 text-sm hover:underline mt-2 block">العودة للفواتير</a></Link>
+        <Link href="/invoices" className="text-blue-600 text-sm hover:underline mt-2 block">العودة للفواتير</Link>
       </div>
     );
   }
