@@ -116,10 +116,10 @@ export default function UnitDetail() {
   const totalCollected = payments.filter((p: any) => p.status === "paid").reduce((s: number, p: any) => s + Number(p.paidAmount || 0), 0);
 
 
-  const actions = (
+  const actions = unit ? (
     <div className="flex items-center gap-2">
-      <Badge className={cn("border", STATUS_COLORS[unit?.status] || "bg-gray-100 text-gray-700")}>
-        {STATUS_LABELS[unit?.status] || unit?.status}
+      <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-gray-100 text-gray-700")}>
+        {STATUS_LABELS[unit.status] || unit.status}
       </Badge>
       <Link href={`/properties/${id}/status`}>
         <Button variant="outline" size="sm" className="gap-1">
@@ -127,9 +127,9 @@ export default function UnitDetail() {
         </Button>
       </Link>
     </div>
-  );
+  ) : undefined;
 
-  const overview = (
+  const overview = unit ? (
     <div className="space-y-6">
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
@@ -661,11 +661,11 @@ export default function UnitDetail() {
       )}
 
     </div>
-  );
+  ) : <div />;
 
   return (
     <DetailPageLayout
-      title={`وحدة ${unit?.unitNumber}`}
+      title={`وحدة ${unit?.unitNumber || ""}`}
       subtitle={`${unit?.buildingName || "-"}${unit?.address ? ` — ${unit.address}` : ""}`}
       backPath="/properties"
       backLabel="الوحدات"

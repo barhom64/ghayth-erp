@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo,
   CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle,
@@ -16,15 +15,13 @@ import {
   BarChart2, ShieldAlert, Users2, Mail, Lock,
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -97,42 +94,11 @@ export default function ProjectDetail() {
     { successMessage: "تم إضافة المهمة", onSuccess: () => { setShowTaskForm(false); setTaskForm({ title: "", priority: "medium", dueDate: "" }); } }
   );
 
-  if (isLoading) {
-    return (
-      <PageShell title="جاري التحميل..." breadcrumbs={BREADCRUMBS}>
-        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
-      </PageShell>
-    );
-  }
-
-  if (is404 || (!isLoading && !project)) {
-    return (
-      <PageShell title="المشروع غير موجود" breadcrumbs={BREADCRUMBS}>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <FolderKanban className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 mb-1">المشروع المطلوب غير موجود أو تم حذفه.</p>
-            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة المشاريع.</p>
-            <Link href="/projects"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للمشاريع</Button></Link>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  if (isError) {
-    return (
-      <PageShell title="خطأ" breadcrumbs={BREADCRUMBS}>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
-            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات المشروع.</p>
-            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
+  const statusTone = (s: string) =>
+    s === "completed" || s === "done" ? "success" as const :
+    s === "active" || s === "in_progress" ? "info" as const :
+    s === "on_hold" ? "warning" as const :
+    s === "planning" || s === "pending" ? "muted" as const : "default" as const;
 
   const phases = project.phases || [];
   const tasks = project.tasks || [];
@@ -223,60 +189,52 @@ export default function ProjectDetail() {
     }
   };
 
-  return (
-    <PageShell
-      title={project.name || "المشروع"}
-      subtitle={project.clientName || undefined}
-      loading={isLoading}
-      breadcrumbs={[...BREADCRUMBS, { label: project.name || `#${id}` }]}
-      actions={
-        <div className="flex items-center gap-2 flex-wrap">
-          <PageStatusBadge status={project.status} domain="project" />
-          {project.isSlipping && (
-            <Badge className="bg-red-100 text-red-700 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" /> متأخر
-            </Badge>
-          )}
-          {criticalRisks.length > 0 && (
-            <Badge className="bg-orange-100 text-orange-700 flex items-center gap-1">
-              <ShieldAlert className="h-3 w-3" /> {criticalRisks.length} مخاطر حرجة
-            </Badge>
-          )}
-          <Link href={`/projects/gantt?projectId=${id}`}>
-            <Button variant="outline" size="sm"><BarChart2 className="h-4 w-4 me-1" />غانت</Button>
-          </Link>
-          <Link href={`/projects/risks?projectId=${id}`}>
-            <Button variant="outline" size="sm"><ShieldAlert className="h-4 w-4 me-1" />المخاطر</Button>
-          </Link>
-          <Link href="/calendar">
-            <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />التقويم</Button>
-          </Link>
-          {project.status !== "completed" && !closingProject && (
-            <Button variant="outline" size="sm" className="text-emerald-600" onClick={() => setClosingProject(true)}>
-              <Lock className="h-4 w-4 me-1" />إقفال المشروع
-            </Button>
-          )}
-          {closingProject && (
-            <div className="flex gap-2">
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={closeProject}>تأكيد الإقفال</Button>
-              <Button variant="outline" size="sm" onClick={() => setClosingProject(false)}>إلغاء</Button>
-            </div>
-          )}
-          <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
-          {deleting ? (
-            <div className="flex gap-2">
-              <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
-              <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
-            </div>
-          ) : (
-            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
-          )}
-          <Link href="/projects">
-            <Button variant="ghost" size="sm"><ArrowRight className="h-4 w-4 me-1" />العودة</Button>
-          </Link>
+  const actions = project ? (
+    <div className="flex items-center gap-2 flex-wrap">
+      {project.isSlipping && (
+        <Badge className="bg-red-100 text-red-700 flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3" /> متأخر
+        </Badge>
+      )}
+      {criticalRisks.length > 0 && (
+        <Badge className="bg-orange-100 text-orange-700 flex items-center gap-1">
+          <ShieldAlert className="h-3 w-3" /> {criticalRisks.length} مخاطر حرجة
+        </Badge>
+      )}
+      <Link href={`/projects/gantt?projectId=${id}`}>
+        <Button variant="outline" size="sm"><BarChart2 className="h-4 w-4 me-1" />غانت</Button>
+      </Link>
+      <Link href={`/projects/risks?projectId=${id}`}>
+        <Button variant="outline" size="sm"><ShieldAlert className="h-4 w-4 me-1" />المخاطر</Button>
+      </Link>
+      <Link href="/calendar">
+        <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />التقويم</Button>
+      </Link>
+      {project.status !== "completed" && !closingProject && (
+        <Button variant="outline" size="sm" className="text-emerald-600" onClick={() => setClosingProject(true)}>
+          <Lock className="h-4 w-4 me-1" />إقفال المشروع
+        </Button>
+      )}
+      {closingProject && (
+        <div className="flex gap-2">
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={closeProject}>تأكيد الإقفال</Button>
+          <Button variant="outline" size="sm" onClick={() => setClosingProject(false)}>إلغاء</Button>
         </div>
-      }
-    >
+      )}
+      <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+      {deleting ? (
+        <div className="flex gap-2">
+          <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
+          <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+      )}
+    </div>
+  ) : undefined;
+
+  const overview = project ? (
+    <div className="space-y-6">
       {editing && (
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل المشروع</CardTitle></CardHeader>
@@ -664,20 +622,27 @@ export default function ProjectDetail() {
       )}
 
       {activeTab === "documents" && id && (
-        <div className="space-y-4">
-          <EntityObligations entityType="project" entityId={id!} hideWhenEmpty />
-          <EntityDocuments entityType="project" entityId={id!} />
-        </div>
+        <EntityObligations entityType="project" entityId={id!} hideWhenEmpty />
       )}
+    </div>
+  ) : null;
 
-      {activeTab === "timeline" && id && (
-        <Card>
-          <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-muted-foreground" /> السجل الزمني</CardTitle></CardHeader>
-          <CardContent>
-            <EntityTimeline entityType="projects" entityId={id!} maxItems={20} />
-          </CardContent>
-        </Card>
-      )}
-    </PageShell>
+  return (
+    <DetailPageLayout
+      title={project?.name || "المشروع"}
+      subtitle={project?.clientName || undefined}
+      backPath="/projects"
+      backLabel="المشاريع"
+      status={project ? { label: statusLabels[project.status] || project.status, tone: statusTone(project.status) } : undefined}
+      entityType="project"
+      entityId={id || ""}
+      isLoading={isLoading}
+      error={isError ? error : undefined}
+      onRetry={() => window.location.reload()}
+      createdAt={project?.createdAt}
+      updatedAt={project?.updatedAt}
+      overview={overview}
+      actions={actions}
+    />
   );
 }

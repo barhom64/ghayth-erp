@@ -10,18 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { ArrowRight, Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, CheckCircle, XCircle, Info, Banknote, FileText, Clock } from "lucide-react";
+import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, Clock } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
@@ -76,45 +74,42 @@ export default function VehicleDetail() {
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
-  const { data: vehicle, isLoading, isError, error } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
+  const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
-  const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
+  const vehicleStatusTone = (s: string): "success" | "warning" | "info" | "muted" | "destructive" | "default" => {
+    switch (s) {
+      case "available": return "success";
+      case "in_use": return "info";
+      case "maintenance": return "warning";
+      case "reserved": return "muted";
+      case "accident": return "destructive";
+      default: return "default";
+    }
+  };
 
-  if (isLoading) return <LoadingSpinner />;
-
-  if (is404 || (!isLoading && !vehicle)) return (
-    <div className="text-center py-12">
-      <Car className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">المركبة غير موجودة</p>
-      <Link href="/fleet"><Button variant="outline" className="mt-4">العودة للأسطول</Button></Link>
-    </div>
-  );
-
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const trips: any[] = vehicle.trips || [];
-  const maintenance: any[] = vehicle.maintenance || [];
-  const fuelLogs: any[] = vehicle.fuelLogs || [];
-  const insuranceList: any[] = vehicle.insurance || [];
+  const trips: any[] = vehicle?.trips || [];
+  const maintenance: any[] = vehicle?.maintenance || [];
+  const fuelLogs: any[] = vehicle?.fuelLogs || [];
+  const insuranceList: any[] = vehicle?.insurance || [];
 
   const totalFuelCost = fuelLogs.reduce((s: number, f: any) => s + (Number(f.totalCost) || 0), 0);
   const totalMaintenanceCost = maintenance.reduce((s: number, m: any) => s + (Number(m.cost) || 0), 0);
 
   const startEdit = () => {
     setEditForm({
-      plateNumber: vehicle.plateNumber || "",
-      status: vehicle.status || "available",
-      color: vehicle.color || "",
-      notes: vehicle.notes || "",
-      registrationNumber: vehicle.registrationNumber || "",
-      registrationExpiry: vehicle.registrationExpiry ? vehicle.registrationExpiry.split("T")[0] : "",
-      inspectionDate: vehicle.inspectionDate ? vehicle.inspectionDate.split("T")[0] : "",
-      nextInspectionDate: vehicle.nextInspectionDate ? vehicle.nextInspectionDate.split("T")[0] : "",
-      plateType: vehicle.plateType || "",
-      sequenceNumber: vehicle.sequenceNumber || "",
+      plateNumber: vehicle?.plateNumber || "",
+      status: vehicle?.status || "available",
+      color: vehicle?.color || "",
+      notes: vehicle?.notes || "",
+      registrationNumber: vehicle?.registrationNumber || "",
+      registrationExpiry: vehicle?.registrationExpiry ? vehicle.registrationExpiry.split("T")[0] : "",
+      inspectionDate: vehicle?.inspectionDate ? vehicle.inspectionDate.split("T")[0] : "",
+      nextInspectionDate: vehicle?.nextInspectionDate ? vehicle.nextInspectionDate.split("T")[0] : "",
+      plateType: vehicle?.plateType || "",
+      sequenceNumber: vehicle?.sequenceNumber || "",
     });
     setEditing(true);
   };
@@ -155,38 +150,29 @@ export default function VehicleDetail() {
     }
   };
 
-  return (
-    <PageShell
-      title={`${vehicle.make || ""} ${vehicle.model || ""} ${vehicle.year || ""}`.trim() || "المركبة"}
-      subtitle={vehicle.plateNumber || undefined}
-      loading={isLoading}
-      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }]}
-      actions={
-        <div className="flex items-center gap-2 flex-wrap">
-          <PageStatusBadge status={vehicle.status} domain="vehicle" />
-          <Link href={`/fleet/${id}/status`}>
-            <Button variant="outline" size="sm" className="gap-1">
-              <Pencil className="h-4 w-4" />تغيير الحالة
-            </Button>
-          </Link>
-          <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
-          {deleting ? (
-            <div className="flex gap-2">
-              <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
-              <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
-            </div>
-          ) : (
-            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
-          )}
-          <Link href="/fleet">
-            <Button variant="ghost" size="sm">
-              <ArrowRight className="h-4 w-4 me-1" />
-              العودة
-            </Button>
-          </Link>
+  const statusLabel = VEHICLE_STATUS_OPTIONS.find(o => o.value === vehicle?.status)?.label || vehicle?.status || "";
+
+  const actions = (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Link href={`/fleet/${id}/status`}>
+        <Button variant="outline" size="sm" className="gap-1">
+          <Pencil className="h-4 w-4" />تغيير الحالة
+        </Button>
+      </Link>
+      <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+      {deleting ? (
+        <div className="flex gap-2">
+          <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
+          <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
         </div>
-      }
-    >
+      ) : (
+        <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+      )}
+    </div>
+  );
+
+  const overview = (
+    <div className="space-y-4">
       {editing && (
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل المركبة</CardTitle></CardHeader>
@@ -793,13 +779,29 @@ export default function VehicleDetail() {
       )}
 
       {id && (
-        <div className="space-y-4">
-          <EntityObligations entityType="fleet_vehicle,fleet_maintenance,fleet_insurance" entityId={id} hideWhenEmpty />
-          <EntityDocuments entityType="vehicle" entityId={id} />
-        </div>
+        <EntityObligations entityType="fleet_vehicle,fleet_maintenance,fleet_insurance" entityId={id} hideWhenEmpty />
       )}
+    </div>
+  );
 
-    </PageShell>
+  return (
+    <DetailPageLayout
+      title={`${vehicle?.make || ""} ${vehicle?.model || ""} ${vehicle?.year || ""}`.trim() || "المركبة"}
+      subtitle={vehicle?.plateNumber || undefined}
+      backPath="/fleet/vehicles"
+      backLabel="المركبات"
+      status={vehicle ? { label: statusLabel, tone: vehicleStatusTone(vehicle.status) } : undefined}
+      entityType="fleet_vehicle"
+      entityId={id || ""}
+      isLoading={isLoading}
+      error={isError ? error : undefined}
+      onRetry={refetch}
+      createdAt={vehicle?.createdAt}
+      updatedAt={vehicle?.updatedAt}
+      overview={overview}
+      actions={actions}
+      hideTabs={["tasks", "timeline"]}
+    />
   );
 }
 
