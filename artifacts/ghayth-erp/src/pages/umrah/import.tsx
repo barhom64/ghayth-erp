@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +10,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Upload } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell } from "@/components/page-shell";
-import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 const EXPECTED_FIELDS = ["fullName", "passportNumber", "nationality", "arrivalDate", "departureDate"];
 const FIELD_LABELS: Record<string, string> = {
@@ -131,8 +128,10 @@ export default function UmrahImport() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
-    <PageShell title="استيراد معتمرين" breadcrumbs={[{ label: "العمرة" }, { label: "الاستيراد" }]}>
-      <UmrahTabsNav />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">استيراد المعتمرين</h1>
+      </div>
 
       <Card>
         <CardHeader><CardTitle className="text-base">رفع ملف إكسل</CardTitle></CardHeader>
@@ -243,7 +242,7 @@ export default function UmrahImport() {
         <CardContent>
           <DataTable
             columns={[
-              { key: "createdAt", header: "التاريخ", render: (l: any) => formatDateAr(l.createdAt) },
+              { key: "createdAt", header: "التاريخ", render: (l: any) => new Date(l.createdAt).toLocaleString("ar-SA") },
               { key: "fileName", header: "الملف" },
               { key: "totalRows", header: "الإجمالي" },
               { key: "newRecords", header: "جديد", render: (l: any) => <span className="text-green-600">{l.newRecords}</span> },
@@ -257,6 +256,6 @@ export default function UmrahImport() {
           />
         </CardContent>
       </Card>
-    </PageShell>
+    </div>
   );
 }
