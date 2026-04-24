@@ -1,4 +1,5 @@
 import PlatformShot from "./PlatformShot";
+import DeepLinkButton from "./DeepLinkButton";
 import type { DeepModuleEntry } from "../data/deep-slides-data";
 
 type Props = {
@@ -78,6 +79,12 @@ export default function DeepDiveSlide({ entry, index, total, position, totalSlid
       <div className="absolute bottom-[2.4vh] left-[4vw] text-muted font-body text-[0.9vw]">
         {pad(position)} / {pad(totalSlides)}
       </div>
+      <DeepLinkButton
+        to={`/slide${position + 3}`}
+        label="العودة إلى الشريحة الأصلية"
+        variant="to-short"
+        className="absolute top-[12vh] left-[4vw]"
+      />
       <div className="absolute bottom-[2.4vh] right-[4vw] text-muted font-body text-[0.9vw] tracking-[0.2em]">
         غيث ERP — جلسة تعمّق
       </div>
