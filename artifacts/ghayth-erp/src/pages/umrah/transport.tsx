@@ -1,11 +1,8 @@
 import { useApiQuery, asList } from "@/lib/api";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Truck } from "lucide-react";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
-import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 interface TransportEntry {
   id: number;
@@ -20,12 +17,12 @@ interface TransportEntry {
 }
 
 const columns: DataTableColumn<TransportEntry>[] = [
-  { key: "tripDate", header: "تاريخ الرحلة", sortable: true, render: (r) => formatDateAr(r.tripDate) },
+  { key: "tripDate", header: "تاريخ الرحلة", sortable: true, render: (r) => r.tripDate ? new Date(r.tripDate).toLocaleDateString("ar-SA") : "-" },
   { key: "fromLocation", header: "من", searchable: true },
   { key: "toLocation", header: "إلى", searchable: true },
   { key: "capacity", header: "السعة" },
   { key: "pilgrimCount", header: "عدد المعتمرين" },
-  { key: "cost", header: "التكلفة", render: (r) => r.cost ? formatCurrency(Number(r.cost)) : "-" },
+  { key: "cost", header: "التكلفة", render: (r) => r.cost ? `${Number(r.cost).toLocaleString("ar-SA")} ر.س` : "-" },
   {
     key: "status", header: "الحالة", render: (r) => {
       const v = r.status;
@@ -40,15 +37,13 @@ export default function UmrahTransport() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["umrah-transport"], "/umrah/transport");
   const rows = asList(data?.data || data);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   return (
-    <PageShell title="نقل العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "النقل" }]}>
-      <UmrahTabsNav />
-      <div>
-        <p className="text-muted-foreground mt-1">إدارة رحلات نقل المعتمرين والمواصلات</p>
-      </div>
+    <PageShell
+      title="النقل والمواصلات"
+      subtitle="إدارة رحلات نقل المعتمرين والمواصلات"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "النقل والمواصلات" }]}
+      loading={isLoading}
+    >
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>
   );
