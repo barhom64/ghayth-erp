@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Zap, AlertCircle, AlertTriangle, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -139,13 +138,10 @@ export function ZatcaSettingsTab() {
         <CardContent className="space-y-4">
           <div>
             <Label>بيئة التشغيل</Label>
-            <Select value={form.environment} onValueChange={(v) => setForm(f => ({ ...f, environment: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sandbox">بيئة الاختبار</SelectItem>
-                <SelectItem value="production">بيئة الإنتاج</SelectItem>
-              </SelectContent>
-            </Select>
+            <select className="w-full border rounded-md p-2 mt-1" value={form.environment} onChange={e => setForm(f => ({ ...f, environment: e.target.value }))}>
+              <option value="sandbox">بيئة الاختبار</option>
+              <option value="production">بيئة الإنتاج</option>
+            </select>
           </div>
           {form.environment === "production" && (
             <div className="flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-md">
