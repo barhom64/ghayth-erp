@@ -16,7 +16,7 @@ contractsRouter.use(authMiddleware);
 
 const createContractSchema = z.object({
   employeeId: z.coerce.number(),
-  assignmentId: z.coerce.number(),
+  assignmentId: z.coerce.number().optional().nullable(),
   contractType: z.string().min(1),
   startDate: z.string().min(1),
   endDate: z.string().optional(),
@@ -106,6 +106,20 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
 
+    let assignmentId = data.assignmentId ?? null;
+    if (!assignmentId) {
+      const [assn] = await rawQuery<any>(
+        `SELECT id FROM employee_assignments
+         WHERE "employeeId"=$1 AND "companyId"=$2 AND ("endDate" IS NULL OR "endDate" >= CURRENT_DATE)
+         ORDER BY "isPrimary" DESC NULLS LAST, "hireDate" DESC NULLS LAST, id DESC LIMIT 1`,
+        [data.employeeId, scope.companyId]
+      );
+      assignmentId = assn?.id ?? null;
+    }
+    if (!assignmentId) {
+      throw new NotFoundError("لا يوجد تعيين فعّال لهذا الموظف. يرجى إنشاء تعيين أولاً.");
+    }
+
     const [seqRow] = await rawQuery<any>(`SELECT nextval('contract_number_seq') AS seq`);
     const ref = `CTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
 
@@ -118,7 +132,7 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'draft','draft')
       RETURNING *`,
       [
-        scope.companyId, data.employeeId, data.assignmentId, data.contractType,
+        scope.companyId, data.employeeId, assignmentId, data.contractType,
         data.startDate, data.endDate || null, data.probationEndDate || null,
         data.salary || null, data.housingAllowance || null, data.transportAllowance || null,
         JSON.stringify(data.otherAllowances || {}),
