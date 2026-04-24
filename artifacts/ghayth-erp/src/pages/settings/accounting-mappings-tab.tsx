@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -108,34 +107,36 @@ export function AccountingMappingsTab() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs text-gray-500 mb-1 block">الحساب المدين</Label>
-                      <Select value={getValue(mapping, "debitAccountId")?.toString() || "_none"} onValueChange={(v) => handleChange(mapping.operationType, "debitAccountId", v === "_none" ? null : Number(v))}>
-                        <SelectTrigger><SelectValue placeholder="-- اختر الحساب المدين --" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none">-- اختر الحساب المدين --</SelectItem>
-                          {postingAccounts.map((acc: any) => (
-                            <SelectItem key={acc.id} value={acc.id.toString()}>
-                              {acc.code} — {acc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <select
+                        className="w-full border rounded-md p-2 text-sm"
+                        value={getValue(mapping, "debitAccountId")}
+                        onChange={(e) => handleChange(mapping.operationType, "debitAccountId", e.target.value ? Number(e.target.value) : null)}
+                      >
+                        <option value="">-- اختر الحساب المدين --</option>
+                        {postingAccounts.map((acc: any) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.code} — {acc.name}
+                          </option>
+                        ))}
+                      </select>
                       {mapping.debitName && !editingMap[mapping.operationType]?.debitAccountId && (
                         <p className="text-xs text-green-600 mt-1">✓ {mapping.debitCode} — {mapping.debitName}</p>
                       )}
                     </div>
                     <div>
                       <Label className="text-xs text-gray-500 mb-1 block">الحساب الدائن</Label>
-                      <Select value={getValue(mapping, "creditAccountId")?.toString() || "_none"} onValueChange={(v) => handleChange(mapping.operationType, "creditAccountId", v === "_none" ? null : Number(v))}>
-                        <SelectTrigger><SelectValue placeholder="-- اختر الحساب الدائن --" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none">-- اختر الحساب الدائن --</SelectItem>
-                          {postingAccounts.map((acc: any) => (
-                            <SelectItem key={acc.id} value={acc.id.toString()}>
-                              {acc.code} — {acc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <select
+                        className="w-full border rounded-md p-2 text-sm"
+                        value={getValue(mapping, "creditAccountId")}
+                        onChange={(e) => handleChange(mapping.operationType, "creditAccountId", e.target.value ? Number(e.target.value) : null)}
+                      >
+                        <option value="">-- اختر الحساب الدائن --</option>
+                        {postingAccounts.map((acc: any) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.code} — {acc.name}
+                          </option>
+                        ))}
+                      </select>
                       {mapping.creditName && !editingMap[mapping.operationType]?.creditAccountId && (
                         <p className="text-xs text-green-600 mt-1">✓ {mapping.creditCode} — {mapping.creditName}</p>
                       )}
