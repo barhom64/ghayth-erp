@@ -1,11 +1,9 @@
 import { useApiQuery, asList } from "@/lib/api";
-import { formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 
 interface KBArticle {
   id: number;
@@ -25,7 +23,7 @@ const columns: DataTableColumn<KBArticle>[] = [
   { key: "views", header: "المشاهدات", sortable: true },
   { key: "helpful", header: "مفيد 👍" },
   { key: "notHelpful", header: "غير مفيد 👎" },
-  { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => formatDateAr(r.createdAt) },
+  { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => r.createdAt ? new Date(r.createdAt).toLocaleDateString("ar-SA") : "-" },
 ];
 
 export default function KnowledgeBase() {
@@ -43,7 +41,6 @@ export default function KnowledgeBase() {
       breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "قاعدة المعرفة" }]}
       loading={isLoading}
     >
-      <SupportTabsNav />
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>
   );
