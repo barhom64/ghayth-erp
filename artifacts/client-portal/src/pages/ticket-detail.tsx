@@ -69,7 +69,7 @@ export default function TicketDetail() {
       <div className="text-center py-12 text-gray-500">
         <p className="text-4xl mb-2">😕</p>
         <p>الطلب غير موجود</p>
-        <Link href="/tickets"><a className="text-blue-600 text-sm hover:underline mt-2 block">العودة للطلبات</a></Link>
+        <Link href="/tickets" className="text-blue-600 text-sm hover:underline mt-2 block">العودة للطلبات</Link>
       </div>
     );
   }
