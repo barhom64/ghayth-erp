@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 // P4.5 — Property sweep: shared header + status chips.
 import { PageShell } from "@/components/page-shell";
-import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Building, Building2, Plus, Eye, Home, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -85,14 +83,18 @@ export default function Properties() {
     },
   ];
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
+    </div>
+  );
 
   return (
     <PageShell
       title="الوحدات العقارية"
       subtitle="إدارة وتتبع الوحدات العقارية"
-      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "الوحدات العقارية" }]}
+      breadcrumbs={[{ label: "العقارات" }]}
       actions={
         canManage ? (
           <Link href="/properties/create">
@@ -101,7 +103,6 @@ export default function Properties() {
         ) : null
       }
     >
-      <PropertyTabsNav />
       <KpiGrid items={[
         { label: "إجمالي العقارات", value: stats?.totalUnits || 0, icon: Building2, color: "text-blue-600 bg-blue-50" },
         { label: "وحدات شاغرة", value: stats?.available || 0, icon: Home, color: "text-emerald-600 bg-emerald-50" },
