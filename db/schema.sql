@@ -7285,6 +7285,50 @@ ALTER SEQUENCE public.notification_log_id_seq OWNED BY public.notification_log.i
 
 
 --
+-- Name: obligations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.obligations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "entityType" character varying(40) NOT NULL,
+    "entityId" integer NOT NULL,
+    "obligationType" character varying(32) NOT NULL,
+    title text NOT NULL,
+    "dueAt" timestamp without time zone NOT NULL,
+    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    "assignedTo" integer,
+    "escalationLevel" integer DEFAULT 0 NOT NULL,
+    "escalationSteps" jsonb,
+    metadata jsonb,
+    "dedupeKey" character varying(120),
+    "metAt" timestamp without time zone,
+    "breachedAt" timestamp without time zone,
+    "lastScannedAt" timestamp without time zone,
+    "closedBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.obligations_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE public.obligations_id_seq OWNED BY public.obligations.id;
+ALTER TABLE ONLY public.obligations ALTER COLUMN id SET DEFAULT nextval('public.obligations_id_seq'::regclass);
+ALTER TABLE ONLY public.obligations ADD CONSTRAINT obligations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.obligations ADD CONSTRAINT "obligations_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+CREATE INDEX idx_obligations_scan ON public.obligations USING btree (status, "dueAt");
+CREATE INDEX idx_obligations_entity ON public.obligations USING btree ("companyId", "entityType", "entityId");
+CREATE UNIQUE INDEX idx_obligations_dedupe ON public.obligations USING btree ("companyId", "dedupeKey") WHERE ("dedupeKey" IS NOT NULL);
+
+
+--
 -- Name: notification_preferences; Type: TABLE; Schema: public; Owner: -
 --
 
