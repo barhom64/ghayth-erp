@@ -106,7 +106,7 @@ export default function CustodyAgingReportPage() {
 
                   {isExpanded && emp.custodies && (
                     <div className="border-t">
-                      <DataTable<any>
+                      <DataTable
                         columns={[
                           { key: "ref", header: "المرجع", render: (c) => (
                             <Link href={`/finance/custodies/${c.id}`}>
