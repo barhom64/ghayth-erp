@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ModuleIcon } from "../../components/ModuleIcons";
 import PlatformShot from "../../components/PlatformShot";
 
@@ -6,19 +7,20 @@ type ModuleNode = {
   iconCode: string;
   name: string;
   tagline: string;
+  deepSlide: number;
 };
 
 const MODULES: ModuleNode[] = [
-  { code: "HR", iconCode: "HR", name: "الموارد البشرية", tagline: "رواتب · حضور · أداء" },
-  { code: "FIN", iconCode: "FIN", name: "المالية والمحاسبة", tagline: "قيود · ميزانيات · بنوك" },
-  { code: "OPS", iconCode: "OPS", name: "العمليات", tagline: "طلبات · مهام · سير عمل" },
-  { code: "FLT", iconCode: "FLT", name: "الأسطول", tagline: "مركبات · صيانة · وقود" },
-  { code: "RE", iconCode: "RE", name: "الأملاك", tagline: "عقود · إيجارات · مستأجرون" },
-  { code: "LGL", iconCode: "LGL", name: "القانونية", tagline: "قضايا · عقود · مواعيد" },
-  { code: "PRJ", iconCode: "PRJ", name: "المشاريع", tagline: "خطط · مراحل · تكاليف" },
-  { code: "SUP", iconCode: "SUP", name: "الدعم الفني", tagline: "تذاكر · SLA · معرفة" },
-  { code: "CRM", iconCode: "CRM", name: "إدارة العملاء", tagline: "عملاء · فرص · 360°" },
-  { code: "PRT", iconCode: "PRT", name: "البوابات الثلاث", tagline: "موظف · عميل · توظيف" },
+  { code: "HR", iconCode: "HR", name: "الموارد البشرية", tagline: "رواتب · حضور · أداء", deepSlide: 2 },
+  { code: "FIN", iconCode: "FIN", name: "المالية والمحاسبة", tagline: "قيود · ميزانيات · بنوك", deepSlide: 3 },
+  { code: "OPS", iconCode: "OPS", name: "العمليات", tagline: "طلبات · مهام · سير عمل", deepSlide: 4 },
+  { code: "FLT", iconCode: "FLT", name: "الأسطول", tagline: "مركبات · صيانة · وقود", deepSlide: 5 },
+  { code: "RE", iconCode: "RE", name: "الأملاك", tagline: "عقود · إيجارات · مستأجرون", deepSlide: 6 },
+  { code: "LGL", iconCode: "LGL", name: "القانونية", tagline: "قضايا · عقود · مواعيد", deepSlide: 7 },
+  { code: "PRJ", iconCode: "PRJ", name: "المشاريع", tagline: "خطط · مراحل · تكاليف", deepSlide: 8 },
+  { code: "SUP", iconCode: "SUP", name: "الدعم الفني", tagline: "تذاكر · SLA · معرفة", deepSlide: 9 },
+  { code: "CRM", iconCode: "CRM", name: "إدارة العملاء", tagline: "عملاء · فرص · 360°", deepSlide: 10 },
+  { code: "PRT", iconCode: "PRT", name: "البوابات الثلاث", tagline: "موظف · عميل · توظيف", deepSlide: 11 },
 ];
 
 function HubAndSpoke() {
@@ -183,19 +185,29 @@ export default function Modules() {
 
         <div className="col-span-5 grid grid-cols-2 gap-[0.9vw]">
           {MODULES.map((m) => (
-            <div
+            <Link
               key={m.code}
-              className="bg-white/8 border border-white/15 rounded-lg px-[0.9vw] py-[1vh] flex items-center gap-[0.8vw]"
+              to={`/deep/slide${m.deepSlide}`}
+              aria-label={`تعمّق في وحدة ${m.name}`}
+              title="افتح النسخة الموسّعة لهذه الوحدة"
+              className="group relative bg-white/8 hover:bg-white/12 border border-white/15 hover:border-accent/60 rounded-lg px-[0.9vw] py-[1vh] flex items-center gap-[0.8vw] no-underline transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
             >
               <div className="text-accent w-[2vw] h-[2vw] shrink-0">
                 <ModuleIcon code={m.iconCode} className="w-full h-full" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="text-accent font-display text-[0.7vw] font-bold tracking-widest">{m.code}</div>
                 <div className="text-white font-display text-[1vw] font-bold leading-tight truncate">{m.name}</div>
                 <div className="text-white/55 font-body text-[0.7vw] mt-[0.2vh] truncate">{m.tagline}</div>
               </div>
-            </div>
+              <span
+                aria-hidden="true"
+                className="absolute top-[0.6vh] left-[0.6vw] inline-flex items-center gap-[0.25vw] rounded-full bg-accent/20 group-hover:bg-accent/35 border border-accent/50 text-accent font-body text-[0.6vw] font-bold tracking-wider px-[0.45vw] py-[0.2vh] leading-none transition-colors"
+              >
+                <span>تعمّق</span>
+                <span>↗</span>
+              </span>
+            </Link>
           ))}
         </div>
       </div>
