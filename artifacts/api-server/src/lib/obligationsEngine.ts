@@ -28,7 +28,7 @@
 // `system.obligation.breached`. Escalation policies are handled downstream
 // by the notification engine.
 
-import { rawExecute, rawQuery, withTransaction } from "./rawdb.js";
+import { rawExecute, rawQuery, withTransaction, pool } from "./rawdb.js";
 import { emitEvent, createNotification } from "./businessHelpers.js";
 
 export type ObligationType =
@@ -71,8 +71,10 @@ export interface RegisterObligationInput {
  * Create the obligations table if missing. Called lazily on first use so that
  * we don't need a dedicated migration for hot-patching.
  */
+let obligationsTableEnsured = false;
 export async function ensureObligationsTable(): Promise<void> {
-  await rawExecute(`
+  if (obligationsTableEnsured) return;
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS obligations (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
@@ -96,18 +98,19 @@ export async function ensureObligationsTable(): Promise<void> {
       "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
     )
   `);
-  await rawExecute(`
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_obligations_scan
       ON obligations (status, "dueAt")
   `);
-  await rawExecute(`
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_obligations_entity
       ON obligations ("companyId", "entityType", "entityId")
   `);
-  await rawExecute(`
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_obligations_dedupe
       ON obligations ("companyId", "dedupeKey") WHERE "dedupeKey" IS NOT NULL
   `);
+  obligationsTableEnsured = true;
 }
 
 /**
