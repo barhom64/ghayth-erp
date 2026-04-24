@@ -2,7 +2,7 @@ import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { eventBus } from "./eventBus.js";
 import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
-import { validateEventPayload } from "./eventCatalog.js";
+import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 
 export function computeVat(baseAmount: number, vatRatePercent: number): number {
   return Math.round(baseAmount * (vatRatePercent / 100) * 100) / 100;
@@ -100,10 +100,30 @@ export async function emitEvent(params: {
   [key: string]: any;
 }) {
   const validation = validateEventPayload(params.action, params);
+  const eventDef = getEventDefinition(params.action);
+  const isCritical = eventDef?.critical === true;
+
   if (!validation.cataloged) {
+    if (isCritical) {
+      throw new ValidationError(`حدث حرج غير مسجل في الكتالوج: ${params.action}`);
+    }
     console.warn(`[emitEvent] uncataloged event: ${params.action}`);
+  } else if (!validation.valid && isCritical) {
+    throw new ValidationError(
+      `حدث حرج بدون بيانات مطلوبة: ${params.action} — ${validation.warnings.join("; ")}`
+    );
   } else if (!validation.valid) {
     console.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
+  }
+
+  // Critical events: persist to event_logs BEFORE emitting to listeners
+  if (isCritical) {
+    await rawExecute(
+      `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [params.companyId, params.userId, params.action, params.entity,
+       String(params.entityId), params.details ?? null]
+    );
   }
 
   try {
@@ -119,15 +139,17 @@ export async function emitEvent(params: {
       after: params.after,
     });
   } catch (err) {
-    // Fallback: write directly to event_logs so no event is ever lost
-    try {
-      await rawExecute(
-        `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [params.companyId, params.userId, params.action, params.entity,
-         String(params.entityId), params.details ?? null]
-      );
-    } catch { /* DB also failed — last resort */ }
+    if (!isCritical) {
+      // Non-critical: fallback persist so no event is lost
+      try {
+        await rawExecute(
+          `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [params.companyId, params.userId, params.action, params.entity,
+           String(params.entityId), params.details ?? null]
+        );
+      } catch { /* DB also failed — last resort */ }
+    }
     console.error("[emitEvent] listener failed, event persisted to event_logs:", err);
   }
 }
