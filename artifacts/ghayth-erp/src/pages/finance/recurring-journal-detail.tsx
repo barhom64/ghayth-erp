@@ -62,7 +62,7 @@ export default function RecurringJournalDetailPage() {
       <CardContent className="p-6">
         <p className="text-sm font-semibold mb-3">قالب بنود القيد</p>
         <div className="rounded-xl border overflow-hidden text-sm">
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "accountCode", header: "الحساب", render: (r) => <span className="font-mono text-xs">{r.accountCode}</span> },
               { key: "description", header: "البيان", render: (r) => r.description || "—" },
@@ -96,7 +96,7 @@ export default function RecurringJournalDetailPage() {
       <CardContent className="p-6">
         <p className="text-sm font-semibold mb-3">سجل التنفيذات السابقة</p>
         <div className="rounded-xl border overflow-hidden text-sm">
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "runDate", header: "تاريخ التنفيذ", render: (r) => r.runDate ? formatDateAr(r.runDate) : "—" },
               { key: "journalRef", header: "القيد الناتج", render: (r) => <span className="font-mono text-xs">{r.journalRef || `#${r.journalEntryId}` || "—"}</span> },
