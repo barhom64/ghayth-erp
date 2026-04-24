@@ -111,7 +111,7 @@ export default function TenantDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <DataTable<any>
+            <DataTable
               columns={[
                 { key: "unitNumber", header: "الوحدة", render: (p) => p.unitNumber || "—" },
                 { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
@@ -140,7 +140,7 @@ export default function TenantDetail() {
             {contracts.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد عقود</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "unitNumber", header: "الوحدة", render: (c) => (
                     <div>
@@ -175,7 +175,7 @@ export default function TenantDetail() {
             {payments.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد مدفوعات</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "unitNumber", header: "الوحدة", render: (p) => p.unitNumber || "—" },
                   { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
@@ -282,7 +282,7 @@ function TenantLettersTab({ tenantId }: { tenantId: string }) {
         {letters.length === 0 ? (
           <p className="text-center text-gray-400 py-8">لا توجد مراسلات</p>
         ) : (
-          <DataTable<any>
+          <DataTable
             columns={columns}
             data={letters}
             noToolbar
