@@ -312,9 +312,10 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
     let approvalActions: any[] = [];
     try {
       approvalActions = await rawQuery<any>(
-        `SELECT aa.*, u.name AS "actionByName"
+        `SELECT aa.*, COALESCE(e.name, u.email) AS "actionByName"
          FROM approval_actions aa
          LEFT JOIN users u ON u.id = aa."actionBy"
+         LEFT JOIN employees e ON e.id = u."employeeId"
          WHERE aa."entityType" = 'custody' AND aa."entityId" = $1
          ORDER BY aa."createdAt" ASC`,
         [Number(id)]
