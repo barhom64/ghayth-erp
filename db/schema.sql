@@ -7554,6 +7554,11 @@ ALTER TABLE ONLY public.fx_rates ADD CONSTRAINT fx_rates_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.fx_rates ADD CONSTRAINT "fx_rates_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
 CREATE INDEX idx_fx_rates_company ON public.fx_rates USING btree ("companyId", "fromCurrency", "toCurrency", "effectiveDate");
 
+CREATE INDEX idx_employees_company ON public.employees USING btree ("companyId", "deletedAt") WHERE ("deletedAt" IS NULL);
+CREATE INDEX idx_employees_department ON public.employees USING btree ("companyId", department) WHERE ("deletedAt" IS NULL);
+CREATE INDEX idx_payroll_runs_company ON public.payroll_runs USING btree ("companyId", period, "deletedAt") WHERE ("deletedAt" IS NULL);
+CREATE INDEX idx_payroll_lines_run ON public.payroll_lines USING btree ("payrollRunId") WHERE ("deletedAt" IS NULL);
+
 
 --
 -- Name: notification_preferences; Type: TABLE; Schema: public; Owner: -

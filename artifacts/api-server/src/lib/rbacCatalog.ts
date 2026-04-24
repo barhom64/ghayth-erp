@@ -141,6 +141,7 @@ export const PERMISSIONS = [
   "bi:read",
   "bi:write",
   "reports:read",
+  "reports:write",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -217,7 +218,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
 
   bi_manager: [
     "bi:read", "bi:write",
-    "reports:read", "audit:read",
+    "reports:read", "reports:write", "audit:read",
   ],
 
   branch_manager: [

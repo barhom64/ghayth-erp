@@ -3,7 +3,6 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
-  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -866,7 +865,9 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
     let journalEntryId: number | null = null;
     if (b.hoursSpent && b.hourlyRate) {
       const billingAmount = Number(b.hoursSpent) * Number(b.hourlyRate);
-      const vatAmount = billingAmount * 0.15;
+      const [vatSetting] = await rawQuery<any>(`SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'vat_rate' LIMIT 1`, [scope.companyId]);
+      const vatRate = vatSetting ? Number(vatSetting.value) / 100 : 0.15;
+      const vatAmount = billingAmount * vatRate;
       const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
       const yearShort = String(new Date().getFullYear()).slice(2);
       const ref = `INV-LEGAL-${yearShort}${monthNum}-${insertId}`;
