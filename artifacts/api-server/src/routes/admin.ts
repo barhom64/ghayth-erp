@@ -1087,6 +1087,9 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
 import { runFullPolicyAudit, ROLE_STRATEGIES, SENSITIVE_OPERATIONS, SEPARATION_OF_DUTIES } from "../lib/policyEngine.js";
 import { checkSystemGuards } from "../lib/systemGovernor.js";
 import { DOMAIN_REGISTRY, getSystemStats } from "../lib/domainRegistry.js";
+import { STATE_MACHINES } from "../lib/lifecycleEngine.js";
+import { EVENT_CATALOG, countEventsByDomain } from "../lib/eventCatalog.js";
+import { PERMISSIONS, ROLE_PERMISSIONS } from "../lib/rbacCatalog.js";
 
 router.get("/governance/policy-audit", requirePermission("admin:read"), async (req, res) => {
   try {
@@ -1135,6 +1138,41 @@ router.get("/governance/gl-reconciliation", requirePermission("admin:read"), asy
     healthy: mismatches.length === 0,
     driftCount: mismatches.length,
     mismatches,
+  });
+});
+
+router.get("/governance/lifecycle-machines", requirePermission("admin:read"), async (_req, res) => {
+  res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
+});
+
+router.get("/governance/event-catalog", requirePermission("admin:read"), async (req, res) => {
+  const scope = req.scope!;
+  const byDomain = countEventsByDomain();
+  const recentEvents = await rawQuery<any>(
+    `SELECT action, entity, "createdAt" FROM event_logs
+     WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 20`,
+    [scope.companyId]
+  );
+  res.json({
+    total: EVENT_CATALOG.length,
+    byDomain,
+    catalog: EVENT_CATALOG.map(e => ({ action: e.name, domain: e.domain, label: e.label, critical: e.critical })),
+    recentEvents,
+  });
+});
+
+router.get("/governance/rbac-matrix", requirePermission("admin:read"), async (req, res) => {
+  const scope = req.scope!;
+  const customPerms = await rawQuery<any>(
+    `SELECT role, permission FROM role_permissions WHERE "companyId" = $1`,
+    [scope.companyId]
+  );
+  res.json({
+    permissions: PERMISSIONS,
+    roleDefaults: ROLE_PERMISSIONS,
+    customPermissions: customPerms,
+    totalPermissions: PERMISSIONS.length,
+    totalRoles: Object.keys(ROLE_PERMISSIONS).length,
   });
 });
 
