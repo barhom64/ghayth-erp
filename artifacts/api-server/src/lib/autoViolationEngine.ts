@@ -14,7 +14,7 @@
 
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { ensureInquiryMemoForViolation, type IncidentType } from "./disciplineEngine.js";
-import { createNotification, getManagerAssignmentId } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, emitEvent } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -453,12 +453,11 @@ export async function runAutoDetection(
 
   // ── بث حدث ──
   if (result.detected > 0) {
-    eventBus.emit("hr.auto_detection.completed", {
-      companyId,
-      date,
-      detected: result.detected,
-      memosCreated: result.memosCreated,
-    });
+    emitEvent({
+      companyId, branchId: 0, userId: null,
+      action: "hr.auto_detection.completed", entity: "auto_detection_log", entityId: 0,
+      details: JSON.stringify({ date, detected: result.detected, memosCreated: result.memosCreated }),
+    }).catch(() => {});
   }
 
   return result;

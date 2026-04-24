@@ -331,13 +331,11 @@ async function fleetStatusCheck(): Promise<string> {
           details: `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — حالة needs_service`,
         });
       } catch {}
-      eventBus.emit("fleet.vehicle.breakdown", {
-        companyId: company.id,
-        entityId: v.id,
-        plateNumber: v.plateNumber,
-        description: `صيانة متأخرة — تجاوزت موعد الصيانة المحدد`,
-        source: "preventive_due",
-      });
+      emitEvent({
+        companyId: company.id, branchId: 0, userId: null,
+        action: "fleet.vehicle.breakdown", entity: "fleet_vehicles", entityId: Number(v.id),
+        details: JSON.stringify({ plateNumber: v.plateNumber, description: "صيانة متأخرة — تجاوزت موعد الصيانة المحدد", source: "preventive_due" }),
+      }).catch(() => {});
       actions++;
     }
 
