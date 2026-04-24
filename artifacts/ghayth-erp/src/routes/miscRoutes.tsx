@@ -13,6 +13,7 @@ const ProjectsCreate = lazy(() => import("@/pages/create/projects-create"));
 const ProjectDetail = lazy(() => import("@/pages/details/project-detail"));
 const Tasks = lazy(() => import("@/pages/tasks"));
 const TasksCreate = lazy(() => import("@/pages/create/tasks-create"));
+const TaskDetail = lazy(() => import("@/pages/details/task-detail"));
 const Warehouse = lazy(() => import("@/pages/warehouse"));
 const WarehouseCreate = lazy(() => import("@/pages/create/warehouse-create"));
 const WarehouseMovementsCreate = lazy(() => import("@/pages/create/warehouse/movements-create"));
@@ -112,6 +113,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/marketing", component: Marketing, module: "marketing" },
   { path: "/marketing/create", component: MarketingCreate, module: "marketing" },
   { path: "/tasks/create", component: TasksCreate, module: "operations" },
+  { path: "/tasks/:id", component: TaskDetail, module: "operations" },
   { path: "/tasks", component: Tasks, module: "operations" },
   { path: "/notifications", component: Notifications },
   { path: "/intelligence", component: Intelligence, module: "bi" },
