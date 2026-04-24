@@ -135,7 +135,7 @@ function SlideEditor() {
 
 function AllSlides() {
   return (
-    <div className="bg-black">
+    <div className="bg-black [&_.deep-link-btn]:!hidden">
       {slides.map((slide) => (
         <div
           key={slide.id}
@@ -189,7 +189,7 @@ function DeepSlideEditor() {
 
 function DeepAllSlides() {
   return (
-    <div className="bg-black">
+    <div className="bg-black [&_.deep-link-btn]:!hidden">
       {deepSlides.map((slide) => (
         <div
           key={slide.id}
