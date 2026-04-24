@@ -20300,6 +20300,27 @@ CREATE TABLE public.umrah_import_changes (
 );
 
 
+-- ─── Performance Indexes (Phase 3 — Architectural Hardening) ────────────────
+
+CREATE INDEX IF NOT EXISTS hr_leave_requests_company_status_idx ON public.hr_leave_requests USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS hr_leave_requests_employee_idx ON public.hr_leave_requests USING btree ("employeeId");
+CREATE INDEX IF NOT EXISTS notifications_assignment_isread_idx ON public.notifications USING btree ("assignmentId", "isRead");
+CREATE INDEX IF NOT EXISTS notifications_company_assignment_idx ON public.notifications USING btree ("companyId", "assignmentId");
+CREATE INDEX IF NOT EXISTS invoices_company_branch_status_idx ON public.invoices USING btree ("companyId", "branchId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS tasks_company_branch_status_idx ON public.tasks USING btree ("companyId", "branchId", status);
+CREATE INDEX IF NOT EXISTS tasks_assignment_status_idx ON public.tasks USING btree ("assignmentId", status);
+CREATE INDEX IF NOT EXISTS employee_assignments_employee_status_idx ON public.employee_assignments USING btree ("employeeId", status);
+CREATE INDEX IF NOT EXISTS support_tickets_company_status_idx ON public.support_tickets USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS support_tickets_sla_deadline_idx ON public.support_tickets USING btree ("slaDeadline") WHERE (status != 'resolved' AND "deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS maintenance_requests_company_status_idx ON public.maintenance_requests USING btree ("companyId", status);
+CREATE INDEX IF NOT EXISTS rental_contracts_company_status_idx ON public.rental_contracts USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS requests_company_status_idx ON public.requests USING btree ("companyId", status);
+CREATE INDEX IF NOT EXISTS fleet_vehicles_company_status_idx ON public.fleet_vehicles USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS legal_cases_company_status_idx ON public.legal_cases USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS financial_posting_failures_company_idx ON public.financial_posting_failures USING btree ("companyId", resolved);
+CREATE INDEX IF NOT EXISTS event_logs_company_action_idx ON public.event_logs USING btree ("companyId", action);
+CREATE INDEX IF NOT EXISTS event_logs_created_idx ON public.event_logs USING btree ("createdAt" DESC);
+
 --
 -- PostgreSQL database dump complete
 --
