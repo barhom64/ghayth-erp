@@ -7,13 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wrench, Plus, AlertCircle, CheckCircle, Clock } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -31,9 +29,18 @@ function getDueDays(nextDate?: string): number | null {
   return Math.round((new Date(nextDate).getTime() - Date.now()) / (24 * 3600 * 1000));
 }
 
+function getDueStatus(nextDate?: string): "overdue" | "due_soon" | "ok" | "none" {
+  const d = getDueDays(nextDate);
+  if (d === null) return "none";
+  if (d < 0) return "overdue";
+  if (d <= 7) return "due_soon";
+  return "ok";
+}
+
 export default function PreventivePlansPage() {
   const [showForm, setShowForm] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState("__all__");
+  const [filters, setFilters] = useFilters();
   const [form, setForm] = useState({
     vehicleId: "", serviceType: "oil_change",
     intervalKm: "", intervalDays: "",
@@ -41,7 +48,7 @@ export default function PreventivePlansPage() {
     nextServiceDate: "", estimatedCost: "", notes: "",
   });
 
-  const { data, refetch, isLoading, isError } = useApiQuery<any>(
+  const { data, refetch } = useApiQuery<any>(
     ["preventive-plans", vehicleFilter],
     `/fleet/preventive-plans${vehicleFilter && vehicleFilter !== "__all__" ? `?vehicleId=${vehicleFilter}` : ""}`
   );
@@ -68,11 +75,86 @@ export default function PreventivePlansPage() {
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
 
-  const overdueCount = plans.filter((p: any) => (getDueDays(p.nextServiceDate) ?? 0) < 0).length;
-  const dueSoonCount = plans.filter((p: any) => { const d = getDueDays(p.nextServiceDate); return d !== null && d >= 0 && d <= 7; }).length;
+  const overdueCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "overdue").length;
+  const dueSoonCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "due_soon").length;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const filtered = applyFilters(plans, filters, {
+    searchFields: ["plateNumber", "serviceType"],
+    statusField: "serviceType",
+  });
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "plateNumber",
+      header: "المركبة",
+      sortable: true,
+      searchable: true,
+      render: (row) => <span className="font-semibold">{row.plateNumber || "-"}</span>,
+    },
+    {
+      key: "serviceType",
+      header: "نوع الخدمة",
+      sortable: true,
+      render: (row) => (
+        <Badge variant="outline">{SERVICE_TYPES[row.serviceType] || row.serviceType}</Badge>
+      ),
+    },
+    {
+      key: "intervalKm",
+      header: "الفترة (كم)",
+      sortable: true,
+      render: (row) => row.intervalKm ? `${row.intervalKm} كم` : "-",
+    },
+    {
+      key: "intervalDays",
+      header: "الفترة (أيام)",
+      sortable: true,
+      render: (row) => row.intervalDays ? `${row.intervalDays} يوم` : "-",
+    },
+    {
+      key: "lastServiceDate",
+      header: "آخر خدمة",
+      sortable: true,
+      render: (row) => row.lastServiceDate ? row.lastServiceDate.split("T")[0] : "-",
+    },
+    {
+      key: "nextServiceDate",
+      header: "الخدمة القادمة",
+      sortable: true,
+      render: (row) => row.nextServiceDate ? row.nextServiceDate.split("T")[0] : "-",
+    },
+    {
+      key: "dueStatus",
+      header: "الحالة",
+      render: (row) => {
+        const dueDays = getDueDays(row.nextServiceDate);
+        const status = getDueStatus(row.nextServiceDate);
+        if (status === "overdue") return (
+          <div className="flex items-center gap-1">
+            <AlertCircle className="w-4 h-4 text-red-500" />
+            <Badge className="bg-red-100 text-red-700">متأخر {Math.abs(dueDays!)} يوم</Badge>
+          </div>
+        );
+        if (status === "due_soon") return (
+          <div className="flex items-center gap-1">
+            <Clock className="w-4 h-4 text-yellow-500" />
+            <Badge className="bg-yellow-100 text-yellow-700">خلال {dueDays} يوم</Badge>
+          </div>
+        );
+        if (status === "ok") return (
+          <Badge className="bg-green-100 text-green-700">{dueDays} يوم</Badge>
+        );
+        return <span className="text-gray-400">-</span>;
+      },
+    },
+    {
+      key: "estimatedCost",
+      header: "التكلفة التقديرية",
+      sortable: true,
+      align: "end",
+      render: (row) => row.estimatedCost > 0 ? `${row.estimatedCost} ر.س` : "-",
+    },
+  ];
 
   return (
     <PageShell
@@ -89,7 +171,6 @@ export default function PreventivePlansPage() {
         </>
       }
     >
-      <FleetTabsNav />
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">خطة صيانة وقائية جديدة</CardTitle></CardHeader>
@@ -122,11 +203,11 @@ export default function PreventivePlansPage() {
             </div>
             <div>
               <Label>آخر خدمة</Label>
-              <UnifiedDateInput value={form.lastServiceDate} onChange={(iso) => setForm({ ...form, lastServiceDate: iso })} />
+              <Input type="date" value={form.lastServiceDate} onChange={(e) => setForm({ ...form, lastServiceDate: e.target.value })} />
             </div>
             <div>
               <Label>موعد الخدمة القادمة</Label>
-              <UnifiedDateInput value={form.nextServiceDate} onChange={(iso) => setForm({ ...form, nextServiceDate: iso })} />
+              <Input type="date" value={form.nextServiceDate} onChange={(e) => setForm({ ...form, nextServiceDate: e.target.value })} />
             </div>
             <div>
               <Label>التكلفة التقديرية (ر.س)</Label>
@@ -148,51 +229,36 @@ export default function PreventivePlansPage() {
         </Card>
       )}
 
-      <div className="flex gap-2 items-center">
-        <Label className="text-sm">تصفية بالمركبة:</Label>
-        <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="كل المركبات" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">كل المركبات</SelectItem>
-            {vehicleList.map((v: any) => <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <AdvancedFilters
+        config={{
+          showSearch: true,
+          searchPlaceholder: "بحث بالمركبة أو نوع الخدمة...",
+          statuses: Object.entries(SERVICE_TYPES).map(([value, label]) => ({ value, label })),
+          showDateRange: false,
+          extraFilters: vehicleList.length > 0 ? [{
+            key: "vehicle",
+            label: "المركبة",
+            options: vehicleList.map((v: any) => ({ value: String(v.id), label: v.plateNumber })),
+          }] : [],
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {plans.length === 0 ? (
-          <div className="col-span-2 text-center py-8 text-gray-400">لا توجد خطط صيانة وقائية</div>
-        ) : plans.map((plan: any) => {
-          const dueDays = getDueDays(plan.nextServiceDate);
-          const isOverdue = dueDays !== null && dueDays < 0;
-          const isDueSoon = dueDays !== null && dueDays >= 0 && dueDays <= 7;
-          return (
-            <Card key={plan.id} className={`hover:shadow-md transition-shadow ${isOverdue ? "border-red-200" : isDueSoon ? "border-yellow-200" : ""}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="font-semibold">{plan.plateNumber}</div>
-                    <div className="text-sm text-gray-500">{SERVICE_TYPES[plan.serviceType] || plan.serviceType}</div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {isOverdue && <><AlertCircle className="w-4 h-4 text-red-500" /><Badge className="bg-red-100 text-red-700">متأخر {Math.abs(dueDays!)} يوم</Badge></>}
-                    {isDueSoon && <><Clock className="w-4 h-4 text-yellow-500" /><Badge className="bg-yellow-100 text-yellow-700">خلال {dueDays} يوم</Badge></>}
-                    {!isOverdue && !isDueSoon && dueDays !== null && <Badge className="bg-green-100 text-green-700">{dueDays} يوم</Badge>}
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 text-xs text-gray-500 gap-2">
-                  {plan.intervalKm && <div><span className="font-medium">الفترة:</span> {plan.intervalKm} كم</div>}
-                  {plan.intervalDays && <div><span className="font-medium">الفترة:</span> {plan.intervalDays} يوم</div>}
-                  {plan.estimatedCost > 0 && <div><span className="font-medium">التكلفة التقديرية:</span> {formatCurrency(plan.estimatedCost)}</div>}
-                  {plan.lastServiceDate && <div><span className="font-medium">آخر خدمة:</span> {plan.lastServiceDate?.split("T")[0]}</div>}
-                  {plan.nextServiceDate && <div><span className="font-medium">الخدمة القادمة:</span> {plan.nextServiceDate?.split("T")[0]}</div>}
-                  {plan.currentMileage && <div><span className="font-medium">العداد الحالي:</span> {plan.currentMileage} كم</div>}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا توجد خطط صيانة وقائية"
+        emptyIcon={<Wrench className="w-10 h-10 text-gray-300" />}
+        rowClassName={(row) => {
+          const status = getDueStatus(row.nextServiceDate);
+          if (status === "overdue") return "bg-red-50/40";
+          if (status === "due_soon") return "bg-yellow-50/40";
+          return undefined as any;
+        }}
+      />
     </PageShell>
   );
 }
