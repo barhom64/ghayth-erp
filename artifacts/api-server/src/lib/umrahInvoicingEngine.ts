@@ -154,7 +154,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
 
   // VAT: fetch company umrah VAT policy (defaults to 0 for exempt umrah services)
   const [vatSetting] = await rawQuery<any>(
-    `SELECT value FROM company_settings WHERE "companyId" = $1 AND key = 'umrah_vat_rate' AND "deletedAt" IS NULL LIMIT 1`,
+    `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'umrah_vat_rate' LIMIT 1`,
     [scope.companyId]
   );
   const vatRate = vatSetting ? Number(vatSetting.value) : 0;

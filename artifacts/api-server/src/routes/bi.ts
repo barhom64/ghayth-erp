@@ -938,8 +938,8 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
            AND po."deliveredAt"::date <= po."expectedDelivery"::date) AS "onTimeDeliveries",
          COUNT(po.id) FILTER (WHERE po."deliveredAt" IS NOT NULL) AS "deliveredOrders",
          COUNT(po.id) FILTER (WHERE po.status IN ('returned','rejected')) AS "returnedOrders"
-       FROM vendors v
-       LEFT JOIN purchase_orders po ON po."vendorId" = v.id AND po."companyId" = $1
+       FROM suppliers v
+       LEFT JOIN purchase_orders po ON po."supplierId" = v.id AND po."companyId" = $1
          AND DATE(po."createdAt") BETWEEN $2::date AND $3::date
        WHERE v."companyId" = $1
        GROUP BY v.id, v.name
