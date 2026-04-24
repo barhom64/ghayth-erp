@@ -669,6 +669,16 @@ router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req
       [status, scope.activeAssignmentId, Number(req.params.id), scope.companyId]
     );
     if (!row) throw new NotFoundError("المهمة غير موجودة");
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: Number(req.params.id),
+      details: JSON.stringify({ status }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "onboarding_tasks", entityId: Number(req.params.id),
+      after: { status },
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1228,6 +1238,16 @@ router.post("/obligations/seed", requirePermission("hr:update"), async (req, res
       );
       registered = before + 1;
     }
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "obligations.seeded", entity: "employees", entityId: 0,
+      details: JSON.stringify({ scannedEmployees: emps.length, employeesProcessed: registered }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "obligations", entityId: 0,
+      after: { scannedEmployees: emps.length, employeesProcessed: registered },
+    }).catch(console.error);
     res.json({ scannedEmployees: emps.length, employeesProcessed: registered });
   } catch (err) { handleRouteError(err, res, "Seed HR obligations error:"); }
 });

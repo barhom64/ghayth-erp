@@ -1,19 +1,16 @@
-import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Building2, Home, Plus, ArrowRight, TrendingUp, BookOpen, AlertTriangle } from "lucide-react";
+import { Building2, Home, Plus, ArrowRight, BookOpen } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 
 export default function BuildingDetail() {
   const [, params] = useRoute("/properties/buildings/:id");
@@ -21,7 +18,7 @@ export default function BuildingDetail() {
   const { permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
 
-  const { data: building, isLoading, isError } = useApiQuery<any>(
+  const { data: building, isLoading, isError, refetch } = useApiQuery<any>(
     ["building-detail", id || ""],
     `/properties/buildings/${id}`,
     !!id
@@ -33,75 +30,15 @@ export default function BuildingDetail() {
   );
   const units = asList(unitsResp);
 
-  const shellBreadcrumbs = [
-    { href: "/properties/dashboard", label: "إدارة الأملاك" },
-    { href: "/properties/buildings", label: "المباني" },
-  ];
-
-  if (isLoading) {
-    return (
-      <PageShell title="جاري التحميل..." breadcrumbs={shellBreadcrumbs}>
-        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
-      </PageShell>
-    );
-  }
-
-  if (isError) {
-    return (
-      <PageShell title="خطأ" breadcrumbs={shellBreadcrumbs}>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
-            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات المبنى.</p>
-            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  if (!building) {
-    return (
-      <PageShell title="المبنى غير موجود" breadcrumbs={shellBreadcrumbs}>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Building2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 mb-1">المبنى المطلوب غير موجود أو تم حذفه.</p>
-            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة المباني.</p>
-            <Link href="/properties/buildings"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للمباني</Button></Link>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
   const totalUnits = units.length;
   const rentedUnits = units.filter((u: any) => u.status === "rented").length;
   const availableUnits = units.filter((u: any) => u.status === "available").length;
   const occupancy = totalUnits > 0 ? Math.round((rentedUnits / totalUnits) * 100) : 0;
 
-  const subtitleParts = [building.city, building.address, building.floors && `${building.floors} طوابق`].filter(Boolean).join(" — ");
+  const subtitleParts = building ? [building.city, building.address, building.floors && `${building.floors} طوابق`].filter(Boolean).join(" — ") : "";
 
-  return (
-    <PageShell
-      title={building.name}
-      subtitle={subtitleParts || undefined}
-      loading={isLoading}
-      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties/buildings", label: "المباني" }]}
-      actions={
-        <div className="flex items-center gap-2">
-          <Badge variant="outline">
-            {building.type === "residential" ? "سكني" : building.type === "commercial" ? "تجاري" : building.type === "mixed" ? "مختلط" : building.type}
-          </Badge>
-          <Link href="/properties/buildings">
-            <Button variant="ghost" size="sm">
-              <ArrowRight className="h-4 w-4 me-1" />
-              العودة
-            </Button>
-          </Link>
-        </div>
-      }
-    >
+  const overview = (
+    <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm bg-blue-50/50">
           <CardContent className="p-4 text-center">
@@ -134,7 +71,7 @@ export default function BuildingDetail() {
           <Home className="h-5 w-5 text-blue-500" /> وحدات المبنى
         </h2>
         {canManage && (
-          <Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building.name)}`}>
+          <Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building?.name || "")}`}>
             <Button size="sm" className="gap-1">
               <Plus className="h-4 w-4" /> إضافة وحدة
             </Button>
@@ -147,7 +84,7 @@ export default function BuildingDetail() {
           <Home className="h-10 w-10 mx-auto mb-3 text-gray-300" />
           <p className="text-gray-500">لا توجد وحدات في هذا المبنى</p>
           {canManage && (
-            <Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building.name)}`}>
+            <Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building?.name || "")}`}>
               <Button className="mt-4 gap-2" size="sm"><Plus className="h-4 w-4" /> إضافة وحدة</Button>
             </Link>
           )}
@@ -204,6 +141,28 @@ export default function BuildingDetail() {
           <FinancialTab entityType="property" entityId={id!} />
         </CardContent>
       </Card>
-    </PageShell>
+    </>
+  );
+
+  const actions = (
+    <Badge variant="outline">
+      {building?.type === "residential" ? "سكني" : building?.type === "commercial" ? "تجاري" : building?.type === "mixed" ? "مختلط" : building?.type}
+    </Badge>
+  );
+
+  return (
+    <DetailPageLayout
+      title={building?.name || "المبنى"}
+      subtitle={subtitleParts || undefined}
+      backPath="/properties/buildings"
+      backLabel="العودة"
+      entityType="building"
+      entityId={id || ""}
+      isLoading={isLoading}
+      error={isError ? true : undefined}
+      onRetry={refetch}
+      overview={overview}
+      actions={actions}
+    />
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useParams, useLocation } from "wouter";
-import { PageShell } from "@/components/page-shell";
+import { useParams } from "wouter";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import type { ExtraTab } from "@/components/shared/detail-page-layout";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,18 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { STATUSES } from "@/lib/constants";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {
-  ArrowRight, Gavel, Calendar, FileText, AlertTriangle, Clock,
-  CheckCircle2, User, MapPin, Scale, TrendingUp, Activity,
-  Plus, ChevronRight, AlertCircle, Info, X
+  Gavel, Calendar, FileText, AlertTriangle, Clock,
+  CheckCircle2, User, MapPin, TrendingUp, Activity,
+  Plus, ChevronRight, Info, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 
 
@@ -217,13 +216,11 @@ function StepImpactPanel({ caseStatus }: { caseStatus: string }) {
 
 export default function LegalCaseDetail() {
   const { id } = useParams<{ id: string }>();
-  const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showAddSession, setShowAddSession] = useState(false);
-  const [tab, setTab] = useState("overview");
 
-  const { data: caseData, refetch, isLoading } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
+  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
 
   const transitionMut = useApiMutation<any, { status: string }>(
     `/legal/cases/${id}`,
@@ -250,201 +247,202 @@ export default function LegalCaseDetail() {
     transitionMut.mutate({ status: newStatus });
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 bg-gray-200 rounded w-1/3" />
-        <div className="h-32 bg-gray-100 rounded" />
-      </div>
-    );
-  }
+  const allowedTransitions: string[] = caseData?.allowedTransitions || [];
 
-  if (!caseData) {
-    return (
-      <div className="text-center py-16">
-        <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-        <p className="text-gray-500">القضية غير موجودة</p>
-        <Button variant="ghost" onClick={() => setLocation("/legal")} className="mt-3">العودة للقائمة</Button>
-      </div>
-    );
-  }
+  // --- Status mapping for DetailPageLayout ---
+  const statusToneMap: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "muted"> = {
+    open: "info",
+    in_progress: "warning",
+    judgment: "warning",
+    won: "success",
+    closed: "muted",
+    lost: "destructive",
+  };
 
-  const allowedTransitions: string[] = caseData.allowedTransitions || [];
+  // --- Actions (header buttons) ---
+  const actions = (
+    <div className="flex items-center gap-2 flex-wrap">
+      {allowedTransitions.map((t: string) => (
+        <Button
+          key={t}
+          size="sm"
+          variant="outline"
+          onClick={() => handleTransition(t)}
+          className={cn("text-xs gap-1", {
+            "border-green-300 text-green-700 hover:bg-green-50": t === "closed" || t === "won",
+            "border-red-300 text-red-700 hover:bg-red-50": t === "lost",
+            "border-blue-300 text-blue-700 hover:bg-blue-50": t === "in_progress" || t === "judgment",
+          })}
+        >
+          {STATUSES[t] || t}
+        </Button>
+      ))}
+    </div>
+  );
+
+  // --- Overview content (main info card + deadline bar + sidebar panels) ---
+  const overview = caseData ? (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <Card>
+          <CardContent className="p-5">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div>
+                <p className="text-xs text-gray-400 mb-1">الحالة</p>
+                <PageStatusBadge status={caseData.status} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">الأولوية</p>
+                <PageStatusBadge status={caseData.priority} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">نوع القضية</p>
+                <span className="text-sm font-medium">{caseData.caseType || "-"}</span>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> المحكمة</p>
+                <span className="text-sm">{caseData.court || "-"}</span>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><User className="h-3 w-3" /> الخصم</p>
+                <span className="text-sm">{caseData.opposingParty || "-"}</span>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><Gavel className="h-3 w-3" /> المحامي</p>
+                <span className="text-sm font-medium">{caseData.lawyerName || "-"}</span>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">تاريخ الرفع</p>
+                <span className="text-sm">{formatDateAr(caseData.filingDate) || "-"}</span>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">عدد الجلسات</p>
+                <span className="text-sm font-bold">{sessions.length}</span>
+              </div>
+            </div>
+
+            {caseData.description && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-xs text-gray-400 mb-1">الوصف</p>
+                <p className="text-sm text-gray-600">{caseData.description}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <DeadlineBar sessions={sessions} />
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">التسلسل الزمني للقضية</CardTitle></CardHeader>
+          <CardContent>
+            <CaseTimeline sessions={sessions} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="space-y-4">
+        <StepImpactPanel caseStatus={caseData.status} />
+        <RiskPanel caseData={caseData} sessions={sessions} />
+        {id && <EntityObligations entityType="legal_case" entityId={Number(id)} hideWhenEmpty />}
+      </div>
+    </div>
+  ) : null;
+
+  // --- Extra tabs: sessions, case documents ---
+  const extraTabs: ExtraTab[] = [
+    {
+      key: "sessions",
+      label: "الجلسات",
+      icon: Calendar,
+      badge: sessions.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">الجلسات</h3>
+            <Button size="sm" onClick={() => setShowAddSession(!showAddSession)}>
+              {showAddSession ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />جلسة جديدة</>}
+            </Button>
+          </div>
+          {showAddSession && <AddSessionForm caseId={Number(id)} onSuccess={handleSessionAdded} />}
+          {sessions.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-gray-400">
+                <Calendar className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد جلسات مسجلة</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {[...sessions].sort((a: any, b: any) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime()).map((s: any, i: number) => {
+                const isPast = new Date(s.sessionDate) < new Date();
+                const daysLeft = Math.ceil((new Date(s.sessionDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                return (
+                  <Card key={i} className={cn("border", isPast ? "border-gray-200" : "border-amber-200 bg-amber-50/50")}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", isPast ? "bg-blue-100" : "bg-amber-100")}>
+                            {isPast ? <CheckCircle2 className="h-4 w-4 text-blue-600" /> : <Clock className="h-4 w-4 text-amber-600" />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{formatDateAr(s.sessionDate)}</span>
+                              {!isPast && <Badge className="bg-amber-100 text-amber-700 text-xs">{daysLeft} أيام</Badge>}
+                            </div>
+                            {s.location && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{s.location}</p>}
+                            {s.judge && <p className="text-xs text-gray-400 mt-0.5">القاضي: {s.judge}</p>}
+                            {s.notes && <p className="text-xs text-gray-400 mt-1 bg-gray-50 rounded px-2 py-1">{s.notes}</p>}
+                          </div>
+                        </div>
+                        {s.result && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0">{s.result}</Badge>
+                        )}
+                      </div>
+                      {s.nextSessionDate && (
+                        <div className="mt-2 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-amber-600">
+                          <Calendar className="h-3 w-3" />
+                          الجلسة التالية: {formatDateAr(s.nextSessionDate)}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "case-documents",
+      label: "مستندات القضية",
+      icon: FileText,
+      content: () => <DocumentsSection caseId={Number(id)} caseTitle={caseData?.title || ""} />,
+    },
+  ];
 
   return (
-    <PageShell
-      title={caseData.title}
-      subtitle={caseData.caseNumber || undefined}
-      actions={
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/legal")}>
-          <ArrowRight className="h-5 w-5" />
-        </Button>
-      }
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardContent className="p-5">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">الحالة</p>
-                  <PageStatusBadge status={caseData.status} />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">الأولوية</p>
-                  <PageStatusBadge status={caseData.priority} />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">نوع القضية</p>
-                  <span className="text-sm font-medium">{caseData.caseType || "-"}</span>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> المحكمة</p>
-                  <span className="text-sm">{caseData.court || "-"}</span>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><User className="h-3 w-3" /> الخصم</p>
-                  <span className="text-sm">{caseData.opposingParty || "-"}</span>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><Gavel className="h-3 w-3" /> المحامي</p>
-                  <span className="text-sm font-medium">{caseData.lawyerName || "-"}</span>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">تاريخ الرفع</p>
-                  <span className="text-sm">{formatDateAr(caseData.filingDate) || "-"}</span>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">عدد الجلسات</p>
-                  <span className="text-sm font-bold">{sessions.length}</span>
-                </div>
-              </div>
-
-              {caseData.description && (
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-xs text-gray-400 mb-1">الوصف</p>
-                  <p className="text-sm text-gray-600">{caseData.description}</p>
-                </div>
-              )}
-
-              {allowedTransitions.length > 0 && (
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-xs text-gray-400 mb-2">تحديث الحالة</p>
-                  <div className="flex flex-wrap gap-2">
-                    {allowedTransitions.map((t: string) => (
-                      <Button
-                        key={t}
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleTransition(t)}
-                        className={cn("text-xs gap-1", {
-                          "border-green-300 text-green-700 hover:bg-green-50": t === "closed" || t === "won",
-                          "border-red-300 text-red-700 hover:bg-red-50": t === "lost",
-                          "border-blue-300 text-blue-700 hover:bg-blue-50": t === "in_progress" || t === "judgment",
-                        })}
-                      >
-                        {STATUSES[t] || t}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <DeadlineBar sessions={sessions} />
-
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="overview" className="gap-2"><Activity className="h-4 w-4" /> التسلسل الزمني</TabsTrigger>
-              <TabsTrigger value="sessions" className="gap-2"><Calendar className="h-4 w-4" /> الجلسات ({sessions.length})</TabsTrigger>
-              <TabsTrigger value="documents" className="gap-2"><FileText className="h-4 w-4" /> المستندات</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="overview" className="mt-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">التسلسل الزمني للقضية</CardTitle></CardHeader>
-                <CardContent>
-                  <CaseTimeline sessions={sessions} />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="sessions" className="mt-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-sm">الجلسات</h3>
-                <Button size="sm" onClick={() => setShowAddSession(!showAddSession)}>
-                  {showAddSession ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />جلسة جديدة</>}
-                </Button>
-              </div>
-              {showAddSession && <AddSessionForm caseId={Number(id)} onSuccess={handleSessionAdded} />}
-              {sessions.length === 0 ? (
-                <Card>
-                  <CardContent className="p-8 text-center text-gray-400">
-                    <Calendar className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">لا توجد جلسات مسجلة</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-3">
-                  {[...sessions].sort((a: any, b: any) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime()).map((s: any, i: number) => {
-                    const isPast = new Date(s.sessionDate) < new Date();
-                    const daysLeft = Math.ceil((new Date(s.sessionDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                    return (
-                      <Card key={i} className={cn("border", isPast ? "border-gray-200" : "border-amber-200 bg-amber-50/50")}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-start gap-3">
-                              <div className={cn("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", isPast ? "bg-blue-100" : "bg-amber-100")}>
-                                {isPast ? <CheckCircle2 className="h-4 w-4 text-blue-600" /> : <Clock className="h-4 w-4 text-amber-600" />}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-sm">{formatDateAr(s.sessionDate)}</span>
-                                  {!isPast && <Badge className="bg-amber-100 text-amber-700 text-xs">{daysLeft} أيام</Badge>}
-                                </div>
-                                {s.location && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{s.location}</p>}
-                                {s.judge && <p className="text-xs text-gray-400 mt-0.5">القاضي: {s.judge}</p>}
-                                {s.notes && <p className="text-xs text-gray-400 mt-1 bg-gray-50 rounded px-2 py-1">{s.notes}</p>}
-                              </div>
-                            </div>
-                            {s.result && (
-                              <Badge variant="outline" className="text-xs flex-shrink-0">{s.result}</Badge>
-                            )}
-                          </div>
-                          {s.nextSessionDate && (
-                            <div className="mt-2 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-amber-600">
-                              <Calendar className="h-3 w-3" />
-                              الجلسة التالية: {formatDateAr(s.nextSessionDate)}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="documents" className="mt-4">
-              <DocumentsSection caseId={Number(id)} caseTitle={caseData.title} />
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        <div className="space-y-4">
-          <StepImpactPanel caseStatus={caseData.status} />
-          <RiskPanel caseData={caseData} sessions={sessions} />
-          {id && <EntityObligations entityType="legal_case" entityId={Number(id)} hideWhenEmpty />}
-          <Card>
-            <CardHeader><CardTitle className="text-sm">سجل الأحداث</CardTitle></CardHeader>
-            <CardContent>
-              <EntityTimeline entityType="legal_case" entityId={Number(id)} />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </PageShell>
+    <DetailPageLayout
+      title={caseData?.title || ""}
+      subtitle={caseData?.caseNumber || undefined}
+      backPath="/legal/cases"
+      backLabel="القضايا"
+      status={caseData ? {
+        label: STATUSES[caseData.status] || caseData.status,
+        tone: statusToneMap[caseData.status] || "default",
+      } : undefined}
+      refNumber={caseData?.caseNumber || undefined}
+      createdAt={caseData?.createdAt}
+      updatedAt={caseData?.updatedAt}
+      entityType="legal_case"
+      entityId={Number(id)}
+      isLoading={isLoading}
+      error={error}
+      onRetry={refetch}
+      actions={actions}
+      overview={overview}
+      extraTabs={extraTabs}
+    />
   );
 }
 

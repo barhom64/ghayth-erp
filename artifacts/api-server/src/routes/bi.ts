@@ -1262,6 +1262,7 @@ router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (r
       [id, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.dismissed", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isDismissed: true }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isDismissed: true } }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
 });
@@ -1275,6 +1276,7 @@ router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req,
       [id, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.read", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isRead: true }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isRead: true } }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Mark insight read"); }
 });
@@ -1306,6 +1308,7 @@ router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, re
       [scope.companyId, scope.activeAssignmentId, alertType, muteUntil || null, reason || null]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.muted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType, muteUntil }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "alert_mute_rules", entityId: 0, after: { alertType, muteUntil, reason } }).catch(console.error);
     res.json({ success: true, message: `تم كتم تنبيهات "${alertType}"` });
   } catch (err) { handleRouteError(err, res, "Mute alert type"); }
 });
@@ -1319,6 +1322,7 @@ router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), a
       [scope.activeAssignmentId, alertType]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.unmuted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "alert_mute_rules", entityId: 0, after: { alertType } }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Unmute alert type"); }
 });

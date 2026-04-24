@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,108 +11,35 @@ import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import {
-  Users2, ArrowRight, Phone, Mail, CreditCard, FileText,
-  Banknote, CheckCircle, AlertTriangle, Building2, Home, Clock, BookOpen
+  Users2, Phone, Mail, CreditCard, FileText,
+  Banknote, AlertTriangle, Home, Clock, BookOpen
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
+import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-
-const TABS = [
-  { key: "overview", label: "نظرة عامة", icon: Users2 },
-  { key: "contracts", label: "العقود", icon: FileText },
-  { key: "payments", label: "المدفوعات", icon: Banknote },
-  { key: "finance", label: "الملف المالي", icon: BookOpen },
-  { key: "letters", label: "المراسلات", icon: Mail },
-  { key: "documents", label: "المستندات", icon: CreditCard },
-  { key: "timeline", label: "السجل الزمني", icon: Clock },
-] as const;
-
-type TabKey = (typeof TABS)[number]["key"];
 
 export default function TenantDetail() {
   const [, params] = useRoute("/properties/tenants/:id");
   const id = params?.id;
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
-  const { data: tenant, isLoading, isError } = useApiQuery<any>(
+  const { data: tenant, isLoading, isError, refetch } = useApiQuery<any>(
     ["tenant-detail", id || ""],
     `/properties/tenants/${id}`,
     !!id
   );
 
-  const shellBreadcrumbs = [
-    { href: "/properties/dashboard", label: "إدارة الأملاك" },
-    { href: "/properties/tenants", label: "المستأجرون" },
-  ];
-
-  if (isLoading) {
-    return (
-      <PageShell title="جاري التحميل..." breadcrumbs={shellBreadcrumbs}>
-        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
-      </PageShell>
-    );
-  }
-
-  if (isError) {
-    return (
-      <PageShell title="خطأ" breadcrumbs={shellBreadcrumbs}>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
-            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات المستأجر.</p>
-            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  if (!tenant) {
-    return (
-      <PageShell title="المستأجر غير موجود" breadcrumbs={shellBreadcrumbs}>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Users2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 mb-1">المستأجر المطلوب غير موجود أو تم حذفه.</p>
-            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة المستأجرين.</p>
-            <Link href="/properties/tenants"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للمستأجرين</Button></Link>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  const contracts = tenant.contracts || [];
-  const payments = tenant.payments || [];
+  const contracts = tenant?.contracts || [];
+  const payments = tenant?.payments || [];
   const activeContract = contracts.find((c: any) => c.status === "active");
   const totalPaid = payments.filter((p: any) => p.status === "paid").reduce((s: number, p: any) => s + Number(p.paidAmount || 0), 0);
   const overduePayments = payments.filter((p: any) => p.status !== "paid" && new Date(p.dueDate) < new Date());
 
-  const subtitleBits = [tenant.phone, tenant.email].filter(Boolean).join(" • ");
+  const subtitleBits = tenant ? [tenant.phone, tenant.email].filter(Boolean).join(" • ") : "";
 
-  return (
-    <PageShell
-      title={tenant.name || "المستأجر"}
-      subtitle={subtitleBits || undefined}
-      loading={isLoading}
-      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties/tenants", label: "المستأجرون" }]}
-      actions={
-        <div className="flex items-center gap-2">
-          {activeContract && (
-            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">مستأجر نشط</Badge>
-          )}
-          <Link href="/properties/tenants">
-            <Button variant="ghost" size="sm">
-              <ArrowRight className="h-4 w-4 me-1" />
-              العودة
-            </Button>
-          </Link>
-        </div>
-      }
-    >
+  const overview = tenant ? (
+    <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
@@ -145,81 +72,68 @@ export default function TenantDetail() {
         </Card>
       </div>
 
-      <div className="flex gap-1 border-b overflow-x-auto pb-px">
-        {TABS.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
-              activeTab === tab.key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">البيانات الشخصية</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            {tenant.name && <div><p className="text-xs text-gray-500">الاسم</p><p className="font-medium">{tenant.name}</p></div>}
+            {tenant.phone && <div><p className="text-xs text-gray-500">الهاتف</p><p className="font-medium">{tenant.phone}</p></div>}
+            {tenant.email && <div><p className="text-xs text-gray-500">البريد الإلكتروني</p><p className="font-medium">{tenant.email}</p></div>}
+            {tenant.nationalId && <div><p className="text-xs text-gray-500">رقم الهوية / الإقامة</p><p className="font-medium font-mono">{tenant.nationalId}</p></div>}
+            {tenant.nationality && <div><p className="text-xs text-gray-500">الجنسية</p><p className="font-medium">{tenant.nationality}</p></div>}
+          </div>
+        </CardContent>
+      </Card>
 
-      {activeTab === "overview" && (
-        <div className="space-y-4">
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">البيانات الشخصية</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                {tenant.name && <div><p className="text-xs text-gray-500">الاسم</p><p className="font-medium">{tenant.name}</p></div>}
-                {tenant.phone && <div><p className="text-xs text-gray-500">الهاتف</p><p className="font-medium">{tenant.phone}</p></div>}
-                {tenant.email && <div><p className="text-xs text-gray-500">البريد الإلكتروني</p><p className="font-medium">{tenant.email}</p></div>}
-                {tenant.nationalId && <div><p className="text-xs text-gray-500">رقم الهوية / الإقامة</p><p className="font-medium font-mono">{tenant.nationalId}</p></div>}
-                {tenant.nationality && <div><p className="text-xs text-gray-500">الجنسية</p><p className="font-medium">{tenant.nationality}</p></div>}
-              </div>
-            </CardContent>
-          </Card>
-
-          {activeContract && (
-            <Card className="border-0 shadow-sm bg-emerald-50/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-emerald-700">
-                  <Home className="h-4 w-4" /> الوحدة الحالية
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                  <div><p className="text-xs text-gray-500">الوحدة</p><p className="font-medium">{activeContract.unitNumber} {activeContract.buildingName ? `- ${activeContract.buildingName}` : ""}</p></div>
-                  <div><p className="text-xs text-gray-500">الإيجار</p><p className="font-medium text-emerald-600">{formatCurrency(Number(activeContract.monthlyRent || 0))}</p></div>
-                  <div><p className="text-xs text-gray-500">من</p><p className="font-medium">{formatDateAr(activeContract.startDate)}</p></div>
-                  <div><p className="text-xs text-gray-500">إلى</p><p className="font-medium">{formatDateAr(activeContract.endDate)}</p></div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {overduePayments.length > 0 && (
-            <Card className="border-red-200 bg-red-50/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-red-700">
-                  <AlertTriangle className="h-4 w-4" /> دفعات متأخرة ({overduePayments.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <DataTable<any>
-                  columns={[
-                    { key: "unitNumber", header: "الوحدة", render: (p) => p.unitNumber || "—" },
-                    { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
-                    { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
-                  ]}
-                  data={overduePayments.slice(0, 5)}
-                  noToolbar
-                  pageSize={0}
-                  searchPlaceholder={null}
-                />
-              </CardContent>
-            </Card>
-          )}
-        </div>
+      {activeContract && (
+        <Card className="border-0 shadow-sm bg-emerald-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-emerald-700">
+              <Home className="h-4 w-4" /> الوحدة الحالية
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div><p className="text-xs text-gray-500">الوحدة</p><p className="font-medium">{activeContract.unitNumber} {activeContract.buildingName ? `- ${activeContract.buildingName}` : ""}</p></div>
+              <div><p className="text-xs text-gray-500">الإيجار</p><p className="font-medium text-emerald-600">{formatCurrency(Number(activeContract.monthlyRent || 0))}</p></div>
+              <div><p className="text-xs text-gray-500">من</p><p className="font-medium">{formatDateAr(activeContract.startDate)}</p></div>
+              <div><p className="text-xs text-gray-500">إلى</p><p className="font-medium">{formatDateAr(activeContract.endDate)}</p></div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {activeTab === "contracts" && (
+      {overduePayments.length > 0 && (
+        <Card className="border-red-200 bg-red-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-red-700">
+              <AlertTriangle className="h-4 w-4" /> دفعات متأخرة ({overduePayments.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DataTable<any>
+              columns={[
+                { key: "unitNumber", header: "الوحدة", render: (p) => p.unitNumber || "—" },
+                { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
+                { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
+              ]}
+              data={overduePayments.slice(0, 5)}
+              noToolbar
+              pageSize={0}
+              searchPlaceholder={null}
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  ) : null;
+
+  const extraTabs: ExtraTab[] = [
+    {
+      key: "contracts",
+      label: "العقود",
+      icon: FileText,
+      content: (
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> تاريخ العقود ({contracts.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
@@ -248,9 +162,13 @@ export default function TenantDetail() {
             )}
           </CardContent>
         </Card>
-      )}
-
-      {activeTab === "payments" && (
+      ),
+    },
+    {
+      key: "payments",
+      label: "المدفوعات",
+      icon: Banknote,
+      content: (
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><Banknote className="h-4 w-4" /> سجل المدفوعات ({payments.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
@@ -274,9 +192,13 @@ export default function TenantDetail() {
             )}
           </CardContent>
         </Card>
-      )}
-
-      {activeTab === "finance" && id && (
+      ),
+    },
+    {
+      key: "finance",
+      label: "الملف المالي",
+      icon: BookOpen,
+      content: id ? (
         <div className="space-y-6">
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-2">
@@ -298,27 +220,35 @@ export default function TenantDetail() {
             </CardContent>
           </Card>
         </div>
-      )}
+      ) : null,
+    },
+    {
+      key: "letters",
+      label: "المراسلات",
+      icon: Mail,
+      content: id ? <TenantLettersTab tenantId={id} /> : null,
+    },
+  ];
 
-      {activeTab === "letters" && <TenantLettersTab tenantId={id!} />}
+  const actions = activeContract ? (
+    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">مستأجر نشط</Badge>
+  ) : null;
 
-      {activeTab === "documents" && (
-        !isNaN(Number(id)) && Number(id) > 0
-          ? (
-            <div className="space-y-4">
-              <EntityObligations entityType="tenant" entityId={Number(id)} hideWhenEmpty />
-              <EntityDocuments entityType="tenant" entityId={Number(id)} />
-            </div>
-          )
-          : <div className="text-center py-8 text-gray-400 text-sm">المستندات غير متاحة لمستأجري العقود القديمة</div>
-      )}
-
-      {activeTab === "timeline" && (
-        !isNaN(Number(id)) && Number(id) > 0
-          ? <EntityTimeline entityType="tenant" entityId={Number(id)} />
-          : <div className="text-center py-8 text-gray-400 text-sm">السجل الزمني غير متاح لمستأجري العقود القديمة</div>
-      )}
-    </PageShell>
+  return (
+    <DetailPageLayout
+      title={tenant?.name || "المستأجر"}
+      subtitle={subtitleBits || undefined}
+      backPath="/properties/tenants"
+      backLabel="العودة"
+      entityType="tenant"
+      entityId={id ? Number(id) : (id || "")}
+      isLoading={isLoading}
+      error={isError ? true : undefined}
+      onRetry={refetch}
+      overview={overview}
+      actions={actions}
+      extraTabs={extraTabs}
+    />
   );
 }
 

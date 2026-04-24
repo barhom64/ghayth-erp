@@ -15,6 +15,7 @@ const AdminPostingFailures = lazy(() => import("@/pages/admin-posting-failures")
 const AdminLifecycleMonitor = lazy(() => import("@/pages/admin-lifecycle-monitor"));
 const AdminRbacMatrix = lazy(() => import("@/pages/admin-rbac-matrix"));
 const AdminGlReconciliation = lazy(() => import("@/pages/admin-gl-reconciliation"));
+const AdminSystemRegistry = lazy(() => import("@/pages/admin-system-registry"));
 
 export const adminRoutes = [
   { path: "/admin", component: Admin },
@@ -32,4 +33,5 @@ export const adminRoutes = [
   { path: "/admin/lifecycle-monitor", component: AdminLifecycleMonitor },
   { path: "/admin/rbac-matrix", component: AdminRbacMatrix },
   { path: "/admin/gl-reconciliation", component: AdminGlReconciliation },
+  { path: "/admin/system-registry", component: AdminSystemRegistry },
 ];

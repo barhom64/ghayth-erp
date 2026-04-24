@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   ArrowRight, Target, Users, Shield, BarChart3, TrendingUp,
   CheckCircle, Clock, Star, AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 
 function ScoreCircle({ score, label, color = "blue" }: { score: number | null; label: string; color?: string }) {
   const colorMap: Record<string, string> = {
@@ -69,7 +67,6 @@ function KpiBar({ label, score, icon: Icon }: { label: string; score: number; ic
   );
 }
 
-// SVG Radar / Spider chart — no extra dependencies required
 function RadarChart({ data }: { data: { label: string; value: number; color: string }[] }) {
   const cx = 130; const cy = 130; const r = 100;
   const N = data.length;
@@ -87,7 +84,6 @@ function RadarChart({ data }: { data: { label: string; value: number; color: str
 
   return (
     <svg width="260" height="260" className="mx-auto">
-      {/* Grid circles */}
       {gridLevels.map((lvl) => {
         const pts = axes.map(({ angle }) => {
           const pt = toXY(angle, (lvl / 100) * r);
@@ -95,19 +91,15 @@ function RadarChart({ data }: { data: { label: string; value: number; color: str
         }).join(" ");
         return <polygon key={lvl} points={pts} fill="none" stroke="#e5e7eb" strokeWidth="1" />;
       })}
-      {/* Axis lines */}
       {axes.map(({ angle }, i) => {
         const end = toXY(angle, r);
         return <line key={i} x1={cx} y1={cy} x2={end.x} y2={end.y} stroke="#d1d5db" strokeWidth="1" />;
       })}
-      {/* Data polygon */}
       <polygon points={polyPoints} fill="rgba(59,130,246,0.15)" stroke="#3b82f6" strokeWidth="2" />
-      {/* Data points */}
       {data.map((d, i) => {
         const pt = toXY(axes[i]!.angle, (d.value / 100) * r);
         return <circle key={i} cx={pt.x} cy={pt.y} r="4" fill="#3b82f6" />;
       })}
-      {/* Labels */}
       {data.map((d, i) => {
         const pt = toXY(axes[i]!.angle, r + 18);
         return (
@@ -117,7 +109,6 @@ function RadarChart({ data }: { data: { label: string; value: number; color: str
           </text>
         );
       })}
-      {/* Center score labels at 80% ring */}
       {data.map((d, i) => {
         const pt = toXY(axes[i]!.angle, (d.value / 100) * r - 10);
         if (d.value < 10) return null;
@@ -142,11 +133,11 @@ export default function Evaluation360DetailPage() {
     `/hr/evaluation-cycles/${cycleId}`
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-  if (!data?.cycle) return <div className="p-8 text-center text-gray-400">دورة التقييم غير موجودة</div>;
-
-  const { cycle, systemEval, peerEvals = [], summary, upwardSummary } = data;
+  const cycle = data?.cycle;
+  const systemEval = data?.systemEval;
+  const peerEvals = data?.peerEvals ?? [];
+  const summary = data?.summary;
+  const upwardSummary = data?.upwardSummary;
   const managerEvals = peerEvals.filter((p: any) => p.evaluatorRole === 'manager');
   const peerOnlyEvals = peerEvals.filter((p: any) => p.evaluatorRole === 'peer');
 
@@ -157,33 +148,19 @@ export default function Evaluation360DetailPage() {
     { id: "upward", label: "التقييم العكسي", icon: Shield },
   ];
 
-  return (
-    <PageShell
-      title={`تقييم 360° — ${cycle.employeeName}`}
-      subtitle={`${cycle.period} · ${cycle.jobTitle}`}
-      loading={isLoading}
-      breadcrumbs={[
-        { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/evaluation-360", label: "تقييم 360" },
-      ]}
-      actions={
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link href={`/hr/evaluation-360/${cycleId}/peer`}>
-            <Button variant="outline" size="sm"><Users className="w-4 h-4 me-1" />إضافة تقييم مدير/زميل</Button>
-          </Link>
-          <Link href={`/hr/evaluation-360/${cycleId}/upward`}>
-            <Button variant="outline" size="sm"><Shield className="w-4 h-4 me-1" />تقييم عكسي سري</Button>
-          </Link>
-          <Link href="/hr/evaluation-360">
-            <Button variant="ghost" size="sm">
-              <ArrowRight className="h-4 w-4 me-1" />
-              العودة
-            </Button>
-          </Link>
-        </div>
-      }
-    >
-      {/* Tab Navigation */}
+  const actions = (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Link href={`/hr/evaluation-360/${cycleId}/peer`}>
+        <Button variant="outline" size="sm"><Users className="w-4 h-4 me-1" />إضافة تقييم مدير/زميل</Button>
+      </Link>
+      <Link href={`/hr/evaluation-360/${cycleId}/upward`}>
+        <Button variant="outline" size="sm"><Shield className="w-4 h-4 me-1" />تقييم عكسي سري</Button>
+      </Link>
+    </div>
+  );
+
+  const overview = (
+    <>
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
         {tabs.map((t) => (
           <button
@@ -199,7 +176,6 @@ export default function Evaluation360DetailPage() {
         ))}
       </div>
 
-      {/* Summary Tab */}
       {tab === "summary" && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -240,7 +216,6 @@ export default function Evaluation360DetailPage() {
             </Card>
           )}
 
-          {/* Upward summary */}
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -271,7 +246,6 @@ export default function Evaluation360DetailPage() {
         </div>
       )}
 
-      {/* System Report Tab */}
       {tab === "system" && (
         <div className="space-y-4">
           {!systemEval ? (
@@ -304,7 +278,6 @@ export default function Evaluation360DetailPage() {
                 </CardContent>
               </Card>
 
-              {/* Radar / Spider chart for KPI dimensions */}
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -361,7 +334,6 @@ export default function Evaluation360DetailPage() {
         </div>
       )}
 
-      {/* Peers Tab */}
       {tab === "peers" && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -436,7 +408,6 @@ export default function Evaluation360DetailPage() {
         </div>
       )}
 
-      {/* Upward Tab */}
       {tab === "upward" && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -482,6 +453,24 @@ export default function Evaluation360DetailPage() {
           )}
         </div>
       )}
-    </PageShell>
+    </>
+  );
+
+  return (
+    <DetailPageLayout
+      title={cycle ? `تقييم 360° — ${cycle.employeeName}` : "تقييم 360°"}
+      subtitle={cycle ? `${cycle.period} · ${cycle.jobTitle}` : undefined}
+      backPath="/hr/evaluations"
+      backLabel="العودة"
+      entityType="hr_evaluation_360"
+      entityId={cycleId}
+      isLoading={isLoading}
+      error={isError || (!isLoading && !data?.cycle) ? true : undefined}
+      onRetry={() => window.location.reload()}
+      overview={overview}
+      actions={actions}
+      createdAt={cycle?.createdAt}
+      updatedAt={cycle?.updatedAt}
+    />
   );
 }

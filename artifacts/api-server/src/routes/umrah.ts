@@ -631,6 +631,7 @@ router.post("/run-daily-status", requirePermission("umrah:write"), async (req, r
       };
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: 0, after: { date: today, ...result } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.daily_status.run", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ date: today, ...result }) }).catch(console.error);
     res.json({ date: today, ...result });
   } catch (err) { handleRouteError(err, res, "Daily status error"); }
 });
@@ -667,6 +668,7 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
       }
     }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created }) }).catch(console.error);
     res.json({ checked: overstayed.length, penaltiesCreated: created });
   } catch (err) { handleRouteError(err, res, "Penalty engine error"); }
 });

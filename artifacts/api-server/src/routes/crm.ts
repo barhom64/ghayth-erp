@@ -798,6 +798,16 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       extraWhere: `"deletedAt" IS NULL`,
       after: { convertedClientId, stage: "closed_won" },
     });
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "crm.opportunity.converted", entity: "crm_opportunities", entityId: id,
+      details: JSON.stringify({ convertedClientId, stage: "closed_won" }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "crm_opportunities", entityId: id,
+      after: { stage: "closed_won", convertedClientId },
+    }).catch(console.error);
     res.json({ ...updated, event: "crm.opportunity.converted", convertedClientId });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -821,6 +831,10 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
       entity: "crm_opportunities",
       entityId: id,
       details: `حذف فرصة CRM`,
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "crm_opportunities", entityId: id,
     }).catch(console.error);
     res.json({ message: "تم حذف الفرصة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete opportunity error:"); }
@@ -923,6 +937,16 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
       [oppId, b.type, b.description, b.scheduledAt, scope.userId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM crm_activities WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "crm.activity.created", entity: "crm_activities", entityId: insertId,
+      details: JSON.stringify({ opportunityId: oppId, type: b.type }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "crm_activities", entityId: insertId,
+      after: { opportunityId: oppId, type: b.type, description: b.description },
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create activity error:"); }
 });
@@ -980,6 +1004,16 @@ router.post("/followup-check", requirePermission("crm:create"), async (req, res)
       }
     }
 
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "crm.followup.checked", entity: "crm_activities", entityId: 0,
+      details: JSON.stringify({ totalOverdue: overdueActivities.length, escalated: escalated.length }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "crm_activities", entityId: 0,
+      after: { totalOverdue: overdueActivities.length, escalated: escalated.length },
+    }).catch(console.error);
     res.json({ totalOverdue: overdueActivities.length, escalated: escalated.length, details: escalated });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });

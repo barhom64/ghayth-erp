@@ -554,6 +554,12 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "property_units", entityId: id,
+      after: { unitNumber: existing.unitNumber, status: existing.status, deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف الوحدة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
 });
@@ -660,6 +666,19 @@ router.post("/contracts/impact-preview", requirePermission("properties:read"), a
 
     const hasDanger = items.some((i) => i.severity === "danger");
     const hasWarning = items.some((i) => i.severity === "warning");
+
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "property.contract.impact_preview", entity: "property_contracts", entityId: 0,
+      details: JSON.stringify({ unitId, tenantId, monthlyRent, startDate, endDate }),
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "property_contracts", entityId: 0,
+      after: { unitId, tenantId, monthlyRent, startDate, endDate },
+    }).catch(console.error);
+
     res.json({
       actionType: "create_rental_contract",
       employeeId: 0,
@@ -889,6 +908,12 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       details: `عقد إيجار جديد — ${b.tenantName || ''} — ${b.startDate} → ${b.endDate}`,
     }).catch(() => {});
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "property_contracts", entityId: insertId,
+      after: { contractNumber, unitId: b.unitId, tenantName: b.tenantName, startDate: b.startDate, endDate: b.endDate, monthlyRent, totalContractValue },
+    }).catch(console.error);
+
     res.status(201).json({ ...row, paymentSchedule: schedule });
   } catch (err) { handleRouteError(err, res, "Create contract error:"); }
 });
@@ -1069,6 +1094,12 @@ router.delete("/contracts/:id", requirePermission("property:delete"), async (req
       entityId: id,
       before: { status: existing.status, contractNumber: existing.contractNumber },
       after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "property_contracts", entityId: id,
+      after: { contractNumber: existing.contractNumber, status: existing.status, unitId: existing.unitId, deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
     res.json({ message: "تم حذف العقد" });
@@ -1412,6 +1443,12 @@ router.delete("/tenants/:id", requirePermission("property:delete"), async (req, 
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "property_tenants", entityId: id,
+      after: { name: existing.name, deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المستأجر" });
   } catch (err) { handleRouteError(err, res, "Delete tenant error:"); }
 });
@@ -1520,6 +1557,12 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
       action: "rent_payment.received", entity: "rent_payments", entityId: Number(id),
       details: `تحصيل ${paidAmount} — JE ${journalEntryId ?? '-'}`,
     }).catch(() => {});
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "property_payments", entityId: Number(id),
+      after: { paidAmount, method: b.method || 'bank_transfer', journalEntryId, status: row?.status },
+    }).catch(console.error);
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Record rent payment error:"); }
@@ -2530,6 +2573,12 @@ router.delete("/buildings/:id", requirePermission("property:delete"), async (req
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "property_buildings", entityId: id,
+      after: { name: existing.name, deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المبنى" });
   } catch (err) { handleRouteError(err, res, "Delete building error:"); }
 });
@@ -2580,6 +2629,13 @@ router.post("/maintenance", requirePermission("property:create"), async (req, re
       entityId: insertId,
       details: JSON.stringify({ unitId: b.unitId, category: b.category || 'general', priority: b.priority || 'medium' }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "property_maintenance_requests", entityId: insertId,
+      after: { unitId: b.unitId, category: b.category || 'general', description: b.description, priority: b.priority || 'medium' },
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create property maintenance error:"); }
 });
@@ -3018,6 +3074,12 @@ router.delete("/owners/:id", requirePermission("property:delete"), async (req, r
       after: { deletedAt: new Date().toISOString() },
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "property_owners", entityId: id,
+      after: { name: existing.name, deletedAt: new Date().toISOString() },
+    }).catch(console.error);
+
     res.json({ message: "تم حذف المالك" });
   } catch (err) { handleRouteError(err, res, "Delete owner error:"); }
 });
@@ -3081,6 +3143,13 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
       entityId: contractId,
       details: JSON.stringify({ installmentId, paidAmount, newStatus, receiptNumber, tenantName: existing.tenantName }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "property_payment_schedules", entityId: installmentId,
+      after: { contractId, installmentId, paidAmount, newStatus, receiptNumber, method: b.method || 'bank_transfer' },
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Pay installment error:"); }
 });
@@ -3146,6 +3215,13 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
       entityId: insertId,
       details: JSON.stringify({ unitId: b.unitId, type: b.type, scheduledDate: b.scheduledDate }),
     }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "property_inspections", entityId: insertId,
+      after: { unitId: b.unitId, type: b.type, scheduledDate: b.scheduledDate, inspectorName: b.inspectorName },
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create inspection error:"); }
 });

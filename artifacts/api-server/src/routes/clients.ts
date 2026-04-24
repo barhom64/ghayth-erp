@@ -257,6 +257,7 @@ router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
     const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`, [Number(id)]);
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "clients", entityId: Number(id), details: JSON.stringify({ name: b.name, phone: b.phone, email: b.email, classification: b.classification }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "clients", entityId: Number(id), after: { name: b.name, phone: b.phone, email: b.email, classification: b.classification } }).catch(console.error);
 
     res.json(updated);
   } catch (err) {
@@ -323,6 +324,7 @@ router.delete("/:id", requirePermission("crm:delete"), async (req, res) => {
     await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.deleted", entity: "clients", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "clients", entityId: Number(id) }).catch(console.error);
 
     res.json({ message: "تم حذف العميل بنجاح" });
   } catch (err) {
@@ -398,6 +400,7 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
       [insertId]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "client_portal_accounts", entityId: insertId, details: JSON.stringify({ clientId: Number(id), email }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "client_portal_accounts", entityId: insertId, after: { clientId: Number(id), email } }).catch(console.error);
 
     res.status(201).json({ account });
   } catch (err) {
@@ -449,6 +452,7 @@ router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, 
       [account.id]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: Number(id), isActive }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "client_portal_accounts", entityId: account.id, after: { clientId: Number(id), isActive, passwordChanged: !!password } }).catch(console.error);
 
     res.json({ account: updated });
   } catch (err) {

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,10 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowRight, Clock, CheckCircle, XCircle, FileText, Ban, Gavel, Scale, Lock, Mail } from "lucide-react";
+import { Clock, CheckCircle, XCircle, FileText, Ban, Gavel, Scale, Lock, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 
 import { INCIDENT_LABELS, MEMO_ACTION_LABELS } from "@/lib/hr-type-maps";
 
@@ -69,87 +67,15 @@ export default function DisciplineMemoDetailPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <PageShell
-        title="جارٍ تحميل المحضر..."
-        loading
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/hr/violations", label: "المخالفات والجزاءات" },
-        ]}
-      >
-        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
-      </PageShell>
-    );
-  }
-  if (isError) {
-    return (
-      <PageShell
-        title="تعذّر تحميل المحضر"
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/hr/violations", label: "المخالفات والجزاءات" },
-        ]}
-      >
-        <ErrorState onRetry={() => window.location.reload()} />
-      </PageShell>
-    );
-  }
-  if (!data?.memo) {
-    return (
-      <PageShell
-        title="المحضر غير موجود"
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/hr/violations", label: "المخالفات والجزاءات" },
-        ]}
-      >
-        <Card>
-          <CardContent className="py-12 text-center text-gray-500">
-            <Ban size={36} className="mx-auto mb-3 opacity-40" />
-            <p className="font-medium mb-1">لا يوجد محضر بهذا الرقم</p>
-            <p className="text-sm mb-4">قد يكون المحضر محذوفًا أو غير متاح لصلاحياتك.</p>
-            <Link href="/hr/violations">
-              <Button variant="outline">
-                <ArrowRight className="h-4 w-4 me-1" />
-                العودة إلى قائمة المخالفات
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
+  const memo = data?.memo;
+  const events = data?.events ?? [];
 
-  const memo = data.memo;
-  const events = data.events ?? [];
+  const totalDeduction = memo
+    ? Number(memo.appliedDeductionAmount ?? 0) + Number(memo.appliedExtraDeduction ?? 0)
+    : 0;
 
-  const totalDeduction =
-    Number(memo.appliedDeductionAmount ?? 0) + Number(memo.appliedExtraDeduction ?? 0);
-
-  return (
-    <PageShell
-      title={memo.memoNumber || "المحضر"}
-      subtitle={`محضر استفسار بشأن ${INCIDENT_LABELS[memo.incidentType] ?? memo.incidentType}`}
-      loading={isLoading}
-      breadcrumbs={[
-        { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/violations", label: "المخالفات والجزاءات" },
-        { label: memo.memoNumber || `محضر #${memo.id}` },
-      ]}
-      actions={
-        <div className="flex items-center gap-2">
-          <PageStatusBadge status={memo.status} domain="memo" className="text-sm px-3 py-1" />
-          <Link href="/hr/violations">
-            <Button variant="ghost" size="sm">
-              <ArrowRight className="h-4 w-4 me-1" />
-              العودة
-            </Button>
-          </Link>
-        </div>
-      }
-    >
+  const overview = memo ? (
+    <>
       <div className="grid md:grid-cols-3 gap-4">
         <Card className="md:col-span-2">
           <CardHeader>
@@ -478,6 +404,7 @@ export default function DisciplineMemoDetailPage() {
         </Card>
       )}
 
+      {/* السجل الزمني للأحداث */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -513,6 +440,35 @@ export default function DisciplineMemoDetailPage() {
           )}
         </CardContent>
       </Card>
-    </PageShell>
+    </>
+  ) : null;
+
+  const headerActions = (
+    <Link href={`/communications/letters/create?relatedType=discipline_memo&relatedId=${id}&subject=${encodeURIComponent("إخطار تأديبي")}`}>
+      <Button variant="outline" size="sm">
+        <Mail className="w-4 h-4 me-1" />
+        خطاب تأديبي
+      </Button>
+    </Link>
+  );
+
+  return (
+    <DetailPageLayout
+      title={memo?.memoNumber || "المحضر"}
+      subtitle={memo ? `محضر استفسار بشأن ${INCIDENT_LABELS[memo.incidentType] ?? memo.incidentType}` : undefined}
+      backPath="/hr/discipline/memos"
+      backLabel="العودة"
+      status={memo ? { label: memo.status } : undefined}
+      refNumber={memo?.memoNumber}
+      createdAt={memo?.createdAt}
+      updatedAt={memo?.updatedAt}
+      entityType="hr_inquiry_memo"
+      entityId={id ?? ""}
+      isLoading={isLoading}
+      error={isError ? true : undefined}
+      onRetry={() => window.location.reload()}
+      actions={headerActions}
+      overview={overview}
+    />
   );
 }

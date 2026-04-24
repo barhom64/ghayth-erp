@@ -555,6 +555,12 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
       details: JSON.stringify({ lateMinutes, isLate, distanceMeters, isOutOfRange, penaltyLevel, penaltyLabel, isWorkDay }),
     }).catch(console.error);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "attendance", entityId: attendanceId,
+      after: { lateMinutes, isLate, distanceMeters, isOutOfRange, penaltyLevel, penaltyLabel, isWorkDay },
+    }).catch(console.error);
+
     res.json({
       message: "تم تسجيل الحضور", lateMinutes, isLate,
       deductionAmount, distanceMeters, isOutOfRange, type: "checkin",
@@ -782,6 +788,12 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       companyId: scope.companyId, userId: scope.userId,
       action: "attendance.checkout", entity: "attendance", entityId: existing.id,
       details: JSON.stringify({ workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters }),
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "attendance", entityId: existing.id,
+      after: { workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters },
     }).catch(console.error);
 
     res.json({ message: "تم تسجيل الانصراف", workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, type: "checkout" });
@@ -1334,6 +1346,12 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       [insertId]
     );
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "hr_leave_requests", entityId: insertId,
+      after: { leaveTypeId, days, startDate, endDate, reason },
+    }).catch(console.error);
+
     res.status(201).json(request);
   } catch (err) {
     handleRouteError(err, res, "Request leave error:");
@@ -1480,6 +1498,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.rejected",
         entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
 
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "update", entity: "hr_leave_requests", entityId: Number(id),
+        after: { status: "rejected", reason },
+      }).catch(console.error);
+
       res.json({ message: "تم الرفض", status: "rejected" });
       return;
     }
@@ -1536,6 +1560,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         companyId: scope.companyId, userId: scope.userId,
         action: "leave.returned", entity: "hr_leave_requests", entityId: Number(id),
         details: `طلب إجازة ${id} — إرجاع: ${reason}`,
+      }).catch(console.error);
+
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "update", entity: "hr_leave_requests", entityId: Number(id),
+        after: { status: "returned", reason },
       }).catch(console.error);
 
       res.json({ message: "تم الإرجاع", status: "returned" });
@@ -1605,6 +1635,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
         emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `leave.stage${currentStageNum}_approved`,
           entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+
+        createAuditLog({
+          companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+          action: "update", entity: "hr_leave_requests", entityId: Number(id),
+          after: { status: "pending", stage: currentStageNum, nextStage: nextStep.stepOrder },
+        }).catch(console.error);
 
         res.json({ message: `تمت الموافقة من المرحلة ${currentStageNum}. الطلب الآن في مرحلة ${nextStep.requiredRole}`, status: "pending", nextStage: nextStep.stepOrder });
         return;
@@ -1740,6 +1776,12 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.approved",
       entity: "hr_leave_requests", entityId: Number(id),
       details: JSON.stringify({ affectedAssignments: allAssignments.length }) }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_leave_requests", entityId: Number(id),
+      after: { status: "approved", affectedAssignments: allAssignments.length },
+    }).catch(console.error);
 
     // Register return-to-work obligation (fires the day after the leave ends)
     try {
@@ -1896,6 +1938,12 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.escalated",
       entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_leave_requests", entityId: Number(id),
+      after: { status: "escalated" },
+    }).catch(console.error);
 
     res.json({ message: "تم تصعيد الطلب لـ HR" });
   } catch (err) {
@@ -4216,6 +4264,12 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       },
     });
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "official_letters", entityId: Number(id),
+      after: { status: newStatus, subject: letter.subject, type: letter.type, notes: notes ?? null },
+    }).catch(console.error);
+
     res.json({ id: Number(id), status: newStatus });
   } catch (err) { handleRouteError(err, res, "خطأ في اعتماد الخطاب"); }
 });
@@ -4331,6 +4385,14 @@ router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, r
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const daysCount = days ?? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
     const impact = await computeLeaveImpact(scope.companyId, Number(employeeId), assignment.id, Number(leaveTypeId), startDate, endDate, daysCount);
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.leave.impact_preview", entity: "hr_leave_requests", entityId: Number(employeeId) }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "hr_leave_requests", entityId: Number(employeeId),
+      after: { employeeId: Number(employeeId), leaveTypeId: Number(leaveTypeId), startDate, endDate },
+    }).catch(console.error);
+
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
 });
@@ -4348,6 +4410,14 @@ router.post("/impact-preview/termination", requirePermission("hr:read"), async (
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const impact = await computeTerminationImpact(scope.companyId, Number(employeeId), assignment.id);
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.termination.impact_preview", entity: "employees", entityId: Number(employeeId) }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "employees", entityId: Number(employeeId),
+      after: { employeeId: Number(employeeId) },
+    }).catch(console.error);
+
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
 });
@@ -4365,6 +4435,14 @@ router.post("/impact-preview/violation", requirePermission("hr:read"), async (re
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const impact = await computeViolationImpact(scope.companyId, Number(employeeId), assignment.id, Number(deduction), severity);
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.violation.impact_preview", entity: "employee_violations", entityId: Number(employeeId) }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "employee_violations", entityId: Number(employeeId),
+      after: { employeeId: Number(employeeId), deduction: Number(deduction), severity },
+    }).catch(console.error);
+
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
 });
@@ -4932,6 +5010,17 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
 
     await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
 
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "evaluation.peer_submitted", entity: "peer_evaluations", entityId: insertId,
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "peer_evaluations", entityId: insertId,
+      after: { cycleId, evaluatorId, evaluatorRole, overallScore },
+    }).catch(console.error);
+
     res.status(201).json({ id: insertId, cycleId, evaluatorId, evaluatorRole, overallScore });
   } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم"); }
 });
@@ -5019,6 +5108,17 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
 
     // Recompute summary (upward score only shows when >=3 reviews)
     await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "evaluation.upward_submitted", entity: "anonymous_upward_reviews", entityId: insertId,
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "anonymous_upward_reviews", entityId: insertId,
+      after: { cycleId, managerId, overallScore },
+    }).catch(console.error);
 
     res.status(201).json({ id: insertId, cycleId, anonymous: true, message: "تم إرسال التقييم بنجاح — هويتك محمية" });
   } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم العكسي"); }
@@ -5618,6 +5718,13 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_transfers", entityId: id,
+      after: { status: row?.status, approved, notes: notes ?? null },
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Approve transfer error:"); }
 });
@@ -5763,6 +5870,13 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_transfers", entityId: id,
+      after: { status: row?.status, confirmed, notes: notes ?? null },
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Receive transfer error:"); }
 });
@@ -6071,6 +6185,12 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       entity: "journal_entries",
       entityId: journalId ?? 0,
       details: JSON.stringify({ period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }),
+    }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "journal_entries", entityId: journalId ?? 0,
+      after: { period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length, ref },
     }).catch(console.error);
 
     res.status(201).json({
@@ -6434,6 +6554,13 @@ router.post("/company-documents", requirePermission("hr:create"), async (req, re
        b.expiryDate || null, b.issuingAuthority || null, b.reminderDays || 30, b.notes || null]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "company_documents", entityId: insertId,
+      after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
+    }).catch(console.error);
+
     res.status(201).json({ id: insertId, message: "تم إضافة وثيقة المنشأة" });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
@@ -6497,6 +6624,13 @@ router.post("/employee-documents", requirePermission("hr:create"), async (req, r
        b.reminderDays || 30, b.notes || null]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "employee_document.created", entity: "hr_employee_documents", entityId: insertId, details: JSON.stringify({ employeeId: Number(b.employeeId), documentType: b.documentType }) }).catch(console.error);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "employee_documents", entityId: insertId,
+      after: { employeeId: Number(b.employeeId), documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
+    }).catch(console.error);
+
     res.status(201).json({ id: insertId, message: "تم إضافة وثيقة الموظف" });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });

@@ -6,6 +6,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 
@@ -226,6 +228,16 @@ export default function LegalContractDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Documents */}
+      {id && (
+        <EntityDocuments entityType="legal_contract" entityId={id} />
+      )}
+
+      {/* Approval Timeline */}
+      {id && (
+        <ApprovalTimeline entityType="legal_contract" entityId={id} />
+      )}
     </div>
   );
 

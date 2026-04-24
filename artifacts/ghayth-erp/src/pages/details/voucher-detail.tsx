@@ -8,6 +8,8 @@ import { AttachmentPreview, type PreviewableAttachment } from "@/components/shar
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Paperclip, Eye, Receipt } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
@@ -292,6 +294,16 @@ export default function VoucherDetail() {
           </Card>
         )}
       </div>
+
+      {/* Documents */}
+      {id && (
+        <EntityDocuments entityType="voucher" entityId={id} />
+      )}
+
+      {/* Approval Timeline */}
+      {id && (
+        <ApprovalTimeline entityType="voucher" entityId={id} />
+      )}
     </div>
   );
 

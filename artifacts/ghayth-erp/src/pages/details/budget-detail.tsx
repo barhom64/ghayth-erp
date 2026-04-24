@@ -6,8 +6,12 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -35,6 +39,7 @@ export default function BudgetDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/budget/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["budget-detail", String(id)],
@@ -211,7 +216,51 @@ export default function BudgetDetail() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Approval actions */}
+        {id && item && ["draft", "active"].includes(item.status) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="budget"
+                entityId={id}
+                currentStatus={item.status}
+                approveEndpoint={`/finance/budgets/${id}/approve`}
+                rejectEndpoint={`/finance/budgets/${id}/reject`}
+                onDone={() => {
+                  refetch();
+                  toast({ title: "تم تحديث الميزانية" });
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Action history */}
+        {id && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">سجل الاعتماد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ActionHistory entityType="budget" entityId={id} defaultOpen />
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      {/* Documents */}
+      {id && (
+        <EntityDocuments entityType="budget" entityId={id} />
+      )}
+
+      {/* Approval Timeline */}
+      {id && (
+        <ApprovalTimeline entityType="budget" entityId={id} />
+      )}
     </div>
   );
 

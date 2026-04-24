@@ -2,13 +2,11 @@ import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
-  Activity, CalendarClock, History, MessageCircle, ListChecks, FileText, Calendar, Hash,
+  ListChecks, History,
 } from "lucide-react";
 
 const FREQUENCY_LABEL: Record<string, string> = {
@@ -42,7 +40,7 @@ export default function RecurringJournalDetailPage() {
   const totalDebit = templateLines.reduce((s: number, l: any) => s + Number(l.debit || 0), 0);
   const totalCredit = templateLines.reduce((s: number, l: any) => s + Number(l.credit || 0), 0);
 
-  const overviewContent = () => (
+  const overview = (
     <Card className="border-0 shadow-sm">
       <CardContent className="p-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -116,50 +114,33 @@ export default function RecurringJournalDetailPage() {
     </Card>
   );
 
-  const tabs: EntityTab[] = [
-    { key: "overview", label: "نظرة عامة", icon: Activity, content: overviewContent },
+  const extraTabs: ExtraTab[] = [
     { key: "template", label: "قالب القيد", icon: ListChecks, content: templateTabContent },
     { key: "history", label: "السجل", icon: History, content: historyTabContent, badge: rj?.history?.length },
-    {
-      key: "timeline",
-      label: "السجل الزمني",
-      icon: History,
-      content: () => <EntityTimeline entityType="recurring-journal" entityId={id} />,
-    },
-    {
-      key: "comments",
-      label: "التعليقات",
-      icon: MessageCircle,
-      content: () => <EntityComments entityType="recurring-journal" entityId={id} />,
-    },
   ];
 
-  const metaItems = [
-    rj?.frequency && { icon: CalendarClock, label: FREQUENCY_LABEL[rj.frequency] || rj.frequency },
-    rj?.nextRunDate && { icon: Calendar, label: `قادم: ${formatDateAr(rj.nextRunDate)}` },
-    rj?.runsCount != null && { icon: Hash, label: `${rj.runsCount} تنفيذ` },
-  ].filter(Boolean) as Array<{ icon: any; label: string }>;
-
   return (
-    <EntityDetailPage
-      title={rj?.name ? `قيد دوري: ${rj.name}` : "..."}
+    <DetailPageLayout
+      title={rj?.name ? `قيد دوري: ${rj.name}` : "القيد الدوري"}
       subtitle={rj?.description}
-      avatar={{ icon: FileText, gradientFrom: "from-purple-500", gradientTo: "to-indigo-600" }}
+      backPath="/finance/recurring-journals"
+      backLabel="العودة للقيود الدورية"
       status={
         rj
           ? rj.active
-            ? { label: "نشط", variant: "success" }
-            : { label: "متوقف", variant: "default" }
+            ? { label: "نشط", tone: "success" }
+            : { label: "متوقف", tone: "muted" }
           : undefined
       }
-      metaItems={metaItems}
-      backHref="/finance/recurring-journals"
-      backLabel="العودة للقيود الدورية"
+      createdAt={rj?.createdAt}
+      updatedAt={rj?.updatedAt}
+      entityType="recurring_journal"
+      entityId={id}
       isLoading={isLoading}
-      isError={isError}
+      error={isError ? true : undefined}
       onRetry={() => refetch()}
-      tabs={tabs}
-      defaultTab="overview"
+      overview={overview}
+      extraTabs={extraTabs}
     />
   );
 }

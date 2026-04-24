@@ -1,10 +1,8 @@
 import { useParams, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   LogOut, Calendar, DollarSign, CheckCircle, Clock,
@@ -39,6 +37,15 @@ import { ActionHistory } from "@/components/approval-actions";
 
 import { EXIT_TYPES, EXIT_REQUEST_STATUS, CLEARANCE_STATUS } from "@/lib/hr-type-maps";
 
+const STATUS_TONE_MAP: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "muted"> = {
+  pending: "warning",
+  approved: "info",
+  in_progress: "info",
+  completed: "success",
+  rejected: "destructive",
+  cancelled: "muted",
+};
+
 export default function ExitDetail() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
@@ -56,60 +63,16 @@ export default function ExitDetail() {
     queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const st = EXIT_REQUEST_STATUS[item?.status] ?? { label: item?.status ?? "—", color: "bg-gray-100 text-gray-600" };
+  const clearance: any[] = item?.clearance || [];
 
-  if (!item) {
-    return (
-      <PageShell title="الطلب غير موجود" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/exit", label: "نهاية الخدمة" }]}>
-        <Card>
-          <CardContent className="py-12 text-center text-gray-400">
-            <LogOut size={36} className="mx-auto mb-3 opacity-40" />
-            <p>طلب نهاية الخدمة غير موجود</p>
-            <Button variant="outline" className="mt-4" onClick={() => navigate("/hr/exit")}>
-              العودة
-            </Button>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  const st = EXIT_REQUEST_STATUS[item.status] ?? { label: item.status, color: "bg-gray-100 text-gray-600" };
-  const clearance: any[] = item.clearance || [];
-
-  const hireDate = item.hireDate ? new Date(item.hireDate) : null;
+  const hireDate = item?.hireDate ? new Date(item.hireDate) : null;
   const yearsOfService = hireDate
     ? ((new Date().getTime() - hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)).toFixed(1)
     : "—";
 
-  return (
-    <PageShell
-      title={`طلب نهاية خدمة — ${item?.employeeName || ""}`}
-      subtitle={item ? `${EXIT_TYPES[item.exitType] || item.exitType} — ${item.jobTitle || ""}` : undefined}
-      loading={isLoading}
-      breadcrumbs={[
-        { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/exit", label: "نهاية الخدمة" },
-        { label: item?.employeeName || "..." },
-      ]}
-      actions={
-        <div className="flex items-center gap-2">
-          <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
-          {item.status === "pending" && (
-            <Button
-              size="sm"
-              className="bg-green-600 hover:bg-green-700"
-              onClick={handleApprove}
-              disabled={approveMut.isPending}
-            >
-              <CheckCircle className="h-4 w-4 ml-1" />
-              اعتماد
-            </Button>
-          )}
-        </div>
-      }
-    >
+  const overviewContent = item ? (
+    <div className="space-y-4">
       {/* KPI cards */}
       <KpiGrid items={[
         { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50", size: "sm" },
@@ -263,6 +226,36 @@ export default function ExitDetail() {
       )}
 
       <ActionHistory entityType="exit_request" entityId={Number(id)} />
-    </PageShell>
+    </div>
+  ) : null;
+
+  return (
+    <DetailPageLayout
+      title={`طلب نهاية خدمة — ${item?.employeeName || ""}`}
+      subtitle={item ? `${EXIT_TYPES[item.exitType] || item.exitType} — ${item.jobTitle || ""}` : undefined}
+      backPath="/hr/exit"
+      status={{ label: st.label, tone: STATUS_TONE_MAP[item?.status] ?? "default" }}
+      entityType="hr_exit_request"
+      entityId={Number(id)}
+      isLoading={isLoading}
+      error={isError ? true : undefined}
+      onRetry={() => window.location.reload()}
+      createdAt={item?.createdAt}
+      updatedAt={item?.updatedAt}
+      actions={
+        item?.status === "pending" ? (
+          <Button
+            size="sm"
+            className="bg-green-600 hover:bg-green-700"
+            onClick={handleApprove}
+            disabled={approveMut.isPending}
+          >
+            <CheckCircle className="h-4 w-4 ml-1" />
+            اعتماد
+          </Button>
+        ) : undefined
+      }
+      overview={overviewContent}
+    />
   );
 }

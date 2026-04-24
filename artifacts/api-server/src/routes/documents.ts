@@ -220,6 +220,11 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
     }
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "documents", entityId: docId,
+      after: { title, fileName, category: category || null },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -341,6 +346,11 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
     );
 
     const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [docId, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "document_versions", entityId: docId,
+      after: { versionNumber: newVersion, fileName, storageKey },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -443,6 +453,11 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
        ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
       [docId, entityType, entityId]
     );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "document_entity_links", entityId: docId,
+      after: { entityType, entityId },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -511,6 +526,11 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
       `INSERT INTO document_folders (name, "parentId", color, "companyId") VALUES ($1,$2,$3,$4)`,
       [String(name).trim(), parentId ? Number(parentId) : null, color ?? null, scope.companyId]
     );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "document_folders", entityId: r.insertId,
+      after: { name, parentId: parentId ? Number(parentId) : null, color: color ?? null },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -614,6 +634,11 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
       [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id, scope.companyId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "document_templates", entityId: id,
+      after: { name, description, category, type },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -634,6 +659,11 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "document_templates", entityId: id,
+      after: { name: existing.name },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -790,6 +820,20 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       }
     }
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "documents", entityId: id,
+      after: { templateName: template.name, entityType, entityId },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.template.generated",
+      entity: "documents",
+      entityId: id,
+      details: JSON.stringify({ templateName: template.name, entityType, entityId }),
+    }).catch(console.error);
+
     res.json({
       html: filledHtml,
       templateName: template.name,
@@ -861,6 +905,11 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "documents", entityId: id,
+      after: { title: b.title, description: b.description, category: b.category, fileName: b.fileName },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -878,6 +927,11 @@ router.delete("/:id", requirePermission("documents:delete"), async (req, res) =>
     const id = Number(req.params.id);
     const result = await rawExecute(`UPDATE documents SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "documents", entityId: id,
+      after: { deletedAt: new Date().toISOString() },
+    }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
