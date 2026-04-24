@@ -217,8 +217,8 @@ export default function LeaveDetail() {
         )}
       </div>
 
-      <ApprovalTimeline entityType="hr_leave_request" entityId={id} />
-      <EntityDocuments entityType="hr_leave_request" entityId={id} />
+      {id && <ApprovalTimeline entityType="hr_leave_request" entityId={id} />}
+      {id && <EntityDocuments entityType="hr_leave_request" entityId={id} />}
     </div>
   );
 

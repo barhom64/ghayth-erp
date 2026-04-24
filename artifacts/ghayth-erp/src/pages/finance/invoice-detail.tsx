@@ -8,9 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
-  ArrowRight,
   Banknote,
-  FileText,
   DollarSign,
   Calendar,
   User,
@@ -25,43 +23,27 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline, ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { PageShell } from "@/components/page-shell";
+import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**
- * Invoice detail page — migrated in R.4 iter 4 to the unified template
- * stack with a **visible payment lifecycle**.
+ * Invoice detail page — migrated to DetailPageLayout which provides
+ * automatic Documents, Timeline, Comments, and Tasks tabs.
  *
- * Before: raw <h1> + back-button row, `StatusBadge` shim, two raw
- * `apiFetch` + `useToast` + `useQueryClient` manual mutations (one
- * for payment recording, one for ZATCA submit), a hand-rolled ZATCA
- * banner with its own tailwind color ladder that duplicated the
- * invoices list chip, and no visible lifecycle strip — users had to
- * read the status chip to understand where a payment was in its
- * progression.
+ * DetailPageLayout handles:
+ *   • Back button + header strip with status badge, ref, dates
+ *   • Loading / error / not-found states
+ *   • Standard tabs: Overview, Documents, Timeline, Comments, Tasks
  *
- * After:
- *   • PageShell with breadcrumbs + back + actions + PageStatusBadge
- *   • ProcessStages strip showing the payment progression:
- *     draft → pending → جزئي → مدفوعة. Void/cancelled render as a
- *     terminal branch. This is the first non-journal finance detail
- *     page to expose a visible lifecycle.
- *   • Payment recording + ZATCA submit migrated to `useApiMutation`
- *     with `pathFn` composition, so VALIDATION_ERROR with field /
- *     CONFLICT with meta.currentStatus / FORBIDDEN with
- *     meta.requiredRoles flow through R.1.2's typed-error toast
- *     pipeline automatically — no more "حدث خطأ" swallowing the real
- *     server reason
- *   • ZATCA banner chip uses PageStatusBadge with the `zatca` domain
- *     added in R.3 (same source as the list page chip)
- *   • StatusBadge shim import removed
- *
- * The print modal + print document are preserved verbatim — they're
- * large, orthogonal, and out of scope for the template unification.
+ * This page provides:
+ *   • overview — payment lifecycle strip, financial summary cards,
+ *     client info, dates, ZATCA integration banner, payment recording
+ *     form, invoice lines table, payments table, journal entries,
+ *     approval actions, action history, notes, and obligations
+ *   • actions — copy, record payment, PDF export, print buttons
+ *   • Print modal + print document (preserved verbatim)
  */
 
 const PAYMENT_LIFECYCLE: ReadonlyArray<{ key: string; label: string }> = [
@@ -94,6 +76,25 @@ function buildLifecycleSteps(status: string | undefined): StageStep[] {
     if (i === currentIdx)  return { label: step.label, status: "current" };
     return { label: step.label, status: "pending" };
   });
+}
+
+/** Map invoice status to DetailPageLayout status tone. */
+function statusToDetailStatus(status: string | undefined): DetailStatus | undefined {
+  if (!status) return undefined;
+  const map: Record<string, DetailStatus> = {
+    draft:          { label: "مسودة",           tone: "muted" },
+    pending:        { label: "قيد الانتظار",    tone: "warning" },
+    sent:           { label: "مُرسَلة",          tone: "info" },
+    partially_paid: { label: "مدفوعة جزئياً",   tone: "warning" },
+    partial:        { label: "مدفوعة جزئياً",   tone: "warning" },
+    paid:           { label: "مدفوعة",          tone: "success" },
+    overdue:        { label: "متأخرة",          tone: "destructive" },
+    void:           { label: "ملغاة",           tone: "muted" },
+    cancelled:      { label: "ملغى",            tone: "muted" },
+    credit_memo:    { label: "إشعار دائن",      tone: "info" },
+    debit_memo:     { label: "إشعار مدين",      tone: "info" },
+  };
+  return map[status] ?? { label: status, tone: "default" };
 }
 
 export default function InvoiceDetailPage() {
@@ -137,10 +138,8 @@ export default function InvoiceDetailPage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError && !invoice) return <ErrorState onRetry={() => window.location.reload()} />;
+  // Loading / error states are now handled by DetailPageLayout.
 
-  const notFound = !isLoading && !invoice;
   const lines = invoice?.lines || [];
   const payments = invoice?.payments || [];
   const journalEntries = invoice?.journalEntries || [];
@@ -163,88 +162,44 @@ export default function InvoiceDetailPage() {
     zatcaMut.mutate({});
   };
 
-  return (
-    <PageShell
-      title={invoice?.ref ? `فاتورة ${invoice.ref}` : notFound ? "الفاتورة غير موجودة" : "..."}
-      subtitle={invoice?.clientName || undefined}
-      breadcrumbs={[
-        { href: "/finance", label: "المالية" },
-        { href: "/finance/invoices", label: "الفواتير" },
-        { label: invoice?.ref || "التفاصيل" },
-      ]}
-      loading={isLoading}
-      actions={
-        <div className="flex items-center gap-2">
-          {invoice?.status && <PageStatusBadge status={invoice.status} domain="invoice" />}
-          <Link href="/finance/invoices">
-            <Button variant="ghost" size="sm">
-              <ArrowRight className="h-4 w-4 me-1" />
-              العودة للفواتير
-            </Button>
-          </Link>
-          <Link href={`/finance/invoices/create?copyFrom=${id}`}>
-            <Button variant="outline" size="sm" className="gap-1">
-              <Copy className="h-4 w-4" />
-              نسخ
-            </Button>
-          </Link>
-          {invoice && remaining > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
-              <Banknote className="h-4 w-4 me-1" />
-              تسجيل دفعة
-            </Button>
-          )}
-          {invoice && (
-            <>
-              <ExportButton
-                endpoint={`/export/pdf/invoice/${id}`}
-                filename={`invoice-${id}.pdf`}
-                type="pdf"
-                label="ملف طباعي"
-              />
-              <PrintActions
-                onPreview={() => setShowPreview(true)}
-                onPrint={() =>
-                  directPrint(printContainerRef.current, `فاتورة ${invoice.ref}`)
-                }
-              />
-            </>
-          )}
-        </div>
-      }
-    >
-      {notFound && (
-        <Card>
-          <CardContent className="p-12 text-center text-muted-foreground">
-            <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p>الفاتورة غير موجودة</p>
-            <Link href="/finance/invoices">
-              <Button variant="outline" className="mt-4">
-                العودة للفواتير
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+  // --- Action buttons for the header ---
+  const actions = (
+    <div className="flex items-center gap-2">
+      <Link href={`/finance/invoices/create?copyFrom=${id}`}>
+        <Button variant="outline" size="sm" className="gap-1">
+          <Copy className="h-4 w-4" />
+          نسخ
+        </Button>
+      </Link>
+      {invoice && remaining > 0 && (
+        <Button variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
+          <Banknote className="h-4 w-4 me-1" />
+          تسجيل دفعة
+        </Button>
       )}
-
-      {isError && !notFound && (
-        <Card>
-          <CardContent className="p-8 text-center text-red-600">
-            تعذر تحميل بيانات الفاتورة
-            <Button
-              variant="outline"
-              className="mt-3 block mx-auto"
-              onClick={() => refetch()}
-            >
-              إعادة المحاولة
-            </Button>
-          </CardContent>
-        </Card>
+      {invoice && (
+        <>
+          <ExportButton
+            endpoint={`/export/pdf/invoice/${id}`}
+            filename={`invoice-${id}.pdf`}
+            type="pdf"
+            label="ملف طباعي"
+          />
+          <PrintActions
+            onPreview={() => setShowPreview(true)}
+            onPrint={() =>
+              directPrint(printContainerRef.current, `فاتورة ${invoice.ref}`)
+            }
+          />
+        </>
       )}
+    </div>
+  );
 
-      {invoice && !notFound && (<>
-      {/* Visible payment lifecycle strip — the first non-journal
-          finance detail page to expose this pattern. */}
+  // --- Overview content (main tab) ---
+  const overview = invoice ? (
+    <div className="space-y-4">
+      {/* Visible payment lifecycle strip */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
           <p className="text-xs font-medium text-muted-foreground mb-2">
@@ -485,25 +440,8 @@ export default function InvoiceDetailPage() {
 
       {id && <EntityObligations entityType="invoice" entityId={id} hideWhenEmpty />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>{id && <EntityDocuments entityType="invoice" entityId={id} />}</div>
-        <Card>
-          <CardHeader><CardTitle className="text-lg">السجل الزمني</CardTitle></CardHeader>
-          <CardContent>
-            {id && <EntityTimeline entityType="invoices" entityId={id} maxItems={20} />}
-          </CardContent>
-        </Card>
-      </div>
-
-      {id && (
-        <Card>
-          <CardHeader><CardTitle className="text-lg">سجل الأحداث</CardTitle></CardHeader>
-          <CardContent>
-            <EntityTimeline entityType="invoice" entityId={id} />
-          </CardContent>
-        </Card>
-      )}
-
+      {/* Print preview modal + hidden print container (kept inside overview
+          so they mount when invoice data is available) */}
       <PrintPreviewModal
         open={showPreview}
         onClose={() => setShowPreview(false)}
@@ -657,7 +595,26 @@ export default function InvoiceDetailPage() {
           )}
         </PrintDocument>
       </div>
-      </>)}
-    </PageShell>
+    </div>
+  ) : null;
+
+  return (
+    <DetailPageLayout
+      title={invoice?.ref ? `فاتورة ${invoice.ref}` : "فاتورة"}
+      subtitle={invoice?.clientName || undefined}
+      backPath="/finance/invoices"
+      backLabel="العودة للفواتير"
+      status={statusToDetailStatus(invoice?.status)}
+      refNumber={invoice?.ref}
+      createdAt={invoice?.createdAt}
+      updatedAt={invoice?.updatedAt}
+      entityType="invoice"
+      entityId={id || ""}
+      isLoading={isLoading}
+      error={isError && !invoice ? "تعذر تحميل بيانات الفاتورة" : undefined}
+      onRetry={refetch}
+      actions={actions}
+      overview={overview}
+    />
   );
 }

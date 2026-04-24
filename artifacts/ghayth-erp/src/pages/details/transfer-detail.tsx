@@ -201,8 +201,8 @@ export default function TransferDetail() {
         )}
       </div>
 
-      <ApprovalTimeline entityType="employee_transfer" entityId={id} />
-      <EntityDocuments entityType="employee_transfer" entityId={id} />
+      {id && <ApprovalTimeline entityType="employee_transfer" entityId={id} />}
+      {id && <EntityDocuments entityType="employee_transfer" entityId={id} />}
     </div>
   );
 

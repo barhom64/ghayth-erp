@@ -185,8 +185,8 @@ export default function HrContractDetail() {
         )}
       </div>
 
-      <ApprovalTimeline entityType="employee_contract" entityId={id} />
-      <EntityDocuments entityType="employee_contract" entityId={id} />
+      {id && <ApprovalTimeline entityType="employee_contract" entityId={id} />}
+      {id && <EntityDocuments entityType="employee_contract" entityId={id} />}
     </div>
   );
 
