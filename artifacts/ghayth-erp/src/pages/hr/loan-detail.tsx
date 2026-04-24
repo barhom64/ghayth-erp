@@ -1,20 +1,23 @@
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
+import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Wallet, Calendar, DollarSign, CheckCircle, Clock } from "lucide-react";
+import { Wallet, Calendar, DollarSign, CheckCircle } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { LOAN_STATUS, INSTALLMENT_STATUS, LOAN_TYPES } from "@/lib/hr-type-maps";
+
+const STATUS_TONE_MAP: Record<string, DetailStatus["tone"]> = {
+  pending: "warning",
+  active: "info",
+  completed: "success",
+  rejected: "destructive",
+};
 
 const LOAN_LIFECYCLE = [
   { key: "pending",   label: "بانتظار الموافقة" },
@@ -38,51 +41,23 @@ function buildLoanSteps(status: string | undefined): StageStep[] {
 
 export default function LoanDetail() {
   const { id } = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
-
   const { data, isLoading, isError } = useApiQuery<any>(["hr-loan-detail", id], `/hr/loans/${id}`);
   const loan = data?.data ?? data;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const st = LOAN_STATUS[loan?.status] ?? { label: loan?.status ?? "—", color: "bg-gray-100 text-gray-600" };
+  const statusObj: DetailStatus = {
+    label: st.label,
+    tone: STATUS_TONE_MAP[loan?.status] ?? "default",
+  };
 
-  if (!loan) {
-    return (
-      <PageShell title="السلفة غير موجودة" breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/loans", label: "سلف الموظفين" }]}>
-        <Card>
-          <CardContent className="py-12 text-center text-gray-400">
-            <Wallet size={36} className="mx-auto mb-3 opacity-40" />
-            <p>السلفة المطلوبة غير موجودة</p>
-            <Button variant="outline" className="mt-4" onClick={() => navigate("/hr/loans")}>
-              العودة للسلف
-            </Button>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  const st = LOAN_STATUS[loan.status] ?? { label: loan.status, color: "bg-gray-100 text-gray-600" };
-  const paidPct = loan.amount > 0
+  const paidPct = loan?.amount > 0
     ? Math.min(100, Math.round((Number(loan.paidAmount ?? 0) / Number(loan.amount)) * 100))
     : 0;
 
-  const installments: any[] = loan.installments ?? [];
+  const installments: any[] = loan?.installments ?? [];
 
-  return (
-    <PageShell
-      title={`سلفة ${loan?.loanNumber || ""}`}
-      subtitle={loan ? `${loan.employeeName} — ${LOAN_TYPES[loan.loanType] ?? loan.loanType}` : undefined}
-      loading={isLoading}
-      breadcrumbs={[
-        { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/loans", label: "سلف الموظفين" },
-        { label: loan?.loanNumber || "..." },
-      ]}
-      actions={
-        <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
-      }
-    >
+  const overview = loan ? (
+    <div className="space-y-4">
       {/* ملخص السلفة */}
       <KpiGrid items={[
         { label: "المبلغ الكلي", value: formatCurrency(Number(loan.amount)), icon: DollarSign, color: "text-blue-600 bg-blue-50", size: "sm" },
@@ -206,9 +181,28 @@ export default function LoanDetail() {
         </CardContent>
       </Card>
       <ActionHistory entityType="loan" entityId={Number(id)} />
+    </div>
+  ) : null;
 
-      <ApprovalTimeline entityType="hr_employee_loan" entityId={Number(id)} />
-      <EntityDocuments entityType="hr_employee_loan" entityId={Number(id)} />
-    </PageShell>
+  return (
+    <DetailPageLayout
+      title={`سلفة ${loan?.loanNumber || ""}`}
+      subtitle={loan ? `${loan.employeeName} — ${LOAN_TYPES[loan.loanType] ?? loan.loanType}` : undefined}
+      backPath="/hr/loans"
+      backLabel="سلف الموظفين"
+      status={statusObj}
+      refNumber={loan?.loanNumber}
+      createdAt={loan?.requestDate ?? loan?.createdAt}
+      updatedAt={loan?.updatedAt}
+      entityType="hr_employee_loan"
+      entityId={Number(id)}
+      isLoading={isLoading}
+      error={isError ? true : undefined}
+      onRetry={() => window.location.reload()}
+      overview={overview}
+      actions={
+        <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
+      }
+    />
   );
 }

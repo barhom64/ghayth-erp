@@ -1,23 +1,18 @@
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import {
-  AlertTriangle, Shield, DollarSign, Calendar, User, FileText,
+  AlertTriangle, Shield, DollarSign, Calendar, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { SEVERITY_LEVELS, INCIDENT_LABELS } from "@/lib/hr-type-maps";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 
 const VIOLATION_LIFECYCLE = [
@@ -44,79 +39,35 @@ function buildViolationSteps(status: string | undefined): StageStep[] {
 
 export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
 
   const { data, isLoading, isError } = useApiQuery<any>(["hr-violation-detail", id], `/hr/violations/${id}`);
   const item = data?.data ?? data;
 
-  if (isLoading) {
-    return (
-      <PageShell
-        title="جارٍ تحميل المخالفة..."
-        loading
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/hr/violations", label: "المخالفات والجزاءات" },
-        ]}
-      >
-        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
-      </PageShell>
-    );
-  }
-  if (isError) {
-    return (
-      <PageShell
-        title="تعذّر تحميل المخالفة"
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/hr/violations", label: "المخالفات والجزاءات" },
-        ]}
-      >
-        <ErrorState onRetry={() => window.location.reload()} />
-      </PageShell>
-    );
-  }
+  const severity = item
+    ? (SEVERITY_LEVELS[item.severity] ?? { label: item.severity || "متوسطة", color: "bg-gray-100 text-gray-600" })
+    : { label: "—", color: "" };
+  const memos: any[] = item?.memos || [];
 
-  if (!item) {
-    return (
-      <PageShell
-        title="المخالفة غير موجودة"
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/hr/violations", label: "المخالفات والجزاءات" },
-        ]}
-      >
-        <Card>
-          <CardContent className="py-12 text-center text-gray-500">
-            <AlertTriangle size={36} className="mx-auto mb-3 opacity-40" />
-            <p className="font-medium mb-1">لا توجد مخالفة بهذا الرقم</p>
-            <p className="text-sm mb-4">قد تكون المخالفة محذوفة أو غير متاحة لصلاحياتك.</p>
-            <Button variant="outline" onClick={() => navigate("/hr/violations")}>
-              العودة إلى قائمة المخالفات
-            </Button>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
+  const statusToneMap: Record<string, "success" | "warning" | "destructive" | "info" | "muted" | "default"> = {
+    approved: "success",
+    pending_employee: "info",
+    pending_manager: "info",
+    pending_hr_decision: "warning",
+    draft: "muted",
+    rejected: "destructive",
+  };
 
-  const severity = SEVERITY_LEVELS[item.severity] ?? { label: item.severity || "متوسطة", color: "bg-gray-100 text-gray-600" };
-  const memos: any[] = item.memos || [];
+  const statusLabelMap: Record<string, string> = {
+    draft: "مسودة",
+    pending_employee: "بانتظار الموظف",
+    pending_manager: "بانتظار المدير",
+    pending_hr_decision: "بانتظار HR",
+    approved: "مُنفَّذ",
+    rejected: "مرفوضة",
+  };
 
-  return (
-    <PageShell
-      title={`مخالفة — ${item?.employeeName || ""}`}
-      subtitle={item ? `${INCIDENT_LABELS[item.type] || item.type} — ${item.period}` : undefined}
-      loading={isLoading}
-      breadcrumbs={[
-        { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/violations", label: "المخالفات" },
-        { label: item?.employeeName || "..." },
-      ]}
-      actions={
-        <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>
-      }
-    >
+  const overviewContent = item ? (
+    <div className="space-y-4">
       {/* KPI cards */}
       <KpiGrid items={[
         { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50", size: "sm" },
@@ -238,9 +189,28 @@ export default function ViolationDetail() {
           </CardContent>
         </Card>
       )}
+    </div>
+  ) : null;
 
-      <ApprovalTimeline entityType="employee_violation" entityId={Number(id)} />
-      <EntityDocuments entityType="employee_violation" entityId={Number(id)} />
-    </PageShell>
+  return (
+    <DetailPageLayout
+      title={`مخالفة — ${item?.employeeName || ""}`}
+      subtitle={item ? `${INCIDENT_LABELS[item.type] || item.type} — ${item.period}` : undefined}
+      backPath="/hr/violations"
+      status={item ? {
+        label: statusLabelMap[item.status] || item.status || severity.label,
+        tone: statusToneMap[item.status] || "default",
+      } : undefined}
+      entityType="employee_violation"
+      entityId={Number(id)}
+      isLoading={isLoading}
+      error={isError ? true : undefined}
+      onRetry={() => window.location.reload()}
+      createdAt={item?.createdAt}
+      overview={overviewContent}
+      actions={
+        <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>
+      }
+    />
   );
 }
