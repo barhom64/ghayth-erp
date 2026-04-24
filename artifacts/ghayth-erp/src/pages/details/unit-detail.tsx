@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   Building, FileText, Banknote, Wrench, Users, Clock, DollarSign,
-  ArrowRight, AlertTriangle, CheckCircle, XCircle, Info, Pencil,
+  AlertTriangle, XCircle, Info, Pencil,
   Compass, Paintbrush, Star, Image as ImageIcon, MapPin, BedDouble, Bath, Maximize2
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -21,8 +21,7 @@ import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, BookOpen } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
@@ -109,83 +108,29 @@ export default function UnitDetail() {
     !!id
   );
 
-  const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
-
-  const shellBreadcrumbs = [
-    { href: "/properties/dashboard", label: "إدارة الأملاك" },
-    { href: "/properties", label: "الوحدات" },
-  ];
-
-  if (isLoading) {
-    return (
-      <PageShell title="جاري التحميل..." breadcrumbs={shellBreadcrumbs}>
-        <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
-      </PageShell>
-    );
-  }
-
-  if (is404 || (!isLoading && !unit)) {
-    return (
-      <PageShell title="الوحدة غير موجودة" breadcrumbs={shellBreadcrumbs}>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 mb-1">الوحدة المطلوبة غير موجودة أو تم حذفها.</p>
-            <p className="text-sm text-muted-foreground mb-4">تأكد من صحة الرابط أو ارجع لقائمة الوحدات.</p>
-            <Link href="/properties"><Button variant="outline"><ArrowRight className="h-4 w-4 me-1" /> العودة للوحدات</Button></Link>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  if (isError) {
-    return (
-      <PageShell title="خطأ" breadcrumbs={shellBreadcrumbs}>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-red-300" />
-            <p className="text-gray-500 mb-4">حدث خطأ أثناء تحميل بيانات الوحدة.</p>
-            <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  const contracts: any[] = unit.contracts || [];
-  const payments: any[] = unit.payments || [];
-  const maintenance: any[] = unit.maintenance || [];
+  const contracts: any[] = unit?.contracts || [];
+  const payments: any[] = unit?.payments || [];
+  const maintenance: any[] = unit?.maintenance || [];
   const activeContract = contracts.find((c: any) => c.status === "active");
   const overduePayments = payments.filter((p: any) => p.status !== "paid" && new Date(p.dueDate) < new Date());
   const totalCollected = payments.filter((p: any) => p.status === "paid").reduce((s: number, p: any) => s + Number(p.paidAmount || 0), 0);
 
 
-  return (
-    <PageShell
-      title={`وحدة ${unit.unitNumber}`}
-      subtitle={`${unit.buildingName || "-"}${unit.address ? ` — ${unit.address}` : ""}`}
-      loading={isLoading}
-      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { href: "/properties", label: "الوحدات" }]}
-      actions={
-        <div className="flex items-center gap-2">
-          <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-gray-100 text-gray-700")}>
-            {STATUS_LABELS[unit.status] || unit.status}
-          </Badge>
-          <Link href={`/properties/${id}/status`}>
-            <Button variant="outline" size="sm" className="gap-1">
-              <Pencil className="h-3.5 w-3.5" /> تغيير الحالة
-            </Button>
-          </Link>
-          <Link href="/properties">
-            <Button variant="ghost" size="sm">
-              <ArrowRight className="h-4 w-4 me-1" />
-              العودة
-            </Button>
-          </Link>
-        </div>
-      }
-    >
+  const actions = (
+    <div className="flex items-center gap-2">
+      <Badge className={cn("border", STATUS_COLORS[unit?.status] || "bg-gray-100 text-gray-700")}>
+        {STATUS_LABELS[unit?.status] || unit?.status}
+      </Badge>
+      <Link href={`/properties/${id}/status`}>
+        <Button variant="outline" size="sm" className="gap-1">
+          <Pencil className="h-3.5 w-3.5" /> تغيير الحالة
+        </Button>
+      </Link>
+    </div>
+  );
+
+  const overview = (
+    <div className="space-y-6">
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -715,7 +660,26 @@ export default function UnitDetail() {
         </Card>
       )}
 
-    </PageShell>
+    </div>
+  );
+
+  return (
+    <DetailPageLayout
+      title={`وحدة ${unit?.unitNumber}`}
+      subtitle={`${unit?.buildingName || "-"}${unit?.address ? ` — ${unit.address}` : ""}`}
+      backPath="/properties"
+      backLabel="الوحدات"
+      status={{ label: STATUS_LABELS[unit?.status] || unit?.status, tone: unit?.status === "available" ? "success" : unit?.status === "rented" ? "info" : unit?.status === "maintenance" ? "warning" : unit?.status === "defaulted" ? "destructive" : "muted" }}
+      entityType="property_unit"
+      entityId={id || ""}
+      isLoading={isLoading}
+      error={isError ? error : undefined}
+      onRetry={() => window.location.reload()}
+      createdAt={unit?.createdAt}
+      updatedAt={unit?.updatedAt}
+      overview={overview}
+      actions={actions}
+    />
   );
 }
 
