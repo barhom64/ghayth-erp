@@ -715,11 +715,11 @@ router.get("/import/batches", requirePermission("umrah:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
-    let where = `b."companyId" = $1 AND b."deletedAt" IS NULL`;
+    let where = `b."companyId" = $1`;
     const params: any[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND b."seasonId" = $${params.length}`; }
     const rows = await rawQuery(
-      `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."uploadedAt" DESC`,
+      `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."createdAt" DESC`,
       params
     );
     res.json({ data: rows });
@@ -730,7 +730,7 @@ router.get("/import/batches/:id/changes", requirePermission("umrah:read"), async
   try {
     const scope = req.scope!;
     const [batch] = await rawQuery(
-      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");
