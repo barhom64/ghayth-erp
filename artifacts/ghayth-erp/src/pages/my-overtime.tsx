@@ -103,7 +103,7 @@ export default function MyOvertime() {
         })}
       </div>
 
-      <DataTable<any>
+      <DataTable
         columns={overtimeColumns}
         data={records}
         emptyMessage="لا توجد سجلات وقت إضافي لهذا الشهر"
