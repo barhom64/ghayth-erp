@@ -15,7 +15,7 @@ import { criticalPathLength } from "../lib/algorithms.js";
 import {
   createNotification,
   createAuditLog,
-  createJournalEntry,
+  createGuardedJournalEntry,
   checkFinancialPeriodOpen,
   getAccountCodeFromMapping,
   emitEvent,
@@ -1732,7 +1732,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
             creditFallback
           );
 
-          journalEntryId = await createJournalEntry({
+          journalEntryId = await createGuardedJournalEntry({
             companyId: scope.companyId,
             branchId: scope.branchId,
             createdBy: (scope as any).activeAssignmentId ?? scope.userId,
@@ -1756,7 +1756,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
                 projectId,
               },
             ],
-          });
+          }, { table: "project_costs", id: insertId });
         }
       }
     } catch (glErr) {
@@ -1826,7 +1826,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
             "credit",
             "1350"
           );
-          journalEntryId = await createJournalEntry({
+          journalEntryId = await createGuardedJournalEntry({
             companyId: scope.companyId,
             branchId: scope.branchId,
             createdBy: (scope as any).activeAssignmentId ?? scope.userId,
@@ -1850,7 +1850,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
                 projectId,
               },
             ],
-          });
+          }, { table: "projects", id: projectId });
         }
       } catch (glErr) {
         console.error(

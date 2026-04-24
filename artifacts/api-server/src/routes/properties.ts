@@ -11,7 +11,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createJournalEntry, createGuardedJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, createGuardedJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -1478,7 +1478,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
     const rentalRevenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
     let journalEntryId: number | null = null;
     try {
-      journalEntryId = await createJournalEntry({
+      journalEntryId = await createGuardedJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId ?? scope.userId,
@@ -1490,7 +1490,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
           { accountCode: cashAccountCode, debit: paidAmount, credit: 0, contractId: existing.contractId, propertyId: existing.unitId },
           { accountCode: rentalRevenueCode, debit: 0, credit: paidAmount, contractId: existing.contractId, propertyId: existing.unitId },
         ],
-      });
+      }, { table: "rent_payments", id: Number(id) });
     } catch (jErr) {
       console.error("Rent payment journal entry failed:", jErr);
       throw new IntegrationError(
@@ -2382,7 +2382,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
           const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_building_asset", "credit", "1100");
           const usefulYears = Number(b.usefulLifeYears) || 20;
           const salvage = Number(b.salvageValue) || 0;
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId,
             ref: `BLDG-${insertId}`,
             description: `إثبات أصل عقاري — ${b.name}`,
@@ -2391,7 +2391,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
               { accountCode: assetCode, debit: Number(b.purchasePrice), credit: 0, propertyId: insertId },
               { accountCode: cashCode, debit: 0, credit: Number(b.purchasePrice) },
             ],
-          });
+          }, { table: "property_buildings", id: insertId });
           await rawExecute(
             `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
               "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
@@ -3285,7 +3285,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
     try {
       const depCashCode = await getAccountCodeFromMapping(scope.companyId, "deposit_cash", "debit", "1100");
       const depLiabilityCode = await getAccountCodeFromMapping(scope.companyId, "deposit_liability", "credit", "2300");
-      await createJournalEntry({
+      await createGuardedJournalEntry({
         companyId: scope.companyId, branchId: scope.branchId ?? 0,
         createdBy: scope.activeAssignmentId ?? scope.userId,
         ref: `DEP-${insertId}`,
@@ -3297,7 +3297,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
           { accountCode: depCashCode, debit: Number(b.amount), credit: 0, contractId: Number(b.contractId) },
           { accountCode: depLiabilityCode, debit: 0, credit: Number(b.amount) },
         ],
-      });
+      }, { table: "property_security_deposits", id: insertId });
     } catch (jErr) {
       console.error("Deposit journal entry failed:", jErr);
       await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1`, [insertId]).catch(() => {});
@@ -3358,7 +3358,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
     try {
       const refLiabilityCode = await getAccountCodeFromMapping(scope.companyId, "deposit_liability", "credit", "2300");
       const refCashCode = await getAccountCodeFromMapping(scope.companyId, "deposit_cash", "debit", "1100");
-      await createJournalEntry({
+      await createGuardedJournalEntry({
         companyId: scope.companyId, branchId: scope.branchId ?? 0,
         createdBy: scope.activeAssignmentId ?? scope.userId,
         ref: `DEP-REF-${id}`,
@@ -3370,7 +3370,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
           { accountCode: refLiabilityCode, debit: refundAmount, credit: 0, contractId: deposit.contractId ? Number(deposit.contractId) : undefined },
           { accountCode: refCashCode, debit: 0, credit: refundAmount },
         ],
-      });
+      }, { table: "property_security_deposits", id: Number(id) });
     } catch (jErr) {
       console.error("Deposit refund journal entry failed:", jErr);
       throw new IntegrationError(

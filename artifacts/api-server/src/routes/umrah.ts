@@ -751,7 +751,7 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
         glLines.push({ accountCode: commissionCode, debit: commission, credit: 0, description: `عمولة وكيل — ${agent.name}` });
       }
 
-      const journalId = await createJournalEntry({
+      const journalId = await createGuardedJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId || 0,
         createdBy: scope.userId,
@@ -760,7 +760,7 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
         sourceType: "umrah_agent_invoice",
         sourceId: rows[0].id,
         lines: glLines,
-      });
+      }, { table: "umrah_agent_invoices", id: rows[0].id });
 
       await rawExecute(
         `UPDATE umrah_agent_invoices SET "journalEntryId"=$1 WHERE id=$2`,

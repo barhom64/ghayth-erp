@@ -182,7 +182,7 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
           const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "credit", "1100");
           const depExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_depreciation", "debit", "6100");
           const accDepCode = await getAccountCodeFromMapping(scope.companyId, "fleet_acc_depreciation", "credit", "1590");
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId,
             ref: `VEHICLE-${insertId}`,
             description: `إثبات أصل مركبة ${plateNumber} ${b.make || ""} ${b.model || ""}`.trim(),
@@ -191,7 +191,7 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
               { accountCode: assetCode, debit: Number(b.purchasePrice), credit: 0, vehicleId: insertId },
               { accountCode: cashCode, debit: 0, credit: Number(b.purchasePrice) },
             ],
-          });
+          }, { table: "fleet_vehicles", id: insertId });
           const vName = `${plateNumber} ${b.make || ""} ${b.model || ""}`.trim();
           const usefulYears = Number(b.usefulLifeYears) || 5;
           const salvage = Number(b.salvageValue) || 0;
@@ -2467,7 +2467,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
       try {
         const finesExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_expense", "debit", "5290");
         const payableCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_payable", "credit", "2100");
-        journalEntryId = await createJournalEntry({
+        journalEntryId = await createGuardedJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.userId,
@@ -2480,7 +2480,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
             { accountCode: finesExpCode, debit: fineAmount, credit: 0, vehicleId: b.vehicleId ? Number(b.vehicleId) : undefined },
             { accountCode: payableCode, debit: 0, credit: fineAmount },
           ],
-        });
+        }, { table: "fleet_traffic_violations", id: insertId });
       } catch (jeErr) {
         console.error("Traffic violation journal entry failed:", jeErr);
         await rawExecute(`DELETE FROM fleet_traffic_violations WHERE id=$1`, [insertId]).catch(() => {});
@@ -2578,7 +2578,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
       try {
         const payableCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_payable", "credit", "2100");
         const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
-        await createJournalEntry({
+        await createGuardedJournalEntry({
           companyId: scope.companyId,
           branchId: scope.branchId,
           createdBy: scope.userId,
@@ -2591,7 +2591,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
             { accountCode: payableCode, debit: fineAmount, credit: 0, vehicleId: existing.vehicleId ? Number(existing.vehicleId) : undefined },
             { accountCode: cashCode, debit: 0, credit: fineAmount },
           ],
-        });
+        }, { table: "fleet_traffic_violations", id });
       } catch (jeErr) {
         console.error("Traffic violation payment JE failed:", jeErr);
         throw new IntegrationError("فشل قيد السداد — لم يتم تسجيل العملية", { field: "journalEntry", fix: "راجع إعدادات الحسابات المالية (2100 / 1100) ثم أعد المحاولة" });

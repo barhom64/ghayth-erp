@@ -5,7 +5,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import {
-  createJournalEntry,
+  createGuardedJournalEntry,
   getAccountCodeFromMapping,
   emitEvent,
   createAuditLog,
@@ -320,7 +320,7 @@ async function postStoreOrderGl(scope: any, order: any) {
     );
   }
 
-  const journalId = await createJournalEntry({
+  const journalId = await createGuardedJournalEntry({
     companyId: scope.companyId,
     branchId: order.branchId || scope.branchId || 0,
     createdBy: scope.userId,
@@ -329,7 +329,7 @@ async function postStoreOrderGl(scope: any, order: any) {
     sourceType: "store_order",
     sourceId: order.id,
     lines,
-  });
+  }, { table: "store_orders", id: order.id });
 
   await rawExecute(
     `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2`,
