@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "refresh-shots": "node scripts/capture-screenshots.mjs",
     "check-shots-age": "node scripts/check-shots-age.mjs",
+    "shots-report": "node scripts/shots-report.mjs",
     "export-pdf": "PORT=4321 BASE_PATH=/ghayth-erp-deck/ pnpm run build && PORT=4321 BASE_PATH=/ghayth-erp-deck/ node scripts/export-pdf.mjs",
     "export-pdf-fresh": "pnpm run refresh-shots && pnpm run export-pdf",
     "export-pdf-deep": "PORT=4322 BASE_PATH=/ghayth-erp-deck/ pnpm run build && PORT=4322 BASE_PATH=/ghayth-erp-deck/ node scripts/export-pdf-deep.mjs",
