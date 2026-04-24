@@ -40,13 +40,13 @@ export default function ExitCreate() {
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  if (employeesQ.isLoading) return <LoadingSpinner />;
-  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
     [employees, form.assignmentId]
   );
+
+  if (employeesQ.isLoading) return <LoadingSpinner />;
+  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
   const hireDate = selectedEmployee?.hireDate || selectedEmployee?.joinDate;
