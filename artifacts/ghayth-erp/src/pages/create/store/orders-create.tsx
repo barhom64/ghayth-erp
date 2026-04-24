@@ -12,7 +12,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface OrderItem {
   name: string;
@@ -167,12 +167,10 @@ export default function OrdersCreate() {
               <Input value={item.name} onChange={(e) => updateItem(idx, "name", e.target.value)} placeholder="اسم العنصر" />
             </div>
             <div className="col-span-2">
-              {idx === 0 && <Label className="text-xs">الكمية</Label>}
-              <Input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} />
+              <NumberField label="الكمية" min={1} value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
             </div>
             <div className="col-span-2">
-              {idx === 0 && <Label className="text-xs">السعر</Label>}
-              <Input type="number" step="0.01" value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} />
+              <NumberField label="السعر" step={0.01} value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
             </div>
             <div className="col-span-1">
               <Button type="button" variant="ghost" size="sm" className="text-red-500" onClick={() => removeItem(idx)}>✕</Button>

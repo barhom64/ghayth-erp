@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -19,6 +20,12 @@ export default function PaymentRegisterPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_payment_register", {
+    paidAmount: "",
+    paymentDate: todayLocal(),
+    paymentMethod: "bank_transfer",
+    notes: "",
+  });
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { data: paymentsResp, isLoading, isError } = useApiQuery<any>(["rent-payments"], "/properties/payments");
@@ -26,13 +33,6 @@ export default function PaymentRegisterPage() {
   const payment = payments.find((p: any) => String(p.id) === params?.paymentId);
 
   const remaining = payment ? payment.amount - (payment.paidAmount || 0) : 0;
-
-  const [form, setForm] = useState({
-    paidAmount: "",
-    paymentDate: todayLocal(),
-    paymentMethod: "bank_transfer",
-    notes: "",
-  });
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -61,6 +61,7 @@ export default function PaymentRegisterPage() {
         }),
       });
       toast({ title: "تم تسجيل الدفعة بنجاح" });
+      clearDraft();
       qc.invalidateQueries({ queryKey: ["rent-payments"] });
       setLocation("/properties/payments");
     } catch (err: any) {
@@ -77,6 +78,12 @@ export default function PaymentRegisterPage() {
       subtitle={payment ? `${payment.tenantName} — ${formatCurrency(payment.amount)}` : "تحميل..."}
       backPath="/properties/payments"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       {payment && (
         <div className="space-y-4">
           <h3 className="flex items-center gap-2 text-lg font-semibold">

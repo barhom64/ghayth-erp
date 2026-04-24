@@ -7,8 +7,9 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { EmployeeSelect } from "@/components/shared/entity-selects";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
@@ -88,12 +89,18 @@ export default function ContractsCreate() {
               </SelectContent>
             </Select>
           </FormFieldWrapper>
-          <TextField label="تاريخ البداية" required value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} placeholder="YYYY-MM-DD" error={fieldErrors.startDate} />
-          <TextField label="تاريخ النهاية" value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} placeholder="YYYY-MM-DD (اختياري)" />
-          <TextField label="نهاية فترة التجربة" value={form.probationEndDate} onChange={(v) => setForm((f) => ({ ...f, probationEndDate: v }))} placeholder="YYYY-MM-DD" />
-          <TextField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} placeholder="0.00" />
-          <TextField label="بدل السكن" value={form.housingAllowance} onChange={(v) => setForm((f) => ({ ...f, housingAllowance: v }))} placeholder="0.00" />
-          <TextField label="بدل النقل" value={form.transportAllowance} onChange={(v) => setForm((f) => ({ ...f, transportAllowance: v }))} placeholder="0.00" />
+          <FormFieldWrapper label="تاريخ البداية" required error={fieldErrors.startDate}>
+            <DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} />
+          </FormFieldWrapper>
+          <FormFieldWrapper label="تاريخ النهاية">
+            <DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} />
+          </FormFieldWrapper>
+          <FormFieldWrapper label="نهاية فترة التجربة">
+            <DatePicker value={form.probationEndDate} onChange={(v) => setForm((f) => ({ ...f, probationEndDate: v }))} />
+          </FormFieldWrapper>
+          <NumberField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} placeholder="0.00" />
+          <NumberField label="بدل السكن" value={form.housingAllowance} onChange={(v) => setForm((f) => ({ ...f, housingAllowance: v }))} placeholder="0.00" />
+          <NumberField label="بدل النقل" value={form.transportAllowance} onChange={(v) => setForm((f) => ({ ...f, transportAllowance: v }))} placeholder="0.00" />
         </div>
         <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." />
         <div className="flex justify-end gap-3 pt-4">

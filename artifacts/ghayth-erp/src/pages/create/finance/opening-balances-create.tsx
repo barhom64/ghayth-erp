@@ -2,7 +2,6 @@ import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +12,10 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { formatCurrency, roundMoney } from "@/lib/formatters";
-import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { FormFieldWrapper, NumberField } from "@/components/shared/form-field-wrapper";
 
 interface OBLine {
   accountCode: string;
@@ -33,6 +33,7 @@ function firstDayOfFiscalYear(): string {
 export default function OpeningBalancesCreatePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { fieldErrors, validate } = useFieldErrors();
 
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
@@ -90,14 +91,6 @@ export default function OpeningBalancesCreatePage() {
     setLines((p) => (p.length > 2 ? p.filter((_, i) => i !== idx) : p));
 
   function handleSubmit() {
-    if (!periodStart) {
-      toast({ variant: "destructive", title: "حدد تاريخ بداية الفترة" });
-      return;
-    }
-    if (!isBalanced) {
-      toast({ variant: "destructive", title: "الأرصدة غير متوازنة" });
-      return;
-    }
     const validLines = lines
       .filter((l) => l.accountCode && (Number(l.debit) > 0 || Number(l.credit) > 0))
       .map((l) => ({
@@ -105,8 +98,13 @@ export default function OpeningBalancesCreatePage() {
         debit: Number(l.debit) || 0,
         credit: Number(l.credit) || 0,
       }));
-    if (validLines.length < 2) {
-      toast({ variant: "destructive", title: "يجب إدخال بندين على الأقل" });
+    const firstError = validate({
+      periodStart: periodStart ? null : "حدد تاريخ بداية الفترة",
+      balance: !isBalanced ? "الأرصدة غير متوازنة" : null,
+      lines: validLines.length < 2 ? "يجب إدخال بندين على الأقل" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({ periodStart, lines: validLines, force });
@@ -206,18 +204,18 @@ export default function OpeningBalancesCreatePage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input
-                  type="number"
-                  min="0"
+                <NumberField
+                  label="مدين"
+                  min={0}
                   value={line.debit}
-                  onChange={(e) => updateLine(idx, "debit", e.target.value)}
+                  onChange={(v) => updateLine(idx, "debit", v)}
                   placeholder="0"
                 />
-                <Input
-                  type="number"
-                  min="0"
+                <NumberField
+                  label="دائن"
+                  min={0}
                   value={line.credit}
-                  onChange={(e) => updateLine(idx, "credit", e.target.value)}
+                  onChange={(v) => updateLine(idx, "credit", v)}
                   placeholder="0"
                 />
                 <Button
