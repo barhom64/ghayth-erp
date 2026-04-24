@@ -5,11 +5,9 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatDateAr } from "@/lib/formatters";
 import {
   Briefcase,
@@ -18,15 +16,12 @@ import {
   Activity,
   Users,
   UserCheck,
-  FolderOpen,
-  History,
-  MessageCircle,
-  XCircle,
-  RotateCcw,
   CheckCircle2,
   Clock,
   FileText,
   MapPin,
+  XCircle,
+  RotateCcw,
 } from "lucide-react";
 
 const STAGE_LABELS: Record<string, string> = {
@@ -36,6 +31,13 @@ const STAGE_LABELS: Record<string, string> = {
   offer: "عرض",
   hired: "تم التوظيف",
   rejected: "مرفوض",
+};
+
+const STATUS_TONE_MAP: Record<string, "success" | "warning" | "info" | "muted" | "destructive" | "default"> = {
+  open: "success",
+  closed: "muted",
+  draft: "default",
+  paused: "warning",
 };
 
 export default function JobDetailPage() {
@@ -50,7 +52,6 @@ export default function JobDetailPage() {
     !!id
   );
 
-  // Applications filtered by posting
   const { data: appsResp } = useApiQuery<any>(
     ["job-applications", id],
     id ? `/recruitment/applications?postingId=${id}` : null,
@@ -82,7 +83,16 @@ export default function JobDetailPage() {
 
   const interviews = useMemo(() => applicants.filter((a) => (a.status || a.stage) === "interview"), [applicants]);
 
-  const overviewContent = () => (
+  const isClosed = job?.status === "closed";
+  const notFound = !isLoading && !job;
+
+  const emptyMsg = (msg: string) => (
+    <Card className="border-0 shadow-sm">
+      <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
+    </Card>
+  );
+
+  const overview = (
     <Card className="border-0 shadow-sm">
       <CardContent className="p-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -114,14 +124,65 @@ export default function JobDetailPage() {
     </Card>
   );
 
-  const emptyMsg = (msg: string) => (
-    <Card className="border-0 shadow-sm">
-      <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
-    </Card>
+  const actions = (
+    <>
+      {isClosed ? (
+        <Button
+          size="sm"
+          variant="default"
+          className="gap-1"
+          onClick={async () => {
+            try {
+              await apiFetch(`/recruitment/postings/${id}/reopen`, {
+                method: "POST",
+                body: JSON.stringify({}),
+              });
+              queryClient.invalidateQueries({ queryKey: ["recruitment-job", id] });
+              toast({ title: "تم إعادة فتح الإعلان الوظيفي" });
+              refetch();
+            } catch (err: any) {
+              toast({
+                variant: "destructive",
+                title: "تعذر إعادة فتح الإعلان",
+                description: err.message || "حدث خطأ",
+              });
+            }
+          }}
+        >
+          <RotateCcw className="h-4 w-4" />
+          إعادة فتح
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1"
+          onClick={async () => {
+            try {
+              await apiFetch(`/recruitment/postings/${id}/close`, {
+                method: "POST",
+                body: JSON.stringify({}),
+              });
+              queryClient.invalidateQueries({ queryKey: ["recruitment-job", id] });
+              toast({ title: "تم إغلاق الإعلان الوظيفي" });
+              refetch();
+            } catch (err: any) {
+              toast({
+                variant: "destructive",
+                title: "تعذر إغلاق الإعلان",
+                description: err.message || "حدث خطأ",
+              });
+            }
+          }}
+        >
+          <XCircle className="h-4 w-4" />
+          إغلاق
+        </Button>
+      )}
+    </>
   );
 
-  const tabs: EntityTab[] = [
-    { key: "overview", label: "نظرة عامة", icon: Activity, content: overviewContent },
+  const extraTabs: ExtraTab[] = [
     {
       key: "applicants",
       label: "المتقدمون",
@@ -146,131 +207,25 @@ export default function JobDetailPage() {
           <DataTable columns={interviewColumns} data={interviews} pageSize={10} emptyMessage="لا توجد مقابلات" noToolbar />
         ),
     },
-    {
-      key: "documents",
-      label: "المستندات",
-      icon: FolderOpen,
-      content: () => <EntityDocuments entityType="job_posting" entityId={id} />,
-    },
-    {
-      key: "timeline",
-      label: "السجل الزمني",
-      icon: History,
-      content: () => <EntityTimeline entityType="job_postings" entityId={id} />,
-    },
-    {
-      key: "comments",
-      label: "التعليقات",
-      icon: MessageCircle,
-      content: () => <EntityComments entityType="job_posting" entityId={id} />,
-    },
   ];
 
-  const metaItems = [
-    job?.department && { icon: Building2, label: job.department },
-    job?.location && { icon: MapPin, label: job.location },
-    job?.type && { icon: FileText, label: job.type },
-    job?.createdAt && { icon: Calendar, label: formatDateAr(job.createdAt) },
-  ].filter(Boolean) as Array<{ icon: any; label: string }>;
-
-  const badges = job?.status ? <Badge variant="outline">{job.status}</Badge> : null;
-
-  const notFound = !isLoading && !job;
-  const isClosed = job?.status === "closed";
-
   return (
-    <EntityDetailPage
+    <DetailPageLayout
       title={job?.title || (notFound ? "الوظيفة غير موجودة" : "...")}
       subtitle={job?.department || undefined}
-      avatar={{
-        icon: Briefcase,
-        gradientFrom: "from-indigo-500",
-        gradientTo: "to-violet-600",
-        text: job?.title?.slice(0, 2),
-      }}
-      badges={badges}
-      metaItems={metaItems}
-      backHref="/hr/recruitment"
+      backPath="/hr/jobs"
       backLabel="العودة للتوظيف"
+      entityType="hr_job"
+      entityId={id}
       isLoading={isLoading}
-      isError={isError || notFound}
-      errorMessage={notFound ? "لم يتم العثور على الوظيفة" : "تعذر تحميل بيانات الوظيفة"}
+      error={isError || notFound ? (notFound ? "لم يتم العثور على الوظيفة" : "تعذر تحميل بيانات الوظيفة") : undefined}
       onRetry={() => refetch()}
-      actions={[
-        isClosed
-          ? {
-              label: "إعادة فتح",
-              icon: RotateCcw,
-              variant: "default" as const,
-              onClick: async () => {
-                try {
-                  await apiFetch(`/recruitment/postings/${id}/reopen`, {
-                    method: "POST",
-                    body: JSON.stringify({}),
-                  });
-                  queryClient.invalidateQueries({ queryKey: ["recruitment-job", id] });
-                  toast({ title: "تم إعادة فتح الإعلان الوظيفي" });
-                  refetch();
-                } catch (err: any) {
-                  toast({
-                    variant: "destructive",
-                    title: "تعذر إعادة فتح الإعلان",
-                    description: err.message || "حدث خطأ",
-                  });
-                }
-              },
-            }
-          : {
-              label: "إغلاق",
-              icon: XCircle,
-              variant: "outline" as const,
-              onClick: async () => {
-                try {
-                  await apiFetch(`/recruitment/postings/${id}/close`, {
-                    method: "POST",
-                    body: JSON.stringify({}),
-                  });
-                  queryClient.invalidateQueries({ queryKey: ["recruitment-job", id] });
-                  toast({ title: "تم إغلاق الإعلان الوظيفي" });
-                  refetch();
-                } catch (err: any) {
-                  toast({
-                    variant: "destructive",
-                    title: "تعذر إغلاق الإعلان",
-                    description: err.message || "حدث خطأ",
-                  });
-                }
-              },
-            },
-      ]}
-      kpis={[
-        {
-          label: "إجمالي المتقدمين",
-          value: applicants.length,
-          icon: Users,
-          color: "text-blue-600 bg-blue-50",
-        },
-        {
-          label: "في المقابلة",
-          value: inInterview,
-          icon: UserCheck,
-          color: "text-purple-600 bg-purple-50",
-        },
-        {
-          label: "تم العرض",
-          value: offered,
-          icon: CheckCircle2,
-          color: "text-green-600 bg-green-50",
-        },
-        {
-          label: "أيام الفتح",
-          value: daysOpen,
-          icon: Clock,
-          color: "text-orange-600 bg-orange-50",
-        },
-      ]}
-      tabs={tabs}
-      defaultTab="overview"
+      overview={overview}
+      actions={actions}
+      extraTabs={extraTabs}
+      status={job?.status ? { label: job.status, tone: STATUS_TONE_MAP[job.status] ?? "default" } : undefined}
+      createdAt={job?.createdAt}
+      updatedAt={job?.updatedAt}
     />
   );
 }

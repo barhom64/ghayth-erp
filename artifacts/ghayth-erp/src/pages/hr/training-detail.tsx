@@ -1,12 +1,10 @@
 import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Badge } from "@/components/ui/badge";
-import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   GraduationCap, Users, MapPin, User, BookOpen,
@@ -15,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 
 const TRAINING_LIFECYCLE = [
   { key: "planned",   label: "مخطط" },
@@ -37,6 +36,14 @@ function buildTrainingSteps(status: string | undefined): StageStep[] {
   });
 }
 
+const STATUS_TONE_MAP: Record<string, "success" | "warning" | "info" | "muted" | "destructive" | "default"> = {
+  planned: "muted",
+  upcoming: "info",
+  active: "success",
+  completed: "success",
+  cancelled: "destructive",
+};
+
 export default function TrainingDetailPage() {
   const [, params] = useRoute("/hr/training/:id");
   const id = params?.id;
@@ -54,46 +61,28 @@ export default function TrainingDetailPage() {
   );
   const enrollments = enrollmentsData?.data || [];
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  if (!program) {
-    return (
-      <PageShell
-        title="تفاصيل البرنامج التدريبي"
-        breadcrumbs={[
-          { href: "/hr", label: "الموارد البشرية" },
-          { href: "/hr/training", label: "التدريب" },
-        ]}
-        loading
-      >
-        <div />
-      </PageShell>
-    );
-  }
-
   const kpis = [
     {
       label: "المدرب",
-      value: program.trainer || "-",
+      value: program?.trainer || "-",
       icon: User,
       color: "text-blue-600 bg-blue-50",
     },
     {
       label: "المشاركين",
-      value: `${program.enrolled || 0} / ${program.capacity || 0}`,
+      value: `${program?.enrolled || 0} / ${program?.capacity || 0}`,
       icon: Users,
       color: "text-purple-600 bg-purple-50",
     },
     {
       label: "الموقع",
-      value: program.location || "-",
+      value: program?.location || "-",
       icon: MapPin,
       color: "text-green-600 bg-green-50",
     },
     {
       label: "الفئة",
-      value: program.category || "-",
+      value: program?.category || "-",
       icon: BookOpen,
       color: "text-amber-600 bg-amber-50",
     },
@@ -160,19 +149,10 @@ export default function TrainingDetailPage() {
     },
   ];
 
-  return (
-    <PageShell
-      title={program.title || "تفاصيل البرنامج التدريبي"}
-      subtitle={program.description || ""}
-      breadcrumbs={[
-        { href: "/hr", label: "الموارد البشرية" },
-        { href: "/hr/training", label: "التدريب" },
-      ]}
-    >
-      {/* KPI cards */}
+  const overview = program ? (
+    <>
       <KpiGrid items={kpis} />
 
-      {/* شريط مراحل البرنامج التدريبي */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
           <p className="text-xs font-medium text-muted-foreground mb-2">مراحل البرنامج</p>
@@ -180,7 +160,6 @@ export default function TrainingDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Program details */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6">
           <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
@@ -234,7 +213,6 @@ export default function TrainingDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Enrollments table */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6">
           <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
@@ -266,6 +244,24 @@ export default function TrainingDetailPage() {
         </CardContent>
       </Card>
       <ActionHistory entityType="training_program" entityId={Number(id)} />
-    </PageShell>
+    </>
+  ) : null;
+
+  return (
+    <DetailPageLayout
+      title={program?.title || "تفاصيل البرنامج التدريبي"}
+      subtitle={program?.description || undefined}
+      backPath="/hr/training"
+      backLabel="العودة"
+      entityType="hr_training"
+      entityId={id ?? ""}
+      isLoading={isLoading}
+      error={isError || (!isLoading && !program) ? true : undefined}
+      onRetry={() => window.location.reload()}
+      overview={overview}
+      status={program?.status ? { label: program.status, tone: STATUS_TONE_MAP[program.status] ?? "default" } : undefined}
+      createdAt={program?.createdAt}
+      updatedAt={program?.updatedAt}
+    />
   );
 }

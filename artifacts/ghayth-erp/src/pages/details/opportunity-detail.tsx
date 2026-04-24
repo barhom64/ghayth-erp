@@ -6,21 +6,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { STATUSES } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check, Clock, FileText as FileTextIcon } from "lucide-react";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check } from "lucide-react";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 
 export default function OpportunityDetail() {
   const [, params] = useRoute("/crm/:id");
@@ -40,26 +35,12 @@ export default function OpportunityDetail() {
   const activities = asList(activitiesResp);
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
-  const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
-
 
   const actTypeMap: Record<string, { label: string; icon: LucideIcon }> = {
     meeting: { label: "اجتماع", icon: User },
     call: { label: "مكالمة", icon: Phone },
     email: { label: "بريد", icon: Mail },
   };
-
-  if (isLoading) return <LoadingSpinner />;
-
-  if (is404 || (!isLoading && !opportunity)) return (
-    <div className="text-center py-12">
-      <Target className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <p className="text-gray-500">الفرصة غير موجودة</p>
-      <Link href="/crm"><Button variant="outline" className="mt-4">العودة لإدارة العلاقات</Button></Link>
-    </div>
-  );
-
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const startEdit = () => {
     setEditForm({
@@ -100,40 +81,30 @@ export default function OpportunityDetail() {
     }
   };
 
-  const value = Number(opportunity.value) || 0;
-  const probability = Number(opportunity.probability) || 0;
+  const value = Number(opportunity?.value) || 0;
+  const probability = Number(opportunity?.probability) || 0;
 
-  return (
-    <PageShell
-      title={opportunity.title || "الفرصة"}
-      subtitle={opportunity.clientName || opportunity.contactName || undefined}
-      loading={isLoading}
-      breadcrumbs={[{ href: "/crm", label: "العملاء" }]}
-      actions={
-        <div className="flex items-center gap-2 flex-wrap">
-          <PageStatusBadge status={opportunity.stage} />
-          <PrintActions
-            onPreview={() => setShowPreview(true)}
-            onPrint={() => directPrint(printContainerRef.current, `عرض سعر - ${opportunity.title}`)}
-          />
-          <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
-          {deleting ? (
-            <div className="flex gap-2">
-              <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
-              <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
-            </div>
-          ) : (
-            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
-          )}
-          <Link href="/crm">
-            <Button variant="ghost" size="sm">
-              <ArrowRight className="h-4 w-4 me-1" />
-              العودة
-            </Button>
-          </Link>
+  const actions = (
+    <div className="flex items-center gap-2 flex-wrap">
+      <PageStatusBadge status={opportunity?.stage} />
+      <PrintActions
+        onPreview={() => setShowPreview(true)}
+        onPrint={() => directPrint(printContainerRef.current, `عرض سعر - ${opportunity?.title}`)}
+      />
+      <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+      {deleting ? (
+        <div className="flex gap-2">
+          <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
+          <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
         </div>
-      }
-    >
+      ) : (
+        <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+      )}
+    </div>
+  );
+
+  const overview = (
+    <>
       {editing && (
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل الفرصة</CardTitle></CardHeader>
@@ -176,7 +147,7 @@ export default function OpportunityDetail() {
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50"><Calendar className="w-5 h-5 text-purple-600" /></div>
-          <div><p className="text-lg font-bold">{opportunity.expectedCloseDate ? formatDateAr(opportunity.expectedCloseDate) : "-"}</p><p className="text-xs text-gray-500">الإغلاق المتوقع</p></div>
+          <div><p className="text-lg font-bold">{opportunity?.expectedCloseDate ? formatDateAr(opportunity.expectedCloseDate) : "-"}</p><p className="text-xs text-gray-500">الإغلاق المتوقع</p></div>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-orange-50"><MessageSquare className="w-5 h-5 text-orange-600" /></div>
@@ -214,132 +185,139 @@ export default function OpportunityDetail() {
 
         <div className="space-y-4">
         <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4" /> السجل الزمني</CardTitle></CardHeader>
-          <CardContent>
-            <EntityTimeline entityType="crm_opportunities" entityId={id!} maxItems={15} />
-          </CardContent>
-        </Card>
-        <Card>
           <CardHeader><CardTitle className="text-base">معلومات الفرصة</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">جهة الاتصال</span><span className="font-medium">{opportunity.contactName || "-"}</span></div>
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">الهاتف</span><span dir="ltr">{opportunity.contactPhone || "-"}</span></div>
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">البريد</span><span>{opportunity.contactEmail || "-"}</span></div>
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">المسؤول</span><span>{opportunity.assigneeName || "-"}</span></div>
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">المصدر</span><span>{opportunity.source || "-"}</span></div>
-            <div className="py-2"><span className="text-gray-500 block mb-1">تاريخ الإنشاء</span><span>{opportunity.createdAt ? formatDateAr(opportunity.createdAt) : "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">جهة الاتصال</span><span className="font-medium">{opportunity?.contactName || "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">الهاتف</span><span dir="ltr">{opportunity?.contactPhone || "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">البريد</span><span>{opportunity?.contactEmail || "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">المسؤول</span><span>{opportunity?.assigneeName || "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">المصدر</span><span>{opportunity?.source || "-"}</span></div>
+            <div className="py-2"><span className="text-gray-500 block mb-1">تاريخ الإنشاء</span><span>{opportunity?.createdAt ? formatDateAr(opportunity.createdAt) : "-"}</span></div>
           </CardContent>
         </Card>
         </div>
       </div>
+    </>
+  );
 
-      {id && <EntityDocuments entityType="opportunity" entityId={id} />}
+  return (
+    <>
+      <DetailPageLayout
+        title={opportunity?.title || "الفرصة"}
+        subtitle={opportunity?.clientName || opportunity?.contactName || undefined}
+        backPath="/crm/opportunities"
+        backLabel="العودة"
+        entityType="crm_opportunity"
+        entityId={id!}
+        isLoading={isLoading}
+        error={isError ? error : undefined}
+        onRetry={() => window.location.reload()}
+        createdAt={opportunity?.createdAt}
+        updatedAt={opportunity?.updatedAt}
+        overview={overview}
+        actions={actions}
+      />
+      {opportunity && (
+        <>
+          <PrintPreviewModal
+            open={showPreview}
+            onClose={() => setShowPreview(false)}
+            branch={branch}
+            documentTitle={opportunity.stage === "proposal" ? "عرض سعر" : "فرصة بيعية"}
+            documentRef={`OPP-${opportunity.id}`}
+            documentDate={opportunity.createdAt ? formatDateAr(opportunity.createdAt) : ""}
+          >
+            <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+              <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                <span className="info-label" style={{ color: "#555" }}>العميل:</span>
+                <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.clientName || opportunity.contactName || "-"}</span>
+              </div>
+              {opportunity.contactPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
+                <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactPhone}</span>
+              </div>}
+              {opportunity.contactEmail && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                <span className="info-label" style={{ color: "#555" }}>البريد:</span>
+                <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactEmail}</span>
+              </div>}
+              <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                <span className="info-label" style={{ color: "#555" }}>المرحلة:</span>
+                <span className="info-value" style={{ fontWeight: 600 }}>{STATUSES[opportunity.stage] || opportunity.stage}</span>
+              </div>
+              {opportunity.expectedCloseDate && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                <span className="info-label" style={{ color: "#555" }}>الإغلاق المتوقع:</span>
+                <span className="info-value" style={{ fontWeight: 600 }}>{formatDateAr(opportunity.expectedCloseDate)}</span>
+              </div>}
+              {opportunity.assigneeName && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                <span className="info-label" style={{ color: "#555" }}>المسؤول:</span>
+                <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.assigneeName}</span>
+              </div>}
+            </div>
 
-      {id && (
-        <Card>
-          <CardHeader><CardTitle className="text-lg">سجل الأحداث</CardTitle></CardHeader>
-          <CardContent>
-            <EntityTimeline entityType="opportunity" entityId={id} />
-          </CardContent>
-        </Card>
+            <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
+              <tbody>
+                <tr>
+                  <td style={{ color: "#555", border: "none", padding: "4px 8px" }}>قيمة العرض:</td>
+                  <td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(value)}</td>
+                </tr>
+                <tr>
+                  <td style={{ color: "#555", border: "none", padding: "4px 8px" }}>الاحتمالية:</td>
+                  <td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{probability}%</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {opportunity.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {opportunity.notes}</p>}
+
+            <div className="signature-area" style={{ marginTop: "60px", display: "flex", justifyContent: "space-between" }}>
+              <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
+                <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع المسؤول</div>
+              </div>
+              <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
+                <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع العميل</div>
+              </div>
+            </div>
+          </PrintPreviewModal>
+
+          <div ref={printContainerRef} style={{ position: "absolute", left: "-9999px", top: 0 }}>
+            <PrintDocument branch={branch} documentTitle={opportunity.stage === "proposal" ? "عرض سعر" : "فرصة بيعية"} documentRef={`OPP-${opportunity.id}`} documentDate={opportunity.createdAt ? formatDateAr(opportunity.createdAt) : ""}>
+              <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+                <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                  <span className="info-label" style={{ color: "#555" }}>العميل:</span>
+                  <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.clientName || opportunity.contactName || "-"}</span>
+                </div>
+                {opportunity.contactPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                  <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
+                  <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactPhone}</span>
+                </div>}
+                {opportunity.contactEmail && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                  <span className="info-label" style={{ color: "#555" }}>البريد:</span>
+                  <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactEmail}</span>
+                </div>}
+                <div className="info-item" style={{ display: "flex", gap: "4px" }}>
+                  <span className="info-label" style={{ color: "#555" }}>المرحلة:</span>
+                  <span className="info-value" style={{ fontWeight: 600 }}>{STATUSES[opportunity.stage] || opportunity.stage}</span>
+                </div>
+              </div>
+              <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
+                <tbody>
+                  <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>قيمة العرض:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(value)}</td></tr>
+                  <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>الاحتمالية:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{probability}%</td></tr>
+                </tbody>
+              </table>
+              {opportunity.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {opportunity.notes}</p>}
+              <div className="signature-area" style={{ marginTop: "60px", display: "flex", justifyContent: "space-between" }}>
+                <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
+                  <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع المسؤول</div>
+                </div>
+                <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
+                  <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع العميل</div>
+                </div>
+              </div>
+            </PrintDocument>
+          </div>
+        </>
       )}
-      <PrintPreviewModal
-        open={showPreview}
-        onClose={() => setShowPreview(false)}
-        branch={branch}
-        documentTitle={opportunity.stage === "proposal" ? "عرض سعر" : "فرصة بيعية"}
-        documentRef={`OPP-${opportunity.id}`}
-        documentDate={opportunity.createdAt ? formatDateAr(opportunity.createdAt) : ""}
-      >
-        <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.clientName || opportunity.contactName || "-"}</span>
-          </div>
-          {opportunity.contactPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactPhone}</span>
-          </div>}
-          {opportunity.contactEmail && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>البريد:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactEmail}</span>
-          </div>}
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>المرحلة:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{STATUSES[opportunity.stage] || opportunity.stage}</span>
-          </div>
-          {opportunity.expectedCloseDate && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>الإغلاق المتوقع:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{formatDateAr(opportunity.expectedCloseDate)}</span>
-          </div>}
-          {opportunity.assigneeName && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>المسؤول:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.assigneeName}</span>
-          </div>}
-        </div>
-
-        <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-          <tbody>
-            <tr>
-              <td style={{ color: "#555", border: "none", padding: "4px 8px" }}>قيمة العرض:</td>
-              <td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(value)}</td>
-            </tr>
-            <tr>
-              <td style={{ color: "#555", border: "none", padding: "4px 8px" }}>الاحتمالية:</td>
-              <td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{probability}%</td>
-            </tr>
-          </tbody>
-        </table>
-
-        {opportunity.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {opportunity.notes}</p>}
-
-        <div className="signature-area" style={{ marginTop: "60px", display: "flex", justifyContent: "space-between" }}>
-          <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-            <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع المسؤول</div>
-          </div>
-          <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-            <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع العميل</div>
-          </div>
-        </div>
-      </PrintPreviewModal>
-
-      <div ref={printContainerRef} style={{ position: "absolute", left: "-9999px", top: 0 }}>
-        <PrintDocument branch={branch} documentTitle={opportunity.stage === "proposal" ? "عرض سعر" : "فرصة بيعية"} documentRef={`OPP-${opportunity.id}`} documentDate={opportunity.createdAt ? formatDateAr(opportunity.createdAt) : ""}>
-          <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.clientName || opportunity.contactName || "-"}</span>
-            </div>
-            {opportunity.contactPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactPhone}</span>
-            </div>}
-            {opportunity.contactEmail && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>البريد:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactEmail}</span>
-            </div>}
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>المرحلة:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{STATUSES[opportunity.stage] || opportunity.stage}</span>
-            </div>
-          </div>
-          <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-            <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>قيمة العرض:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(value)}</td></tr>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>الاحتمالية:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{probability}%</td></tr>
-            </tbody>
-          </table>
-          {opportunity.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {opportunity.notes}</p>}
-          <div className="signature-area" style={{ marginTop: "60px", display: "flex", justifyContent: "space-between" }}>
-            <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-              <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع المسؤول</div>
-            </div>
-            <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-              <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع العميل</div>
-            </div>
-          </div>
-        </PrintDocument>
-      </div>
-    </PageShell>
+    </>
   );
 }

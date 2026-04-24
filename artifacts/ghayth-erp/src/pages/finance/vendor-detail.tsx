@@ -2,34 +2,20 @@ import { useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
-  Building2,
-  Phone,
-  Mail,
   Pencil,
-  Activity,
   ShoppingCart,
   FileText,
   CreditCard,
-  History,
-  MessageCircle,
-  FolderOpen,
   DollarSign,
   Clock,
-  Hash,
-  MapPin,
-  StickyNote,
-  User,
 } from "lucide-react";
 
 export default function VendorDetailPage() {
@@ -72,7 +58,6 @@ export default function VendorDetailPage() {
     (p: any) => String(p.supplierId ?? p.vendorId) === String(id)
   );
 
-  // Prefer server-computed stats when available, fall back to client aggregation.
   const totalPurchases = vendor?.totalPurchases != null
     ? Number(vendor.totalPurchases)
     : pos.reduce((sum, p) => sum + (Number(p.total) || Number(p.amount) || 0), 0);
@@ -109,37 +94,45 @@ export default function VendorDetailPage() {
     { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-semibold text-green-600">{formatCurrency(Number(r.amount) || 0)}</span> },
   ];
 
-  const overviewContent = () => (
-    <Card className="border-0 shadow-sm">
-      <CardContent className="p-6 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <InfoRow label="الاسم" value={vendor?.name} />
-          <InfoRow label="جهة الاتصال" value={vendor?.contactPerson} />
-          <InfoRow label="الهاتف" value={vendor?.phone} />
-          <InfoRow label="البريد الإلكتروني" value={vendor?.email} />
-          <InfoRow label="الرقم الضريبي" value={vendor?.taxNumber} />
-          <InfoRow label="التصنيف" value={vendor?.category} />
-          <InfoRow label="شروط الدفع" value={vendor?.paymentTerms} />
-          <InfoRow label="العنوان" value={vendor?.address} />
-        </div>
-        {vendor?.notes && (
-          <div className="pt-4 border-t">
-            <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{vendor.notes}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-
   const emptyMsg = (msg: string) => (
     <Card className="border-0 shadow-sm">
       <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
     </Card>
   );
 
-  const tabs: EntityTab[] = [
-    { key: "overview", label: "نظرة عامة", icon: Activity, content: overviewContent },
+  const overview = (
+    <>
+      <div className="grid gap-4 md:grid-cols-4">
+        <KpiCard icon={DollarSign} label="إجمالي المشتريات" value={formatCurrency(totalPurchases)} color="text-blue-600 bg-blue-50" />
+        <KpiCard icon={CreditCard} label="مدفوعات معلقة" value={formatCurrency(pendingPayments)} color="text-orange-600 bg-orange-50" />
+        <KpiCard icon={ShoppingCart} label="أوامر شراء نشطة" value={String(activePos)} color="text-purple-600 bg-purple-50" />
+        <KpiCard icon={Clock} label="آخر فاتورة" value={lastInvoiceDate ? formatDateAr(lastInvoiceDate) : "—"} color="text-green-600 bg-green-50" />
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InfoRow label="الاسم" value={vendor?.name} />
+            <InfoRow label="جهة الاتصال" value={vendor?.contactPerson} />
+            <InfoRow label="الهاتف" value={vendor?.phone} />
+            <InfoRow label="البريد الإلكتروني" value={vendor?.email} />
+            <InfoRow label="الرقم الضريبي" value={vendor?.taxNumber} />
+            <InfoRow label="التصنيف" value={vendor?.category} />
+            <InfoRow label="شروط الدفع" value={vendor?.paymentTerms} />
+            <InfoRow label="العنوان" value={vendor?.address} />
+          </div>
+          {vendor?.notes && (
+            <div className="pt-4 border-t">
+              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{vendor.notes}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+
+  const extraTabs: ExtraTab[] = [
     {
       key: "purchase-orders",
       label: "أوامر الشراء",
@@ -187,96 +180,52 @@ export default function VendorDetailPage() {
         </div>
       ),
     },
-    {
-      key: "documents",
-      label: "المستندات",
-      icon: FolderOpen,
-      content: () => <EntityDocuments entityType="vendor" entityId={id} />,
-    },
-    {
-      key: "timeline",
-      label: "السجل الزمني",
-      icon: History,
-      content: () => <EntityTimeline entityType="vendors" entityId={id} />,
-    },
-    {
-      key: "comments",
-      label: "التعليقات",
-      icon: MessageCircle,
-      content: () => <EntityComments entityType="vendor" entityId={id} />,
-    },
   ];
 
-  const metaItems = [
-    vendor?.phone && { icon: Phone, label: vendor.phone },
-    vendor?.email && { icon: Mail, label: vendor.email },
-    vendor?.taxNumber && { icon: Hash, label: vendor.taxNumber },
-    vendor?.address && { icon: MapPin, label: vendor.address },
-  ].filter(Boolean) as Array<{ icon: any; label: string }>;
-
-  const badges = vendor?.category ? <Badge variant="outline">{vendor.category}</Badge> : null;
-
-  const notFound = !isLoading && !vendor;
+  const actions = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="gap-1"
+      onClick={() => navigate("/finance/vendors")}
+    >
+      <Pencil className="h-4 w-4" />
+      تعديل
+    </Button>
+  );
 
   return (
-    <EntityDetailPage
-      title={vendor?.name || (notFound ? "المورد غير موجود" : "...")}
+    <DetailPageLayout
+      title={vendor?.name || "المورد"}
       subtitle={vendor?.contactPerson || undefined}
-      avatar={{
-        icon: Building2,
-        gradientFrom: "from-blue-500",
-        gradientTo: "to-indigo-600",
-        text: vendor?.name?.slice(0, 2),
-      }}
-      badges={badges}
-      metaItems={metaItems}
-      backHref="/finance/vendors"
+      backPath="/finance/vendors"
       backLabel="العودة للموردين"
+      entityType="vendor"
+      entityId={id}
       isLoading={isLoading}
-      isError={isError || notFound}
-      errorMessage={notFound ? "لم يتم العثور على المورد المطلوب" : "تعذر تحميل بيانات المورد"}
+      error={isError ? true : undefined}
       onRetry={() => refetch()}
-      actions={[
-        {
-          label: "تعديل",
-          icon: Pencil,
-          variant: "outline",
-          onClick: () => {
-            // Dedicated edit page doesn't exist yet — navigate back to the list
-            // where inline edit is available for now.
-            navigate("/finance/vendors");
-          },
-        },
-      ]}
-      kpis={[
-        {
-          label: "إجمالي المشتريات",
-          value: formatCurrency(totalPurchases),
-          icon: DollarSign,
-          color: "text-blue-600 bg-blue-50",
-        },
-        {
-          label: "مدفوعات معلقة",
-          value: formatCurrency(pendingPayments),
-          icon: CreditCard,
-          color: "text-orange-600 bg-orange-50",
-        },
-        {
-          label: "أوامر شراء نشطة",
-          value: activePos,
-          icon: ShoppingCart,
-          color: "text-purple-600 bg-purple-50",
-        },
-        {
-          label: "آخر فاتورة",
-          value: lastInvoiceDate ? formatDateAr(lastInvoiceDate) : "—",
-          icon: Clock,
-          color: "text-green-600 bg-green-50",
-        },
-      ]}
-      tabs={tabs}
-      defaultTab="overview"
+      overview={overview}
+      actions={actions}
+      extraTabs={extraTabs}
     />
+  );
+}
+
+function KpiCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
+  const [textColor, bgColor] = color.split(" ");
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center border ${bgColor}`}>
+          <Icon className={`h-5 w-5 ${textColor}`} />
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="text-xl font-bold">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
