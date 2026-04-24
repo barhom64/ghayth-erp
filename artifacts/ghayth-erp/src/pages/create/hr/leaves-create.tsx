@@ -53,11 +53,6 @@ export default function LeavesCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate } = useFieldErrors();
 
-  if (leaveTypesQ.isLoading || loadingEmp) return <LoadingSpinner />;
-  if (leaveTypesQ.isError || errorEmp) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const selectedType = leaveTypes.find((lt: any) => String(lt.id) === form.leaveTypeId);
-
   const daysCount = useMemo(() => {
     if (!form.startDate || !form.endDate) return 0;
     const start = new Date(form.startDate);
@@ -66,6 +61,11 @@ export default function LeavesCreate() {
     const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return diff;
   }, [form.startDate, form.endDate]);
+
+  if (leaveTypesQ.isLoading || loadingEmp) return <LoadingSpinner />;
+  if (leaveTypesQ.isError || errorEmp) return <ErrorState onRetry={() => window.location.reload()} />;
+
+  const selectedType = leaveTypes.find((lt: any) => String(lt.id) === form.leaveTypeId);
 
   const selectedBalance = balances.find((b: any) =>
     String(b.leaveTypeId) === form.leaveTypeId || b.type === selectedType?.name
