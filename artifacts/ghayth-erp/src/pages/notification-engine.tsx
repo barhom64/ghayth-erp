@@ -780,7 +780,7 @@ function DeliveryStatsTab() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">آخر عمليات التوصيل</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <DataTable<Record<string, unknown>>
+            <DataTable
               columns={deliveryLogColumns}
               data={logs}
               searchPlaceholder={null}
@@ -901,7 +901,7 @@ function PreferencesTab() {
 
       <Card>
         <CardContent className="p-0">
-          <DataTable<{ category: string; channels: Record<string, boolean> }>
+          <DataTable
             columns={preferencesColumns}
             data={Object.entries(localPrefs).sort(([a], [b]) => a.localeCompare(b)).map(([category, channels]) => ({ category, channels }))}
             rowKey={(row) => row.category}
