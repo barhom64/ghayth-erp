@@ -4,7 +4,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -223,6 +223,7 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
       [scope.companyId, operationType]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "accounting_mappings", entityId: updated?.id ?? 0, before: existing.length > 0 ? existing[0] : null, after: updated }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mapping.updated", entity: "accounting_mappings", entityId: updated?.id ?? 0, details: JSON.stringify({ operationType }) }).catch(console.error);
     res.json(updated);
   } catch (err) {
     handleRouteError(err, res, "Update accounting mapping error:");
@@ -259,6 +260,7 @@ router.post("/accounting-mappings/batch", requirePermission("finance:write"), as
     }
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "accounting_mappings", entityId: scope.companyId, after: { batch: true, count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mappings.batch_updated", entity: "accounting_mappings", entityId: scope.companyId, details: JSON.stringify({ count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) }) }).catch(console.error);
     res.json({ message: "تم حفظ التوجيهات بنجاح", count: mappings.length });
   } catch (err) {
     handleRouteError(err, res, "Batch update accounting mappings error:");
@@ -358,6 +360,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
     );
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entry_templates", entityId: result, after: template }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.created", entity: "journal_entry_templates", entityId: result, details: JSON.stringify({ name, operationType }) }).catch(console.error);
     res.status(201).json(template);
   } catch (err) {
     handleRouteError(err, res, "Create journal template error:");
@@ -411,6 +414,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
       [Number(id)]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "journal_entry_templates", entityId: Number(id), before: existing, after: template }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.updated", entity: "journal_entry_templates", entityId: Number(id), details: JSON.stringify({ name, operationType: existing.operationType }) }).catch(console.error);
     res.json(template);
   } catch (err) {
     handleRouteError(err, res, "Update journal template error:");
@@ -428,6 +432,7 @@ router.delete("/journal-templates/:id", requirePermission("finance:write"), asyn
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: Number(req.params.id), before: existing }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.deleted", entity: "journal_entry_templates", entityId: Number(req.params.id), details: JSON.stringify({ name: existing.name }) }).catch(console.error);
     res.json({ message: "تم حذف القالب" });
   } catch (err) {
     handleRouteError(err, res, "Delete journal template error:");
@@ -505,6 +510,7 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
       [insertId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "subsidiary_accounts", entityId: insertId, after: row }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.created", entity: "subsidiary_accounts", entityId: insertId, details: JSON.stringify({ entityType, entityId, accountType }) }).catch(console.error);
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create subsidiary account error:");
@@ -524,6 +530,7 @@ router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), as
       [Number(req.params.id), scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "subsidiary_accounts", entityId: Number(req.params.id), before: before ?? null }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.deleted", entity: "subsidiary_accounts", entityId: Number(req.params.id), details: JSON.stringify({ entityType: before?.entityType, entityId: before?.entityId }) }).catch(console.error);
     res.json({ message: "تم الحذف" });
   } catch (err) {
     handleRouteError(err, res, "Delete subsidiary account error:");

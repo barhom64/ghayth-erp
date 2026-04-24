@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import {
   submitWorkflow,
   approveWorkflow,
@@ -114,6 +114,7 @@ router.post("/submit", requirePermission("admin:write"), async (req, res) => {
       data,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.instanceId, after: { requestType, title } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.created", entity: "workflow_instances", entityId: result.instanceId, details: JSON.stringify({ requestType, title }) }).catch(console.error);
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -137,6 +138,7 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
       overrideReason: body.overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "approve" } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.approved", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -162,6 +164,7 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
       overrideReason: body.overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "reject" } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.rejected", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -189,6 +192,7 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
       overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "refer", referredTo } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "refer", referredTo }) }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -213,6 +217,7 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
       overrideReason: body.overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "escalate" } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "escalate" }) }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -237,6 +242,7 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
       overrideReason: body.overrideReason,
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "return" } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "return" }) }).catch(console.error);
     res.json(result);
   } catch (e: any) {
     const code = e.message.includes("غير موجودة") ? 404 :
@@ -378,6 +384,7 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
       }
     }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch(console.error);
     res.status(201).json({ id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -417,6 +424,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
     const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
     const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch(console.error);
     res.json({ ...def, steps: updatedSteps });
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -430,6 +438,7 @@ router.delete("/definitions/:id", requirePermission("admin:write"), async (req, 
     const [before] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.deleted", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestType: before?.requestType }) }).catch(console.error);
     res.json({ message: "تم الحذف" });
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -466,6 +475,7 @@ router.post("/sla-definitions", requirePermission("admin:write"), async (req, re
       [scope.companyId, requestType, warningHours ?? 24, deadlineHours ?? 48, escalationHours ?? 72, autoApproveOnTimeout ?? false, escalateTo ?? "hr_manager"]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "sla_definitions", entityId: insertId, details: JSON.stringify({ requestType }) }).catch(console.error);
     res.status(201).json({ id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
