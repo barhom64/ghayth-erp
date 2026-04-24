@@ -6,11 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell } from "@/components/page-shell";
-import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 export default function UmrahDashboard() {
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -43,10 +40,10 @@ export default function UmrahDashboard() {
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
-    <PageShell title="العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "نظرة عامة" }]}>
-      <UmrahTabsNav />
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <h1 className="text-3xl font-bold tracking-tight">لوحة تشغيل العمرة</h1>
           {activeSeason && <p className="text-sm text-muted-foreground mt-1">الموسم النشط: {activeSeason.title}</p>}
         </div>
         <div className="flex gap-2">
@@ -118,7 +115,7 @@ export default function UmrahDashboard() {
           <CardHeader><CardTitle className="text-base">الغرامات</CardTitle></CardHeader>
           <CardContent>
             <div className="flex justify-between items-center">
-              <div><span className="text-2xl font-bold text-red-600">{formatCurrency(Number(pen.totalAmount || 0))}</span></div>
+              <div><span className="text-2xl font-bold text-red-600">{Number(pen.totalAmount || 0).toLocaleString()}</span> <span className="text-sm">ريال</span></div>
               <Badge variant="outline">{pen.pending || 0} معلقة</Badge>
             </div>
           </CardContent>
@@ -148,7 +145,7 @@ export default function UmrahDashboard() {
                 { key: "fullName", header: "الاسم", render: (r) => <span className="font-medium">{r.fullName}</span> },
                 { key: "passportNumber", header: "الجواز" },
                 { key: "nationality", header: "الجنسية" },
-                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => formatDateAr(r.actualArrival) },
+                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => r.actualArrival ? new Date(r.actualArrival).toLocaleDateString("ar-SA") : "-" },
                 { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
               ] as DataTableColumn<any>[]}
               data={dash?.recentArrivals || []}
@@ -159,6 +156,6 @@ export default function UmrahDashboard() {
           </CardContent>
         </Card>
       )}
-    </PageShell>
+    </div>
   );
 }
