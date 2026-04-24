@@ -6,6 +6,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import {
   createJournalEntry,
+  createGuardedJournalEntry,
   getAccountCodeFromMapping,
   emitEvent,
   createAuditLog,
@@ -824,25 +825,21 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
 
     const tripCost = Number(b.cost || 0);
     if (tripCost > 0) {
-      try {
-        const transportExpenseCode = await getAccountCodeFromMapping(scope.companyId, "umrah_transport_expense", "debit", "5300");
-        const cashCode = await getAccountCodeFromMapping(scope.companyId, "umrah_transport_payable", "credit", "2100");
-        await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId || 0,
-          createdBy: scope.userId,
-          ref: `UMRAH-TRN-${rows[0].id}`,
-          description: `مصروف نقل عمرة — ${b.fromLocation} → ${b.toLocation}`,
-          sourceType: "umrah_transport",
-          sourceId: rows[0].id,
-          lines: [
-            { accountCode: transportExpenseCode, debit: tripCost, credit: 0, description: `مصروف نقل — ${b.fromLocation} → ${b.toLocation}`, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined },
-            { accountCode: cashCode, debit: 0, credit: tripCost, description: `مستحقات نقل عمرة` },
-          ],
-        });
-      } catch (glErr) {
-        console.error("[umrah] GL posting failed for transport", rows[0].id, glErr);
-      }
+      const transportExpenseCode = await getAccountCodeFromMapping(scope.companyId, "umrah_transport_expense", "debit", "5300");
+      const cashCode = await getAccountCodeFromMapping(scope.companyId, "umrah_transport_payable", "credit", "2100");
+      await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        createdBy: scope.userId,
+        ref: `UMRAH-TRN-${rows[0].id}`,
+        description: `مصروف نقل عمرة — ${b.fromLocation} → ${b.toLocation}`,
+        sourceType: "umrah_transport",
+        sourceId: rows[0].id,
+        lines: [
+          { accountCode: transportExpenseCode, debit: tripCost, credit: 0, description: `مصروف نقل — ${b.fromLocation} → ${b.toLocation}`, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined },
+          { accountCode: cashCode, debit: 0, credit: tripCost, description: `مستحقات نقل عمرة` },
+        ],
+      }, { table: "umrah_transport", id: rows[0].id });
     }
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch(console.error);

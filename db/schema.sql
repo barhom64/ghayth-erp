@@ -4681,6 +4681,26 @@ ALTER SEQUENCE public.expense_claims_id_seq OWNED BY public.expense_claims.id;
 -- Name: financial_periods; Type: TABLE; Schema: public; Owner: -
 --
 
+CREATE TABLE public.financial_posting_failures (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "sourceType" character varying(50) NOT NULL,
+    "sourceId" integer NOT NULL,
+    error text,
+    resolved boolean DEFAULT false,
+    "resolvedAt" timestamp with time zone,
+    "resolvedBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.financial_posting_failures_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+
+ALTER SEQUENCE public.financial_posting_failures_id_seq OWNED BY public.financial_posting_failures.id;
+
+ALTER TABLE ONLY public.financial_posting_failures ALTER COLUMN id SET DEFAULT nextval('public.financial_posting_failures_id_seq'::regclass);
+
+
 CREATE TABLE public.financial_periods (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
@@ -6234,7 +6254,11 @@ CREATE TABLE public.invoices (
     "taxCategoryCode" character varying(10) DEFAULT 'S'::character varying,
     "exemptionReason" text,
     "projectId" integer,
-    CONSTRAINT invoices_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text])))
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "postedBy" integer,
+    "postedAt" timestamp with time zone,
+    CONSTRAINT invoices_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text, ('posted'::character varying)::text, ('closed'::character varying)::text])))
 );
 
 
@@ -11079,6 +11103,7 @@ CREATE TABLE public.umrah_sales_invoices (
     "groupRefs" text,
     "pilgrimCount" integer DEFAULT 0,
     "journalEntryId" integer,
+    "glStatus" character varying(20) DEFAULT 'pending',
     notes text,
     "createdBy" integer,
     "updatedBy" integer,
@@ -11114,6 +11139,7 @@ CREATE TABLE public.umrah_payments (
     "externalReference" character varying(100),
     "paymentDate" date DEFAULT CURRENT_DATE,
     "journalEntryId" integer,
+    "glStatus" character varying(20) DEFAULT 'pending',
     notes text,
     "createdBy" integer,
     "updatedBy" integer,
@@ -17485,6 +17511,13 @@ CREATE INDEX journal_entries_deleted_at_idx ON public.journal_entries USING btre
 
 
 --
+-- Name: uq_journal_entries_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_journal_entries_source ON public.journal_entries USING btree ("companyId", "sourceType", "sourceId") WHERE ("sourceType" IS NOT NULL AND "sourceId" IS NOT NULL AND "deletedAt" IS NULL);
+
+
+--
 -- Name: journal_lines_journal_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -20266,6 +20299,27 @@ CREATE TABLE public.umrah_import_changes (
     "createdAt" timestamp with time zone DEFAULT now()
 );
 
+
+-- ─── Performance Indexes (Phase 3 — Architectural Hardening) ────────────────
+
+CREATE INDEX IF NOT EXISTS hr_leave_requests_company_status_idx ON public.hr_leave_requests USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS hr_leave_requests_employee_idx ON public.hr_leave_requests USING btree ("employeeId");
+CREATE INDEX IF NOT EXISTS notifications_assignment_isread_idx ON public.notifications USING btree ("assignmentId", "isRead");
+CREATE INDEX IF NOT EXISTS notifications_company_assignment_idx ON public.notifications USING btree ("companyId", "assignmentId");
+CREATE INDEX IF NOT EXISTS invoices_company_branch_status_idx ON public.invoices USING btree ("companyId", "branchId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS tasks_company_branch_status_idx ON public.tasks USING btree ("companyId", "branchId", status);
+CREATE INDEX IF NOT EXISTS tasks_assignment_status_idx ON public.tasks USING btree ("assignmentId", status);
+CREATE INDEX IF NOT EXISTS employee_assignments_employee_status_idx ON public.employee_assignments USING btree ("employeeId", status);
+CREATE INDEX IF NOT EXISTS support_tickets_company_status_idx ON public.support_tickets USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS support_tickets_sla_deadline_idx ON public.support_tickets USING btree ("slaDeadline") WHERE (status != 'resolved' AND "deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS maintenance_requests_company_status_idx ON public.maintenance_requests USING btree ("companyId", status);
+CREATE INDEX IF NOT EXISTS rental_contracts_company_status_idx ON public.rental_contracts USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS requests_company_status_idx ON public.requests USING btree ("companyId", status);
+CREATE INDEX IF NOT EXISTS fleet_vehicles_company_status_idx ON public.fleet_vehicles USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS legal_cases_company_status_idx ON public.legal_cases USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS financial_posting_failures_company_idx ON public.financial_posting_failures USING btree ("companyId", resolved);
+CREATE INDEX IF NOT EXISTS event_logs_company_action_idx ON public.event_logs USING btree ("companyId", action);
+CREATE INDEX IF NOT EXISTS event_logs_created_idx ON public.event_logs USING btree ("createdAt" DESC);
 
 --
 -- PostgreSQL database dump complete

@@ -891,6 +891,16 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       after: { title: b.title, projectId, assigneeId: b.assigneeId, priority: b.priority },
     }).catch(console.error);
 
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.task.created",
+      entity: "project_tasks",
+      entityId: insertId,
+      details: JSON.stringify({ projectId, title: b.title, assigneeId: b.assigneeId, priority: b.priority }),
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create project task error:"); }
 });
@@ -1326,6 +1336,16 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
       }
     } catch (obErr) { console.error("Milestone obligation failed:", obErr); }
 
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.milestone.created",
+      entity: "project_milestones",
+      entityId: insertId,
+      details: JSON.stringify({ projectId, title: b.title, targetDate: b.targetDate }),
+    }).catch(console.error);
+
     const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1`, [insertId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create milestone error:"); }
@@ -1392,6 +1412,16 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       await markObligationMet(scope.companyId, "project_milestone", id, "delivery").catch(console.error);
     }
 
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.milestone.updated",
+      entity: "project_milestones",
+      entityId: id,
+      details: JSON.stringify({ title: b.title, status: b.status, targetDate: b.targetDate }),
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update milestone error:"); }
 });
@@ -1436,6 +1466,17 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
        b.mitigationPlan || null, b.responsibleId || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM project_risks WHERE id=$1`, [insertId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.risk.created",
+      entity: "project_risks",
+      entityId: insertId,
+      details: JSON.stringify({ projectId, title: b.title, riskScore, riskLevel }),
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
 });
@@ -1504,6 +1545,17 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
       params
     );
     if (!rows[0]) throw new NotFoundError("المخاطرة غير موجودة");
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.risk.updated",
+      entity: "project_risks",
+      entityId: id,
+      details: JSON.stringify({ title: b.title, status: b.status, probability: b.probability, impact: b.impact }),
+    }).catch(console.error);
+
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update risk error:"); }
 });
@@ -1546,6 +1598,17 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
        b.startDate || null, b.endDate || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM project_resources WHERE id=$1`, [insertId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.resource.created",
+      entity: "project_resources",
+      entityId: insertId,
+      details: JSON.stringify({ projectId, employeeId: b.employeeId, role: b.role }),
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create resource error:"); }
 });
@@ -1704,6 +1767,17 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1`, [insertId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "project.cost.created",
+      entity: "project_costs",
+      entityId: insertId,
+      details: JSON.stringify({ projectId, description: b.description, amount: b.amount, category: b.category }),
+    }).catch(console.error);
+
     res.status(201).json({ ...row, journalEntryId });
   } catch (err) { handleRouteError(err, res, "Create project cost error:"); }
 });

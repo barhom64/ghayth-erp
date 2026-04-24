@@ -11,7 +11,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, createJournalEntry, createGuardedJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -1250,22 +1250,20 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
 
     let journalEntryId: number | null = null;
     if (earlyFee > 0) {
-      try {
-        const receivableCode = await getAccountCodeFromMapping(scope.companyId, "rental_receivable", "debit", "1200");
-        const revenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
-        journalEntryId = await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `TERM-${id}-${Date.now()}`,
-          description: `رسوم إنهاء مبكر لعقد ${contract.contractNumber} — ${b.reason}`,
-          type: "rental", sourceType: "rental_contract", sourceId: Number(id),
-          lines: [
-            { accountCode: receivableCode, debit: earlyFee, credit: 0, contractId: Number(id), propertyId: contract.unitId },
-            { accountCode: revenueCode, debit: 0, credit: earlyFee, contractId: Number(id), propertyId: contract.unitId },
-          ],
-        });
-      } catch (jeErr) { console.error("Termination fee JE failed:", jeErr); }
+      const receivableCode = await getAccountCodeFromMapping(scope.companyId, "rental_receivable", "debit", "1200");
+      const revenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
+      journalEntryId = await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `TERM-${id}-${Date.now()}`,
+        description: `رسوم إنهاء مبكر لعقد ${contract.contractNumber} — ${b.reason}`,
+        type: "rental", sourceType: "rental_contract", sourceId: Number(id),
+        lines: [
+          { accountCode: receivableCode, debit: earlyFee, credit: 0, contractId: Number(id), propertyId: contract.unitId },
+          { accountCode: revenueCode, debit: 0, credit: earlyFee, contractId: Number(id), propertyId: contract.unitId },
+        ],
+      }, { table: "property_contracts", id: Number(id) }).catch(() => null);
     }
 
     await emitEvent({
@@ -1775,6 +1773,16 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
       after: { category: b.category, priority: autoPriority, assignedTo: assignedTechnicianId, isEmergency },
     }).catch(console.error);
 
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.maintenance.requested",
+      entity: "property_maintenance_requests",
+      entityId: insertId,
+      details: JSON.stringify({ unitId: b.unitId, category: b.category, priority: autoPriority, isEmergency, assignedTo: assignedTechnicianId }),
+    }).catch(console.error);
+
     try {
       let techAssignmentId = null;
       if (assignedTechnicianId) {
@@ -1992,24 +2000,22 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
 
     let journalEntryId: number | null = null;
     if (cost > 0) {
-      try {
-        const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
-        const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
-        journalEntryId = await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.userId,
-          ref: `JE-MAINT-${id}-${Date.now()}`,
-          description: `صيانة أملاك — بلاغ #${id} — ${mr.category} — ${cost.toFixed(2)} ريال`,
-          type: "property",
-          sourceType: "maintenance_request",
-          sourceId: id,
-          lines: [
-            { accountCode: maintExpCode, debit: cost, credit: 0, propertyId: mr.unitId ? Number(mr.unitId) : undefined },
-            { accountCode: cashCode, debit: 0, credit: cost },
-          ],
-        });
-      } catch (jeErr) { console.error("Journal entry failed:", jeErr); }
+      const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
+      const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
+      journalEntryId = await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.userId,
+        ref: `JE-MAINT-${id}-${Date.now()}`,
+        description: `صيانة أملاك — بلاغ #${id} — ${mr.category} — ${cost.toFixed(2)} ريال`,
+        type: "property",
+        sourceType: "maintenance_request",
+        sourceId: id,
+        lines: [
+          { accountCode: maintExpCode, debit: cost, credit: 0, propertyId: mr.unitId ? Number(mr.unitId) : undefined },
+          { accountCode: cashCode, debit: 0, credit: cost },
+        ],
+      }, { table: "property_maintenance_requests", id: Number(id) }).catch(() => null);
     }
 
     await createAuditLog({
@@ -2044,6 +2050,16 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
     } catch (taskErr) { console.error("Failed to create follow-up task:", taskErr); }
 
     console.log(`[SURVEY] Maintenance #${id} completed — follow-up task #${followUpTaskId} created for ${mr.tenantName}`);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.maintenance.completed",
+      entity: "property_maintenance_requests",
+      entityId: id,
+      details: JSON.stringify({ invoiceId, followUpTaskId, journalEntryId, cost, category: mr.category, unitId: mr.unitId }),
+    }).catch(console.error);
 
     eventBus.emit("maintenance.completed", {
       companyId: scope.companyId,
@@ -2554,6 +2570,15 @@ router.post("/maintenance", requirePermission("property:create"), async (req, re
       [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium']
     );
     const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.maintenance.created",
+      entity: "property_maintenance",
+      entityId: insertId,
+      details: JSON.stringify({ unitId: b.unitId, category: b.category || 'general', priority: b.priority || 'medium' }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create property maintenance error:"); }
 });
@@ -2697,6 +2722,15 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
         before: { status: existing.status }, after: { status: b.status },
       });
     }
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.maintenance.updated",
+      entity: "property_maintenance_requests",
+      entityId: id,
+      details: JSON.stringify({ status: b.status, category: b.category, priority: b.priority }),
+    }).catch(console.error);
     if (b.status === "completed" && existing.status !== "completed") {
       const updatedCost = Number(b.actualCost ?? existing.actualCost ?? 0);
       if (updatedCost > 0) {
@@ -2716,24 +2750,22 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
           });
         } catch (invErr) { console.error("PATCH completion invoice error:", invErr); }
 
-        try {
-          const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
-          const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
-          await createJournalEntry({
-            companyId: scope.companyId,
-            branchId: scope.branchId,
-            createdBy: scope.activeAssignmentId ?? scope.userId,
-            ref: `PROP-MAINT-${id}`,
-            description: `مصروف صيانة عقار — ${existing.category || ""} / ${existing.tenantName || ""}`,
-            type: "property",
-            sourceType: "maintenance_request",
-            sourceId: id,
-            lines: [
-              { accountCode: maintExpCode, debit: updatedCost, credit: 0, propertyId: existing.unitId ? Number(existing.unitId) : undefined },
-              { accountCode: cashCode, debit: 0, credit: updatedCost },
-            ],
-          });
-        } catch (jeErr) { console.error("Property maintenance journal entry failed:", jeErr); }
+        const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
+        const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
+        await createGuardedJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          createdBy: scope.activeAssignmentId ?? scope.userId,
+          ref: `PROP-MAINT-${id}`,
+          description: `مصروف صيانة عقار — ${existing.category || ""} / ${existing.tenantName || ""}`,
+          type: "property",
+          sourceType: "maintenance_request",
+          sourceId: id,
+          lines: [
+            { accountCode: maintExpCode, debit: updatedCost, credit: 0, propertyId: existing.unitId ? Number(existing.unitId) : undefined },
+            { accountCode: cashCode, debit: 0, credit: updatedCost },
+          ],
+        }, { table: "property_maintenance", id: Number(id) }).catch(() => {});
       }
       try {
         await rawQuery<any>(
@@ -3023,24 +3055,31 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
       [newPaid, b.paidDate || new Date().toISOString().split('T')[0], b.method || 'bank_transfer', newStatus, receiptNumber, installmentId]
     );
     if (paidAmount > 0) {
-      try {
-        const schCashCode = await getAccountCodeFromMapping(scope.companyId, "rental_cash_receipt", "debit", b.method === 'cash' ? '1100' : '1110');
-        const schRevenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
-        await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `RENT-SCH-${installmentId}`,
-          description: `تحصيل قسط إيجار #${existing.installmentNumber} / ${existing.tenantName || ''} / ${existing.unitNumber || ''}`,
-          sourceType: "rent_payment", sourceId: installmentId,
-          lines: [
-            { accountCode: schCashCode, debit: paidAmount, credit: 0, propertyId: existing.unitId, contractId: existing.contractId },
-            { accountCode: schRevenueCode, debit: 0, credit: paidAmount, propertyId: existing.unitId, contractId: existing.contractId },
-          ],
-        });
-      } catch (jErr) { console.error("Schedule payment journal entry failed:", jErr); }
+      const schCashCode = await getAccountCodeFromMapping(scope.companyId, "rental_cash_receipt", "debit", b.method === 'cash' ? '1100' : '1110');
+      const schRevenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
+      await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `RENT-SCH-${installmentId}`,
+        description: `تحصيل قسط إيجار #${existing.installmentNumber} / ${existing.tenantName || ''} / ${existing.unitNumber || ''}`,
+        sourceType: "rent_payment", sourceId: installmentId,
+        lines: [
+          { accountCode: schCashCode, debit: paidAmount, credit: 0, propertyId: existing.unitId, contractId: existing.contractId },
+          { accountCode: schRevenueCode, debit: 0, credit: paidAmount, propertyId: existing.unitId, contractId: existing.contractId },
+        ],
+      }, { table: "property_contracts", id: contractId }).catch(() => {});
     }
     const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1`, [installmentId]);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.installment.paid",
+      entity: "property_contracts",
+      entityId: contractId,
+      details: JSON.stringify({ installmentId, paidAmount, newStatus, receiptNumber, tenantName: existing.tenantName }),
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Pay installment error:"); }
 });
@@ -3097,6 +3136,15 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
        b.conditionRating || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM property_inspections WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "property.inspection.created",
+      entity: "property_inspections",
+      entityId: insertId,
+      details: JSON.stringify({ unitId: b.unitId, type: b.type, scheduledDate: b.scheduledDate }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create inspection error:"); }
 });

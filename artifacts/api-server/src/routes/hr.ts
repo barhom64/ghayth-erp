@@ -10,6 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
+import { requireOwnership } from "../middlewares/contextualRbac.js";
 import rateLimit from "express-rate-limit";
 import {
   haversineDistance,
@@ -1340,7 +1341,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
 });
 
 // Staged leave approval: manager (stage 1) → HR (stage 2)
-router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requireOwnership({ table: "hr_leave_requests", checks: ["company", "branch"] }), async (req, res) => {
   // Step 6 of the HR operational audit — leave approval workflow.
   // 4 authorization / state branches rewritten to ForbiddenError +
   // ConflictError, each one carrying meta so the frontend can show
@@ -2641,6 +2642,7 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
       after: { name, startTime: startTime ?? null, endTime: endTime ?? null, days: days ?? "0,1,2,3,4", shiftType: effectiveShiftType, isDefault: !!isDefault },
     }).catch(console.error);
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1`, [insertId]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.created", entity: "hr_shifts", entityId: insertId, details: JSON.stringify({ name, shiftType: effectiveShiftType }) }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create shift error:"); }
 });
@@ -2729,6 +2731,7 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
       entityId: insertId,
       after: { employeeId: resolvedEmployeeId, period, overallScore: Number(overallScore ?? 0), status: effectiveStatus },
     });
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "performance.created", entity: "hr_performance", entityId: insertId, details: JSON.stringify({ employeeId: resolvedEmployeeId, period }) }).catch(console.error);
 
     res.status(201).json({
       id: insertId,
@@ -2825,6 +2828,7 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
       entityId: insertId,
       after: { name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true },
     });
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "fixed", category: category ?? "allowance" }) }).catch(console.error);
     res.status(201).json({ id: insertId, name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
@@ -2901,6 +2905,7 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
       action: "create", entity: "approval_chains", entityId: chainId,
       after: { name, chainType, minAmount, maxAmount, stepCount: steps?.length ?? 0 },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.created", entity: "hr_approval_chain_definitions", entityId: chainId, details: JSON.stringify({ name, chainType }) }).catch(console.error);
 
     res.status(201).json({ id: chainId, name, chainType, stepsCreated: steps?.length ?? 0 });
   } catch (err) { handleRouteError(err, res, "Create approval chain error:"); }
@@ -2920,6 +2925,7 @@ router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"),
       action: "delete", entity: "approval_chains", entityId: id,
       before: existing ?? { id },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.deleted", entity: "hr_approval_chain_definitions", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3123,6 +3129,7 @@ router.put("/attendance-policy", requirePermission("hr:update"), async (req, res
       action: "update", entity: "attendance_policies", entityId: scope.companyId,
       after: { lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "attendance_policy.updated", entity: "hr_attendance_policies", entityId: scope.companyId, details: JSON.stringify({ lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3237,6 +3244,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
       before: beforeRow ?? {},
       after: updated ?? {},
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.updated", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json(updated || { message: "تم التحديث" });
   } catch (err) { handleRouteError(err, res, "Patch violation error:"); }
 });
@@ -3265,6 +3273,7 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
       );
     } catch (e) { console.error(e); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: `violation.${newStatus}`, entity: "employee_violations", entityId: id, before: { status: violation.status }, after: { status: newStatus } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `violation.${newStatus}`, entity: "hr_violations", entityId: id, details: JSON.stringify({ id, status: newStatus }) }).catch(console.error);
     const labels: Record<string, string> = { approved: "تم اعتماد المخالفة", rejected: "تم رفض المخالفة", returned: "تم إرجاع المخالفة" };
     res.json({ message: labels[newStatus], status: newStatus });
   } catch (err) { handleRouteError(err, res, "Violation approval error:"); }
@@ -3308,6 +3317,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
       before: beforeRow ?? {},
       after: row ?? {},
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.updated", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch shift error:"); }
 });
@@ -3323,6 +3333,7 @@ router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) =>
       action: "delete", entity: "shifts", entityId: id,
       before: beforeRow ?? { id },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.deleted", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json({ message: "تم حذف الوردية" });
   } catch (err) { handleRouteError(err, res, "Delete shift error:"); }
 });
@@ -3390,6 +3401,7 @@ router.post("/shift-assignments", requirePermission("hr:create"), async (req, re
       action: "create", entity: "employee_shift_assignments", entityId: insertId,
       after: { assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch(console.error);
     res.status(201).json({ id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
   } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
@@ -3545,6 +3557,7 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
       action: "update", entity: "hr_leave_requests", entityId: Number(req.params.id),
       after: { status: status ?? undefined, reason: reason ?? undefined },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "leave.updated", entity: "hr_leave_requests", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id), status, reason }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3950,6 +3963,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
       before: beforeRow ?? {},
       after: row,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.updated", entity: "hr_performance", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id) }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch performance error:"); }
 });
@@ -3972,6 +3986,7 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
       action: "delete", entity: "performance_reviews", entityId: id,
       before: beforeRow ?? { id },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.deleted", entity: "hr_performance", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3995,6 +4010,7 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
       action: "delete", entity: "employee_violations", entityId: id,
       before: beforeRow ?? { id },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.deleted", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4059,6 +4075,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
       before: beforeRow ?? {},
       after: row,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.updated", entity: "hr_official_letters", entityId: letterId, details: JSON.stringify({ id: letterId }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4081,6 +4098,7 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
       action: "delete", entity: "official_letters", entityId: id,
       before: beforeRow ?? { id },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.deleted", entity: "hr_official_letters", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4290,6 +4308,7 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
       action: "update", entity: "settings", entityId: scope.companyId,
       after: { key: "hr.onboarding_steps", steps },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "onboarding.steps_updated", entity: "hr_onboarding_steps", entityId: scope.companyId, details: JSON.stringify({ stepCount: steps.length }) }).catch(console.error);
     res.json({ data: steps });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4672,6 +4691,7 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
       action: "create", entity: "evaluation_cycles", entityId: cycleId,
       after: { employeeId, period, status: "in_progress", participantCount: participants.length },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "evaluation.created", entity: "hr_evaluation_cycles", entityId: cycleId, details: JSON.stringify({ employeeId, period }) }).catch(console.error);
     res.status(201).json({ id: cycleId, period, employeeId, status: 'in_progress', systemEval: evalData });
   } catch (err) { handleRouteError(err, res, "خطأ في بدء دورة التقييم"); }
 });
@@ -5254,6 +5274,7 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
       action: "create", entity: "delegations", entityId: r.insertId,
       after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch(console.error);
     res.status(201).json({ success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
 });
@@ -5300,6 +5321,7 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
       action: "create", entity: "public_holidays", entityId: insertId,
       after: { name: b.name, startDate: b.startDate, endDate: b.endDate || b.startDate, year, type: b.type || "national" },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.created", entity: "hr_public_holidays", entityId: insertId, details: JSON.stringify({ name: b.name, startDate: b.startDate }) }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create holiday error:"); }
 });
@@ -5334,6 +5356,7 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
       before: beforeRow ?? {},
       after: rows[0],
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.updated", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update holiday error:"); }
 });
@@ -5352,6 +5375,7 @@ router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req
       action: "delete", entity: "public_holidays", entityId: id,
       before: beforeRow ?? { id },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.deleted", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json({ message: "تم حذف العطلة" });
   } catch (err) { handleRouteError(err, res, "Delete holiday error:"); }
 });
@@ -5791,6 +5815,7 @@ router.post("/idp", requirePermission("hr:create"), async (req, res) => {
       action: "create", entity: "employee_development_plans", entityId: insertId,
       after: { employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي", status: "planned" },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.created", entity: "hr_individual_development_plans", entityId: insertId, details: JSON.stringify({ employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي" }) }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create IDP error:"); }
 });
@@ -5823,6 +5848,7 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
       before: beforeRow ?? {},
       after: rows[0],
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.updated", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update IDP error:"); }
 });
@@ -5838,6 +5864,7 @@ router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
       action: "delete", entity: "employee_development_plans", entityId: id,
       before: beforeRow ?? { id },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.deleted", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json({ message: "تم حذف خطة التطوير" });
   } catch (err) { handleRouteError(err, res, "Delete IDP error:"); }
 });
@@ -6042,7 +6069,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       userId: scope.userId,
       action: "hr.accruals.posted",
       entity: "journal_entries",
-      entityId: journalId,
+      entityId: journalId ?? 0,
       details: JSON.stringify({ period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }),
     }).catch(console.error);
 
@@ -6406,6 +6433,7 @@ router.post("/company-documents", requirePermission("hr:create"), async (req, re
       [scope.companyId, b.documentType, b.documentNumber || null, b.issueDate || null,
        b.expiryDate || null, b.issuingAuthority || null, b.reminderDays || 30, b.notes || null]
     );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch(console.error);
     res.status(201).json({ id: insertId, message: "تم إضافة وثيقة المنشأة" });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
@@ -6468,6 +6496,7 @@ router.post("/employee-documents", requirePermission("hr:create"), async (req, r
        b.issueDate || null, b.expiryDate || null, b.issuingAuthority || null,
        b.reminderDays || 30, b.notes || null]
     );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "employee_document.created", entity: "hr_employee_documents", entityId: insertId, details: JSON.stringify({ employeeId: Number(b.employeeId), documentType: b.documentType }) }).catch(console.error);
     res.status(201).json({ id: insertId, message: "تم إضافة وثيقة الموظف" });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
@@ -6536,6 +6565,7 @@ router.post("/excuse-requests", requirePermission("hr:create"), async (req, res)
       action: "create", entity: "hr_excuse_requests", entityId: insertId,
       after: { excuseDate, excuseType, estimatedMinutes },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId, action: "excuse.created", entity: "hr_excuse_requests", entityId: insertId, details: JSON.stringify({ excuseDate, excuseType }) }).catch(console.error);
 
     res.status(201).json({ id: insertId, message: "تم تقديم طلب الاستئذان بنجاح" });
   } catch (err) { handleRouteError(err, res, "Create excuse request error:"); }
@@ -6576,6 +6606,7 @@ router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), asy
       action: newStatus, entity: "hr_excuse_requests", entityId: Number(id),
       before: { status: "pending" }, after: { status: newStatus },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "excuse.approved", entity: "hr_excuse_requests", entityId: Number(id), details: JSON.stringify({ id: Number(id), status: newStatus }) }).catch(console.error);
 
     res.json({ message: approved ? "تمت الموافقة على الاستئذان" : "تم رفض الاستئذان", status: newStatus });
   } catch (err) { handleRouteError(err, res, "Approve excuse request error:"); }

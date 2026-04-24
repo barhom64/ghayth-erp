@@ -10,11 +10,13 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { requireOwnership } from "../middlewares/contextualRbac.js";
 import {
   createNotification,
   emitEvent,
   createAuditLog,
   createJournalEntry,
+  createGuardedJournalEntry,
   initiateApprovalChain,
   getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
@@ -410,24 +412,8 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       }
     });
 
-    // Create the journal entry via the centralized helper (handles balance
-    // validation, rounding-difference auto-correction, updateAccountBalances,
-    // and event bus emission).
-    await createJournalEntry({
-      companyId: effectiveCompanyId,
-      branchId: branchId ?? scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `JE-${ref}`,
-      description: `فاتورة ${ref}${description ? ` – ${description}` : ""}`,
-      type: "invoice",
-      sourceType: "invoice",
-      sourceId: insertId,
-      lines: [
-        { accountCode: invArCode, debit: total, credit: 0 },
-        { accountCode: invRevenueCode, debit: 0, credit: baseAmount },
-        { accountCode: invVatPayableCode, debit: 0, credit: vatAmount },
-      ],
-    });
+    // GL entry deferred to approval (POST /invoices/:id/approve)
+    // to prevent unapproved drafts from affecting the ledger.
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.created", entity: "invoices", entityId: insertId, details: JSON.stringify({ ref, total, dueDate: finalDueDate, vatAmount, lineCount: validatedLines.length }) }).catch(console.error);
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch(console.error);
@@ -501,6 +487,103 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
     res.json({ message: "تم إرسال الفاتورة بنجاح", status: "sent", channels, ref: invoice.ref });
   } catch (err) {
     handleRouteError(err, res, "Send invoice error:");
+  }
+});
+
+invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+
+    const [invoice] = await rawQuery<any>(
+      `SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId"
+       WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+
+    await applyTransition({
+      entity: "invoices",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "invoice.approved",
+      fromStates: ["draft", "sent", "returned"],
+      toState: "approved",
+      setExtras: { approvedBy: scope.userId, approvedAt: { raw: "NOW()" } },
+      extraWhere: `"deletedAt" IS NULL`,
+      after: { ref: invoice.ref, total: invoice.total },
+    });
+
+    // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+    const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000"),
+      getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+    ]);
+    await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId || 0,
+      createdBy: scope.activeAssignmentId,
+      ref: `JE-${invoice.ref}`,
+      description: `فاتورة ${invoice.ref}${invoice.description ? ` – ${invoice.description}` : ""}`,
+      type: "invoice",
+      sourceType: "invoice",
+      sourceId: id,
+      lines: [
+        { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
+        { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
+        { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+      ],
+    }, { table: "invoices", id });
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1`, [id]);
+    res.json(updated);
+  } catch (err) {
+    if (typeof lifecycleErrorResponse === 'function') {
+      const mapped = lifecycleErrorResponse(err);
+      if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    }
+    handleRouteError(err, res, "Approve invoice error:");
+  }
+});
+
+invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+
+    await applyTransition({
+      entity: "invoices",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "invoice.posted",
+      fromStates: ["approved"],
+      toState: "posted",
+      setExtras: { postedBy: scope.userId, postedAt: { raw: "NOW()" } },
+      extraWhere: `"deletedAt" IS NULL`,
+    });
+
+    // Verify GL entry exists
+    const [glEntry] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "sourceType"='invoice' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (!glEntry) {
+      console.warn(`[invoice-post] Invoice #${id} has no GL entry — should have been created on approval`);
+    }
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1`, [id]);
+    res.json(updated);
+  } catch (err) {
+    if (typeof lifecycleErrorResponse === 'function') {
+      const mapped = lifecycleErrorResponse(err);
+      if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    }
+    handleRouteError(err, res, "Post invoice error:");
   }
 });
 
@@ -979,28 +1062,23 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       );
     });
 
-    // Post JE
     let journalId: number | null = null;
-    try {
-      journalId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: invoice.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: `CM-${invoice.ref}-${memoId}`,
-        description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
-        sourceType: "credit_memo",
-        sourceId: memoId ?? undefined,
-        lines: [
-          { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
-          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
-          { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
-        ],
-      });
-      if (journalId && memoId) {
-        await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
-      }
-    } catch (je) {
-      console.error("Credit memo JE error:", je);
+    journalId = await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: invoice.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: `CM-${invoice.ref}-${memoId}`,
+      description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
+      sourceType: "credit_memo",
+      sourceId: memoId ?? undefined,
+      lines: [
+        { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
+        ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
+        { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
+      ],
+    }, { table: "credit_memos", id: memoId ?? 0 });
+    if (journalId && memoId) {
+      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
     }
 
     emitEvent({
@@ -1118,26 +1196,22 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
     });
 
     let journalId: number | null = null;
-    try {
-      journalId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: invoice.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: `DM-${invoice.ref}-${memoId}`,
-        description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
-        sourceType: "debit_memo",
-        sourceId: memoId ?? undefined,
-        lines: [
-          { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId },
-          { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId },
-          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId }] : []),
-        ],
-      });
-      if (journalId && memoId) {
-        await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
-      }
-    } catch (je) {
-      console.error("Debit memo JE error:", je);
+    journalId = await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: invoice.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: `DM-${invoice.ref}-${memoId}`,
+      description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
+      sourceType: "debit_memo",
+      sourceId: memoId ?? undefined,
+      lines: [
+        { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId },
+        { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId },
+        ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId }] : []),
+      ],
+    }, { table: "debit_memos", id: memoId ?? 0 });
+    if (journalId && memoId) {
+      await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
     }
 
     emitEvent({
@@ -1432,25 +1506,21 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
     ]);
 
     let journalId: number | null = null;
-    try {
-      journalId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: advRef,
-        description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,
-        sourceType: "customer_advance",
-        sourceId: advanceId ?? undefined,
-        lines: [
-          { accountCode: cashCode, debit: amt, credit: 0, clientId: Number(clientId) },
-          { accountCode: advLiabCode, debit: 0, credit: amt, clientId: Number(clientId) },
-        ],
-      });
-      if (journalId && advanceId) {
-        await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2`, [journalId, advanceId]);
-      }
-    } catch (je) {
-      console.error("Customer advance JE error:", je);
+    journalId = await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: advRef,
+      description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,
+      sourceType: "customer_advance",
+      sourceId: advanceId ?? undefined,
+      lines: [
+        { accountCode: cashCode, debit: amt, credit: 0, clientId: Number(clientId) },
+        { accountCode: advLiabCode, debit: 0, credit: amt, clientId: Number(clientId) },
+      ],
+    }, { table: "customer_advances", id: advanceId ?? 0 });
+    if (journalId && advanceId) {
+      await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2`, [journalId, advanceId]);
     }
 
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
@@ -1526,22 +1596,19 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
     });
 
     let journalId: number | null = null;
-    try {
-      journalId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: advance.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
-        description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
-        sourceType: "advance_application",
-        lines: [
-          { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
-          { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
-        ],
-      });
-    } catch (je) {
-      console.error("Apply advance JE error:", je);
-    }
+    journalId = await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: advance.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
+      description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
+      sourceType: "advance_application",
+      sourceId: advanceId,
+      lines: [
+        { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
+        { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
+      ],
+    }, { table: "customer_advances", id: advanceId });
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification, emitEvent, createJournalEntry, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -673,28 +673,23 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
       console.error("Failed to create invoice for deal-won:", invoiceErr);
     }
 
-    try {
-      const arCode = await getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200");
-      const revenueCode = await getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000");
-      const vatCode = await getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300");
-
-      await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId || 0,
-        createdBy: scope.userId,
-        ref: invoiceRef,
-        description: `قيد فاتورة CRM — ${opp.title}`,
-        sourceType: "crm_deal_won",
-        sourceId: opp.id,
-        lines: [
-          { accountCode: arCode, debit: totalAmount, credit: 0, description: `ذمم مدينة — ${opp.title}`, clientId: clientId || undefined },
-          { accountCode: revenueCode, debit: 0, credit: dealValue, description: `إيراد مبيعات — ${opp.title}`, clientId: clientId || undefined },
-          { accountCode: vatCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${opp.title}` },
-        ],
-      });
-    } catch (glErr) {
-      console.error("Failed to create GL entry for CRM deal-won:", glErr);
-    }
+    const arCode = await getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200");
+    const revenueCode = await getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000");
+    const vatCode = await getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300");
+    await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId || 0,
+      createdBy: scope.userId,
+      ref: invoiceRef,
+      description: `قيد فاتورة CRM — ${opp.title}`,
+      sourceType: "crm_deal_won",
+      sourceId: opp.id,
+      lines: [
+        { accountCode: arCode, debit: totalAmount, credit: 0, description: `ذمم مدينة — ${opp.title}`, clientId: clientId || undefined },
+        { accountCode: revenueCode, debit: 0, credit: dealValue, description: `إيراد مبيعات — ${opp.title}`, clientId: clientId || undefined },
+        { accountCode: vatCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${opp.title}` },
+      ],
+    }, { table: "crm_opportunities", id: opp.id });
 
     if (clientId) {
       try {

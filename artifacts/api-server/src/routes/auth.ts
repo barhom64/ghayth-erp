@@ -71,6 +71,7 @@ const registerLimiter = rateLimit({
 });
 
 router.post("/register", registerLimiter, async (_req, res) => {
+  emitEvent({ companyId: 0, userId: 0, action: "auth.register", entity: "users", entityId: 0 }).catch(console.error);
   res.status(405).json({ error: "إنشاء الحسابات يتم بواسطة المسؤول فقط — Self-registration is not permitted" });
 });
 
@@ -246,6 +247,7 @@ router.post("/refresh", async (req, res) => {
       role: primaryAssignment.role,
     });
 
+    emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch(console.error);
     res.json({ token: newToken });
   } catch (err) {
     handleRouteError(err, res, "Refresh token error:");
@@ -291,6 +293,7 @@ router.post("/switch-assignment", authMiddleware, async (req, res) => {
       throw new NotFoundError("التعيين غير موجود أو غير نشط");
     }
     const token = signToken({ userId: scope.userId, assignmentId: Number(assignmentId), role: assignment.role });
+    emitEvent({ companyId: assignment.companyId, userId: scope.userId, action: "auth.switch_assignment", entity: "user_assignments", entityId: Number(assignmentId) }).catch(console.error);
     res.json({ token });
   } catch (err) {
     handleRouteError(err, res, "Switch assignment error:");

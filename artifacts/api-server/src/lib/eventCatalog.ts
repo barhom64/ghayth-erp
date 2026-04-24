@@ -24,7 +24,19 @@ export type EventDomain =
   | "warehouse"
   | "project"
   | "workflow"
-  | "system";
+  | "system"
+  | "umrah"
+  | "auth"
+  | "admin"
+  | "training"
+  | "governance"
+  | "marketing"
+  | "documents"
+  | "communications"
+  | "intelligence"
+  | "recruitment"
+  | "tasks"
+  | "notifications";
 
 export interface EventDefinition {
   /** Canonical event name, e.g. "finance.invoice.created" */
@@ -396,6 +408,462 @@ export const EVENT_CATALOG: EventDefinition[] = [
     payload: { period: "string", daysRemaining: "number" },
     consumers: ["financeNotifier"],
     sideEffects: ["notification"],
+  },
+
+  // ─── UMRAH ────────────────────────────────────────────────────────────
+  {
+    name: "umrah.pilgrim.created",
+    label: "تسجيل معتمر",
+    domain: "umrah",
+    description: "تُصدر عند تسجيل معتمر جديد في النظام",
+    payload: { pilgrimId: "number", packageId: "number", passportNo: "string" },
+    consumers: ["transportAssigner", "invoiceGenerator", "obligationsEngine"],
+    sideEffects: ["obligation_register", "audit"],
+  },
+  {
+    name: "umrah.invoice.generated",
+    label: "إنشاء فاتورة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند توليد فاتورة من محرك الفوترة",
+    payload: { invoiceId: "number", pilgrimId: "number", total: "number" },
+    consumers: ["financeEngine", "commissionEngine"],
+    sideEffects: ["gl_post", "audit"],
+    critical: true,
+  },
+  {
+    name: "umrah.payment.received",
+    label: "استلام دفعة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند تسجيل سداد من معتمر أو وكيل فرعي",
+    payload: { paymentId: "number", invoiceId: "number", amount: "number", method: "string" },
+    consumers: ["financeEngine", "cashFlowTracker"],
+    sideEffects: ["gl_post", "audit"],
+    critical: true,
+  },
+  {
+    name: "umrah.commission.calculated",
+    label: "احتساب عمولة",
+    domain: "umrah",
+    description: "تُصدر عند احتساب عمولة وكيل أو موظف",
+    payload: { commissionId: "number", agentId: "number", amount: "number", period: "string" },
+    consumers: ["payrollEngine", "financeEngine"],
+    sideEffects: ["gl_post", "notification", "audit"],
+    critical: true,
+  },
+  {
+    name: "umrah.package.created",
+    label: "إنشاء باقة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند تسجيل باقة جديدة مع التسعير",
+    payload: { packageId: "number", name: "string", basePrice: "number" },
+    consumers: ["pricingEngine"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.transport.created",
+    label: "إنشاء رحلة نقل",
+    domain: "umrah",
+    description: "تُصدر عند تخصيص نقل لمجموعة معتمرين",
+    payload: { transportId: "number", vehicleType: "string", pilgrimCount: "number" },
+    consumers: ["fleetEngine", "financeEngine"],
+    sideEffects: ["gl_post", "audit"],
+  },
+  {
+    name: "umrah.agent.created",
+    label: "تسجيل وكيل عمرة",
+    domain: "umrah",
+    description: "تُصدر عند إضافة وكيل فرعي أو رئيسي",
+    payload: { agentId: "number", name: "string", agentType: "string" },
+    consumers: ["commissionEngine"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.season.opened",
+    label: "افتتاح موسم عمرة",
+    domain: "umrah",
+    description: "تُصدر عند فتح موسم جديد",
+    payload: { seasonId: "number", startDate: "string", endDate: "string" },
+    consumers: ["pricingEngine", "execDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "umrah.violation.created",
+    label: "تسجيل مخالفة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند تسجيل مخالفة تنظيمية",
+    payload: { violationId: "number", type: "string", severity: "string" },
+    consumers: ["legalEngine", "execDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
+
+  // ─── AUTH ─────────────────────────────────────────────────────────────
+  {
+    name: "auth.register",
+    label: "تسجيل مستخدم جديد",
+    domain: "auth",
+    description: "تُصدر عند إنشاء حساب مستخدم جديد",
+    payload: { userId: "number", email: "string" },
+    consumers: ["onboardingEngine", "notificationService"],
+    sideEffects: ["audit", "notification"],
+  },
+  {
+    name: "auth.login.success",
+    label: "تسجيل دخول ناجح",
+    domain: "auth",
+    description: "تُصدر عند نجاح عملية تسجيل الدخول",
+    payload: { userId: "number", ip: "string" },
+    consumers: ["securityMonitor"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "auth.switch_assignment",
+    label: "تبديل التعيين",
+    domain: "auth",
+    description: "تُصدر عند تبديل المستخدم بين التعيينات",
+    payload: { userId: "number", fromAssignment: "number", toAssignment: "number" },
+    consumers: ["sessionTracker"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── ADMIN ────────────────────────────────────────────────────────────
+  {
+    name: "admin.user.created",
+    label: "إنشاء مستخدم إداري",
+    domain: "admin",
+    description: "تُصدر عند إنشاء مستخدم من لوحة الإدارة",
+    payload: { userId: "number", role: "string" },
+    consumers: ["notificationService"],
+    sideEffects: ["audit", "notification"],
+  },
+  {
+    name: "admin.role.created",
+    label: "إنشاء دور",
+    domain: "admin",
+    description: "تُصدر عند إنشاء دور جديد في النظام",
+    payload: { roleId: "number", name: "string" },
+    consumers: ["rbacEngine"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "admin.role_permissions.bulk_updated",
+    label: "تحديث صلاحيات دور",
+    domain: "admin",
+    description: "تُصدر عند تعديل صلاحيات دور بالجملة",
+    payload: { roleId: "number", permissionCount: "number" },
+    consumers: ["rbacEngine", "sessionInvalidator"],
+    sideEffects: ["audit"],
+    critical: true,
+  },
+  {
+    name: "admin.integration.created",
+    label: "إنشاء تكامل خارجي",
+    domain: "admin",
+    description: "تُصدر عند ربط نظام خارجي",
+    payload: { integrationId: "number", provider: "string" },
+    consumers: ["webhookDispatcher"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── TRAINING ─────────────────────────────────────────────────────────
+  {
+    name: "training.program.created",
+    label: "إنشاء برنامج تدريبي",
+    domain: "training",
+    description: "تُصدر عند إنشاء برنامج تدريبي جديد",
+    payload: { programId: "number", title: "string", startDate: "string" },
+    consumers: ["enrollmentEngine", "obligationsEngine"],
+    sideEffects: ["obligation_register", "audit"],
+  },
+  {
+    name: "training.program.approved",
+    label: "اعتماد برنامج تدريبي",
+    domain: "training",
+    description: "تُصدر عند اعتماد البرنامج من الإدارة",
+    payload: { programId: "number", approvedBy: "number" },
+    consumers: ["enrollmentEngine", "budgetValidator"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "training.enrollment.created",
+    label: "تسجيل متدرب",
+    domain: "training",
+    description: "تُصدر عند تسجيل موظف في برنامج تدريبي",
+    payload: { enrollmentId: "number", employeeId: "number", programId: "number" },
+    consumers: ["obligationsEngine"],
+    sideEffects: ["notification", "audit"],
+  },
+
+  // ─── GOVERNANCE ───────────────────────────────────────────────────────
+  {
+    name: "governance.risk.created",
+    label: "تسجيل خطر",
+    domain: "governance",
+    description: "تُصدر عند تسجيل خطر جديد في سجل المخاطر",
+    payload: { riskId: "number", severity: "string", likelihood: "string" },
+    consumers: ["riskDashboard", "obligationsEngine"],
+    sideEffects: ["obligation_register", "audit"],
+  },
+  {
+    name: "governance.compliance.created",
+    label: "تسجيل التزام تنظيمي",
+    domain: "governance",
+    description: "تُصدر عند تسجيل بند امتثال جديد",
+    payload: { complianceId: "number", framework: "string", dueDate: "string" },
+    consumers: ["obligationsEngine", "execDashboard"],
+    sideEffects: ["obligation_register", "notification", "audit"],
+    critical: true,
+  },
+  {
+    name: "governance.audit.created",
+    label: "إنشاء تدقيق",
+    domain: "governance",
+    description: "تُصدر عند إنشاء مهمة تدقيق داخلي",
+    payload: { auditId: "number", scope: "string", auditor: "number" },
+    consumers: ["obligationsEngine"],
+    sideEffects: ["obligation_register", "audit"],
+  },
+  {
+    name: "governance.policy.created",
+    label: "إنشاء سياسة",
+    domain: "governance",
+    description: "تُصدر عند نشر سياسة أو لائحة جديدة",
+    payload: { policyId: "number", title: "string", version: "number" },
+    consumers: ["documentsEngine", "notificationService"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "governance.capa.created",
+    label: "إجراء تصحيحي",
+    domain: "governance",
+    description: "تُصدر عند إنشاء إجراء تصحيحي/وقائي (CAPA)",
+    payload: { capaId: "number", type: "string", targetDate: "string" },
+    consumers: ["obligationsEngine"],
+    sideEffects: ["obligation_register", "audit"],
+  },
+
+  // ─── MARKETING ────────────────────────────────────────────────────────
+  {
+    name: "marketing.campaign.created",
+    label: "إنشاء حملة تسويقية",
+    domain: "marketing",
+    description: "تُصدر عند إنشاء حملة تسويقية جديدة",
+    payload: { campaignId: "number", name: "string", budget: "number" },
+    consumers: ["budgetValidator", "execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "marketing.campaign.revenue_updated",
+    label: "تحديث إيرادات حملة",
+    domain: "marketing",
+    description: "تُصدر عند ربط إيرادات بحملة تسويقية",
+    payload: { campaignId: "number", revenue: "number", roi: "number" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── DOCUMENTS ────────────────────────────────────────────────────────
+  {
+    name: "documents.document.created",
+    label: "إنشاء مستند",
+    domain: "documents",
+    description: "تُصدر عند رفع أو إنشاء مستند جديد",
+    payload: { documentId: "number", type: "string", entityType: "string", entityId: "number" },
+    consumers: ["searchIndexer", "versionControl"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "documents.document.status_changed",
+    label: "تغيير حالة مستند",
+    domain: "documents",
+    description: "تُصدر عند تغيير حالة المستند (active/archived/expired)",
+    payload: { documentId: "number", oldStatus: "string", newStatus: "string" },
+    consumers: ["obligationsEngine"],
+    sideEffects: ["audit", "notification"],
+  },
+  {
+    name: "documents.template.created",
+    label: "إنشاء قالب مستند",
+    domain: "documents",
+    description: "تُصدر عند إنشاء قالب مستند جديد",
+    payload: { templateId: "number", name: "string" },
+    consumers: ["templateEngine"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── COMMUNICATIONS ───────────────────────────────────────────────────
+  {
+    name: "communications.message.sent",
+    label: "إرسال رسالة",
+    domain: "communications",
+    description: "تُصدر عند إرسال رسالة عبر أي قناة (SMS/WhatsApp/Email)",
+    payload: { messageId: "number", channel: "string", recipient: "string" },
+    consumers: ["communicationsTracker"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "communications.log.created",
+    label: "تسجيل اتصال",
+    domain: "communications",
+    description: "تُصدر عند تسجيل سجل اتصال يدوي",
+    payload: { logId: "number", direction: "string", channel: "string" },
+    consumers: ["crmEngine"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── RECRUITMENT ──────────────────────────────────────────────────────
+  {
+    name: "recruitment.posting.created",
+    label: "نشر وظيفة شاغرة",
+    domain: "recruitment",
+    description: "تُصدر عند نشر إعلان وظيفي",
+    payload: { postingId: "number", title: "string", department: "string" },
+    consumers: ["careersPortal", "execDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "recruitment.application.created",
+    label: "تقديم طلب توظيف",
+    domain: "recruitment",
+    description: "تُصدر عند تقديم مرشح لطلب توظيف",
+    payload: { applicationId: "number", postingId: "number", applicantName: "string" },
+    consumers: ["recruitmentWorkflow", "hrNotifier"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "recruitment.job.closed",
+    label: "إغلاق وظيفة شاغرة",
+    domain: "recruitment",
+    description: "تُصدر عند إغلاق إعلان وظيفي",
+    payload: { postingId: "number", reason: "string", applicantCount: "number" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── TASKS ────────────────────────────────────────────────────────────
+  {
+    name: "tasks.task.created",
+    label: "إنشاء مهمة",
+    domain: "tasks",
+    description: "تُصدر عند إنشاء مهمة جديدة",
+    payload: { taskId: "number", title: "string", type: "string", assignedTo: "number" },
+    consumers: ["notificationService", "obligationsEngine"],
+    sideEffects: ["obligation_register", "notification", "audit"],
+  },
+  {
+    name: "tasks.task.completed",
+    label: "إتمام مهمة",
+    domain: "tasks",
+    description: "تُصدر عند تغيير حالة المهمة إلى مكتملة",
+    payload: { taskId: "number", completedBy: "number" },
+    consumers: ["obligationsEngine", "performanceTracker"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "tasks.task.deleted",
+    label: "حذف مهمة",
+    domain: "tasks",
+    description: "تُصدر عند حذف مهمة (soft delete)",
+    payload: { taskId: "number", title: "string" },
+    consumers: ["obligationsEngine"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── NOTIFICATIONS ────────────────────────────────────────────────────
+  {
+    name: "notifications.template.created",
+    label: "إنشاء قالب إشعار",
+    domain: "notifications",
+    description: "تُصدر عند إنشاء قالب إشعار جديد",
+    payload: { templateId: "number", channel: "string", name: "string" },
+    consumers: ["notificationEngine"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "notifications.webhook.created",
+    label: "إنشاء webhook",
+    domain: "notifications",
+    description: "تُصدر عند تسجيل webhook جديد",
+    payload: { webhookId: "number", url: "string", events: "string[]" },
+    consumers: ["webhookDispatcher"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── INTELLIGENCE ─────────────────────────────────────────────────────
+  {
+    name: "intelligence.ai.categorized",
+    label: "تصنيف ذكي",
+    domain: "intelligence",
+    description: "تُصدر عند تصنيف كيان بواسطة الذكاء الاصطناعي",
+    payload: { entityType: "string", entityId: "number", category: "string", confidence: "number" },
+    consumers: ["automationEngine"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "intelligence.smart_assign.created",
+    label: "توزيع ذكي",
+    domain: "intelligence",
+    description: "تُصدر عند توزيع مهمة عبر خوارزمية التوازن",
+    payload: { taskId: "number", assignedTo: "number", algorithm: "string" },
+    consumers: ["performanceTracker"],
+    sideEffects: ["audit"],
+  },
+
+  // ─── PROJECT ──────────────────────────────────────────────────────────
+  {
+    name: "project.created",
+    label: "إنشاء مشروع",
+    domain: "project",
+    description: "تُصدر عند إنشاء مشروع جديد",
+    payload: { projectId: "number", name: "string", budget: "number" },
+    consumers: ["budgetValidator", "obligationsEngine"],
+    sideEffects: ["obligation_register", "audit"],
+  },
+  {
+    name: "project.milestone.created",
+    label: "إنشاء مرحلة مشروع",
+    domain: "project",
+    description: "تُصدر عند إضافة milestone لمشروع",
+    payload: { milestoneId: "number", projectId: "number", dueDate: "string" },
+    consumers: ["obligationsEngine"],
+    sideEffects: ["obligation_register", "audit"],
+  },
+  {
+    name: "project.phase.completed",
+    label: "إتمام مرحلة",
+    domain: "project",
+    description: "تُصدر عند إتمام مرحلة من المشروع",
+    payload: { phaseId: "number", projectId: "number" },
+    consumers: ["execDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "project.risk.created",
+    label: "تسجيل خطر مشروع",
+    domain: "project",
+    description: "تُصدر عند تسجيل خطر في مشروع",
+    payload: { riskId: "number", projectId: "number", severity: "string" },
+    consumers: ["riskDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
+
+  // ─── STORE ────────────────────────────────────────────────────────────
+  {
+    name: "store.order.created",
+    label: "إنشاء طلب متجر",
+    domain: "store",
+    description: "تُصدر عند إنشاء طلب من المتجر الإلكتروني",
+    payload: { orderId: "number", total: "number", itemCount: "number" },
+    consumers: ["inventoryEngine", "financeEngine"],
+    sideEffects: ["gl_post", "audit", "notification"],
+  },
+  {
+    name: "store.product.created",
+    label: "إضافة منتج متجر",
+    domain: "store",
+    description: "تُصدر عند إضافة منتج جديد في المتجر",
+    payload: { productId: "number", name: "string", price: "number" },
+    consumers: ["searchIndexer"],
+    sideEffects: ["audit"],
   },
 ];
 

@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { createJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog } from "./businessHelpers.js";
+import { createJournalEntry, createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog } from "./businessHelpers.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -212,30 +212,26 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     }
   });
 
-  // GL: Debit Accounts Receivable, Credit Umrah Revenue
-  try {
-    const [arCode, revCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "umrah_invoice_ar", "debit", "1200"),
-      getAccountCodeFromMapping(scope.companyId, "umrah_invoice_revenue", "credit", "4200"),
-    ]);
-    await createJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId || 0,
-      createdBy: scope.userId,
-      ref: `JE-${ref}`,
-      description: `فاتورة مبيعات عمرة — ${ref}`,
-      type: "sales",
-      sourceType: "umrah_sales_invoices",
-      sourceId: invoiceId,
-      lines: [
-        { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}` },
-        { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}` },
-        ...(penaltiesTotal > 0 ? [{ accountCode: revCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}` }] : []),
-      ],
-    });
-  } catch (err) {
-    console.error("[umrah-invoice] GL journal entry failed (non-blocking):", err);
-  }
+  // GL: Debit Accounts Receivable, Credit Umrah Revenue — BLOCKING (financial integrity)
+  const [arCode, revCode] = await Promise.all([
+    getAccountCodeFromMapping(scope.companyId, "umrah_invoice_ar", "debit", "1200"),
+    getAccountCodeFromMapping(scope.companyId, "umrah_invoice_revenue", "credit", "4200"),
+  ]);
+  await createGuardedJournalEntry({
+    companyId: scope.companyId,
+    branchId: scope.branchId || 0,
+    createdBy: scope.userId,
+    ref: `JE-${ref}`,
+    description: `فاتورة مبيعات عمرة — ${ref}`,
+    type: "sales",
+    sourceType: "umrah_sales_invoices",
+    sourceId: invoiceId,
+    lines: [
+      { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}` },
+      { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}` },
+      ...(penaltiesTotal > 0 ? [{ accountCode: revCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}` }] : []),
+    ],
+  }, { table: "umrah_sales_invoices", id: invoiceId });
 
   emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: invoiceId, details: JSON.stringify({ ref, total, subAgentId, groupCount: groups.length, pilgrimCount: totalPilgrims }) }).catch(console.error);
   createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total } }).catch(console.error);
@@ -339,28 +335,25 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
     }
   });
 
-  try {
-    const [cashCode, arCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_payment_ar", "credit", "1200"),
-    ]);
-    await createJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId || 0,
-      createdBy: scope.userId,
-      ref: `JE-${payRef}`,
-      description: `سداد وكيل فرعي — ${payRef}`,
-      type: "payment",
-      sourceType: "umrah_payments",
-      sourceId: paymentId,
-      lines: [
-        { accountCode: cashCode, debit: sarAmount, credit: 0 },
-        { accountCode: arCode, debit: 0, credit: sarAmount },
-      ],
-    });
-  } catch (err) {
-    console.error("[umrah-payment] Journal entry failed (non-blocking):", err);
-  }
+  // GL: payment journal — BLOCKING (financial integrity)
+  const [cashCode, arPayCode] = await Promise.all([
+    getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
+    getAccountCodeFromMapping(scope.companyId, "invoice_payment_ar", "credit", "1200"),
+  ]);
+  await createGuardedJournalEntry({
+    companyId: scope.companyId,
+    branchId: scope.branchId || 0,
+    createdBy: scope.userId,
+    ref: `JE-${payRef}`,
+    description: `سداد وكيل فرعي — ${payRef}`,
+    type: "payment",
+    sourceType: "umrah_payments",
+    sourceId: paymentId,
+    lines: [
+      { accountCode: cashCode, debit: sarAmount, credit: 0 },
+      { accountCode: arPayCode, debit: 0, credit: sarAmount },
+    ],
+  }, { table: "umrah_payments", id: paymentId });
 
   emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.payment.received", entity: "umrah_payments", entityId: paymentId, details: JSON.stringify({ ref: payRef, sarAmount, method, allocations }) }).catch(console.error);
   createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_payments", entityId: paymentId, after: { ref: payRef, sarAmount } }).catch(console.error);

@@ -424,6 +424,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
       priority: "high", refType: "hr_exit_request", refId: item.id,
     }).catch(console.error);
 
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "exit.approved", entity: "hr_exit_requests", entityId: item.id, details: JSON.stringify({ exitNumber: item.exitNumber }) }).catch(console.error);
     res.json({ success: true, message: "تم اعتماد طلب نهاية الخدمة" });
   } catch (err) {
     handleRouteError(err, res, "خطأ في اعتماد الطلب");
@@ -467,6 +468,7 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
       );
     }
 
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "exit.clearance_updated", entity: "hr_exit_clearance", entityId: item.id, details: JSON.stringify({ status: newStatus, exitRequestId: item.exitRequestId }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "خطأ في تحديث إخلاء الطرف");

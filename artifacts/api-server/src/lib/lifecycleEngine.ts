@@ -312,6 +312,249 @@ export function assertTransition(
   }
 }
 
+// ─── State Machine Definitions ──────────────────────────────────────────────
+// Each entity's valid state graph. Keys are source states; values are the set
+// of reachable target states. `"*"` as a source means "from any state".
+
+export interface StateMachine {
+  entity: string;
+  label: string;
+  statusColumn?: string;
+  transitions: Record<string, string[]>;
+}
+
+export const STATE_MACHINES: StateMachine[] = [
+  {
+    entity: "invoices",
+    label: "فاتورة مبيعات",
+    transitions: {
+      draft: ["approved", "cancelled"],
+      approved: ["posted", "cancelled"],
+      posted: ["paid", "partial", "overdue", "cancelled", "closed"],
+      partial: ["paid", "overdue", "cancelled"],
+      overdue: ["paid", "partial", "cancelled"],
+      paid: ["closed"],
+      cancelled: [],
+      closed: [],
+    },
+  },
+  {
+    entity: "purchase_orders",
+    label: "أمر شراء",
+    transitions: {
+      draft: ["pending_approval", "approved", "cancelled"],
+      pending_approval: ["approved", "rejected"],
+      approved: ["partially_received", "received", "cancelled"],
+      partially_received: ["received"],
+      received: ["paid"],
+      rejected: ["draft"],
+      paid: [],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "purchase_requests",
+    label: "طلب شراء",
+    transitions: {
+      draft: ["pending", "approved"],
+      pending: ["approved", "rejected"],
+      approved: ["converted"],
+      rejected: ["draft"],
+      converted: [],
+    },
+  },
+  {
+    entity: "journal_entries",
+    label: "قيد يومية",
+    statusColumn: "status",
+    transitions: {
+      draft: ["pending_approval", "posted"],
+      pending_approval: ["posted", "rejected"],
+      posted: ["reversed"],
+      rejected: ["draft"],
+      reversed: [],
+    },
+  },
+  {
+    entity: "legal_cases",
+    label: "قضية قانونية",
+    transitions: {
+      open: ["in_progress", "closed", "on_hold"],
+      in_progress: ["closed", "on_hold"],
+      on_hold: ["in_progress", "closed"],
+      closed: [],
+    },
+  },
+  {
+    entity: "legal_contracts",
+    label: "عقد قانوني",
+    transitions: {
+      draft: ["active", "cancelled"],
+      active: ["terminated", "expired", "renewed"],
+      terminated: [],
+      expired: ["renewed"],
+      renewed: ["active"],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "hr_leave_requests",
+    label: "طلب إجازة",
+    transitions: {
+      pending: ["approved", "rejected"],
+      approved: ["cancelled", "completed"],
+      rejected: [],
+      cancelled: [],
+      completed: [],
+    },
+  },
+  {
+    entity: "hr_exit_requests",
+    label: "طلب مغادرة",
+    transitions: {
+      pending: ["approved", "rejected"],
+      approved: ["clearance", "completed"],
+      clearance: ["completed"],
+      rejected: [],
+      completed: [],
+    },
+  },
+  {
+    entity: "hr_discipline_memos",
+    label: "مذكرة تأديبية",
+    transitions: {
+      draft: ["issued"],
+      issued: ["acknowledged", "appealed", "escalated"],
+      acknowledged: ["closed"],
+      appealed: ["gm_review", "justified", "closed"],
+      escalated: ["gm_review"],
+      gm_review: ["justified", "closed"],
+      justified: ["closed"],
+      closed: [],
+    },
+  },
+  {
+    entity: "fleet_trips",
+    label: "رحلة أسطول",
+    transitions: {
+      scheduled: ["in_progress", "cancelled"],
+      in_progress: ["completed", "cancelled"],
+      completed: [],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "fleet_maintenance",
+    label: "صيانة مركبة",
+    transitions: {
+      scheduled: ["in_progress", "cancelled"],
+      in_progress: ["completed", "cancelled"],
+      completed: [],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "property_contracts",
+    label: "عقد عقاري",
+    transitions: {
+      draft: ["active", "cancelled"],
+      active: ["terminated", "expired", "renewed"],
+      terminated: [],
+      expired: ["renewed"],
+      renewed: ["active"],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "support_tickets",
+    label: "تذكرة دعم",
+    transitions: {
+      open: ["in_progress", "closed"],
+      in_progress: ["resolved", "escalated", "closed"],
+      escalated: ["in_progress", "resolved", "closed"],
+      resolved: ["closed", "open"],
+      closed: ["open"],
+    },
+  },
+  {
+    entity: "crm_opportunities",
+    label: "فرصة بيع",
+    transitions: {
+      prospecting: ["qualification", "lost"],
+      qualification: ["proposal", "lost"],
+      proposal: ["negotiation", "lost"],
+      negotiation: ["won", "lost"],
+      won: [],
+      lost: [],
+    },
+  },
+  {
+    entity: "workflow_instances",
+    label: "طلب اعتماد",
+    transitions: {
+      pending: ["approved", "rejected", "escalated"],
+      escalated: ["approved", "rejected"],
+      approved: [],
+      rejected: [],
+    },
+  },
+  {
+    entity: "umrah_sales_invoices",
+    label: "فاتورة عمرة",
+    transitions: {
+      draft: ["confirmed", "cancelled"],
+      confirmed: ["paid", "partial", "cancelled"],
+      partial: ["paid", "cancelled"],
+      paid: [],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "governance_policies",
+    label: "سياسة حوكمة",
+    transitions: {
+      draft: ["active", "archived"],
+      active: ["archived", "draft"],
+      archived: [],
+    },
+  },
+  {
+    entity: "budgets",
+    label: "ميزانية",
+    transitions: {
+      draft: ["pending_approval", "approved"],
+      pending_approval: ["approved", "rejected"],
+      approved: ["closed"],
+      rejected: ["draft"],
+      closed: [],
+    },
+  },
+  {
+    entity: "financial_periods",
+    label: "فترة مالية",
+    transitions: {
+      open: ["closed"],
+      closed: ["open"],
+    },
+  },
+];
+
+const _smIndex = new Map<string, StateMachine>(
+  STATE_MACHINES.map((sm) => [sm.entity, sm])
+);
+
+export function getStateMachine(entity: string): StateMachine | undefined {
+  return _smIndex.get(entity);
+}
+
+export function isValidTransition(entity: string, from: string, to: string): boolean {
+  const sm = _smIndex.get(entity);
+  if (!sm) return true;
+  const allowed = sm.transitions[from] ?? sm.transitions["*"];
+  if (!allowed) return false;
+  return allowed.includes(to);
+}
+
 function quoteIdent(ident: string): string {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(ident)) {
     return `"${ident.replace(/"/g, '""')}"`;

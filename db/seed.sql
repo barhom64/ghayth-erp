@@ -240,6 +240,8 @@ INSERT INTO public.role_permissions (id, role, permission, "companyId", "created
 INSERT INTO public.role_permissions (id, role, permission, "companyId", "createdAt") VALUES (289, 'crm_manager', 'operations:read', NULL, '2026-04-13 17:07:35.160892+00');
 INSERT INTO public.role_permissions (id, role, permission, "companyId", "createdAt") VALUES (290, 'crm_manager', 'tasks:create', NULL, '2026-04-13 17:07:35.160892+00');
 INSERT INTO public.role_permissions (id, role, permission, "companyId", "createdAt") VALUES (291, 'crm_manager', 'tasks:update', NULL, '2026-04-13 17:07:35.160892+00');
+INSERT INTO public.role_permissions (id, role, permission, "companyId", "createdAt") VALUES (292, 'finance_manager', 'finance:approve', NULL, '2026-04-24 00:00:00+00');
+INSERT INTO public.role_permissions (id, role, permission, "companyId", "createdAt") VALUES (293, 'branch_manager', 'finance:approve', NULL, '2026-04-24 00:00:00+00');
 
 
 --
