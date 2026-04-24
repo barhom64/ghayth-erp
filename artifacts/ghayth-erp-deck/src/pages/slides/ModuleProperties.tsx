@@ -1,5 +1,6 @@
 import { PropertiesIcon } from "../../components/ModuleIcons";
 import PlatformShot from "../../components/PlatformShot";
+import DeepLinkButton from "../../components/DeepLinkButton";
 
 export default function ModuleProperties() {
   return (
@@ -55,6 +56,12 @@ export default function ModuleProperties() {
         </div>
       </div>
 
+      <DeepLinkButton
+        to="/deep/slide6"
+        label="تعمّق في هذه الوحدة"
+        variant="to-deep"
+        className="absolute bottom-[2.6vh] right-[6vw]"
+      />
       <div className="absolute bottom-[3vh] left-[6vw] text-muted font-body text-[1vw]">09 / 19</div>
     </div>
   );
