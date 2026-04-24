@@ -341,7 +341,7 @@ export default function InvoiceDetailPage() {
       <Card>
         <CardHeader><CardTitle>بنود الفاتورة</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "_index", header: "#", render: (_r, i) => <span className="text-gray-400">{i + 1}</span> },
               { key: "description", header: "الوصف", render: (r) => <span className="font-medium">{r.description || "-"}</span> },
@@ -363,7 +363,7 @@ export default function InvoiceDetailPage() {
       <Card>
         <CardHeader><CardTitle>سجل الدفعات</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-blue-600">{r.ref}</span> },
               { key: "description", header: "الوصف", render: (r) => r.description || "-" },
@@ -387,7 +387,7 @@ export default function InvoiceDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-purple-600">{r.ref}</span> },
               { key: "description", header: "الوصف", render: (r) => r.description || "-" },
