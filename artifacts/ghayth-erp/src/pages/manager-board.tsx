@@ -62,6 +62,11 @@ export default function ManagerBoard() {
       advance: `/finance/salary-advances/${id}/approve`,
       custody: `/finance/custodies/${id}/approve`,
       letter: `/hr/official-letters/${id}/approve`,
+      purchase: `/finance/purchase-requests/${id}/approve`,
+      expense: `/finance/expenses/${id}/approve`,
+      loan: `/hr/loans/${id}/approve`,
+      overtime: `/hr/overtime/${id}/approve`,
+      exit: `/hr/exit/${id}/approve`,
     };
     return map[type];
   };
@@ -91,12 +96,22 @@ export default function ManagerBoard() {
   const advances = pending.pendingAdvances || [];
   const custodies = pending.pendingCustodies || [];
   const letters = pending.pendingLetters || [];
+  const purchases = pending.pendingPurchases || [];
+  const expenses = pending.pendingExpenses || [];
+  const loans = pending.pendingLoans || [];
+  const overtime = pending.pendingOvertime || [];
+  const exitRequests = pending.pendingExitRequests || [];
   const workflows = pending.pendingWorkflows || [];
   const allPending = [
     ...leaves.map((l: any) => ({ ...l, _type: "leave", _label: "إجازة" })),
     ...advances.map((a: any) => ({ ...a, _type: "advance", _label: "سلفة" })),
     ...custodies.map((c: any) => ({ ...c, _type: "custody", _label: "عُهدة" })),
     ...letters.map((l: any) => ({ ...l, _type: "letter", _label: "خطاب" })),
+    ...purchases.map((p: any) => ({ ...p, _type: "purchase", _label: "طلب شراء" })),
+    ...expenses.map((e: any) => ({ ...e, _type: "expense", _label: "مصروف" })),
+    ...loans.map((l: any) => ({ ...l, _type: "loan", _label: "قرض" })),
+    ...overtime.map((o: any) => ({ ...o, _type: "overtime", _label: "عمل إضافي" })),
+    ...exitRequests.map((e: any) => ({ ...e, _type: "exit", _label: "مغادرة" })),
   ];
   const urgentPending = allPending.filter((r: any) => r.priority === "high" || r.priority === "urgent");
   const todayPending = allPending.filter((r: any) => {
@@ -146,6 +161,11 @@ export default function ManagerBoard() {
               item._type === "leave" ? "bg-blue-100 text-blue-700" :
               item._type === "advance" ? "bg-green-100 text-green-700" :
               item._type === "letter" ? "bg-purple-100 text-purple-700" :
+              item._type === "purchase" ? "bg-amber-100 text-amber-700" :
+              item._type === "expense" ? "bg-rose-100 text-rose-700" :
+              item._type === "loan" ? "bg-teal-100 text-teal-700" :
+              item._type === "overtime" ? "bg-cyan-100 text-cyan-700" :
+              item._type === "exit" ? "bg-red-100 text-red-700" :
               "bg-gray-100 text-gray-700"
             )}>
               {item._label}

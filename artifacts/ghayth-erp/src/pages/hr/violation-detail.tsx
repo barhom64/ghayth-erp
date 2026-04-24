@@ -15,6 +15,8 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { SEVERITY_LEVELS, INCIDENT_LABELS } from "@/lib/hr-type-maps";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 
@@ -236,6 +238,9 @@ export default function ViolationDetail() {
           </CardContent>
         </Card>
       )}
+
+      <ApprovalTimeline entityType="employee_violation" entityId={Number(id)} />
+      <EntityDocuments entityType="employee_violation" entityId={Number(id)} />
     </PageShell>
   );
 }

@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Timer, Calendar, DollarSign, Clock, User } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
@@ -204,6 +206,9 @@ export default function OvertimeDetail() {
         </CardContent>
       </Card>
       <ActionHistory entityType="overtime" entityId={Number(id)} />
+
+      <ApprovalTimeline entityType="hr_overtime_request" entityId={Number(id)} />
+      <EntityDocuments entityType="hr_overtime_request" entityId={Number(id)} />
     </PageShell>
   );
 }

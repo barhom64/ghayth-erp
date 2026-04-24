@@ -22,6 +22,8 @@ import {
 import { cn } from "@/lib/utils";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 
 
 const STEP_IMPACTS: Record<string, { icon: string; title: string; description: string; severity: "info" | "warning" | "danger" | "success" }> = {
@@ -442,6 +444,12 @@ export default function LegalCaseDetail() {
               <EntityTimeline entityType="legal_case" entityId={Number(id)} />
             </CardContent>
           </Card>
+
+          {/* Documents */}
+          <EntityDocuments entityType="legal_case" entityId={Number(id)} />
+
+          {/* Approval Timeline */}
+          <ApprovalTimeline entityType="legal_case" entityId={Number(id)} />
         </div>
       </div>
     </PageShell>

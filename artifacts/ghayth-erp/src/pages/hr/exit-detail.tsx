@@ -36,6 +36,8 @@ function buildExitSteps(status: string | undefined): StageStep[] {
 }
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ActionHistory } from "@/components/approval-actions";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 
 import { EXIT_TYPES, EXIT_REQUEST_STATUS, CLEARANCE_STATUS } from "@/lib/hr-type-maps";
 
@@ -263,6 +265,9 @@ export default function ExitDetail() {
       )}
 
       <ActionHistory entityType="exit_request" entityId={Number(id)} />
+
+      <ApprovalTimeline entityType="hr_exit_request" entityId={Number(id)} />
+      <EntityDocuments entityType="hr_exit_request" entityId={Number(id)} />
     </PageShell>
   );
 }

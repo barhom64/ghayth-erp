@@ -7,6 +7,8 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Clock } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -194,6 +196,16 @@ export default function ExcuseDetail() {
           </Card>
         )}
       </div>
+
+      {/* Documents */}
+      {id && (
+        <EntityDocuments entityType="hr_excuse_request" entityId={id} />
+      )}
+
+      {/* Approval Timeline */}
+      {id && (
+        <ApprovalTimeline entityType="hr_excuse_request" entityId={id} />
+      )}
     </div>
   );
 

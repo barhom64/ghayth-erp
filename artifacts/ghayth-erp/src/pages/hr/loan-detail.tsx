@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Wallet, Calendar, DollarSign, CheckCircle, Clock } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -204,6 +206,9 @@ export default function LoanDetail() {
         </CardContent>
       </Card>
       <ActionHistory entityType="loan" entityId={Number(id)} />
+
+      <ApprovalTimeline entityType="hr_employee_loan" entityId={Number(id)} />
+      <EntityDocuments entityType="hr_employee_loan" entityId={Number(id)} />
     </PageShell>
   );
 }

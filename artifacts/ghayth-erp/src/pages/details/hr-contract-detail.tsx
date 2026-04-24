@@ -10,6 +10,8 @@ import { ActionHistory } from "@/components/approval-actions";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityDocuments } from "@/components/shared/entity-documents";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 
 /**
  * HrContractDetail — detail page for a single HR contract.
@@ -182,6 +184,9 @@ export default function HrContractDetail() {
           </Card>
         )}
       </div>
+
+      <ApprovalTimeline entityType="employee_contract" entityId={id} />
+      <EntityDocuments entityType="employee_contract" entityId={id} />
     </div>
   );
 

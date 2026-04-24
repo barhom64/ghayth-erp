@@ -7,6 +7,7 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Edit, Paperclip, Eye } from "lucide-react";
@@ -256,6 +257,11 @@ export default function RequestDetail() {
           </Card>
         )}
       </div>
+
+      {/* Approval Timeline */}
+      {id && (
+        <ApprovalTimeline entityType="request" entityId={id} />
+      )}
     </div>
   );
 
