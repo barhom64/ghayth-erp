@@ -151,7 +151,7 @@ export default function JournalManualDetailPage() {
           <div className="pt-4 border-t">
             <p className="text-sm font-semibold mb-2">بنود القيد</p>
             <div className="rounded-xl border overflow-hidden text-sm">
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "accountCode", header: "الحساب", render: (r) => <span className="font-mono text-xs">{r.accountCode}</span> },
                   { key: "description", header: "البيان" },
