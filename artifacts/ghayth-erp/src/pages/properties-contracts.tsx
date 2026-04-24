@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useSearch, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,17 +10,14 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { TagFilterSelect, useTagFilter, EntityTags } from "@/components/shared/entity-tags";
 import { EntityComments } from "@/components/shared/entity-comments";
+import { PageShell } from "@/components/page-shell";
 import {
   FileText, Plus, ChevronDown, ChevronUp, CalendarDays, Banknote,
   CheckCircle2, Clock, AlertTriangle, RefreshCw, Zap, Droplets, Wifi,
-  Shield, Receipt, CreditCard, DollarSign
+  Shield, Receipt, CreditCard
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { KpiGrid } from "@/components/shared/kpi-card";
 import { useAppContext } from "@/contexts/app-context";
-import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
-import { PageShell } from "@/components/page-shell";
-import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 
 const FREQ_LABELS: Record<string, string> = {
   monthly: "شهري", quarterly: "ربع سنوي", semi_annual: "نصف سنوي", annual: "سنوي",
@@ -242,7 +238,6 @@ export default function PropertiesContracts() {
   const contracts = asList(contractsResp);
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const searchStr = useSearch();
 
   useEffect(() => {
@@ -260,10 +255,6 @@ export default function PropertiesContracts() {
     }
   }, [searchStr]);
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("contract");
-
-  if (isLoading) return <PageShell title="عقود الإيجار" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "عقود الإيجار" }]}><LoadingSpinner /></PageShell>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const preFiltered = applyFilters(contracts, filters, {
     searchFields: ["tenantName", "unitNumber", "ejarNumber"] as any,
     statusField: "status" as any,
@@ -272,16 +263,6 @@ export default function PropertiesContracts() {
   const filtered = tagFilteredIds ? preFiltered.filter((c: any) => tagFilteredIds.has(c.id)) : preFiltered;
 
   const columns: DataTableColumn<any>[] = [
-    {
-      key: "_select",
-      header: "",
-      width: "32px",
-      render: (v) => (
-        <span onClick={(ev) => ev.stopPropagation()}>
-          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
-        </span>
-      ),
-    },
     { key: "ejarNumber", header: "رقم إيجار", sortable: true, className: "font-mono text-xs text-blue-700", render: (c) => c.ejarNumber || "—" },
     { key: "unitNumber", header: "الوحدة", sortable: true, render: (c) => `${c.unitNumber}${c.buildingName ? ` - ${c.buildingName}` : ""}` },
     { key: "tenantName", header: "المستأجر", sortable: true, className: "font-medium" },
@@ -308,94 +289,14 @@ export default function PropertiesContracts() {
     <PageShell
       title="عقود الإيجار"
       subtitle="إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار"
-      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "عقود الإيجار" }]}
+      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={
         <Link href="/properties/contracts/create">
           <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة عقد</Button>
         </Link>
       }
     >
-      <PropertyTabsNav />
-
-      {/* Renewal Pipeline — contracts expiring within 90 days */}
-      {(() => {
-        const now = new Date();
-        const in30 = new Date(now.getTime() + 30 * 86400000);
-        const in60 = new Date(now.getTime() + 60 * 86400000);
-        const in90 = new Date(now.getTime() + 90 * 86400000);
-        const expiring = contracts
-          .filter((c: any) => c.status === "active" && c.endDate)
-          .filter((c: any) => new Date(c.endDate) <= in90)
-          .sort((a: any, b: any) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
-        if (expiring.length === 0) return null;
-        const urgent = expiring.filter((c: any) => new Date(c.endDate) <= in30);
-        const soon = expiring.filter((c: any) => new Date(c.endDate) > in30 && new Date(c.endDate) <= in60);
-        const later = expiring.filter((c: any) => new Date(c.endDate) > in60);
-        return (
-          <Card className="border-orange-200 bg-orange-50/30">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-orange-600" />
-                خط أنابيب التجديد — {expiring.length} عقد ينتهي خلال 90 يوم
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {urgent.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs font-bold text-red-600">⚠ خلال 30 يوم ({urgent.length})</p>
-                  {urgent.map((c: any) => (
-                    <div key={c.id} className="flex items-center justify-between p-2 rounded bg-red-50 border border-red-100">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium">{c.tenantName || "—"}</span>
-                        <span className="text-xs text-gray-500 ms-2">وحدة {c.unitNumber || c.unitId}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-red-600 font-medium">{formatDateAr(c.endDate)}</span>
-                        <Link href={`/properties/contracts/${c.id}`}>
-                          <Button size="sm" variant="outline" className="h-7 text-xs">تجديد / إنهاء</Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {soon.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs font-bold text-orange-600">خلال 60 يوم ({soon.length})</p>
-                  {soon.slice(0, 3).map((c: any) => (
-                    <div key={c.id} className="flex items-center justify-between p-2 rounded bg-orange-50/50 border border-orange-100">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium">{c.tenantName || "—"}</span>
-                        <span className="text-xs text-gray-500 ms-2">وحدة {c.unitNumber || c.unitId}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-orange-600">{formatDateAr(c.endDate)}</span>
-                        <Link href={`/properties/contracts/${c.id}`}>
-                          <Button size="sm" variant="ghost" className="h-7 text-xs">عرض</Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {later.length > 0 && (
-                <p className="text-xs text-gray-500">+ {later.length} عقد ينتهي خلال 61-90 يوم</p>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })()}
-
-      <KpiGrid items={[
-        { label: "إجمالي العقود", value: contracts.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-        { label: "نشط", value: contracts.filter((c: any) => c.status === "active").length, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },
-        { label: "منتهي", value: contracts.filter((c: any) => c.status === "expired").length, icon: Clock, color: "text-red-600 bg-red-50" },
-        { label: "إجمالي القيمة", value: formatCurrency(contracts.reduce((s: number, c: any) => s + Number(c.monthlyRent || 0), 0)), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
-      ]} />
-
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <AdvancedFilters
+      <AdvancedFilters
             config={{
               searchPlaceholder: "بحث بالمستأجر أو الوحدة أو رقم إيجار...",
               statuses: [
@@ -420,28 +321,7 @@ export default function PropertiesContracts() {
             ], "عقود_الإيجار")}
             resultCount={filtered?.length}
           />
-          <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
-        </div>
-      </div>
-
-      <BulkActionsBar
-        entityType="property_contract"
-        items={filtered}
-        selectedIds={selectedIds}
-        onToggle={toggleSelect}
-        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
-        onClear={clearSelection}
-        invalidateKeys={[["rental-contracts"]]}
-        actions={["export"]}
-        csvColumns={[
-          { key: "ejarNumber", label: "رقم إيجار" },
-          { key: "unitNumber", label: "الوحدة" },
-          { key: "tenantName", label: "المستأجر" },
-          { key: "monthlyRent", label: "الإيجار الشهري" },
-          { key: "status", label: "الحالة" },
-        ]}
-        csvFileName="عقود_الإيجار"
-      />
+      <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-blue-500" /> قائمة العقود</CardTitle></CardHeader>
