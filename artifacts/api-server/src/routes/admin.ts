@@ -1083,4 +1083,33 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
+// ─── Governance: Policy Audit ───────────────────────────────────────────
+import { runFullPolicyAudit, ROLE_STRATEGIES, SENSITIVE_OPERATIONS, SEPARATION_OF_DUTIES } from "../lib/policyEngine.js";
+import { checkSystemGuards } from "../lib/systemGovernor.js";
+import { DOMAIN_REGISTRY, getSystemStats } from "../lib/domainRegistry.js";
+
+router.get("/governance/policy-audit", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const violations = await runFullPolicyAudit(scope.companyId);
+    res.json({ violations, total: violations.length, critical: violations.filter(v => v.severity === "critical").length });
+  } catch (err) { handleRouteError(err, res, "Policy audit error:"); }
+});
+
+router.get("/governance/role-strategies", requirePermission("admin:read"), async (_req, res) => {
+  res.json({ strategies: ROLE_STRATEGIES, separationOfDuties: SEPARATION_OF_DUTIES, sensitiveOperations: SENSITIVE_OPERATIONS });
+});
+
+router.get("/governance/system-guards", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const result = await checkSystemGuards(scope.companyId, "all", { date: new Date().toISOString().split("T")[0] });
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "System guards error:"); }
+});
+
+router.get("/governance/domain-registry", requirePermission("admin:read"), async (_req, res) => {
+  res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
+});
+
 export default router;
