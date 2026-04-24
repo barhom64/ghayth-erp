@@ -185,6 +185,7 @@ router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), asy
       [clientId, scope.userId, req.params.id, scope.companyId]
     );
     const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: Number(req.params.id), after: { clientId } }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Link sub-agent client"); }
 });
@@ -199,6 +200,7 @@ router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async 
        WHERE "companyId"=$3 AND "nuskCode"=$4 AND "deletedAt" IS NULL`,
       [clientId, scope.userId, scope.companyId, nuskCode]
     );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: 0, after: { nuskCode, clientId } }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Link sub-agent by nusk"); }
 });
@@ -234,8 +236,8 @@ router.post("/pricing", requirePermission("umrah:write"), async (req, res) => {
     const overlap = await rawQuery(
       `SELECT id FROM umrah_pricing
        WHERE "companyId" = $1 AND "agentId" = $2 AND "deletedAt" IS NULL
-         AND COALESCE("subAgentId", 0) = COALESCE($3, 0)
-         AND COALESCE("seasonId", 0) = COALESCE($4, 0)
+         AND (("subAgentId" IS NULL AND $3::int IS NULL) OR "subAgentId" = $3)
+         AND (("seasonId" IS NULL AND $4::int IS NULL) OR "seasonId" = $4)
          AND "validFrom" <= $6 AND "validTo" >= $5`,
       [scope.companyId, b.agentId, b.subAgentId || null, b.seasonId || null, b.validFrom, b.validTo]
     );
@@ -277,8 +279,8 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
         const overlap = await rawQuery(
           `SELECT id FROM umrah_pricing
            WHERE "companyId" = $1 AND "agentId" = $2 AND "deletedAt" IS NULL AND id != $3
-             AND COALESCE("subAgentId", 0) = COALESCE($4, 0)
-             AND COALESCE("seasonId", 0) = COALESCE($5, 0)
+             AND (("subAgentId" IS NULL AND $4::int IS NULL) OR "subAgentId" = $4)
+             AND (("seasonId" IS NULL AND $5::int IS NULL) OR "seasonId" = $5)
              AND "validFrom" <= $7 AND "validTo" >= $6`,
           [scope.companyId, agId, req.params.id, saId || null, sId || null, vf, vt]
         );
@@ -357,6 +359,7 @@ router.post("/violations", requirePermission("umrah:write"), async (req, res) =>
        b.description || null, b.penaltyAmount || 0, b.status || "open", scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.created", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type, penaltyAmount: b.penaltyAmount || 0 } }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create violation"); }
 });
@@ -379,6 +382,18 @@ router.patch("/violations/:id", requirePermission("umrah:write"), async (req, re
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_violations", entityId: Number(req.params.id), after: b }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update violation"); }
+});
+
+router.delete("/violations/:id", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await rawExecute(
+      `UPDATE umrah_violations SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+      [scope.userId, req.params.id, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: Number(req.params.id) }).catch(console.error);
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete violation"); }
 });
 
 // ============================================================================

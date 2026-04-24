@@ -297,11 +297,10 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
 
       const newPaid = Math.round((Number(inv.paidAmount) + allocAmount) * 100) / 100;
       const newStatus = newPaid >= Number(inv.total) - 0.01 ? "paid" : "partially_paid";
-      const paidAt = newStatus === "paid" ? "NOW()" : null;
 
-      if (paidAt) {
+      if (newStatus === "paid") {
         await client.query(
-          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "updatedAt" = NOW() WHERE id = $3`,
+          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "paidAt" = NOW(), "updatedAt" = NOW() WHERE id = $3`,
           [newPaid, newStatus, inv.id]
         );
       } else {

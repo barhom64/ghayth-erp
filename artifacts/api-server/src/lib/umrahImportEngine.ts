@@ -710,7 +710,7 @@ async function detectViolation(
   )).rows;
   if (exists) return;
 
-  const penalty = type === "absconded" ? 2000 : (Number(row.overstayDays) || 0) * 0;
+  const penalty = type === "absconded" ? 2000 : (Number(row.overstayDays) || 0) * 200;
 
   await client.query(
     `INSERT INTO umrah_violations
