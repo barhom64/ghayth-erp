@@ -3,7 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
@@ -92,6 +92,7 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
       action: "create", entity: "training_programs", entityId: r.insertId,
       after: { title, category: category ?? null, startDate: startDate ?? null, endDate: endDate ?? null, capacity: Number(capacity ?? 0) },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.created", entity: "training_programs", entityId: r.insertId, details: JSON.stringify({ title, category }) }).catch(console.error);
     res.status(201).json({ id: r.insertId, title, status: status ?? "upcoming" });
   } catch (err) { handleRouteError(err, res, "Create training program error:"); }
 });
@@ -134,6 +135,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
       action: "update", entity: "training_programs", entityId: id,
       before: existing, after: b,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.updated", entity: "training_programs", entityId: id, details: JSON.stringify(b) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }
 });
@@ -150,6 +152,7 @@ router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req
     await rawExecute(`UPDATE training_programs SET status='approved' WHERE id=$1`, [id]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'approved',$2,$3,$4)`, [id, body.notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "training_program.approved", entity: "training_programs", entityId: id, before: { status: program.status }, after: { status: "approved" } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.approved", entity: "training_programs", entityId: id, details: JSON.stringify({ previousStatus: program.status }) }).catch(console.error);
     res.json({ message: "تم اعتماد البرنامج التدريبي", status: "approved" });
   } catch (err) { handleRouteError(err, res, "Training approve error:"); }
 });
@@ -168,6 +171,7 @@ router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req,
     await rawExecute(`UPDATE training_programs SET status='rejected' WHERE id=$1`, [id]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'rejected',$2,$3,$4)`, [id, notes, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "training_program.rejected", entity: "training_programs", entityId: id, before: { status: program.status }, after: { status: "rejected" } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.rejected", entity: "training_programs", entityId: id, details: JSON.stringify({ previousStatus: program.status, notes }) }).catch(console.error);
     res.json({ message: "تم رفض البرنامج التدريبي", status: "rejected" });
   } catch (err) { handleRouteError(err, res, "Training reject error:"); }
 });
@@ -184,6 +188,7 @@ router.delete("/programs/:id", requirePermission("hr:delete"), async (req, res) 
       action: "delete", entity: "training_programs", entityId: id,
       before: existing,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.deleted", entity: "training_programs", entityId: id, details: "{}" }).catch(console.error);
     res.json({ message: "تم حذف البرنامج التدريبي بنجاح" });
   } catch (err) { handleRouteError(err, res, "training"); }
 });
@@ -243,6 +248,7 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
       action: "create", entity: "training_enrollments", entityId: r.insertId,
       after: { programId: Number(programId), employeeId: employeeId ? Number(employeeId) : null, employeeName: employeeName ?? null, status: status ?? "enrolled" },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.enrollment.created", entity: "training_enrollments", entityId: r.insertId, details: JSON.stringify({ programId, employeeId }) }).catch(console.error);
     res.status(201).json({ id: r.insertId, programId: Number(programId), employeeId: employeeId ?? null, status: status ?? "enrolled" });
   } catch (err) { handleRouteError(err, res, "Create training enrollment error:"); }
 });
@@ -279,6 +285,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
       action: "update", entity: "training_enrollments", entityId: id,
       before: existing, after: b,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.enrollment.updated", entity: "training_enrollments", entityId: id, details: JSON.stringify(b) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }
 });
@@ -296,6 +303,7 @@ router.delete("/enrollments/:id", requirePermission("hr:delete"), async (req, re
       action: "delete", entity: "training_enrollments", entityId: id,
       before: existing,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.enrollment.deleted", entity: "training_enrollments", entityId: id, details: JSON.stringify({ programId: existing.programId }) }).catch(console.error);
     res.json({ message: "تم حذف التسجيل بنجاح" });
   } catch (err) { handleRouteError(err, res, "training"); }
 });

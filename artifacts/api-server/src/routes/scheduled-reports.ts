@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 
@@ -24,7 +25,7 @@ const patchScheduledReportSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-scheduledReportsRouter.get("/", async (req, res) => {
+scheduledReportsRouter.get("/", requirePermission("reports:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -43,7 +44,7 @@ scheduledReportsRouter.get("/", async (req, res) => {
   }
 });
 
-scheduledReportsRouter.post("/", async (req, res) => {
+scheduledReportsRouter.post("/", requirePermission("reports:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = createScheduledReportSchema.safeParse(req.body);
@@ -61,7 +62,7 @@ scheduledReportsRouter.post("/", async (req, res) => {
   }
 });
 
-scheduledReportsRouter.patch("/:id", async (req, res) => {
+scheduledReportsRouter.patch("/:id", requirePermission("reports:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -87,7 +88,7 @@ scheduledReportsRouter.patch("/:id", async (req, res) => {
   }
 });
 
-scheduledReportsRouter.delete("/:id", async (req, res) => {
+scheduledReportsRouter.delete("/:id", requirePermission("reports:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -101,7 +102,7 @@ scheduledReportsRouter.delete("/:id", async (req, res) => {
   }
 });
 
-scheduledReportsRouter.get("/history", async (req, res) => {
+scheduledReportsRouter.get("/history", requirePermission("reports:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(

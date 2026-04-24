@@ -4,7 +4,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { z } from "zod";
 
@@ -166,6 +166,14 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
       action: "create", entity: "documents", entityId: r.insertId,
       after: { title, type: type || "document", department: department ?? null },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.document.created",
+      entity: "documents",
+      entityId: r.insertId,
+      details: JSON.stringify({ title, type: type || "document" }),
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId, title, type, department });
   } catch (err) { handleRouteError(err, res, "Create document error:"); }
 });
@@ -212,6 +220,14 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
     }
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.document.uploaded",
+      entity: "documents",
+      entityId: docId,
+      details: JSON.stringify({ title, fileName, category: category || null }),
+    }).catch(console.error);
     res.status(201).json(doc);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -325,6 +341,14 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
     );
 
     const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [docId, scope.companyId]);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.version.created",
+      entity: "documents",
+      entityId: docId,
+      details: JSON.stringify({ version: newVersion, fileName }),
+    }).catch(console.error);
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -385,6 +409,14 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
       before: { status: beforeDoc.status },
       after: { status, impact: impact || undefined },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.document.status_changed",
+      entity: "documents",
+      entityId: docId,
+      details: JSON.stringify({ from: beforeDoc.status, to: status }),
+    }).catch(console.error);
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
     res.json({ ...(doc as any), impact });
@@ -411,6 +443,14 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
        ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
       [docId, entityType, entityId]
     );
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.entity_link.created",
+      entity: "document_entity_links",
+      entityId: docId,
+      details: JSON.stringify({ entityType, entityId }),
+    }).catch(console.error);
     res.json({ message: "تم الربط بنجاح" });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -471,6 +511,14 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
       `INSERT INTO document_folders (name, "parentId", color, "companyId") VALUES ($1,$2,$3,$4)`,
       [String(name).trim(), parentId ? Number(parentId) : null, color ?? null, scope.companyId]
     );
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.folder.created",
+      entity: "document_folders",
+      entityId: r.insertId,
+      details: JSON.stringify({ name }),
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId, name, parentId: parentId ? Number(parentId) : null });
   } catch (err) { handleRouteError(err, res, "Create folder error:"); }
 });
@@ -523,6 +571,14 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
       action: "create", entity: "document_templates", entityId: r.insertId,
       after: { name, type: type || "letter", category: category ?? null },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.template.created",
+      entity: "document_templates",
+      entityId: r.insertId,
+      details: JSON.stringify({ name, type: type || "letter" }),
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId, name, type: type || "letter" });
   } catch (err) { handleRouteError(err, res, "Create template error:"); }
 });
@@ -558,6 +614,14 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
       [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id, scope.companyId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.template.updated",
+      entity: "document_templates",
+      entityId: id,
+      details: JSON.stringify({ name }),
+    }).catch(console.error);
     res.json(row);
   } catch (e: any) { handleRouteError(e, res, "Update document template error"); }
 });
@@ -570,6 +634,13 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.template.deleted",
+      entity: "document_templates",
+      entityId: id,
+    }).catch(console.error);
     res.json({ message: "تم حذف القالب بنجاح" });
   } catch (e: any) { handleRouteError(e, res, "Delete document template error"); }
 });
@@ -790,6 +861,13 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.document.updated",
+      entity: "documents",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -800,6 +878,13 @@ router.delete("/:id", requirePermission("documents:delete"), async (req, res) =>
     const id = Number(req.params.id);
     const result = await rawExecute(`UPDATE documents SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.document.deleted",
+      entity: "documents",
+      entityId: id,
+    }).catch(console.error);
     res.json({ message: "تم حذف المستند بنجاح" });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });

@@ -11778,6 +11778,327 @@ ALTER SEQUENCE public.zatca_submission_log_id_seq OWNED BY public.zatca_submissi
 
 
 --
+-- Name: hr_employee_loans; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.hr_employee_loans (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "assignmentId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "loanNumber" character varying(30) NOT NULL,
+    "loanType" character varying(30) DEFAULT 'salary_advance'::character varying,
+    amount numeric(12,2) NOT NULL,
+    "installmentCount" integer NOT NULL DEFAULT 1,
+    "installmentAmount" numeric(12,2) NOT NULL,
+    "paidAmount" numeric(12,2) DEFAULT 0,
+    "remainingAmount" numeric(12,2) NOT NULL,
+    reason text,
+    status character varying(20) DEFAULT 'pending'::character varying,
+    "requestDate" date DEFAULT CURRENT_DATE,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "startDeductionPeriod" character varying(7),
+    "rejectionReason" text,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT hr_employee_loans_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('active'::character varying)::text, ('rejected'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text])))
+);
+
+CREATE SEQUENCE public.hr_employee_loans_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.hr_employee_loans_id_seq OWNED BY public.hr_employee_loans.id;
+ALTER TABLE ONLY public.hr_employee_loans ALTER COLUMN id SET DEFAULT nextval('public.hr_employee_loans_id_seq'::regclass);
+
+
+--
+-- Name: hr_loan_installments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.hr_loan_installments (
+    id integer NOT NULL,
+    "loanId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "assignmentId" integer NOT NULL,
+    "installmentNumber" integer NOT NULL,
+    amount numeric(12,2) NOT NULL,
+    period character varying(7) NOT NULL,
+    status character varying(20) DEFAULT 'pending'::character varying,
+    "paidAt" timestamp with time zone,
+    "payrollLineId" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    CONSTRAINT hr_loan_installments_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('paid'::character varying)::text, ('cancelled'::character varying)::text])))
+);
+
+CREATE SEQUENCE public.hr_loan_installments_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.hr_loan_installments_id_seq OWNED BY public.hr_loan_installments.id;
+ALTER TABLE ONLY public.hr_loan_installments ALTER COLUMN id SET DEFAULT nextval('public.hr_loan_installments_id_seq'::regclass);
+
+
+--
+-- Name: hr_overtime_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.hr_overtime_requests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "assignmentId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "requestNumber" character varying(30) NOT NULL,
+    "overtimeDate" date NOT NULL,
+    "startTime" time NOT NULL,
+    "endTime" time NOT NULL,
+    hours numeric(5,2) NOT NULL,
+    "hourlyRate" numeric(10,2),
+    multiplier numeric(3,2) DEFAULT 1.50,
+    "totalAmount" numeric(12,2),
+    reason text,
+    status character varying(20) DEFAULT 'pending'::character varying,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "rejectionReason" text,
+    "payrollPeriod" character varying(7),
+    "payrollLineId" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT hr_overtime_requests_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('paid'::character varying)::text])))
+);
+
+CREATE SEQUENCE public.hr_overtime_requests_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.hr_overtime_requests_id_seq OWNED BY public.hr_overtime_requests.id;
+ALTER TABLE ONLY public.hr_overtime_requests ALTER COLUMN id SET DEFAULT nextval('public.hr_overtime_requests_id_seq'::regclass);
+
+
+--
+-- Name: hr_exit_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.hr_exit_requests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "assignmentId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "exitNumber" character varying(30) NOT NULL,
+    "exitType" character varying(30) NOT NULL DEFAULT 'resignation'::character varying,
+    "requestDate" date DEFAULT CURRENT_DATE,
+    "lastWorkingDay" date,
+    "exitReason" text,
+    status character varying(20) DEFAULT 'pending'::character varying,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "rejectionReason" text,
+    "clearanceCompleted" boolean DEFAULT false,
+    "settlementAmount" numeric(12,2),
+    "settlementPaid" boolean DEFAULT false,
+    "gratuityAmount" numeric(12,2),
+    "leaveBalance" numeric(8,2),
+    "leaveCompensation" numeric(12,2),
+    "loanDeductions" numeric(12,2) DEFAULT 0,
+    "otherDeductions" numeric(12,2) DEFAULT 0,
+    "netSettlement" numeric(12,2),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT hr_exit_requests_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('completed'::character varying)::text])))
+);
+
+CREATE SEQUENCE public.hr_exit_requests_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.hr_exit_requests_id_seq OWNED BY public.hr_exit_requests.id;
+ALTER TABLE ONLY public.hr_exit_requests ALTER COLUMN id SET DEFAULT nextval('public.hr_exit_requests_id_seq'::regclass);
+
+
+--
+-- Name: hr_exit_clearance; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.hr_exit_clearance (
+    id integer NOT NULL,
+    "exitRequestId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    department character varying(50) NOT NULL,
+    "departmentLabel" character varying(100) NOT NULL,
+    status character varying(20) DEFAULT 'pending'::character varying,
+    "clearedBy" integer,
+    "clearedAt" timestamp with time zone,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    CONSTRAINT hr_exit_clearance_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('cleared'::character varying)::text, ('rejected'::character varying)::text])))
+);
+
+CREATE SEQUENCE public.hr_exit_clearance_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.hr_exit_clearance_id_seq OWNED BY public.hr_exit_clearance.id;
+ALTER TABLE ONLY public.hr_exit_clearance ALTER COLUMN id SET DEFAULT nextval('public.hr_exit_clearance_id_seq'::regclass);
+
+
+--
+-- Name: hr_excuse_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.hr_excuse_requests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "assignmentId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "excuseDate" date NOT NULL,
+    "excuseType" character varying(30) DEFAULT 'early_leave'::character varying,
+    "startTime" time,
+    "endTime" time,
+    "estimatedMinutes" integer DEFAULT 0,
+    reason text,
+    status character varying(20) DEFAULT 'pending'::character varying,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "rejectionReason" text,
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "createdAt" timestamp with time zone DEFAULT now(),
+    CONSTRAINT hr_excuse_requests_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text])))
+);
+
+CREATE SEQUENCE public.hr_excuse_requests_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.hr_excuse_requests_id_seq OWNED BY public.hr_excuse_requests.id;
+ALTER TABLE ONLY public.hr_excuse_requests ALTER COLUMN id SET DEFAULT nextval('public.hr_excuse_requests_id_seq'::regclass);
+
+
+--
+-- Name: purchase_order_lines; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.purchase_order_lines (
+    id integer NOT NULL,
+    "purchaseOrderId" integer NOT NULL,
+    "productId" integer,
+    description text NOT NULL,
+    quantity numeric(10,2) NOT NULL,
+    "unitPrice" numeric(18,2) NOT NULL,
+    "totalPrice" numeric(18,2) NOT NULL,
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+
+CREATE SEQUENCE public.purchase_order_lines_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.purchase_order_lines_id_seq OWNED BY public.purchase_order_lines.id;
+ALTER TABLE ONLY public.purchase_order_lines ALTER COLUMN id SET DEFAULT nextval('public.purchase_order_lines_id_seq'::regclass);
+
+
+--
+-- Name: payment_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_runs (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    ref text NOT NULL,
+    "paymentDate" date NOT NULL,
+    method text,
+    "bankAccount" text,
+    "totalAmount" numeric(18,2) NOT NULL,
+    "poCount" integer NOT NULL,
+    status text NOT NULL DEFAULT 'executed',
+    "journalId" integer,
+    "createdBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+
+CREATE SEQUENCE public.payment_runs_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.payment_runs_id_seq OWNED BY public.payment_runs.id;
+ALTER TABLE ONLY public.payment_runs ALTER COLUMN id SET DEFAULT nextval('public.payment_runs_id_seq'::regclass);
+
+
+--
+-- Name: customer_advances; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.customer_advances (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "clientId" integer NOT NULL,
+    ref text NOT NULL,
+    amount numeric(18,2) NOT NULL,
+    "appliedAmount" numeric(18,2) NOT NULL DEFAULT 0,
+    method text,
+    "receivedDate" date NOT NULL,
+    notes text,
+    status text NOT NULL DEFAULT 'open',
+    "journalId" integer,
+    "createdBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+
+CREATE SEQUENCE public.customer_advances_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.customer_advances_id_seq OWNED BY public.customer_advances.id;
+ALTER TABLE ONLY public.customer_advances ALTER COLUMN id SET DEFAULT nextval('public.customer_advances_id_seq'::regclass);
+
+
+--
+-- Name: property_contracts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.property_contracts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    ref text NOT NULL,
+    "propertyId" integer,
+    "contractType" character varying(50),
+    "startDate" date,
+    "endDate" date,
+    status character varying(20) DEFAULT 'active'::character varying,
+    amount numeric(18,2),
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    CONSTRAINT property_contracts_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('expired'::character varying)::text, ('cancelled'::character varying)::text])))
+);
+
+CREATE SEQUENCE public.property_contracts_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.property_contracts_id_seq OWNED BY public.property_contracts.id;
+ALTER TABLE ONLY public.property_contracts ALTER COLUMN id SET DEFAULT nextval('public.property_contracts_id_seq'::regclass);
+
+
+--
+-- Name: employee_salary_components; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_salary_components (
+    id integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "assignmentId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "componentId" integer NOT NULL,
+    "isActive" boolean DEFAULT true,
+    "createdAt" timestamp with time zone DEFAULT now()
+);
+
+CREATE SEQUENCE public.employee_salary_components_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.employee_salary_components_id_seq OWNED BY public.employee_salary_components.id;
+ALTER TABLE ONLY public.employee_salary_components ALTER COLUMN id SET DEFAULT nextval('public.employee_salary_components_id_seq'::regclass);
+
+
+--
+-- Name: employee_kpi_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_kpi_snapshots (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "snapshotDate" date NOT NULL,
+    kpis jsonb,
+    score numeric(5,2),
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+
+CREATE SEQUENCE public.employee_kpi_snapshots_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.employee_kpi_snapshots_id_seq OWNED BY public.employee_kpi_snapshots.id;
+ALTER TABLE ONLY public.employee_kpi_snapshots ALTER COLUMN id SET DEFAULT nextval('public.employee_kpi_snapshots_id_seq'::regclass);
+
+
+--
 -- Name: accounting_mappings id; Type: DEFAULT; Schema: public; Owner: -
 --
 

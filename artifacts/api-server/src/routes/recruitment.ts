@@ -5,7 +5,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const createPostingSchema = z.object({
   title: z.string().min(1, "عنوان الإعلان الوظيفي مطلوب"),
@@ -83,6 +83,14 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
       action: "create", entity: "job_postings", entityId: r.insertId,
       after: { title, type: type || "full-time", status: status || "open" },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recruitment.posting.created",
+      entity: "job_postings",
+      entityId: r.insertId,
+      details: JSON.stringify({ title, type: type || "full-time", status: status || "open" }),
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId, title, status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
@@ -121,6 +129,13 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
     if (result.affectedRows === 0) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recruitment.posting.updated",
+      entity: "job_postings",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -159,6 +174,14 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
       },
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "closed", closedReason: reason } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recruitment.posting.closed",
+      entity: "job_postings",
+      entityId: id,
+      details: JSON.stringify({ reason }),
+    }).catch(console.error);
     res.json({ ...updated, event: "recruitment.job.closed" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -186,6 +209,13 @@ router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, r
       },
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "open", reopened: true } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recruitment.posting.reopened",
+      entity: "job_postings",
+      entityId: id,
+    }).catch(console.error);
     res.json({ ...updated, event: "recruitment.job.reopened" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -202,6 +232,13 @@ router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) =
     if (!before) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recruitment.posting.deleted",
+      entity: "job_postings",
+      entityId: id,
+    }).catch(console.error);
     res.json({ message: "تم حذف الإعلان الوظيفي بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -238,6 +275,14 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
       action: "create", entity: "job_applications", entityId: r.insertId,
       after: { postingId: Number(postingId), applicantName, status: status || "new" },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recruitment.application.created",
+      entity: "job_applications",
+      entityId: r.insertId,
+      details: JSON.stringify({ postingId: Number(postingId), applicantName }),
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId, postingId: Number(postingId), applicantName, status: status || "new" });
   } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
@@ -271,6 +316,13 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_applications", entityId: id, after: b }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recruitment.application.updated",
+      entity: "job_applications",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -283,6 +335,13 @@ router.delete("/applications/:id", requirePermission("hr:write"), async (req, re
     if (!before) throw new NotFoundError("طلب التوظيف غير موجود");
     await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "recruitment.application.deleted",
+      entity: "job_applications",
+      entityId: id,
+    }).catch(console.error);
     res.json({ message: "تم حذف طلب التوظيف بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
