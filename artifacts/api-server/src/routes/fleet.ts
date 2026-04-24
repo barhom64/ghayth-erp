@@ -897,31 +897,11 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       after: { vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm, cost: totalEstimatedCost },
     }).catch(console.error);
 
-    // Emit on the event bus so eventListeners.ts can write an audit_logs row
-    // and any future rule / analytics subscriber gets the notification. Before
-    // this we only wrote an audit row manually — the listener was dead.
-    eventBus.emit("fleet.trip.started", {
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      entity: "fleet_trips",
-      entityId: insertId,
-      action: "create",
-      after: {
-        vehicleId: selectedVehicleId,
-        driverId: selectedDriverId,
-        distance: estimatedDistanceKm,
-        cost: totalEstimatedCost,
-        fromLocation: b.fromLocation,
-        toLocation: b.toLocation,
-      },
-    });
-
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1`, [insertId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.created", entity: "fleet_trips", entityId: insertId,
-      details: JSON.stringify({ vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm }),
+      details: JSON.stringify({ vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm, fromLocation: b.fromLocation, toLocation: b.toLocation }),
     }).catch(console.error);
     res.status(201).json({
       ...row,

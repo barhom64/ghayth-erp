@@ -516,13 +516,15 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
       const result = await bootstrapCompany(companyId, name);
       branchId = result.branchId;
       bootstrapped = true;
-      eventBus.emit("company.created", {
+      emitEvent({
         companyId,
+        branchId: branchId ?? 0,
         userId: scope.userId,
-        entity: "company",
+        action: "company.created",
+        entity: "companies",
         entityId: companyId,
-        after: { name, nameEn, taxNumber, crNumber, branchId },
-      });
+        details: JSON.stringify({ name, nameEn, taxNumber, crNumber, branchId }),
+      }).catch(console.error);
     } catch (bootstrapErr: any) {
       console.error("[CompanyBootstrap] Partial failure, cleaning up company:", bootstrapErr);
       try {

@@ -743,21 +743,21 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
 
     // Bus emission — closes the dead listener in eventListeners.ts:261 so the
     // rules engine + audit trail see every stock movement, not just products.
-    eventBus.emit("warehouse.movement.created", {
+    emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
       userId: scope.userId,
+      action: "warehouse.movement.created",
       entity: "warehouse_movements",
       entityId: insertId,
-      action: "create",
-      after: {
+      details: JSON.stringify({
         productId: row?.productId,
         type: row?.type,
         quantity: row?.quantity,
         unitCost: row?.unitCost,
         reference: row?.reference,
-      },
-    });
+      }),
+    }).catch(console.error);
 
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;

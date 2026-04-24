@@ -1330,6 +1330,12 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "bi.kpi.created", label: "إنشاء kpi", domain: "bi", description: "تُصدر عند إنشاء kpi", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "bi.report.created", label: "إنشاء report", domain: "bi", description: "تُصدر عند إنشاء report", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
 
+  // ─── DIRECT eventBus.emit() EVENTS ───
+  { name: "fleet.vehicle.breakdown", label: "عطل مركبة", domain: "fleet", description: "تُصدر عند اكتشاف عطل في مركبة", payload: { vehicleId: "number", reason: "string" }, consumers: ["maintenanceWorkflow", "execDashboard"], sideEffects: ["notification", "audit"], critical: true },
+  { name: "hr.auto_detection.completed", label: "اكتمال كشف تلقائي", domain: "hr", description: "تُصدر بعد انتهاء محرك الكشف التلقائي عن المخالفات", payload: { companyId: "number", detected: "number" }, consumers: ["hrNotifier"], sideEffects: ["notification", "audit"] },
+  { name: "company.created", label: "إنشاء شركة", domain: "admin", description: "تُصدر عند إنشاء شركة جديدة في النظام", payload: { companyId: "number", name: "string" }, consumers: ["onboardingEngine"], sideEffects: ["audit", "notification"], critical: true },
+  { name: "maintenance.completed", label: "اكتمال صيانة عقارية", domain: "property", description: "تُصدر عند اكتمال طلب صيانة عقارية", payload: { maintenanceId: "number", propertyId: "number" }, consumers: ["propertyManager"], sideEffects: ["notification", "audit"] },
+  { name: "journal.entry.created", label: "إنشاء قيد محاسبي", domain: "finance", description: "تُصدر بعد ترحيل قيد يومية جديد", payload: { journalId: "number", sourceKey: "string", total: "number" }, consumers: ["glReconciler", "budgetValidator"], sideEffects: ["audit"], critical: true },
 ];
 
 /** Fast lookup by event name */

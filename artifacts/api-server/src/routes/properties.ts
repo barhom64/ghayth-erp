@@ -2061,14 +2061,15 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
       details: JSON.stringify({ invoiceId, followUpTaskId, journalEntryId, cost, category: mr.category, unitId: mr.unitId }),
     }).catch(console.error);
 
-    eventBus.emit("maintenance.completed", {
+    emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
       userId: scope.userId,
-      entity: "maintenance_requests",
+      action: "maintenance.completed",
+      entity: "property_maintenance_requests",
       entityId: id,
-      details: { invoiceId, followUpTaskId, journalEntryId, cost, category: mr.category, unitId: mr.unitId },
-    });
+      details: JSON.stringify({ invoiceId, followUpTaskId, journalEntryId, cost, category: mr.category, unitId: mr.unitId }),
+    }).catch(console.error);
 
     if (mr.unitId) {
       try {

@@ -7329,6 +7329,233 @@ CREATE UNIQUE INDEX idx_obligations_dedupe ON public.obligations USING btree ("c
 
 
 --
+-- Name: cost_centers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cost_centers (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    code character varying(20) NOT NULL,
+    name character varying(120) NOT NULL,
+    type character varying(40) DEFAULT 'department'::character varying,
+    "parentId" integer,
+    "relatedEntityType" character varying(40),
+    "relatedEntityId" integer,
+    "allocatedAmount" numeric(14,2) DEFAULT 0,
+    status character varying(20) DEFAULT 'active'::character varying,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.cost_centers_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.cost_centers_id_seq OWNED BY public.cost_centers.id;
+ALTER TABLE ONLY public.cost_centers ALTER COLUMN id SET DEFAULT nextval('public.cost_centers_id_seq'::regclass);
+ALTER TABLE ONLY public.cost_centers ADD CONSTRAINT cost_centers_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.cost_centers ADD CONSTRAINT "cost_centers_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+CREATE INDEX idx_cost_centers_company ON public.cost_centers USING btree ("companyId", status);
+
+
+--
+-- Name: vouchers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vouchers (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    type character varying(20) NOT NULL,
+    ref character varying(40),
+    amount numeric(14,2) DEFAULT 0 NOT NULL,
+    description text,
+    "clientId" integer,
+    "supplierId" integer,
+    "paymentMethod" character varying(40),
+    "journalEntryId" integer,
+    status character varying(20) DEFAULT 'posted'::character varying,
+    "createdBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.vouchers_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vouchers_id_seq OWNED BY public.vouchers.id;
+ALTER TABLE ONLY public.vouchers ALTER COLUMN id SET DEFAULT nextval('public.vouchers_id_seq'::regclass);
+ALTER TABLE ONLY public.vouchers ADD CONSTRAINT vouchers_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.vouchers ADD CONSTRAINT "vouchers_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+CREATE INDEX idx_vouchers_company ON public.vouchers USING btree ("companyId", type, "createdAt");
+
+
+--
+-- Name: expenses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.expenses (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    ref character varying(40),
+    description text,
+    amount numeric(14,2) DEFAULT 0 NOT NULL,
+    category character varying(60),
+    "employeeId" integer,
+    status character varying(20) DEFAULT 'pending'::character varying,
+    "approvedBy" integer,
+    "journalEntryId" integer,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.expenses_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.expenses_id_seq OWNED BY public.expenses.id;
+ALTER TABLE ONLY public.expenses ALTER COLUMN id SET DEFAULT nextval('public.expenses_id_seq'::regclass);
+ALTER TABLE ONLY public.expenses ADD CONSTRAINT expenses_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.expenses ADD CONSTRAINT "expenses_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+CREATE INDEX idx_expenses_company ON public.expenses USING btree ("companyId", status);
+
+
+--
+-- Name: user_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_sessions (
+    id integer NOT NULL,
+    "userId" integer NOT NULL,
+    "companyId" integer,
+    token text,
+    "ipAddress" character varying(45),
+    "userAgent" text,
+    "expiresAt" timestamp without time zone,
+    "lastActivityAt" timestamp without time zone DEFAULT now(),
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.user_sessions_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.user_sessions_id_seq OWNED BY public.user_sessions.id;
+ALTER TABLE ONLY public.user_sessions ALTER COLUMN id SET DEFAULT nextval('public.user_sessions_id_seq'::regclass);
+ALTER TABLE ONLY public.user_sessions ADD CONSTRAINT user_sessions_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.user_sessions ADD CONSTRAINT "user_sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES public.users(id);
+CREATE INDEX idx_user_sessions_user ON public.user_sessions USING btree ("userId", "expiresAt");
+
+
+--
+-- Name: activity_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.activity_logs (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "userId" integer,
+    action character varying(80) NOT NULL,
+    entity character varying(60),
+    "entityId" integer,
+    metadata jsonb,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.activity_logs_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.activity_logs_id_seq OWNED BY public.activity_logs.id;
+ALTER TABLE ONLY public.activity_logs ALTER COLUMN id SET DEFAULT nextval('public.activity_logs_id_seq'::regclass);
+ALTER TABLE ONLY public.activity_logs ADD CONSTRAINT activity_logs_pkey PRIMARY KEY (id);
+CREATE INDEX idx_activity_logs_company ON public.activity_logs USING btree ("companyId", "createdAt");
+
+
+--
+-- Name: audit_archive; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.audit_archive (
+    id integer NOT NULL,
+    "originalId" integer,
+    "companyId" integer NOT NULL,
+    "userId" integer,
+    action character varying(80),
+    entity character varying(60),
+    "entityId" integer,
+    before jsonb,
+    after jsonb,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "archivedAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.audit_archive_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.audit_archive_id_seq OWNED BY public.audit_archive.id;
+ALTER TABLE ONLY public.audit_archive ALTER COLUMN id SET DEFAULT nextval('public.audit_archive_id_seq'::regclass);
+ALTER TABLE ONLY public.audit_archive ADD CONSTRAINT audit_archive_pkey PRIMARY KEY (id);
+CREATE INDEX idx_audit_archive_company ON public.audit_archive USING btree ("companyId", "createdAt");
+
+
+--
+-- Name: auto_detection_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auto_detection_log (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "ruleType" character varying(40) NOT NULL,
+    "employeeId" integer,
+    "detectedAt" timestamp without time zone DEFAULT now() NOT NULL,
+    severity character varying(20),
+    details jsonb,
+    "violationId" integer,
+    status character varying(20) DEFAULT 'detected'::character varying
+);
+
+CREATE SEQUENCE public.auto_detection_log_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.auto_detection_log_id_seq OWNED BY public.auto_detection_log.id;
+ALTER TABLE ONLY public.auto_detection_log ALTER COLUMN id SET DEFAULT nextval('public.auto_detection_log_id_seq'::regclass);
+ALTER TABLE ONLY public.auto_detection_log ADD CONSTRAINT auto_detection_log_pkey PRIMARY KEY (id);
+CREATE INDEX idx_auto_detection_company ON public.auto_detection_log USING btree ("companyId", "ruleType");
+
+
+--
+-- Name: credit_memos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.credit_memos (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "invoiceId" integer NOT NULL,
+    ref character varying(40),
+    amount numeric(14,2) NOT NULL,
+    reason text,
+    status character varying(20) DEFAULT 'posted'::character varying,
+    "journalEntryId" integer,
+    "createdBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.credit_memos_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.credit_memos_id_seq OWNED BY public.credit_memos.id;
+ALTER TABLE ONLY public.credit_memos ALTER COLUMN id SET DEFAULT nextval('public.credit_memos_id_seq'::regclass);
+ALTER TABLE ONLY public.credit_memos ADD CONSTRAINT credit_memos_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.credit_memos ADD CONSTRAINT "credit_memos_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+CREATE INDEX idx_credit_memos_company ON public.credit_memos USING btree ("companyId");
+
+
+--
+-- Name: fx_rates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fx_rates (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "fromCurrency" character varying(3) NOT NULL,
+    "toCurrency" character varying(3) NOT NULL,
+    rate numeric(14,6) NOT NULL,
+    "effectiveDate" date NOT NULL,
+    source character varying(40) DEFAULT 'manual'::character varying,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.fx_rates_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.fx_rates_id_seq OWNED BY public.fx_rates.id;
+ALTER TABLE ONLY public.fx_rates ALTER COLUMN id SET DEFAULT nextval('public.fx_rates_id_seq'::regclass);
+ALTER TABLE ONLY public.fx_rates ADD CONSTRAINT fx_rates_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.fx_rates ADD CONSTRAINT "fx_rates_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+CREATE INDEX idx_fx_rates_company ON public.fx_rates USING btree ("companyId", "fromCurrency", "toCurrency", "effectiveDate");
+
+
+--
 -- Name: notification_preferences; Type: TABLE; Schema: public; Owner: -
 --
 
